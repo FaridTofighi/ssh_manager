@@ -36,7 +36,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Vte", "2.91")
-from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gio, GLib, Gtk  # type: ignore  # noqa: E402
 
 SAMPLE_INVENTORY = {
     "production/web.conf": """Host web-01
@@ -265,6 +265,8 @@ def run(out_dir: Path) -> None:
     from ssh_manager import gtk_app
 
     app = gtk_app.SSHManagerApplication(_SANDBOX / "inventory")
+    # Never talk to (or become) a running SSH Manager instance.
+    app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
     app.register(None)
 
     empty_base = _SANDBOX / "empty-inventory"

@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import warnings
 from enum import IntEnum
 from typing import Callable, Optional
 
@@ -65,7 +66,10 @@ class BaseDialog(Gtk.Dialog):
         content.set_margin_end(Space.L)
         content.set_margin_top(Space.L)
         content.set_margin_bottom(Space.S)
-        action_area = self.get_action_area()  # deprecated accessor, still the only one in GTK 3
+        with warnings.catch_warnings():
+            # Deprecated accessor, but GTK 3 offers no other way to style the action area.
+            warnings.simplefilter("ignore", DeprecationWarning)
+            action_area = self.get_action_area()
         action_area.set_margin_start(Space.L)
         action_area.set_margin_end(Space.L)
         action_area.set_margin_bottom(Space.L)
