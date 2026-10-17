@@ -31,7 +31,7 @@ from gi.repository import Gdk, Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
-from ..theme.tokens import Size, Space  # noqa: E402
+from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
@@ -46,12 +46,12 @@ FILTER_HELP = _(
 
 
 # Vertical rhythm of the reference (y from the sidebar top, which is y = 77).
-HEADER_TOP = 29  # → header block ("CONNECTION MANAGER" cap top at ≈ +34)
-HEADER_HEIGHT = 52
-TITLE_GAP = 5  # eyebrow → "Hosts" (cap top at y = 134)
-ADD_HOST_TOP = 12  # header top → Add host button (button y = 118)
-SEARCH_TOP = 22  # header block bottom → search box (y = 180)
-TREE_TOP_GAP = 20  # search box bottom → first tree row (y = 245)
+HEADER_TOP = Layout.Sidebar.HEADER_TOP
+HEADER_HEIGHT = Layout.Sidebar.HEADER_HEIGHT
+TITLE_GAP = Layout.Sidebar.TITLE_GAP
+ADD_HOST_TOP = Layout.Sidebar.ADD_HOST_TOP
+SEARCH_TOP = Layout.Sidebar.SEARCH_TOP
+TREE_TOP_GAP = Layout.Sidebar.TREE_TOP_GAP
 
 
 def _add_menu_model(template_items) -> Gio.Menu:
@@ -211,10 +211,10 @@ class SidebarView(Gtk.Box):
         return header
 
     def _build_search_row(self) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M - 1)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Sidebar.SEARCH_GAP)
         row.get_style_context().add_class("sidebar-search")
         row.set_margin_start(Space.XXL)
-        row.set_margin_end(Space.XXL + 1)
+        row.set_margin_end(Layout.Sidebar.SEARCH_END)
         row.set_margin_top(SEARCH_TOP)
 
         overlay = Gtk.Overlay()
@@ -293,7 +293,7 @@ class SidebarView(Gtk.Box):
         self.bulk_revealer.set_reveal_child(active)
 
     def _build_footer(self) -> Gtk.Widget:
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Sidebar.FOOTER_GAP)
         footer.get_style_context().add_class("sidebar-footer")
         footer.set_size_request(-1, Size.SIDEBAR_FOOTER)
         self.settings_link = _footer_link(Icons.SETTINGS, _("Settings"), "win.settings", _("Settings (Ctrl+,)"))

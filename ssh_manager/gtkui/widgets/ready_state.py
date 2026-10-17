@@ -22,14 +22,14 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
-from ..theme.tokens import Size, Space  # noqa: E402
+from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from .icons import make_icon  # noqa: E402
 
-BODY_WIDTH = 520
-TITLE_TOP = 24
-BODY_TOP = 14
-BUTTON_TOP = 32
-CAPTION_TOP = 16
+BODY_WIDTH = Layout.Ready.BODY_WIDTH
+TITLE_TOP = Layout.Ready.TITLE_TOP
+BODY_TOP = Layout.Ready.BODY_TOP
+BUTTON_TOP = Layout.Ready.BUTTON_TOP
+CAPTION_TOP = Layout.Ready.CAPTION_TOP
 
 
 class ReadyState(Gtk.Box):
@@ -63,8 +63,10 @@ class ReadyState(Gtk.Box):
         self.body.get_style_context().add_class("empty-description")
         self.body.set_line_wrap(True)
         self.body.set_justify(Gtk.Justification.CENTER)
-        self.body.set_max_width_chars(60)
-        self.body.set_size_request(-1, -1)
+        # Wrap at exactly BODY_WIDTH: the size request sets the width, and a
+        # one-character natural width keeps the label from growing past it.
+        self.body.set_max_width_chars(1)
+        self.body.set_size_request(BODY_WIDTH, -1)
         self.body.set_margin_top(BODY_TOP)
         self.pack_start(self.body, False, False, 0)
 

@@ -82,6 +82,65 @@ class Size:
     BADGE = 22
 
 
+class Layout:
+    """Offsets and gaps measured on docs/ui-target/relay-reference.png (px).
+
+    Views take every reference measurement from here, so the geometry lives in
+    one place next to the other design tokens.
+    """
+
+    class Topbar:
+        BRAND_INSET = 29  # window edge → logo tile
+        WORDMARK_GAP = 11  # logo tile → "SSH Manager"
+        DIVIDER_HEIGHT = 28
+        BRAND_DIVIDER_OFFSET = 2  # brand block = pane position + 2 (divider at x = 408)
+        WORKSPACE_GAP = 22  # divider → workspace button (its 8px padding makes 30)
+        WORKSPACE_NAME_GAP = 16  # "WORKSPACE" → inventory name
+        HEALTH_GAP = 19  # health text → activity button
+        HEALTH_DOT_GAP = 10
+        HELP_GAP = 12  # activity → help button
+        AVATAR_GAP = 17  # help → avatar
+
+    class Sidebar:
+        HEADER_TOP = 29  # sidebar top → header block ("CONNECTION MANAGER" at y = 111)
+        HEADER_HEIGHT = 52
+        TITLE_GAP = 5  # eyebrow → "Hosts" (cap top at y = 134)
+        ADD_HOST_TOP = 12  # header top → Add host (y = 118)
+        SEARCH_TOP = 22  # header bottom → search box (y = 180)
+        SEARCH_GAP = 11  # search box → filter button
+        SEARCH_END = 25  # filter button → sidebar edge
+        TREE_TOP_GAP = 20  # search box → first tree row (y = 245)
+        FOOTER_GAP = 10  # Settings → Keys
+
+    class Tree:
+        GROUP_GAP = 7  # extra space above every top-level group but the first
+        LEAD = 26  # x of the level-0 chevron box
+        CHEVRON = 14
+        FOLDER = 18
+        HOST_ICON = 16
+        COUNT_RIGHT = 25  # count right edge → row right edge
+        DOT_RIGHT = 28  # status-dot centre → row right edge
+        DOT = 7
+        BAR_WIDTH = 4
+        BAR_HEIGHT = 24
+        RADIUS = 8
+
+    class Page:
+        CRUMB_GAP = 10
+        HEADER_GAP = 18  # host tile → title block
+        STAT_GAP = 40  # between header stat columns
+        TAB_GAP = 29  # between page tabs
+        INFO_GAP = 48  # between info-bar fields
+        INFO_COMPACT_WIDTH = 1250  # live session + narrower info bar: hide AUTH / PROXY
+
+    class Ready:
+        BODY_WIDTH = 520
+        TITLE_TOP = 24
+        BODY_TOP = 14
+        BUTTON_TOP = 32
+        CAPTION_TOP = 16
+
+
 class Motion:
     """Animation durations in milliseconds (ease-out curves)."""
 

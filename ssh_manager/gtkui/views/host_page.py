@@ -27,16 +27,16 @@ from gi.repository import GLib, Gtk, Pango  # type: ignore  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..host_facts import ActivityEvent, Crumb, LatencyLevel, format_relative_time  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Level, Size, Space, environment_kind  # noqa: E402
+from ..theme.tokens import Layout, Level, Size, Space, environment_kind  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import level_icon  # noqa: E402
 
 GUTTER = Space.GUTTER  # 36px horizontal padding of every band
-STAT_GAP = 40  # between the two header stat columns
-INFO_GAP = 48  # between info-bar fields
-TAB_GAP = 29  # between page tabs
+STAT_GAP = Layout.Page.STAT_GAP
+INFO_GAP = Layout.Page.INFO_GAP
+TAB_GAP = Layout.Page.TAB_GAP
 
 
 class PageTab(str, Enum):
@@ -84,7 +84,7 @@ class PageBar(Gtk.Box):
         self.on_primary: Callable[[], None] = lambda: None
         self.on_more: Callable[[Gtk.Widget], None] = lambda _w: None
 
-        self.crumbs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
+        self.crumbs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Page.CRUMB_GAP)
         self.crumbs.set_valign(Gtk.Align.CENTER)
         set_accessible_name(self.crumbs, _("Location"))
         self.pack_start(self.crumbs, True, True, 0)
@@ -142,7 +142,7 @@ class PageBar(Gtk.Box):
 
 class HostHeader(Gtk.Box):
     def __init__(self) -> None:
-        Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.L + 2)
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Page.HEADER_GAP)
         self.get_style_context().add_class("host-header")
         self.set_size_request(-1, Size.HOST_HEADER)
 
@@ -389,7 +389,7 @@ class InfoBar(Gtk.Box):
         self._compact = False
         self.connect("size-allocate", self._on_size_allocate)
 
-    COMPACT_WIDTH = 1250  # below this, a live session hides AUTH and PROXY (Details tab has them)
+    COMPACT_WIDTH = Layout.Page.INFO_COMPACT_WIDTH  # live session: hide AUTH and PROXY (Details tab has them)
 
     def _on_size_allocate(self, _widget, allocation) -> None:
         self._compact = allocation.width < self.COMPACT_WIDTH

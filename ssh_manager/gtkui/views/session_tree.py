@@ -32,7 +32,7 @@ from ..controllers.tree_controller import TreeRow  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.loader import current_palette  # noqa: E402
 from ..constants import Icons  # noqa: E402
-from ..theme.tokens import STATUS_GLYPHS, ConnectionStatus, Size  # noqa: E402
+from ..theme.tokens import STATUS_GLYPHS, ConnectionStatus, Layout, Size  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import render_svg_surface, tinted_icon_surface  # noqa: E402
 
@@ -101,19 +101,19 @@ def render_count(cell, model, tree_iter) -> None:
 
 # Geometry measured on the reference (sidebar 407px + 1px separator).
 ROW_HEIGHT = Size.TREE_ROW  # 41
-GROUP_GAP = 7  # extra space above every top-level group but the first
+GROUP_GAP = Layout.Tree.GROUP_GAP
 INSET = Size.TREE_INSET  # selection inset from both sidebar edges
 INDENT = Size.TREE_INDENT  # 25 per level
-LEAD = 26  # x of the level-0 chevron box
-CHEVRON = 14
-FOLDER = 18
-HOST_ICON = 16
-BAR_WIDTH, BAR_HEIGHT = 4, 24
-COUNT_RIGHT = 25  # count right edge from the row's right edge
-DOT_RIGHT = 28  # status-dot centre from the row's right edge
-DOT = 7
-COUNT_SCALE = 13 / 16
-RADIUS = 8
+LEAD = Layout.Tree.LEAD
+CHEVRON = Layout.Tree.CHEVRON
+FOLDER = Layout.Tree.FOLDER
+HOST_ICON = Layout.Tree.HOST_ICON
+BAR_WIDTH, BAR_HEIGHT = Layout.Tree.BAR_WIDTH, Layout.Tree.BAR_HEIGHT
+COUNT_RIGHT = Layout.Tree.COUNT_RIGHT
+DOT_RIGHT = Layout.Tree.DOT_RIGHT
+DOT = Layout.Tree.DOT
+COUNT_SCALE = 13 / 16  # count font (13px) relative to the row font (16px)
+RADIUS = Layout.Tree.RADIUS
 
 
 def row_geometry(kind: object, depth: int) -> Dict[str, int]:

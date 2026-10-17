@@ -11,6 +11,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
+from ..theme.tokens import Layout  # noqa: E402
+
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -20,9 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 COMPACT_SIDEBAR_WIDTH = 300
-# The pane separator sits at x = position; the reference puts the top-bar
-# divider one pixel to its right, i.e. the brand block is position + 2 wide.
-BRAND_DIVIDER_OFFSET = 2
+BRAND_DIVIDER_OFFSET = Layout.Topbar.BRAND_DIVIDER_OFFSET
 
 
 class LayoutController:

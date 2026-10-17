@@ -29,15 +29,15 @@ from ..constants import Icons  # noqa: E402
 from ..controllers.notifications import MessageHistory  # noqa: E402
 from ..health import Health  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Level, Size, Space  # noqa: E402
+from ..theme.tokens import Layout, Level, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import MessageHistoryButton  # noqa: E402
 from ..workspaces import Workspace  # noqa: E402
 
-BRAND_PADDING = 29  # logo tile inset from the window edge (reference)
-WORKSPACE_GAP = 22  # divider → workspace button (plus its 8px padding = 30)
+BRAND_PADDING = Layout.Topbar.BRAND_INSET
+WORKSPACE_GAP = Layout.Topbar.WORKSPACE_GAP
 
 
 def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) -> Gio.Menu:
@@ -117,7 +117,7 @@ class HeaderView(Gtk.HeaderBar):
         self.brand.pack_start(logo, False, False, 0)
         self.wordmark = Gtk.Label(label=_("SSH Manager"))
         self.wordmark.get_style_context().add_class("wordmark")
-        self.wordmark.set_margin_start(Space.M - 1)
+        self.wordmark.set_margin_start(Layout.Topbar.WORDMARK_GAP)
         self.wordmark.set_ellipsize(Pango.EllipsizeMode.END)
         self.brand.pack_start(self.wordmark, False, False, 0)
 
@@ -131,7 +131,7 @@ class HeaderView(Gtk.HeaderBar):
         self.divider = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         self.divider.get_style_context().add_class("topbar-divider")
         self.divider.set_valign(Gtk.Align.CENTER)
-        self.divider.set_size_request(1, 28)
+        self.divider.set_size_request(1, Layout.Topbar.DIVIDER_HEIGHT)
         self.brand.pack_end(self.divider, False, False, 0)
         self.pack_start(self.brand)
 
@@ -148,7 +148,7 @@ class HeaderView(Gtk.HeaderBar):
         content.pack_start(self._workspace_caption, False, False, 0)
         self._workspace_name = Gtk.Label(label="")
         self._workspace_name.get_style_context().add_class("workspace-name")
-        self._workspace_name.set_margin_start(Space.L)
+        self._workspace_name.set_margin_start(Layout.Topbar.WORKSPACE_NAME_GAP)
         self._workspace_name.set_ellipsize(Pango.EllipsizeMode.END)
         self._workspace_name.set_max_width_chars(32)
         content.pack_start(self._workspace_name, False, False, 0)
@@ -175,7 +175,7 @@ class HeaderView(Gtk.HeaderBar):
         self.avatar_button.set_valign(Gtk.Align.CENTER)
         self.avatar_button.set_halign(Gtk.Align.CENTER)
         self.avatar_button.set_size_request(Size.AVATAR, Size.AVATAR)
-        self.avatar_button.set_margin_start(17)
+        self.avatar_button.set_margin_start(Layout.Topbar.AVATAR_GAP)
         self._avatar_label = Gtk.Label(label="U")
         self.avatar_button.add(self._avatar_label)
         self.avatar_button.set_tooltip_text(_("Account and application menu (F10)"))
@@ -192,7 +192,7 @@ class HeaderView(Gtk.HeaderBar):
         self.help_button.add(make_icon(Icons.HELP, 20))
         self.help_button.set_tooltip_text(_("Help"))
         set_accessible_name(self.help_button, _("Help"))
-        self.help_button.set_margin_start(Space.M)
+        self.help_button.set_margin_start(Layout.Topbar.HELP_GAP)
         help_popover = Gtk.Popover.new_from_model(self.help_button, _help_menu_model())
         help_popover.get_style_context().add_class("sm-popover")
         self.help_button.set_popover(help_popover)
@@ -208,8 +208,8 @@ class HeaderView(Gtk.HeaderBar):
         self.health_button.get_style_context().add_class("health")
         self.health_button.set_relief(Gtk.ReliefStyle.NONE)
         self.health_button.set_valign(Gtk.Align.CENTER)
-        self.health_button.set_margin_end(Space.L + 3)
-        health = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
+        self.health_button.set_margin_end(Layout.Topbar.HEALTH_GAP)
+        health = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Topbar.HEALTH_DOT_GAP)
         self._health_dot = Dot(9, css_class="health-dot")
         health.pack_start(self._health_dot, False, False, 0)
         self._health_label = Gtk.Label(label=_("All systems operational"))
