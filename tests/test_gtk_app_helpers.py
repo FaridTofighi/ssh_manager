@@ -5,7 +5,18 @@ from pathlib import Path
 from unittest import mock
 
 from ssh_manager.config import HostEntry
+from ssh_manager.gtkui.constants import Icons, TreeColumn
 from ssh_manager.gtkui.theme.loader import current_palette
+from ssh_manager.gtkui.views.session_tree import render_count, render_icon, render_status
+from ssh_manager.gtkui.widgets.icons import tinted_icon_surface
+
+
+class _FakeCell:
+    def __init__(self) -> None:
+        self.props = {}
+
+    def set_property(self, name, value) -> None:
+        self.props[name] = value
 from ssh_manager.gtk_app import (
     Gdk,
     GdkPixbuf,
@@ -175,207 +186,73 @@ class GtkAppHelperTests(unittest.TestCase):
                 "_host_status": {},
                 "_host_iters": {"prod::web::app": "iter-1"},
                 "tree_store": FakeTreeStore(),
-                "_status_color": SSHManagerWindow._status_color,
-                "COLUMN_STATUS_COLOR": SSHManagerWindow.COLUMN_STATUS_COLOR,
+                "COLUMN_STATUS": SSHManagerWindow.COLUMN_STATUS,
             },
         )()
 
         SSHManagerWindow._set_host_status_for_key(dummy, "prod::web::app", "connected")
 
         self.assertEqual(dummy._host_status["prod::web::app"], "connected")
-        self.assertEqual(updates, [("iter-1", SSHManagerWindow.COLUMN_STATUS_COLOR, current_palette().success)])
+        # The status column stores the state; the renderer maps it to glyph + color.
+        self.assertEqual(updates, [("iter-1", TreeColumn.STATUS, "connected")])
 
-    def test_render_icon_uses_app_drawn_pixbuf_when_row_has_color(self) -> None:
-        class FakeCell:
-            def __init__(self) -> None:
-                self.props = {}
-
-            def set_property(self, name, value) -> None:
-                self.props[name] = value
-
+    # The hand-painted pixbuf icons were replaced by tinted themed icons and the
+    # status is no longer shown by coloring the row text; these tests cover the
+    # replacements (see views/session_tree.py).
+    def _fake_model(self, **values):
         class FakeModel:
             def get_value(self, _iter, column):
-                if column == SSHManagerWindow.COLUMN_ICON:
-                    return SSHManagerWindow.ICON_HOST
-                if column == SSHManagerWindow.COLUMN_COLOR:
-                    return "#112233"
-                return ""
+                return values.get(TreeColumn(column).name, "")
 
-        pixbuf = object()
-        dummy = type(
-            "DummyWindow",
-            (),
-            {
-                "COLUMN_ICON": SSHManagerWindow.COLUMN_ICON,
-                "COLUMN_COLOR": SSHManagerWindow.COLUMN_COLOR,
-                "_tree_icon_pixbuf": lambda self, icon_name, color: pixbuf
-                if (icon_name, color) == (SSHManagerWindow.ICON_HOST, "#112233")
-                else None,
-            },
-        )()
+        return FakeModel()
 
-        cell = FakeCell()
-        SSHManagerWindow._render_icon(dummy, None, cell, FakeModel(), object(), None)
+    def test_render_icon_uses_tinted_theme_icon_with_row_color(self) -> None:
+        cell = _FakeCell()
+        model = self._fake_model(ICON=Icons.HOST, COLOR="#112233", KIND="host")
+        render_icon(None, cell, model, object(), {})
+        self.assertIsNotNone(cell.props["surface"])
 
-        self.assertTrue(cell.props["visible"])
-        self.assertIs(cell.props["pixbuf"], pixbuf)
-        self.assertIsNone(cell.props["icon-name"])
+    def test_render_icon_falls_back_to_token_color_without_row_color(self) -> None:
+        cache = {}
+        cell = _FakeCell()
+        model = self._fake_model(ICON=Icons.GROUP, COLOR="", KIND="parent")
+        render_icon(None, cell, model, object(), cache)
+        self.assertIsNotNone(cell.props["surface"])
+        self.assertEqual({key[1] for key in cache}, {current_palette().icon_group})
 
-    def test_render_icon_falls_back_to_icon_name_without_app_pixbuf(self) -> None:
-        class FakeCell:
-            def __init__(self) -> None:
-                self.props = {}
+    def test_tinted_icon_surface_rejects_invalid_color(self) -> None:
+        self.assertIsNone(tinted_icon_surface(Icons.HOST, "not-a-color"))
+        self.assertIsNotNone(tinted_icon_surface(Icons.HOST, "#445566"))
 
-            def set_property(self, name, value) -> None:
-                self.props[name] = value
+    def test_status_glyph_shape_and_color_per_state(self) -> None:
+        palette = current_palette()
+        cell = _FakeCell()
+        render_status(cell, self._fake_model(KIND="host", STATUS="connected"), object())
+        self.assertEqual((cell.props["text"], cell.props["foreground"]), ("●", palette.success))
+        cell = _FakeCell()
+        render_status(cell, self._fake_model(KIND="host", STATUS="failed"), object())
+        self.assertEqual((cell.props["text"], cell.props["foreground"]), ("✖", palette.danger))
+        cell = _FakeCell()
+        render_status(cell, self._fake_model(KIND="host", STATUS="unknown"), object())
+        self.assertFalse(cell.props["visible"])
+        cell = _FakeCell()
+        render_status(cell, self._fake_model(KIND="parent", STATUS="connected"), object())
+        self.assertFalse(cell.props["visible"])
 
-        class FakeModel:
-            def get_value(self, _iter, column):
-                if column == SSHManagerWindow.COLUMN_ICON:
-                    return SSHManagerWindow.ICON_HOST
-                if column == SSHManagerWindow.COLUMN_COLOR:
-                    return "#112233"
-                return ""
-
-        dummy = type(
-            "DummyWindow",
-            (),
-            {
-                "COLUMN_ICON": SSHManagerWindow.COLUMN_ICON,
-                "COLUMN_COLOR": SSHManagerWindow.COLUMN_COLOR,
-                "_tree_icon_pixbuf": lambda self, icon_name, color: None,
-            },
-        )()
-
-        cell = FakeCell()
-        SSHManagerWindow._render_icon(dummy, None, cell, FakeModel(), object(), None)
-
-        self.assertTrue(cell.props["visible"])
-        self.assertIsNone(cell.props["pixbuf"])
-        self.assertEqual(cell.props["icon-name"], SSHManagerWindow.ICON_HOST)
-
-    def test_tree_icon_pixbuf_draws_default_icon_without_custom_color(self) -> None:
-        dummy = type(
-            "DummyWindow",
-            (),
-            {
-                "_color_pixbuf_cache": {},
-                "_default_tree_icon_color": SSHManagerWindow._default_tree_icon_color,
-                "_draw_colored_tree_icon_pixbuf": SSHManagerWindow._draw_colored_tree_icon_pixbuf,
-                "_pixbuf_has_visible_pixels": SSHManagerWindow._pixbuf_has_visible_pixels,
-                "_scale_rgb": SSHManagerWindow._scale_rgb,
-                "_blend_rgb": SSHManagerWindow._blend_rgb,
-                "_paint_rect": SSHManagerWindow._paint_rect,
-                "ICON_GROUP": SSHManagerWindow.ICON_GROUP,
-                "ICON_SUBGROUP": SSHManagerWindow.ICON_SUBGROUP,
-                "ICON_HOST": SSHManagerWindow.ICON_HOST,
-            },
-        )()
-
-        pixbuf = SSHManagerWindow._tree_icon_pixbuf(dummy, SSHManagerWindow.ICON_GROUP, "")
-
-        self.assertIsNotNone(pixbuf)
-        self.assertTrue(SSHManagerWindow._pixbuf_has_visible_pixels(dummy, pixbuf))
-
-    def test_draw_colored_tree_icon_pixbuf_builds_visible_folder_icon(self) -> None:
-        rgba = Gdk.RGBA()
-        self.assertTrue(rgba.parse("#112233"))
-        dummy = type(
-            "DummyWindow",
-            (),
-            {
-                "_scale_rgb": SSHManagerWindow._scale_rgb,
-                "_blend_rgb": SSHManagerWindow._blend_rgb,
-                "_paint_rect": SSHManagerWindow._paint_rect,
-                "ICON_GROUP": SSHManagerWindow.ICON_GROUP,
-                "ICON_SUBGROUP": SSHManagerWindow.ICON_SUBGROUP,
-                "ICON_HOST": SSHManagerWindow.ICON_HOST,
-            },
-        )()
-
-        pixbuf = SSHManagerWindow._draw_colored_tree_icon_pixbuf(dummy, SSHManagerWindow.ICON_SUBGROUP, rgba)
-
-        self.assertTrue(SSHManagerWindow._pixbuf_has_visible_pixels(object(), pixbuf))
-        pixels = bytes(pixbuf.get_pixels())
-        self.assertIn(bytes([17, 34, 51, 255]), [pixels[i : i + 4] for i in range(0, len(pixels), 4)])
-
-    def test_draw_colored_tree_icon_pixbuf_builds_visible_host_icon(self) -> None:
-        rgba = Gdk.RGBA()
-        self.assertTrue(rgba.parse("#112233"))
-        dummy = type(
-            "DummyWindow",
-            (),
-            {
-                "_scale_rgb": SSHManagerWindow._scale_rgb,
-                "_blend_rgb": SSHManagerWindow._blend_rgb,
-                "_paint_rect": SSHManagerWindow._paint_rect,
-                "ICON_GROUP": SSHManagerWindow.ICON_GROUP,
-                "ICON_SUBGROUP": SSHManagerWindow.ICON_SUBGROUP,
-                "ICON_HOST": SSHManagerWindow.ICON_HOST,
-            },
-        )()
-
-        pixbuf = SSHManagerWindow._draw_colored_tree_icon_pixbuf(
-            dummy,
-            SSHManagerWindow.ICON_HOST,
-            rgba,
-        )
-
-        self.assertTrue(SSHManagerWindow._pixbuf_has_visible_pixels(object(), pixbuf))
-        pixels = bytes(pixbuf.get_pixels())
-        self.assertIn(bytes([17, 34, 51, 255]), [pixels[i : i + 4] for i in range(0, len(pixels), 4)])
-
-    def test_pixbuf_visible_check_rejects_fully_transparent_icons(self) -> None:
-        transparent = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 2, 2)
-        transparent.fill(0x11223300)
-        visible = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 2, 2)
-        visible.fill(0x11223344)
-        no_alpha = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 2, 2)
-        no_alpha.fill(0x112233ff)
-
-        self.assertFalse(SSHManagerWindow._pixbuf_has_visible_pixels(object(), transparent))
-        self.assertTrue(SSHManagerWindow._pixbuf_has_visible_pixels(object(), visible))
-        self.assertTrue(SSHManagerWindow._pixbuf_has_visible_pixels(object(), no_alpha))
-
-    def test_render_text_clears_status_foreground_when_no_status_color(self) -> None:
-        class FakeCell:
-            def __init__(self) -> None:
-                self.props = {}
-
-            def set_property(self, name, value) -> None:
-                self.props[name] = value
-
-        class FakeModel:
-            def __init__(self, status_color: str, item_color: str = "") -> None:
-                self.status_color = status_color
-                self.item_color = item_color
+    def test_count_badge_only_on_groups(self) -> None:
+        class CountModel:
+            def __init__(self, kind):
+                self.kind = kind
 
             def get_value(self, _iter, column):
-                if column == SSHManagerWindow.COLUMN_TEXT:
-                    return "app"
-                if column == SSHManagerWindow.COLUMN_COLOR:
-                    return self.item_color
-                if column == SSHManagerWindow.COLUMN_STATUS_COLOR:
-                    return self.status_color
-                return ""
+                return {TreeColumn.KIND: self.kind, TreeColumn.COUNT: 3}.get(column, "")
 
-        cell = FakeCell()
-        SSHManagerWindow._render_text(SSHManagerWindow, None, cell, FakeModel("#ef4444"), object(), None)
-        self.assertEqual(cell.props["foreground"], "#ef4444")
-        self.assertTrue(cell.props["foreground-set"])
-
-        cell = FakeCell()
-        SSHManagerWindow._render_text(SSHManagerWindow, None, cell, FakeModel(""), object(), None)
-        self.assertFalse(cell.props["foreground-set"])
-
-        cell = FakeCell()
-        SSHManagerWindow._render_text(SSHManagerWindow, None, cell, FakeModel("", "#112233"), object(), None)
-        self.assertFalse(cell.props["foreground-set"])
-
-        cell = FakeCell()
-        SSHManagerWindow._render_text(SSHManagerWindow, None, cell, FakeModel("#ef4444", "#112233"), object(), None)
-        self.assertEqual(cell.props["foreground"], "#ef4444")
-        self.assertTrue(cell.props["foreground-set"])
+        cell = _FakeCell()
+        render_count(cell, CountModel("child"), object())
+        self.assertEqual((cell.props["visible"], cell.props["text"]), (True, "3"))
+        cell = _FakeCell()
+        render_count(cell, CountModel("host"), object())
+        self.assertFalse(cell.props["visible"])
 
     def test_save_ui_state_persists_host_colors(self) -> None:
         class FakePaned:

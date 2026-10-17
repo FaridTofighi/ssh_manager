@@ -8,6 +8,19 @@ from typing import Callable, List, Optional, Tuple
 from .i18n import _
 from .theme.tokens import ConnectionStatus
 
+STATUS_LABELS = {
+    ConnectionStatus.CONNECTED: _("Connected"),
+    ConnectionStatus.CONNECTING: _("Connecting…"),
+    ConnectionStatus.FAILED: _("Connection failed"),
+    ConnectionStatus.UNKNOWN: _("Not connected"),
+}
+
+
+def status_text(status: object) -> str:
+    """Human-readable label for a connection status."""
+
+    return STATUS_LABELS[ConnectionStatus.coerce(status)]
+
 
 @dataclass
 class DetailAction:

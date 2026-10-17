@@ -13,26 +13,18 @@ a tooltip, so status is never communicated by color alone:
 from __future__ import annotations
 
 import math
-from typing import Dict
 
 import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
-from ..i18n import _  # noqa: E402
 from ..theme.tokens import ConnectionStatus  # noqa: E402
-
-STATUS_LABELS: Dict[ConnectionStatus, str] = {
-    ConnectionStatus.CONNECTED: _("Connected"),
-    ConnectionStatus.CONNECTING: _("Connecting…"),
-    ConnectionStatus.FAILED: _("Connection failed"),
-    ConnectionStatus.UNKNOWN: _("Not connected"),
-}
+from ..view_models import status_text  # noqa: E402
 
 
 def status_label(status: object) -> str:
-    return STATUS_LABELS[ConnectionStatus.coerce(status)]
+    return status_text(status)
 
 
 class StatusDot(Gtk.DrawingArea):

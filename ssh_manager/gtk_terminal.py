@@ -1710,6 +1710,19 @@ class TerminalNotebook(Gtk.Box):
     def tabs(self) -> List[TerminalTab]:
         return list(self._tabs)
 
+    def find_tab(self, host: HostEntry) -> Optional[TerminalTab]:
+        """Return the first open session for ``host`` (matched by group path and alias)."""
+
+        for tab in self._tabs:
+            other = tab.host
+            if (other.parent_group, other.child_group, other.alias) == (host.parent_group, host.child_group, host.alias):
+                return tab
+        return None
+
+    def focus_tab(self, tab: TerminalTab) -> None:
+        if tab in self._tabs:
+            self._focus_tab(tab)
+
     def _focus_tab(self, tab: TerminalTab) -> None:
         self._last_current_tab = tab
         if not self._tile_mode:

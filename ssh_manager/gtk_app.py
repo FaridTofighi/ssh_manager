@@ -51,7 +51,18 @@ from ssh_manager.gtkui.validation import validate_child_path, validate_group_nam
 from ssh_manager.gtkui.controllers.notifications import ToastController
 from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window, register_actions
 from ssh_manager.gtkui.controllers import details_presenter
-from ssh_manager.gtkui.constants import RowKind
+from ssh_manager.gtkui.constants import Icons, RowKind, TreeColumn
+from ssh_manager.gtkui.controllers import host_actions
+from ssh_manager.gtkui.controllers.shortcuts import accel_label
+from ssh_manager.gtkui.controllers.tree_controller import (
+    TreeCallbacks,
+    build_tree_rows,
+    parse_filter,
+    search_text_for_host,
+    sidebar_page_for,
+)
+from ssh_manager.gtkui.views.session_tree import SessionTreeView, new_tree_store
+from ssh_manager.gtkui.widgets.menus import build_context_menu, popup_menu
 from ssh_manager.gtkui.dialogs.files import choose_folder
 from ssh_manager.gtkui.views.details import DetailsView
 from ssh_manager.gtkui.views.header import HeaderView
@@ -1813,19 +1824,21 @@ class SSHManagerApplication(Gtk.Application):
 class SSHManagerWindow(Gtk.ApplicationWindow):
     """Main window for the SSH manager."""
 
-    COLUMN_ICON = 0
-    COLUMN_TEXT = 1
-    COLUMN_KIND = 2
-    COLUMN_PARENT = 3
-    COLUMN_CHILD = 4
-    COLUMN_ALIAS = 5
-    COLUMN_HOST = 6
-    COLUMN_SEARCH = 7
-    COLUMN_COLOR = 8
-    COLUMN_STATUS_COLOR = 9
-    ICON_GROUP = "ssh-manager-group"
-    ICON_SUBGROUP = "ssh-manager-subgroup"
-    ICON_HOST = "ssh-manager-host"
+    # Tree column indexes (aliases of TreeColumn kept for compatibility).
+    COLUMN_ICON = TreeColumn.ICON
+    COLUMN_TEXT = TreeColumn.TEXT
+    COLUMN_KIND = TreeColumn.KIND
+    COLUMN_PARENT = TreeColumn.PARENT
+    COLUMN_CHILD = TreeColumn.CHILD
+    COLUMN_ALIAS = TreeColumn.ALIAS
+    COLUMN_HOST = TreeColumn.HOST
+    COLUMN_SEARCH = TreeColumn.SEARCH
+    COLUMN_COLOR = TreeColumn.COLOR
+    COLUMN_STATUS = TreeColumn.STATUS
+    COLUMN_STATUS_COLOR = TreeColumn.STATUS  # now stores the status name, not a color
+    ICON_GROUP = Icons.GROUP
+    ICON_SUBGROUP = Icons.SUBGROUP
+    ICON_HOST = Icons.HOST
 
     def __init__(
         self,
@@ -1912,7 +1925,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._terminal_maximized = False
         self._details_visible_before_max = True
         self._compact = False
-        self.tree_store = Gtk.TreeStore(str, str, str, str, str, str, object, str, str, str)
+        self.tree_store = new_tree_store()
 
     def _warn_if_password_file_locked(self) -> None:
         backend = self._secure_store.backend
@@ -1983,28 +1996,15 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.set_smart_groups([group.name for group in self._smart_groups])
         return sidebar
 
-    def _build_tree_view(self) -> Gtk.TreeView:
-        tree_view = Gtk.TreeView(model=self.tree_store)
-        tree_view.set_headers_visible(False)
-        tree_view.set_enable_tree_lines(True)
+    def _build_tree_view(self) -> SessionTreeView:
+        tree_view = SessionTreeView(self.tree_store)
         tree_view.connect("row-activated", self._on_row_activated)
         tree_view.connect("button-press-event", self._on_tree_button_press)
         tree_view.connect("key-press-event", self._on_tree_key_press)
-        selection = tree_view.get_selection()
-        selection.set_mode(Gtk.SelectionMode.MULTIPLE)
-        selection.connect("changed", self._on_selection_changed)
+        tree_view.get_selection().connect("changed", self._on_selection_changed)
+        tree_view.on_context_menu = self._show_context_menu_for_selection
         self.tree_view = tree_view
         self._configure_drag_and_drop()
-
-        icon_renderer = Gtk.CellRendererPixbuf()
-        text_renderer = Gtk.CellRendererText()
-        text_renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
-        column = Gtk.TreeViewColumn()
-        column.pack_start(icon_renderer, False)
-        column.pack_start(text_renderer, True)
-        column.set_cell_data_func(icon_renderer, self._render_icon)
-        column.set_cell_data_func(text_renderer, self._render_text)
-        tree_view.append_column(column)
         return tree_view
 
     # ------------------------------------------------------------ sidebar state
@@ -2172,157 +2172,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             tree_view.queue_draw()
 
     # ------------------------------------------------------------- tree helpers
-    def _render_icon(self, _column, cell: Gtk.CellRendererPixbuf, model, iter_, _data) -> None:
-        icon_name = model.get_value(iter_, self.COLUMN_ICON)
-        color = model.get_value(iter_, self.COLUMN_COLOR)
-        cell.set_property("visible", True)
-        if icon_name:
-            pix = self._tree_icon_pixbuf(icon_name, color)
-            if pix:
-                cell.set_property("pixbuf", pix)
-                cell.set_property("icon-name", None)
-                return
-        cell.set_property("pixbuf", None)
-        cell.set_property("icon-name", icon_name)
-
-    def _render_text(self, _column, cell: Gtk.CellRendererText, model, iter_, _data) -> None:
-        cell.set_property("text", model.get_value(iter_, self.COLUMN_TEXT))
-        status_color = model.get_value(iter_, self.COLUMN_STATUS_COLOR)
-        if status_color:
-            cell.set_property("foreground", status_color)
-            cell.set_property("foreground-set", True)
-        else:
-            cell.set_property("foreground-set", False)
-
-    def _tree_icon_pixbuf(self, icon_name: str, color: str = "") -> Optional[GdkPixbuf.Pixbuf]:
-        icon_color = color or self._default_tree_icon_color(icon_name)
-        cache_key = f"icon::{icon_name}::{icon_color}"
-        cached = self._color_pixbuf_cache.get(cache_key)
-        if cached:
-            return cached
-        rgba = Gdk.RGBA()
-        if not rgba.parse(icon_color):
-            return None
-        pix = self._draw_colored_tree_icon_pixbuf(icon_name, rgba)
-        if pix and self._pixbuf_has_visible_pixels(pix):
-            self._color_pixbuf_cache[cache_key] = pix
-            return pix
-        return None
-
-    def _default_tree_icon_color(self, icon_name: str) -> str:
-        palette = current_palette()
-        if icon_name == self.ICON_GROUP:
-            return palette.icon_group
-        if icon_name == self.ICON_SUBGROUP:
-            return palette.icon_subgroup
-        if icon_name == self.ICON_HOST:
-            return palette.icon_host
-        return palette.text_disabled
-
-    def _draw_colored_tree_icon_pixbuf(self, icon_name: str, rgba: Gdk.RGBA) -> GdkPixbuf.Pixbuf:
-        size = 18
-        rowstride = size * 4
-        pixels = bytearray(rowstride * size)
-        r = int(rgba.red * 255 + 0.5)
-        g = int(rgba.green * 255 + 0.5)
-        b = int(rgba.blue * 255 + 0.5)
-        a = int(rgba.alpha * 255 + 0.5)
-        fill = (r, g, b, a)
-        outline = (*self._scale_rgb(r, g, b, 0.58), a)
-        light = (*self._blend_rgb((r, g, b), (255, 255, 255), 0.28), a)
-        detail = (*self._blend_rgb((r, g, b), (255, 255, 255), 0.7), min(230, a))
-        if icon_name == self.ICON_GROUP:
-            self._paint_rect(pixels, size, 2, 5, 14, 15, outline)
-            self._paint_rect(pixels, size, 3, 6, 13, 14, fill)
-            self._paint_rect(pixels, size, 5, 3, 16, 13, outline)
-            self._paint_rect(pixels, size, 6, 4, 15, 12, light)
-            self._paint_rect(pixels, size, 7, 6, 14, 7, detail)
-            self._paint_rect(pixels, size, 7, 9, 14, 10, detail)
-        elif icon_name == self.ICON_SUBGROUP:
-            self._paint_rect(pixels, size, 3, 3, 10, 7, outline)
-            self._paint_rect(pixels, size, 4, 4, 10, 6, light)
-            self._paint_rect(pixels, size, 1, 6, 17, 16, outline)
-            self._paint_rect(pixels, size, 2, 7, 16, 15, fill)
-            self._paint_rect(pixels, size, 3, 8, 15, 9, light)
-            self._paint_rect(pixels, size, 12, 11, 14, 13, detail)
-        elif icon_name == self.ICON_HOST:
-            self._paint_rect(pixels, size, 2, 3, 16, 16, outline)
-            self._paint_rect(pixels, size, 3, 4, 15, 15, fill)
-            self._paint_rect(pixels, size, 4, 6, 14, 7, detail)
-            self._paint_rect(pixels, size, 4, 10, 14, 11, detail)
-            self._paint_rect(pixels, size, 12, 13, 14, 14, detail)
-        else:
-            self._paint_rect(pixels, size, 3, 3, 15, 15, outline)
-            self._paint_rect(pixels, size, 4, 4, 14, 14, fill)
-        data = GLib.Bytes.new(bytes(pixels))
-        return GdkPixbuf.Pixbuf.new_from_bytes(
-            data,
-            GdkPixbuf.Colorspace.RGB,
-            True,
-            8,
-            size,
-            size,
-            rowstride,
-        )
-
-    def _paint_rect(
-        self,
-        pixels: bytearray,
-        size: int,
-        x1: int,
-        y1: int,
-        x2: int,
-        y2: int,
-        color: Tuple[int, int, int, int],
-    ) -> None:
-        r, g, b, a = color
-        rowstride = size * 4
-        for y in range(max(0, y1), min(size, y2)):
-            row = y * rowstride
-            for x in range(max(0, x1), min(size, x2)):
-                idx = row + x * 4
-                pixels[idx] = r
-                pixels[idx + 1] = g
-                pixels[idx + 2] = b
-                pixels[idx + 3] = a
-
-    def _scale_rgb(self, r: int, g: int, b: int, factor: float) -> Tuple[int, int, int]:
-        return (
-            max(0, min(255, int(r * factor + 0.5))),
-            max(0, min(255, int(g * factor + 0.5))),
-            max(0, min(255, int(b * factor + 0.5))),
-        )
-
-    def _blend_rgb(
-        self,
-        source: Tuple[int, int, int],
-        target: Tuple[int, int, int],
-        amount: float,
-    ) -> Tuple[int, int, int]:
-        return (
-            max(0, min(255, int(source[0] + (target[0] - source[0]) * amount + 0.5))),
-            max(0, min(255, int(source[1] + (target[1] - source[1]) * amount + 0.5))),
-            max(0, min(255, int(source[2] + (target[2] - source[2]) * amount + 0.5))),
-        )
-
-    def _pixbuf_has_visible_pixels(self, pixbuf: GdkPixbuf.Pixbuf) -> bool:
-        channels = pixbuf.get_n_channels()
-        if channels < 3:
-            return False
-        if not pixbuf.get_has_alpha() or channels < 4:
-            return True
-        width = pixbuf.get_width()
-        height = pixbuf.get_height()
-        rowstride = pixbuf.get_rowstride()
-        pixels = bytes(pixbuf.get_pixels())
-        for y in range(height):
-            row = y * rowstride
-            for x in range(width):
-                idx = row + (x * channels) + 3
-                if idx < len(pixels) and pixels[idx] > 0:
-                    return True
-        return False
-
     def _group_color_for(self, parent: str, child: str) -> str:
         key = parent if not child else f"{parent}/{child}"
         return self._group_colors.get(key, "")
@@ -2364,222 +2213,54 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         b = int(rgba.blue * 255 + 0.5)
         return f"#{r:02x}{g:02x}{b:02x}"
 
+    def _inventories(self):
+        inventories = [(self.manager.tree, False)]
+        if self._shared_manager:
+            inventories.append((self._shared_manager.tree, True))
+        return inventories
+
     def _rebuild_tree(self, *, refresh: bool = False) -> None:
         if refresh:
             self.manager.refresh()
-        query = self._sidebar.search_text.lower()
-        filter_query = self._filter_query.strip()
-        filter_terms = self._parse_filter(filter_query) if filter_query else None
-        if filter_query and filter_terms is None:
-            self._sidebar.set_filter_error(self._filter_error or _("Invalid filter."))
-            filter_terms = None
-        else:
-            self._sidebar.set_filter_error("")
-
-        self.tree_store.clear()
+        query = self._sidebar.search_text
+        terms, error = parse_filter(self._filter_query)
+        self._filter_error = error
+        self._sidebar.set_filter_error(error)
+        inventories = self._inventories()
+        rows = build_tree_rows(
+            inventories,
+            query,
+            terms,
+            TreeCallbacks(
+                display_user=self._display_username_for_host,
+                status=lambda key: self._host_status.get(key, "unknown"),
+                color=self._item_color_for,
+            ),
+        )
+        selected = self._current_item()
         self._host_lookup.clear()
-        self._host_iters = {}
         self._read_only_keys = set()
-
-        def walk_inventory(tree: Dict[str, Dict[str, GroupConfig]], shared: bool = False) -> None:
-            for parent_name, children in sorted(tree.items(), key=lambda kv: kv[0].lower()):
-                label_parent = f"[Shared] {parent_name}" if shared else parent_name
-                parent_iter: Optional[Gtk.TreeIter] = None
-                parent_matches = not query or query in label_parent.lower()
-                folder_cache: Dict[Tuple[str, str], Gtk.TreeIter] = {}
-
-                def ensure_parent_iter() -> Gtk.TreeIter:
-                    nonlocal parent_iter
-                    if parent_iter is None:
-                        color = self._item_color_for(label_parent, "")
-                        parent_iter = self.tree_store.append(
-                            None,
-                            [
-                                self.ICON_GROUP,
-                                label_parent,
-                                "parent",
-                                label_parent,
-                                "",
-                                "",
-                                None,
-                                label_parent.lower(),
-                                color,
-                                "",
-                            ],
-                        )
-                    return parent_iter
-
-                for child_name, group in sorted(children.items(), key=lambda kv: kv[0].lower()):
-                    child_matches = parent_matches or (query and query in child_name.lower())
-                    include_all_hosts = child_matches and bool(query)
-
-                    segments = child_name.split("/")
-                    current_iter = None
-                    if child_matches or include_all_hosts or not query:
-                        current_iter = ensure_parent_iter()
-                        path_parts: List[str] = []
-                        folder_iter = current_iter
-                        for segment in segments[:-1]:
-                            path_parts.append(segment)
-                            folder_path = "/".join(path_parts)
-                            cache_key = (label_parent, folder_path)
-                            folder_iter = folder_cache.get(cache_key)
-                            if folder_iter is None:
-                                color = self._item_color_for(label_parent, folder_path)
-                                folder_iter = self.tree_store.append(
-                                    current_iter,
-                                    [
-                                        self.ICON_SUBGROUP,
-                                        segment,
-                                        "child-folder",
-                                        label_parent,
-                                        folder_path,
-                                        "",
-                                        None,
-                                        f"{label_parent.lower()} {folder_path.lower()}",
-                                        color,
-                                        "",
-                                    ],
-                                )
-                                folder_cache[cache_key] = folder_iter
-                        current_iter = folder_iter
-
-                    child_iter: Optional[Gtk.TreeIter] = None
-                    if current_iter is not None:
-                        color = self._item_color_for(label_parent, child_name)
-                        child_iter = self.tree_store.append(
-                            current_iter,
-                            [
-                                self.ICON_SUBGROUP,
-                                segments[-1],
-                                "child",
-                                label_parent,
-                                child_name,
-                                "",
-                                None,
-                                f"{label_parent.lower()} {child_name.lower()}",
-                                color,
-                                "",
-                            ],
-                        )
-
-                    for host in sorted(group.hosts, key=lambda h: h.alias.lower()):
-                        if query and not (include_all_hosts or self._host_matches(host, query)):
-                            continue
-                        if filter_terms and not self._filter_host(host, filter_terms):
-                            continue
-                        child_iter = child_iter or ensure_parent_iter()
-                        if current_iter is not None and child_iter is None:
-                            color = self._item_color_for(label_parent, child_name)
-                            child_iter = self.tree_store.append(
-                                current_iter,
-                                [
-                                    self.ICON_SUBGROUP,
-                                    segments[-1],
-                                    "child",
-                                    label_parent,
-                                    child_name,
-                                    "",
-                                    None,
-                                    f"{label_parent.lower()} {child_name.lower()}",
-                                    color,
-                                    "",
-                                ],
-                            )
-                        icon = self.ICON_HOST
-                        display = host.alias
-                        key = self._make_host_key(label_parent, child_name, host.alias)
-                        state = self._host_status.get(key, "unknown")
-                        if key not in self._host_status:
-                            self._host_status[key] = state
-                        color_value = self._item_color_for(label_parent, child_name, host.alias)
-                        status_color = "" if state == "unknown" else self._status_color(state)
-                        host_iter = self.tree_store.append(
-                            child_iter,
-                            [
-                                icon,
-                                display,
-                                "host",
-                                label_parent,
-                                child_name,
-                                host.alias,
-                                host,
-                                self._search_text_for_host(host),
-                                color_value,
-                                status_color,
-                            ],
-                        )
-                        self._host_lookup[key] = host
-                        self._host_iters[key] = host_iter
-                        if shared:
-                            self._read_only_keys.add(key)
-
-                if parent_iter is None and parent_matches and not query:
-                    ensure_parent_iter()
-
-        walk_inventory(self.manager.tree, shared=False)
-        if self._shared_manager:
-            walk_inventory(self._shared_manager.tree, shared=True)
-
-        self.tree_view.expand_all()
-        self._update_sidebar_page(bool(query or filter_terms))
+        for top in rows:
+            for row in top.walk():
+                if row.kind is RowKind.HOST and row.host is not None:
+                    self._host_lookup[row.key] = row.host
+                    self._host_status.setdefault(row.key, "unknown")
+                    if row.shared:
+                        self._read_only_keys.add(row.key)
+        self._host_iters = self.tree_view.populate(rows)
+        self._restore_selection(*selected)
+        self._sidebar.set_page(TreePage(sidebar_page_for(inventories, rows, bool(query or terms))))
         self._update_details()
         self._update_toolbar_state()
 
-    def _update_sidebar_page(self, filtered: bool) -> None:
-        has_inventory = bool(self.manager.tree) or bool(self._shared_manager and self._shared_manager.tree)
-        if not has_inventory:
-            page = TreePage.EMPTY
-        elif self.tree_store.get_iter_first() is None and filtered:
-            page = TreePage.NO_RESULTS
-        else:
-            page = TreePage.TREE
-        self._sidebar.set_page(page)
-
-    def _host_matches(self, host: HostEntry, query: str) -> bool:
-        return query in self._search_text_for_host(host)
-
-    def _parse_filter(self, text: str) -> Optional[List[Tuple[str, str]]]:
-        terms: List[Tuple[str, str]] = []
-        if not text.strip():
-            return terms
-        self._filter_error = ""
-        chunks = [part.strip() for part in text.split("AND")]
-        for chunk in chunks:
-            if not chunk:
-                continue
-            if ":" not in chunk:
-                self._filter_error = f"Invalid term '{chunk}'. Use key:value."
-                return None
-            key, value = chunk.split(":", 1)
-            key = key.strip().lower()
-            value = value.strip().lower()
-            if not key or not value:
-                self._filter_error = f"Invalid term '{chunk}'."
-                return None
-            terms.append((key, value))
-        return terms
-
-    def _filter_host(self, host: HostEntry, terms: List[Tuple[str, str]]) -> bool:
-        for key, val in terms:
-            matched = False
-            if key in {"tag", "tags"}:
-                tags = [t.strip().lower() for t in (host_option(host, "tags") or "").split(",") if t.strip()]
-                matched = val in tags
-            elif key == "environment":
-                matched = host.metadata.get("environment", "").lower() == val
-            elif key == "owner":
-                matched = host.metadata.get("owner", "").lower() == val
-            elif key == "service":
-                matched = host.metadata.get("service", "").lower() == val
-            else:
-                matched = (
-                    (host_option(host, key) or "").lower() == val
-                    or host.metadata.get(key, "").lower() == val
-                )
-            if not matched:
-                return False
-        return True
+    def _restore_selection(self, kind: str, data: Dict[str, str]) -> None:
+        row_kind = RowKind.coerce(kind)
+        if row_kind is RowKind.HOST:
+            self._select_host(data.get("parent", ""), data.get("child", ""), data.get("alias", ""))
+        elif row_kind is RowKind.CHILD:
+            self._select_child_group(data.get("parent", ""), data.get("child", ""))
+        elif row_kind is RowKind.PARENT:
+            self._select_parent_group(data.get("parent", ""))
 
     def _host_has_plaintext_password(self, host: HostEntry) -> bool:
         for key, value in host.options.items():
@@ -2634,15 +2315,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return False
 
     def _search_text_for_host(self, host: HostEntry) -> str:
-        display_user = self._display_username_for_host(host).lower()
-        parts = [
-            host.alias.lower(),
-            (host_option(host, "hostname") or "").lower(),
-            display_user,
-            (host_option(host, "tags") or "").lower(),
-            (host_option(host, "proxyjump") or "").lower(),
-        ]
-        return " ".join(filter(None, parts))
+        return search_text_for_host(host, self._display_username_for_host(host))
 
     def _refresh_smart_group_list(self) -> None:
         self._sidebar.set_smart_groups([group.name for group in self._smart_groups])
@@ -2940,15 +2613,17 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return current_palette().status_color(state)
 
     def _set_host_status_for_key(self, key: str, state: str) -> None:
-        state = state if state in {"connected", "failed", "unknown"} else "unknown"
+        state = state if state in {"connected", "connecting", "failed", "unknown"} else "unknown"
         self._host_status[key] = state
-        color = "" if state == "unknown" else self._status_color(state)
         tree_iter = self._host_iters.get(key)
         if tree_iter:
             try:
-                self.tree_store.set_value(tree_iter, self.COLUMN_STATUS_COLOR, color)
+                self.tree_store.set_value(tree_iter, self.COLUMN_STATUS, state)
             except Exception:
                 pass
+        details = getattr(self, "_details", None)
+        if details is not None and self._selected_host() is not None:
+            self._update_details()
 
     def _set_host_status(self, host: HostEntry, state: str) -> None:
         self._set_host_status_for_key(self._host_key(host), state)
@@ -3214,118 +2889,81 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host = self._coerce_host(host_obj)
         if host:
             self._open_hosts([host])
+        elif view.row_expanded(path):
+            view.collapse_row(path)
+        else:
+            view.expand_row(path, False)
 
     def _on_tree_button_press(self, widget: Gtk.TreeView, event: Gdk.EventButton) -> bool:
-        if event.button != 3:
-            # Clear selection if clicking on empty area
-            if event.button == 1:
-                pos = widget.get_path_at_pos(int(event.x), int(event.y))
-                if not pos:
-                    widget.get_selection().unselect_all()
-                    return False
+        if event.button == 1:
+            if not widget.get_path_at_pos(int(event.x), int(event.y)):
+                widget.get_selection().unselect_all()
+            return False
+        if event.button != 3 or event.type != Gdk.EventType.BUTTON_PRESS:
             return False
         pos = widget.get_path_at_pos(int(event.x), int(event.y))
-        if not pos:
-            self._show_blank_context_menu(event)
-            return True
-        path, column, x, y = pos
-        widget.grab_focus()
-        selection = widget.get_selection()
-        # Preserve multi-selection when right-clicking on already-selected rows.
-        if not (selection and selection.path_is_selected(path)):
-            widget.set_cursor(path, column, False)
-        tree_iter = self.tree_store.get_iter(path)
-        if not tree_iter:
-            self._show_blank_context_menu(event)
-            return True
-        kind = self.tree_store.get_value(tree_iter, self.COLUMN_KIND)
-        menu = Gtk.Menu()
-        actions: list[Tuple[str, Callable[[], None]]] = []
-        host_for_menu: Optional[HostEntry] = None
-        perms_for_menu = {"can_view": True, "can_connect": True, "can_edit": True}
-        if kind == "host":
-            host_for_menu = self._coerce_host(self.tree_store.get_value(tree_iter, self.COLUMN_HOST))
-            if host_for_menu:
-                perms_for_menu = self._permissions_for_host(host_for_menu)
-
-        if kind == "host":
-            actions = [
-                ("Connect", self._connect_selected),
-                ("Reconnect", self._connect_selected),
-                ("Copy SCP Command…", self._copy_scp_command),
-                ("Edit", self._edit_selected),
-                ("Duplicate", self._duplicate_selected),
-                ("Move to Group…", self._move_selected),
-                ("Change Color…", self._change_group_color),
-                ("Clear Color", self._clear_group_color),
-                ("Forget Password", self._forget_password_for_current_host),
-                ("Delete", self._delete_selected),
-            ]
-        elif kind == "child":
-            actions = [
-                ("Connect All", self._connect_child_group),
-                ("New Subgroup…", self._create_child_group_for_current),
-                ("New Host…", self._create_host_in_current_group),
-                ("Edit", self._rename_child_group),
-                ("Duplicate", self._duplicate_child_group),
-                ("Change Color…", self._change_group_color),
-                ("Clear Color", self._clear_group_color),
-                ("Delete", self._delete_child_group),
-            ]
-        elif kind == "child-folder":
-            actions = [
-                ("Connect All", self._connect_child_group),
-                ("New Subgroup…", self._create_child_group_for_current),
-                ("New Host…", self._create_host_in_current_group),
-                ("Change Color…", self._change_group_color),
-                ("Clear Color", self._clear_group_color),
-            ]
-        elif kind == "parent":
-            actions = [
-                ("Connect All", self._connect_parent_group),
-                ("New Subgroup…", self._create_child_group_for_current),
-                ("New Host…", self._create_host_in_current_group),
-                ("Edit", self._rename_parent_group),
-                ("Duplicate", self._duplicate_parent_group),
-                ("Change Color…", self._change_group_color),
-                ("Clear Color", self._clear_group_color),
-                ("Delete", self._delete_parent_group),
-            ]
+        if pos:
+            path, column, _x, _y = pos
+            widget.grab_focus()
+            selection = widget.get_selection()
+            # Preserve multi-selection when right-clicking on already-selected rows.
+            if not selection.path_is_selected(path):
+                widget.set_cursor(path, column, False)
         else:
-            return False
-
-        for label, handler in actions:
-            item = Gtk.MenuItem(label=label)
-            item.connect("activate", lambda _item, cb=handler: cb())
-            if host_for_menu:
-                if label in {"Edit", "Duplicate", "Move to Group…", "Delete"} and not perms_for_menu.get("can_edit", True):
-                    item.set_sensitive(False)
-            menu.append(item)
-        toplevel = widget.get_toplevel()
-        if isinstance(toplevel, Gtk.Window) and hasattr(menu, "set_transient_for"):
-            menu.set_transient_for(toplevel)
-        menu.attach_to_widget(widget, None)
-        menu.show_all()
-        if hasattr(menu, "popup_at_pointer"):
-            menu.popup_at_pointer(event)
-        else:
-            menu.popup(None, None, None, None, event.button, event.time)
+            widget.get_selection().unselect_all()
+        self._show_context_menu_for_selection(event)
         return True
 
-    def _show_blank_context_menu(self, event: Gdk.EventButton) -> None:
-        menu = Gtk.Menu()
-        for label, handler in [
-            ("New Host", self._on_new_host_clicked),
-            ("New Group", self._create_parent_group),
-        ]:
-            item = Gtk.MenuItem(label=label)
-            item.connect("activate", lambda _item, cb=handler: cb())
-            menu.append(item)
-        menu.show_all()
-        if hasattr(menu, "popup_at_pointer"):
-            menu.popup_at_pointer(event)
+    def _menu_accels(self) -> Dict[str, str]:
+        return {name: accel_label(name) for name in ("host-connect", "rename", "host-delete", "new-host", "quick-connect")}
+
+    def _context_menu_spec(self):
+        kind_value, data = self._current_item()
+        kind = RowKind.coerce(kind_value)
+        accels = self._menu_accels()
+        if kind is RowKind.HOST:
+            host = self._selected_host()
+            perms = self._permissions_for_host(host) if host else {}
+            can_edit = bool(host) and not self._host_is_read_only(host)
+            has_session = bool(host and self.terminal_tabs.find_tab(host))
+            return host_actions.host_menu(self, can_edit=can_edit and perms.get("can_edit", True), has_session=has_session, accels=accels)
+        if kind is not None:
+            parent = data.get("parent", "")
+            child = data.get("child", "")
+            if kind is RowKind.PARENT:
+                has_hosts = bool(self._collect_hosts_for_parent_group(parent))
+            else:
+                has_hosts = bool(self._collect_hosts_for_child_group(parent, child))
+            return host_actions.group_menu(
+                self, kind, read_only=parent.startswith("[Shared] "), has_hosts=has_hosts, accels=accels
+            )
+        return host_actions.blank_menu(self, accels=accels)
+
+    def _show_context_menu_for_selection(self, event: Optional[Gdk.Event] = None) -> None:
+        menu = build_context_menu(self._context_menu_spec(), attach_to=self.tree_view)
+        if event is not None:
+            popup_menu(menu, event)
+            return
+        rect = self.tree_view.selected_row_rect()
+        window = self.tree_view.get_bin_window()
+        if rect is not None and window is not None:
+            menu.popup_at_rect(window, rect, Gdk.Gravity.SOUTH_WEST, Gdk.Gravity.NORTH_WEST, None)
         else:
-            menu.popup(None, None, None, None, event.button, event.time)
+            popup_menu(menu, None, widget=self.tree_view)
+
+    def _reconnect_selected(self) -> None:
+        host = self._selected_host()
+        tab = self.terminal_tabs.find_tab(host) if host else None
+        if tab is None:
+            self._connect_selected()
+            return
+        self.terminal_tabs.focus_tab(tab)
+        tab.reconnect()
+
+    def _change_host_color(self) -> None:
+        """Pick a color for the selected host (not its group)."""
+
+        self._change_group_color()
 
     def _change_group_color(self) -> None:
         kind, data = self._current_item()
@@ -3654,45 +3292,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------ toolbar actions
     def _on_refresh_clicked(self) -> None:
         self._rebuild_tree(refresh=True)
-
-    def _on_new_host_clicked(self) -> None:
-        menu = Gtk.Menu()
-
-        direct_item = Gtk.MenuItem(label="New Host…")
-        direct_item.connect("activate", lambda *_: self.prompt_new_host())
-        menu.append(direct_item)
-
-        tmpl_root = Gtk.MenuItem(label="New from Template")
-        tmpl_menu = Gtk.Menu()
-        for tmpl in built_in_templates():
-            item = Gtk.MenuItem(label=f"{tmpl.label}")
-            item.connect("activate", lambda _m, t=tmpl: self.prompt_new_host(template=t))
-            tmpl_menu.append(item)
-        tmpl_menu.show_all()
-        tmpl_root.set_submenu(tmpl_menu)
-        menu.append(tmpl_root)
-
-        menu.show_all()
-        self._popup_menu(menu, getattr(self, "_new_host_button", None))
-
-    def _popup_menu(self, menu: Gtk.Menu, anchor: Optional[Gtk.Widget]) -> None:
-        if anchor is not None and hasattr(menu, "popup_at_widget"):
-            menu.popup_at_widget(anchor, Gdk.Gravity.SOUTH, Gdk.Gravity.NORTH, None)
-        elif hasattr(menu, "popup_at_pointer"):
-            menu.popup_at_pointer(Gtk.get_current_event())
-        else:
-            menu.popup(None, None, None, None, 0, Gtk.get_current_event_time())
-
-    def _on_new_folder_clicked(self) -> None:
-        menu = Gtk.Menu()
-        parent_item = Gtk.MenuItem(label="Parent Group")
-        parent_item.connect("activate", lambda *_: self._create_parent_group())
-        child_item = Gtk.MenuItem(label="Child Group")
-        child_item.connect("activate", lambda *_: self._create_child_group())
-        menu.append(parent_item)
-        menu.append(child_item)
-        menu.show_all()
-        self._popup_menu(menu, getattr(self, "_new_folder_button", None))
 
     def _on_edit_clicked(self) -> None:
         kind, _ = self._current_item()
@@ -4922,10 +4521,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         """Re-render rows whose colors come from the active palette."""
 
         self._color_pixbuf_cache.clear()
-        for key, state in list(self._host_status.items()):
-            self._set_host_status_for_key(key, state)
         if hasattr(self, "tree_view"):
-            self.tree_view.queue_draw()
+            self.tree_view.clear_icon_cache()
 
     def _load_ui_state(self) -> Dict[str, object]:
         if not self._ui_state_path.exists():

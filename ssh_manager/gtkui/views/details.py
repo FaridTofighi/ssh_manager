@@ -61,7 +61,9 @@ class DetailsView(Gtk.Box):
 
         self.chips = ChipFlow()
         self.chips.set_valign(Gtk.Align.CENTER)
+        self.chips.set_halign(Gtk.Align.START)
         header.pack_start(self.chips, True, True, 0)
+        titles.set_size_request(200, -1)
 
         self._actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
         self._actions_box.set_valign(Gtk.Align.CENTER)
