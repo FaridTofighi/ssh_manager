@@ -385,6 +385,7 @@ class InfoBar(Gtk.Box):
         self.pack_start(self.live, True, True, 0)
         self.copy_button = IconButton(Icons.COPY, _("Copy SSH command"), lambda: self.on_copy(), css_classes=("info-copy",))
         self.copy_button.set_valign(Gtk.Align.CENTER)
+        self.copy_button.set_no_show_all(True)  # shown only when there is a command to copy
         self.pack_end(self.copy_button, False, False, 0)
         self._compact = False
         self.connect("size-allocate", self._on_size_allocate)

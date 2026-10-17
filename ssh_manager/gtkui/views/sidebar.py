@@ -137,7 +137,7 @@ class SidebarView(Gtk.Box):
             Icons.SEARCH,
             _("No matching hosts"),
             _("Try a different search or clear the filter."),
-            action_label=_("_Clear Search and Filter"),
+            action_label=_("_Clear search and filter"),
             on_action=self.clear_all,
             compact=True,
         )
@@ -146,9 +146,9 @@ class SidebarView(Gtk.Box):
             Icons.SERVER,
             _("No hosts yet"),
             _("Add your first host, or open a folder that contains SSH config files."),
-            action_label=_("_Add Host"),
+            action_label=_("_Add host"),
             on_action=lambda: self.on_add_host(),
-            secondary_label=_("_Open Config Folder…"),
+            secondary_label=_("_Open config folder…"),
             on_secondary=lambda: self.on_open_folder(),
             compact=True,
         )

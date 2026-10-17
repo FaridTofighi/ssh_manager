@@ -501,7 +501,7 @@ def run(out_dir: Path) -> None:
         )
 
     def prefs_dialog(window) -> Gtk.Dialog:
-        return PreferencesDialog(window, True, 1.0, 14, window._settings)
+        return PreferencesDialog(window, True, 1.0, 11, window._settings)
 
     def config_dialog(window) -> Gtk.Dialog:
         path = base / "production" / "web.conf"
