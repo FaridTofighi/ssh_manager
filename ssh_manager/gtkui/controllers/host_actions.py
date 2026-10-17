@@ -1,137 +1,356 @@
-"""Context-menu descriptions for the session tree (GTK-free).
-
-Menus are grouped into the same four sections everywhere — *Connect*,
-*Edit*, *Organize* and *Destructive* — and built from :mod:`menu_spec`
-objects. ``Reconnect`` only appears when a session for the host is already
-open; hosts get their own *Change Color…* entry that recolors the host (not
-its group).
-"""
+"""Create, edit, duplicate, move, tag and delete hosts."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Protocol
+import logging
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
-from ..constants import Icons, RowKind
-from ..i18n import _
-from ..menu_spec import MenuItemSpec, MenuSection, MenuSpec
+import gi
 
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
 
-class TreeMenuCallbacks(Protocol):
-    def _connect_selected(self) -> None: ...
-    def _reconnect_selected(self) -> None: ...
-    def _copy_ssh_command(self) -> None: ...
-    def _copy_scp_command(self) -> None: ...
-    def _edit_selected(self) -> None: ...
-    def _duplicate_selected(self) -> None: ...
-    def _move_selected(self) -> None: ...
-    def _change_host_color(self) -> None: ...
-    def _change_group_color(self) -> None: ...
-    def _clear_group_color(self) -> None: ...
-    def _forget_password_for_current_host(self) -> None: ...
-    def _delete_selected(self) -> None: ...
-    def _connect_child_group(self) -> None: ...
-    def _connect_parent_group(self) -> None: ...
-    def _create_child_group_for_current(self) -> None: ...
-    def _create_host_in_current_group(self) -> None: ...
-    def _rename_child_group(self) -> None: ...
-    def _rename_parent_group(self) -> None: ...
-    def _duplicate_child_group(self) -> None: ...
-    def _duplicate_parent_group(self) -> None: ...
-    def _delete_child_group(self) -> None: ...
-    def _delete_parent_group(self) -> None: ...
-    def prompt_new_host(self) -> None: ...
-    def _create_parent_group(self) -> None: ...
-    def _quick_connect(self) -> None: ...
+from ...config import HostEntry  # noqa: E402
+from ...host_utils import host_option  # noqa: E402
+from ...templates import HostTemplate, built_in_templates  # noqa: E402
+from ..dialogs.base import is_accept  # noqa: E402
+from ..dialogs.bulk_tag import BulkTagDialog  # noqa: E402
+from ..dialogs.group_picker import GroupPickerDialog  # noqa: E402
+from ..dialogs.host_dialog import HostDialog  # noqa: E402
+from ..constants import RowKind  # noqa: E402
+from ..i18n import _  # noqa: E402
+from ..theme.tokens import Level  # noqa: E402
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ...gtk_app import SSHManagerWindow
 
 
-def host_menu(
-    cb: TreeMenuCallbacks,
-    *,
-    can_edit: bool = True,
-    has_session: bool = False,
-    accels: Dict[str, str] = None,  # type: ignore[assignment]
-) -> MenuSpec:
-    accels = accels or {}
-    return [
-        MenuSection("connect", [
-            MenuItemSpec(_("_Connect"), cb._connect_selected, Icons.CONNECT, accels.get("host-connect", "")),
-            MenuItemSpec(_("_Reconnect"), cb._reconnect_selected, Icons.RECONNECT, visible=has_session,
-                         tooltip=_("Reconnect the open session for this host")),
-            MenuItemSpec(_("Copy SSH Command"), cb._copy_ssh_command, Icons.TERMINAL),
-            MenuItemSpec(_("Copy SCP Command"), cb._copy_scp_command, Icons.COPY),
-        ]),
-        MenuSection("edit", [
-            MenuItemSpec(_("_Edit…"), cb._edit_selected, Icons.EDIT, accels.get("rename", ""), sensitive=can_edit),
-            MenuItemSpec(_("D_uplicate…"), cb._duplicate_selected, Icons.DUPLICATE, sensitive=can_edit),
-        ]),
-        MenuSection("organize", [
-            MenuItemSpec(_("_Move to Group…"), cb._move_selected, Icons.MOVE, sensitive=can_edit),
-            MenuItemSpec(_("Change Host _Color…"), cb._change_host_color, Icons.COLOR),
-            MenuItemSpec(_("Clear Host Color"), cb._clear_group_color, Icons.CLEAR),
-            MenuItemSpec(_("_Forget Password"), cb._forget_password_for_current_host, Icons.FORGET),
-        ]),
-        MenuSection("destructive", [
-            MenuItemSpec(_("_Delete Host…"), cb._delete_selected, Icons.DELETE, accels.get("host-delete", ""),
-                         sensitive=can_edit, destructive=True),
-        ]),
-    ]
+LOGGER = logging.getLogger(__name__)
 
 
-def group_menu(
-    cb: TreeMenuCallbacks,
-    kind: RowKind,
-    *,
-    read_only: bool = False,
-    has_hosts: bool = True,
-    accels: Dict[str, str] = None,  # type: ignore[assignment]
-) -> MenuSpec:
-    accels = accels or {}
-    editable = not read_only
-    connect = cb._connect_parent_group if kind is RowKind.PARENT else cb._connect_child_group
-    sections: List[MenuSection] = [
-        MenuSection("connect", [
-            MenuItemSpec(_("Connect _All"), connect, Icons.CONNECT, sensitive=has_hosts),
-        ]),
-        MenuSection("edit", [
-            MenuItemSpec(_("New _Host…"), cb._create_host_in_current_group, Icons.NEW, sensitive=editable),
-            MenuItemSpec(_("New _Subgroup…"), cb._create_child_group_for_current, Icons.FOLDER, sensitive=editable),
-        ]),
-    ]
-    if kind is RowKind.PARENT:
-        sections[1].items += [
-            MenuItemSpec(_("_Rename…"), cb._rename_parent_group, Icons.EDIT, accels.get("rename", ""), sensitive=editable),
-            MenuItemSpec(_("D_uplicate…"), cb._duplicate_parent_group, Icons.DUPLICATE, sensitive=editable),
-        ]
-    elif kind is RowKind.CHILD:
-        sections[1].items += [
-            MenuItemSpec(_("_Rename…"), cb._rename_child_group, Icons.EDIT, accels.get("rename", ""), sensitive=editable),
-            MenuItemSpec(_("D_uplicate…"), cb._duplicate_child_group, Icons.DUPLICATE, sensitive=editable),
-        ]
-    sections.append(MenuSection("organize", [
-        MenuItemSpec(_("Change Group _Color…"), cb._change_group_color, Icons.COLOR),
-        MenuItemSpec(_("Clear Group Color"), cb._clear_group_color, Icons.CLEAR),
-    ]))
-    if kind is RowKind.PARENT:
-        sections.append(MenuSection("destructive", [
-            MenuItemSpec(_("_Delete Group…"), cb._delete_parent_group, Icons.DELETE, accels.get("host-delete", ""),
-                         sensitive=editable, destructive=True),
-        ]))
-    elif kind is RowKind.CHILD:
-        sections.append(MenuSection("destructive", [
-            MenuItemSpec(_("_Delete Child Group…"), cb._delete_child_group, Icons.DELETE, accels.get("host-delete", ""),
-                         sensitive=editable, destructive=True),
-        ]))
-    return sections
+class HostActions:
+    """Create, edit, duplicate, move, tag and delete hosts."""
 
+    def __init__(self, win: "SSHManagerWindow") -> None:
+        self.win = win
 
-def blank_menu(cb: TreeMenuCallbacks, *, accels: Dict[str, str] = None) -> MenuSpec:  # type: ignore[assignment]
-    accels = accels or {}
-    return [
-        MenuSection("create", [
-            MenuItemSpec(_("New _Host…"), cb.prompt_new_host, Icons.NEW, accels.get("new-host", "")),
-            MenuItemSpec(_("New _Group…"), cb._create_parent_group, Icons.FOLDER),
-        ]),
-        MenuSection("connect", [
-            MenuItemSpec(_("_Quick Connect…"), cb._quick_connect, Icons.CONNECT, accels.get("quick-connect", "")),
-        ]),
-    ]
+    def pick_group(self, title: str, **kwargs) -> Optional[Tuple[str, str, bool]]:
+        """Run a :class:`GroupPickerDialog`; return ``(parent, child, create_child)``."""
+
+        picker = GroupPickerDialog(self.win, self.win.manager, title, **kwargs)
+        try:
+            return picker.selected() if is_accept(picker.run()) else None
+        finally:
+            picker.destroy()
+
+    def run_host_dialog(self, dialog: HostDialog, parent: str, child: str) -> Tuple[Optional[HostEntry], Optional[str]]:
+        """Run ``dialog``; return ``(host, credential_id)`` (``host`` is None when cancelled)."""
+
+        try:
+            if not is_accept(dialog.run()):
+                return None, None
+            return dialog.build_host(parent, child), dialog.selected_credential_id()
+        finally:
+            dialog.destroy()
+
+    def host_dialog(self, host: Optional[HostEntry] = None, **kwargs) -> HostDialog:
+        binding = self.win._credential_store.binding_for_host(self.win.creds.host_key(host)) if host else None
+        return HostDialog(
+            self.win,
+            host,
+            credentials=self.win._credential_store.list(),
+            selected_credential_id=binding,
+            metadata=host.metadata if host else {},
+            vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
+            vault_unlocked=self.win._vault.unlocked,
+            profiles=self.win._profiles,
+            **kwargs,
+        )
+
+    def prompt_new_host(self, template: Optional[HostTemplate] = None) -> None:
+        parent, child = self.win.tree.infer_target_group()
+        create_child = False
+        if not parent or not child:
+            selection = self.pick_group(
+                _("Choose a Group for the New Host"),
+                allow_new_child=True,
+                initial_parent=parent,
+                initial_child=child,
+                accept_label=_("_Continue"),
+            )
+            if not selection:
+                return
+            parent, child, create_child = selection
+
+        dialog = self.host_dialog(template_defaults=template.defaults if template else None)
+        host, cred_id = self.run_host_dialog(dialog, parent, child)
+        if not host:
+            return
+        if create_child:
+            ok, msg = self.win.manager.create_child_group(parent, child)
+            self.win._log_event(msg, ok)
+            if not ok:
+                return
+        success, msg = self.win.manager.add_host(parent, child, host)
+        self.win._log_event(msg, success)
+        if success:
+            self.win.creds.bind_credential(self.win.creds.host_key(host), cred_id)
+            self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_host(parent, child, host.alias)
+
+    def new_host_from_template(self, template_id: str) -> None:
+        template = next((t for t in built_in_templates() if t.id == template_id), None)
+        self.prompt_new_host(template=template)
+
+    def edit_selected(self) -> None:
+        if self.win.tree.current_item_is_read_only():
+            self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
+            return
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) > 1:
+            self.win._notify(_("Select a single host to edit."), Level.INFO)
+            return
+        host = self.win.tree.selected_host()
+        if not host:
+            return
+        updated, cred_id = self.run_host_dialog(self.host_dialog(host), host.parent_group, host.child_group)
+        if not updated:
+            return
+        if not self.win.creds.check_secrets_policy(updated):
+            return
+        changed: List[str] = []
+        for key in {"alias", "hostname", "user", "port", "tags"}:
+            old_value = host.alias if key == "alias" else (host_option(host, key) or "")
+            new_value = updated.alias if key == "alias" else (host_option(updated, key) or "")
+            if old_value != new_value and "password" not in key:
+                changed.append(key)
+        success, msg = self.win.manager.update_host(host.parent_group, host.child_group, host.alias, updated)
+        self.win._log_event(msg, success)
+        if success:
+            self.win.creds.bind_credential(self.win.creds.host_key(updated), cred_id)
+            if self.win.creds.host_key(updated) != self.win.creds.host_key(host):
+                self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+            if changed:
+                self.win.sessions.audit_log("edit", updated, extra={"fields": ",".join(changed)})
+            self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_host(updated.parent_group, updated.child_group, updated.alias)
+
+    def duplicate_selected(self) -> None:
+        if self.win.tree.current_item_is_read_only():
+            self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
+            return
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) > 1:
+            self.win._notify(_("Select a single host to duplicate."), Level.INFO)
+            return
+        host = self.win.tree.selected_host()
+        if not host:
+            return
+        dialog = self.host_dialog(host)
+        dialog.set_alias(self.win.tree.generate_duplicate_alias(host))
+        dialog.set_title(_("Duplicate Host"))
+        clone, cred_id = self.run_host_dialog(dialog, host.parent_group, host.child_group)
+        if not clone:
+            return
+        if not self.win.creds.check_secrets_policy(clone):
+            return
+        success, msg = self.win.manager.add_host(host.parent_group, host.child_group, clone)
+        self.win._log_event(msg, success)
+        if success:
+            self.win.creds.bind_credential(self.win.creds.host_key(clone), cred_id)
+            self.win.sessions.audit_log("edit", clone, extra={"fields": "duplicate"})
+            self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_host(clone.parent_group, clone.child_group, clone.alias)
+
+    def move_selected(self) -> None:
+        if self.win.tree.current_item_is_read_only():
+            self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
+            return
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) > 1:
+            self.win._notify(_("Select a single host to move."), Level.INFO)
+            return
+        host = self.win.tree.selected_host()
+        if not host:
+            return
+        selection = self.pick_group(
+            _("Move Host “{alias}”").format(alias=host.alias),
+            allow_new_child=True,
+            initial_parent=host.parent_group,
+            initial_child=host.child_group,
+            accept_label=_("_Move"),
+        )
+        if not selection:
+            return
+        target_parent, target_child, create_child = selection
+        binding = self.win._credential_store.binding_for_host(self.win.creds.host_key(host))
+        success, msg = self.win.manager.move_hosts(
+            [(host.parent_group, host.child_group, host.alias)],
+            target_parent,
+            target_child,
+            create_child=create_child,
+        )
+        self.win._log_event(msg, success)
+        if success:
+            if binding:
+                self.win.creds.bind_credential(
+                    f"{target_parent}::{target_child}::{host.alias}",
+                    binding,
+                )
+                self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+            self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_host(target_parent, target_child, host.alias)
+
+    def delete_selected(self) -> None:
+        if self.win.tree.current_item_is_read_only():
+            self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
+            return
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) > 1:
+            self.win._notify(_("Select a single item to delete."), Level.INFO)
+            return
+        host = self.win.tree.selected_host()
+        if not host:
+            return
+        if not self.win._confirm(
+            _("Delete host “{alias}”?").format(alias=host.alias),
+            detail=_("The host entry is removed from {path}.").format(path=f"{host.parent_group}/{host.child_group}"),
+            confirm_label=_("_Delete Host"),
+        ):
+            return
+        success, msg = self.win.manager.delete_host(host.parent_group, host.child_group, host.alias)
+        self.win._log_event(msg, success)
+        if success:
+            self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+            self.win.sessions.audit_log("delete", host)
+            self.win.tree.rebuild(refresh=True)
+
+    def bulk_move_selected(self) -> None:
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) < 2:
+            return
+        selection = self.pick_group(_("Move Selected Hosts"), allow_new_child=True, accept_label=_("_Move"))
+        if not selection:
+            return
+        target_parent, target_child, create_child = selection
+        key_list = [(h.parent_group, h.child_group, h.alias) for h in hosts]
+        ok, msg = self.win.manager.move_hosts(key_list, target_parent, target_child, create_child=create_child)
+        self.win._log_event(msg, ok)
+        if ok:
+            for parent, child, alias in key_list:
+                self.win.creds.rebind_credential(
+                    f"{parent}::{child}::{alias}",
+                    f"{target_parent}::{target_child}::{alias}",
+                )
+            self.win.tree.rebuild(refresh=True)
+
+    def bulk_tag_selected(self) -> None:
+        hosts = self.win.tree.selected_hosts()
+        if len(hosts) < 2:
+            return
+        result = BulkTagDialog(self.win, len(hosts)).ask()
+        if result is None:
+            return
+        tags_to_add, color_val = result
+        tag_val = ",".join(tags_to_add)
+
+        if color_val:
+            for h in hosts:
+                self.win.colors.set_host_color(h.parent_group, h.child_group, h.alias, color_val)
+
+        # Apply tags to each host options (append if necessary) and persist
+        if tag_val:
+            for h in hosts:
+                tags = [t.strip() for t in (host_option(h, "tags") or "").split(",") if t.strip()]
+                new_tags = [t for t in tags]
+                for part in tag_val.split(","):
+                    t = part.strip()
+                    if t and t not in new_tags:
+                        new_tags.append(t)
+                h.options["tags"] = ",".join(new_tags)
+                ok, msg = self.win.manager.update_host(h.parent_group, h.child_group, h.alias, h)
+                if not ok:
+                    self.win._log_event(msg, False)
+
+        self.win.tree.rebuild(refresh=True)
+        tree_view = getattr(self.win, "tree_view", None)
+        if tree_view:
+            tree_view.queue_draw()
+
+    def create_host_in_current_group(self) -> None:
+        kind, data = self.win.tree.current_item()
+        parent = data.get("parent", "")
+        if not parent:
+            return
+        if kind == RowKind.CHILD.value:
+            child = data.get("child", "")
+            if not child:
+                return
+            self.create_host_in_group(parent, child)
+        elif kind == RowKind.CHILD_FOLDER.value:
+            folder = data.get("child", "") or ""
+            name = self.win._prompt_text(
+                "Select subgroup",
+                f"Subgroup under {parent}/{folder}:",
+                "",
+            )
+            if not name:
+                return
+            leaf = self.win.groups.normalize_group_filename(name)
+            child = f"{folder}/{leaf}" if folder else leaf
+            create_child = child not in self.win.manager.tree.get(parent, {})
+            if create_child:
+                ok, msg = self.win.manager.create_child_group(parent, child)
+                self.win._log_event(msg, ok)
+                if not ok:
+                    return
+            self.create_host_in_group(parent, child)
+        elif kind == RowKind.PARENT.value:
+            choice = self.win.groups.prompt_child_destination(parent)
+            if not choice:
+                return
+            child, create_child = choice
+            if create_child:
+                ok, msg = self.win.manager.create_child_group(parent, child)
+                self.win._log_event(msg, ok)
+                if not ok:
+                    return
+            self.create_host_in_group(parent, child)
+
+    def create_host_in_group(self, parent: str, child: str) -> None:
+        host, cred_id = self.run_host_dialog(self.host_dialog(), parent, child)
+        if not host:
+            return
+        if not self.win.creds.check_secrets_policy(host):
+            return
+        success, msg = self.win.manager.add_host(parent, child, host)
+        self.win._log_event(msg, success)
+        if success:
+            self.win.creds.bind_credential(self.win.creds.host_key(host), cred_id)
+            self.win.sessions.audit_log("edit", host, extra={"fields": "new"})
+            self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_host(parent, child, host.alias)
+
+    def edit_current_item(self) -> None:
+        kind, _ = self.win.tree.current_item()
+        if kind == RowKind.HOST.value:
+            self.edit_selected()
+        elif kind == RowKind.CHILD.value:
+            self.win.groups.rename_child_group()
+        elif kind == RowKind.PARENT.value:
+            self.win.groups.rename_parent_group()
+
+    def delete_current_item(self) -> None:
+        kind, _ = self.win.tree.current_item()
+        if kind == RowKind.HOST.value:
+            self.delete_selected()
+        elif kind == RowKind.CHILD.value:
+            self.win.groups.delete_child_group()
+        elif kind == RowKind.PARENT.value:
+            self.win.groups.delete_parent_group()
+
+    def rename_focused(self) -> None:
+        if self.win.tree_view.has_focus():
+            self.edit_current_item()
+        else:
+            self.win.terminal_tabs.rename_current()

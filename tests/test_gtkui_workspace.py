@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 from ssh_manager.config import HostEntry
 from ssh_manager.gtkui.theme.tokens import ConnectionStatus
@@ -111,6 +112,49 @@ class NotebookTests(unittest.TestCase):
         tab._set_strip_ansi(True)
         self.notebook._sync_toolbar()
         self.assertTrue(self.notebook._toolbar.plain_copy.get_active())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class SpawnPathTests(unittest.TestCase):
+    """Exercise the real spawn path with VTE's spawn mocked (no ssh process)."""
+
+    def _tab(self):
+        from ssh_manager.gtk_terminal import TerminalTab
+
+        tab = TerminalTab(HostEntry(alias="web", options={"hostname": "web.internal"}), lambda *_: None, autostart=False)
+        tab._terminal.spawn_async = mock.Mock()
+        return tab
+
+    def test_spawn_without_sshpass_runs_plain_ssh(self) -> None:
+        tab = self._tab()
+        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value=None):
+            tab._spawn()
+        args = tab._terminal.spawn_async.call_args[0]
+        argv, envv = args[2], args[3]
+        self.assertEqual(argv[0], "ssh")
+        self.assertFalse(any(item.startswith("SSHPASS=") for item in envv))
+        self.assertIs(tab.status, ConnectionStatus.CONNECTING)
+        self.assertFalse(tab._banner.get_revealed())
+        tab.destroy()
+
+    def test_spawn_with_override_password_uses_sshpass(self) -> None:
+        tab = self._tab()
+        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass"):
+            tab._spawn("s3cret", password_origin="retry", save_on_success=True)
+        argv, envv = tab._terminal.spawn_async.call_args[0][2:4]
+        self.assertEqual(argv[:2], ["sshpass", "-e"])
+        self.assertIn("SSHPASS=s3cret", envv)
+        self.assertEqual(tab._password_source, "retry")
+        self.assertEqual(tab._password_to_save, "s3cret")
+        tab.destroy()
+
+    def test_override_without_sshpass_does_not_spawn(self) -> None:
+        tab = self._tab()
+        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value=None):
+            tab._spawn("s3cret")
+        tab._terminal.spawn_async.assert_not_called()
+        self.assertEqual(tab._password_source, "manual")
+        tab.destroy()
 
 
 if __name__ == "__main__":  # pragma: no cover

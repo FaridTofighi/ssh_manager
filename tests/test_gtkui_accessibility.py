@@ -1,8 +1,6 @@
-import os
-import tempfile
 import unittest
-from pathlib import Path
-from unittest import mock
+
+from tests.gtk_window_fixture import WindowSandbox
 
 
 def _display_available() -> bool:
@@ -55,47 +53,13 @@ def _is_icon_only(button) -> bool:
 class MainWindowAccessibilityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        from gi.repository import Gio, Gtk  # type: ignore
-
-        cls.tmp = tempfile.TemporaryDirectory()
-        root = Path(cls.tmp.name)
-        cls.env = mock.patch.dict(
-            os.environ,
-            {"HOME": str(root / "home"), "XDG_CONFIG_HOME": str(root / "config"), "XDG_DATA_HOME": str(root / "data")},
-        )
-        cls.env.start()
-        base = root / "inventory" / "prod"
-        base.mkdir(parents=True)
-        (base / "web.conf").write_text("Host web-01\n    hostname web-01.internal\n", encoding="utf-8")
-
-        original_show_all = Gtk.Widget.show_all
-
-        def show_children_only(widget):
-            if isinstance(widget, Gtk.Window):
-                for part in (widget.get_child(), widget.get_titlebar()):
-                    if part is not None:
-                        original_show_all(part)
-                return
-            original_show_all(widget)
-
-        cls.show_patch = mock.patch.object(Gtk.Widget, "show_all", show_children_only)
-        cls.show_patch.start()
-
-        from ssh_manager.gtk_app import SSHManagerWindow
-        from ssh_manager.settings import AppSettings
-
-        cls.app = Gtk.Application(application_id="org.codex.SSHManager.Tests", flags=Gio.ApplicationFlags.NON_UNIQUE)
-        cls.app.register(None)
-        settings = AppSettings.load()
-        settings.master_password_disabled = True
-        cls.window = SSHManagerWindow(cls.app, root / "inventory", settings)
+        cls.sandbox = WindowSandbox()
+        cls.window = cls.sandbox.window
+        cls.app = cls.sandbox.app
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls.window.destroy()
-        cls.show_patch.stop()
-        cls.env.stop()
-        cls.tmp.cleanup()
+        cls.sandbox.close()
 
     def _widgets(self):
         yield from _walk(self.window.get_titlebar())

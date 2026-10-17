@@ -60,6 +60,18 @@ class SecretEntry(Gtk.Box):
         activates_default: bool = True,
     ) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        self._build_entry_row(placeholder, generate, activates_default)
+        self._build_hints(show_strength)
+
+        self._keymap = Gdk.Keymap.get_for_display(Gdk.Display.get_default()) if Gdk.Display.get_default() else None
+        self._keymap_handler = 0
+        if self._keymap is not None:
+            self._keymap_handler = self._keymap.connect("state-changed", lambda *_: self._update_caps())
+        self.entry.connect("focus-in-event", lambda *_: self._update_caps() or False)
+        self.entry.connect("focus-out-event", lambda *_: self._caps.hide() or False)
+        self.connect("destroy", self._on_destroy)
+
+    def _build_entry_row(self, placeholder: str, generate: bool, activates_default: bool) -> None:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         row.get_style_context().add_class("linked")
 
@@ -90,6 +102,7 @@ class SecretEntry(Gtk.Box):
             row.pack_start(gen, False, False, 0)
         self.pack_start(row, False, False, 0)
 
+    def _build_hints(self, show_strength: bool) -> None:
         self._caps = Gtk.Label(label=_("Caps Lock is on"))
         self._caps.set_xalign(0.0)
         self._caps.get_style_context().add_class("form-help")
@@ -111,14 +124,6 @@ class SecretEntry(Gtk.Box):
             self.pack_start(strength_row, False, False, 0)
             self.entry.connect("changed", lambda *_: self._update_strength())
             self._update_strength()
-
-        self._keymap = Gdk.Keymap.get_for_display(Gdk.Display.get_default()) if Gdk.Display.get_default() else None
-        self._keymap_handler = 0
-        if self._keymap is not None:
-            self._keymap_handler = self._keymap.connect("state-changed", lambda *_: self._update_caps())
-        self.entry.connect("focus-in-event", lambda *_: self._update_caps() or False)
-        self.entry.connect("focus-out-event", lambda *_: self._caps.hide() or False)
-        self.connect("destroy", self._on_destroy)
 
     # -------------------------------------------------------------- api
     def get_text(self) -> str:

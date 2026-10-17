@@ -158,7 +158,11 @@ class HostDialog(BaseDialog):
 
     def _build_pages(self) -> None:
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        for build in (self._page_general, self._page_connection, self._page_credentials,
+                      self._page_tags, self._page_ssh_options, self._page_permissions):
+            build(labels)
 
+    def _page_general(self, labels: Gtk.SizeGroup) -> None:
         general = self.layout.new_page("general", _("General"), _("How the host appears in the tree and where it lives."))
         sec = FormSection()
         self._alias_row = sec.add(_("_Alias"), self.alias_entry, validator=validate_alias, label_group=labels,
@@ -170,6 +174,7 @@ class HostDialog(BaseDialog):
         general.append(sec)
         self._sections["general"] = sec
 
+    def _page_connection(self, labels: Gtk.SizeGroup) -> None:
         connection = self.layout.new_page("connection", _("Connection"), _("Keys and jump hosts."))
         sec = FormSection()
         sec.add(_("Private _key"), self.identity_entry, label_group=labels,
@@ -179,6 +184,7 @@ class HostDialog(BaseDialog):
         connection.append(sec)
         self._sections["connection"] = sec
 
+    def _page_credentials(self, labels: Gtk.SizeGroup) -> None:
         creds = self.layout.new_page("credentials", _("Credentials"),
                                      _("Reuse a saved credential or vault entry; its username replaces the User field."))
         sec = FormSection()
@@ -189,6 +195,7 @@ class HostDialog(BaseDialog):
         creds.append(sec)
         self._sections["credentials"] = sec
 
+    def _page_tags(self, labels: Gtk.SizeGroup) -> None:
         tags = self.layout.new_page("tags", _("Tags & Notes"), _("Used by search, filters and smart groups."))
         sec = FormSection()
         sec.add(_("_Tags"), self.tags_entry, label_group=labels, help_text=_("Comma-separated."))
@@ -199,6 +206,7 @@ class HostDialog(BaseDialog):
         tags.append(sec)
         self._sections["tags"] = sec
 
+    def _page_ssh_options(self, labels: Gtk.SizeGroup) -> None:
         options = self.layout.new_page(
             "ssh_options",
             _("SSH Options"),
@@ -220,6 +228,7 @@ class HostDialog(BaseDialog):
         options.append(self._extras_row.error)
         self.extras_view.get_buffer().connect("changed", lambda *_: self._extras_row.validate())
 
+    def _page_permissions(self, labels: Gtk.SizeGroup) -> None:
         perms = self.layout.new_page("permissions", _("Permissions"),
                                      _("Local, advisory restrictions for this host. They are stored as comments in the config file."))
         for check in (self._perm_view_check, self._perm_connect_check, self._perm_edit_check):

@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 import gi
 
@@ -39,14 +39,17 @@ from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
 from ssh_manager.gtkui.theme.loader import get_theme_manager
-from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Motion, Space
+from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Space
 from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level
 from ssh_manager.gtkui.views.workspace import BroadcastStrip, SessionToolbar, TabLabel, TileFrame, tab_menu_spec
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
 from ssh_manager.gtkui.widgets.icon_button import IconButton, IconMenuButton
 from ssh_manager.gtkui.widgets.menus import build_context_menu, build_menu, popup_menu
 
-LogFn = Callable[[str, bool], None]
+if TYPE_CHECKING:  # pragma: no cover
+    from ssh_manager.profiles import SessionProfile
+
+LogFn = Callable[[str, object], None]  # message, success flag or Level
 PasswordUpdateFn = Callable[[HostEntry, str], bool]
 LOGGER = logging.getLogger(__name__)
 AUTH_FAILURE_RE = re.compile(
@@ -257,15 +260,6 @@ def _set_stat_tooltip(label: object, text: str) -> None:
         setter(text)
 
 
-def icon_label_content(icon_name: str, label: str) -> Gtk.Box:
-    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-    image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
-    text = Gtk.Label(label=label)
-    box.pack_start(image, False, False, 0)
-    box.pack_start(text, False, False, 0)
-    return box
-
-
 class TerminalPaneContainer(Gtk.Box):
     """Wrapper for a single terminal pane (prep for future splits)."""
 
@@ -300,6 +294,36 @@ class TerminalTab(Gtk.Box):
         appearance: Optional[TerminalAppearanceSettings] = None,
     ) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self._init_state(host, log, font_scale, password_store, password_update_handler, autostart, profile, appearance)
+        self.set_hexpand(True)
+        self.set_vexpand(True)
+        self._build_infobar()
+        self._build_terminal_area()
+        self._build_statusbar()
+
+        self._terminal.connect("key-press-event", self._on_terminal_key_press)
+        self._terminal.connect("child-exited", self._on_child_exited)
+        self._terminal.connect("focus-in-event", self._on_terminal_focus)
+        self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
+        self._focused_terminal = self._terminal
+        if autostart:
+            self._spawn()
+        else:
+            self._set_status("Connecting…", False)
+
+    def _init_state(
+        self,
+        host: HostEntry,
+        log: LogFn,
+        font_scale: float,
+        password_store: Optional[SecureStore],
+        password_update_handler: Optional[PasswordUpdateFn],
+        autostart: bool,
+        profile: Optional["SessionProfile"],
+        appearance: Optional[TerminalAppearanceSettings],
+    ) -> None:
+        """Initialise session, password-tracking and timer state."""
+
         self._host = host
         self._log = log
         self._font_scale = max(0.5, min(3.0, font_scale))
@@ -340,22 +364,6 @@ class TerminalTab(Gtk.Box):
         self._stats_enabled = True
         self._custom_title = ""
         self._activity_callback: Optional[Callable[["TerminalTab"], None]] = None
-
-        self.set_hexpand(True)
-        self.set_vexpand(True)
-        self._build_infobar()
-        self._build_terminal_area()
-        self._build_statusbar()
-
-        self._terminal.connect("key-press-event", self._on_terminal_key_press)
-        self._terminal.connect("child-exited", self._on_child_exited)
-        self._terminal.connect("focus-in-event", self._on_terminal_focus)
-        self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
-        self._focused_terminal = self._terminal
-        if autostart:
-            self._spawn()
-        else:
-            self._set_status("Connecting…", False)
 
     # ------------------------------------------------------------------ building
     def _build_infobar(self) -> None:
@@ -721,14 +729,11 @@ class TerminalTab(Gtk.Box):
     def _prompt_retry_after_failure(self) -> bool:
         self._retry_timeout_id = 0
         if shutil.which("sshpass") is None:
-            self._log(
-                "Automatic password retry unavailable because sshpass is not installed.",
-                False,
-            )
+            self._log(_("Automatic password retry unavailable because sshpass is not installed."), Level.WARNING)
             return GLib.SOURCE_REMOVE
         password = self._prompt_for_password()
         if password:
-            self._log(f"Retrying {self._host.alias} with entered password…", False)
+            self._log(_("Retrying {alias} with entered password…").format(alias=self._host.alias), Level.INFO)
 
             def _start_retry() -> bool:
                 self._spawn(
@@ -740,7 +745,7 @@ class TerminalTab(Gtk.Box):
 
             GLib.idle_add(_start_retry)
         else:
-            self._log(f"Password entry cancelled for {self._host.alias}.", False)
+            self._log(_("Password entry cancelled for {alias}.").format(alias=self._host.alias), Level.INFO)
         return GLib.SOURCE_REMOVE
 
     def _terminal_tail(self, term: Vte.Terminal, limit: int = 4096) -> str:
@@ -861,7 +866,7 @@ class TerminalTab(Gtk.Box):
                     pass
         self._terminate_current_child()
         self._set_status("Authentication failed", False)
-        self._log(f"Authentication failed for {self._host.alias}. Enter a new password.", False)
+        self._log(_("Authentication failed for {alias}. Enter a new password.").format(alias=self._host.alias), Level.ERROR)
         self._schedule_retry_prompt()
         return True
 
@@ -942,9 +947,9 @@ class TerminalTab(Gtk.Box):
         self._password_change_tracker.reset()
         self._clear_detected_password_change()
         if saved:
-            self._log(f"Saved updated password for {self._host.alias}.", True)
+            self._log(_("Saved updated password for {alias}.").format(alias=self._host.alias), Level.SUCCESS)
         else:
-            self._log(f"Could not save updated password for {self._host.alias}.", False)
+            self._log(_("Could not save updated password for {alias}.").format(alias=self._host.alias), Level.WARNING)
 
     def _persist_password(self) -> None:
         if not self._secure_store or not self._password_to_save:
@@ -957,7 +962,7 @@ class TerminalTab(Gtk.Box):
         existing = self._secure_store.get(host, port, username)
         if existing != password:
             self._secure_store.set(host, port, username, password)
-            self._log(f"Saved password for {self._host.alias}.", True)
+            self._log(_("Saved password for {alias}.").format(alias=self._host.alias), Level.SUCCESS)
         self._password_to_save = None
 
     def _spawn(
@@ -967,7 +972,16 @@ class TerminalTab(Gtk.Box):
         password_origin: str = "prompt",
         save_on_success: bool = False,
     ) -> None:
-        term = self._terminal
+        """Start (or restart) the SSH child process for this session."""
+
+        self._reset_attempt_state()
+        proceed, password = self._password_for_attempt(override_password, password_origin, save_on_success)
+        if not proceed:
+            return
+        argv, envv = self._spawn_command(password)
+        self._start_child(argv, envv)
+
+    def _reset_attempt_state(self) -> None:
         self._ever_connected = False
         self._password_source = "none"
         self._password_to_save = None
@@ -978,105 +992,86 @@ class TerminalTab(Gtk.Box):
         self._auth_retry_pending = False
         self._child_pid = None
         self._stop_password_prompt_poll()
-        if self._password_save_source_id:
-            GLib.source_remove(self._password_save_source_id)
-            self._password_save_source_id = 0
-        if self._connection_confirm_source_id:
-            GLib.source_remove(self._connection_confirm_source_id)
-            self._connection_confirm_source_id = 0
-        if self._retry_timeout_id:
-            GLib.source_remove(self._retry_timeout_id)
-            self._retry_timeout_id = 0
+        for attr in ("_password_save_source_id", "_connection_confirm_source_id", "_retry_timeout_id"):
+            source_id = getattr(self, attr)
+            if source_id:
+                GLib.source_remove(source_id)
+                setattr(self, attr, 0)
+
+    def _password_for_attempt(
+        self, override_password: Optional[str], password_origin: str, save_on_success: bool
+    ) -> Tuple[bool, Optional[str]]:
+        """Decide which password (if any) sshpass should send. Returns ``(proceed, password)``."""
 
         helper_available = shutil.which("sshpass") is not None
-        stored_password: Optional[str] = None
         credentials = self._credential_components()
-        if self._secure_store and credentials:
-            stored_password = self._secure_store.get(*credentials)
-
-        password_for_attempt: Optional[str] = None
+        stored_password = self._secure_store.get(*credentials) if self._secure_store and credentials else None
+        alias = self._host.alias
         if override_password is not None:
             if not helper_available:
-                self._log(
-                    "Cannot perform automatic password entry because sshpass is not installed.",
-                    False,
-                )
+                self._log(_("Cannot perform automatic password entry because sshpass is not installed."), Level.WARNING)
                 self._password_source = "manual"
-                return
-            password_for_attempt = override_password
+                return False, None
             self._password_source = password_origin
             if save_on_success:
                 self._password_to_save = override_password
-        elif stored_password:
+            return True, override_password
+        if stored_password:
             if helper_available:
-                password_for_attempt = stored_password
                 self._password_source = "stored"
-            else:
-                self._log(
-                    f"Stored password available for {self._host.alias} but sshpass is missing. "
-                    "Falling back to manual entry.",
-                    False,
-                )
-                self._password_source = "manual"
-        else:
-            if helper_available:
-                password = self._prompt_for_password()
-                if password is None:
-                    self._log(f"Password entry cancelled for {self._host.alias}.", False)
-                    return
-                password_for_attempt = password
-                self._password_source = "prompt"
-                self._password_to_save = password
-            else:
-                self._log(
-                    f"Automatic password entry unavailable for {self._host.alias} (sshpass not installed).",
-                    False,
-                )
-                self._password_source = "manual"
+                return True, stored_password
+            self._log(_("Stored password available for {alias} but sshpass is missing. Falling back to manual entry.").format(alias=alias), Level.WARNING)
+            self._password_source = "manual"
+            return True, None
+        if not helper_available:
+            self._log(_("Automatic password entry unavailable for {alias} (sshpass not installed).").format(alias=alias), Level.WARNING)
+            self._password_source = "manual"
+            return True, None
+        password = self._prompt_for_password()
+        if password is None:
+            self._log(_("Password entry cancelled for {alias}.").format(alias=alias), Level.INFO)
+            return False, None
+        self._password_source = "prompt"
+        self._password_to_save = password
+        return True, password
 
+    def _spawn_command(self, password: Optional[str]) -> Tuple[List[str], List[str]]:
         argv = self._ssh_arguments()
         envv = [f"{key}={value}" for key, value in os.environ.items()]
         if self._profile and self._profile.env_vars:
-            for k, v in self._profile.env_vars.items():
-                envv.append(f"{k}={v}")
-
-        if password_for_attempt:
-            envv.append(f"SSHPASS={password_for_attempt}")
+            envv.extend(f"{k}={v}" for k, v in self._profile.env_vars.items())
+        if password:
+            envv.append(f"SSHPASS={password}")
             argv = ["sshpass", "-e", *argv]
+        return argv, envv
 
+    def _start_child(self, argv: List[str], envv: List[str]) -> None:
+        term = self._terminal
         term.reset(True, True)
         self._session_active = False
         self._set_status("Connecting…", False)
+        alias = self._host.alias
 
-        def _on_spawn_finish(term: Vte.Terminal, pid: int, error: Optional[GLib.Error], _user_data) -> None:
+        def _on_spawn_finish(_term: Vte.Terminal, pid: int, error: Optional[GLib.Error], _user_data) -> None:
             if error:
-                self._log(f"Failed to open SSH session for {self._host.alias}: {error.message}", False)
+                self._log(_("Failed to open SSH session for {alias}: {error}").format(alias=alias, error=error.message), Level.ERROR)
                 self._set_status("Connection failed", False)
-                GLib.idle_add(self.emit, "session-closed", self._host.alias, False)
+                GLib.idle_add(self.emit, "session-closed", alias, False)
                 return
             if pid == 0:
-                self._log(f"SSH session exited immediately for {self._host.alias}", False)
+                self._log(_("SSH session exited immediately for {alias}").format(alias=alias), Level.WARNING)
                 self._set_status("Connection closed", False)
-                GLib.idle_add(self.emit, "session-closed", self._host.alias, False)
+                GLib.idle_add(self.emit, "session-closed", alias, False)
                 return
             self._child_pid = pid
             self._set_status("Connected", True)
             self.focus_terminal()
 
-        self._banner.set_reveal_child(False)
+        self._banner.set_revealed(False)
         self._reconnect_button.set_sensitive(False)
         term.spawn_async(
-            Vte.PtyFlags.DEFAULT,
-            None,
-            argv,
-            envv,
-            GLib.SpawnFlags.DEFAULT,
-            None,
-            None,
-            -1,
-            None,
-            _on_spawn_finish,
-            None,
+            Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.DEFAULT,
+            None, None, -1, None, _on_spawn_finish, None,
         )
 
     def _spawn_secondary(self, term: Vte.Terminal) -> None:
@@ -1088,7 +1083,7 @@ class TerminalTab(Gtk.Box):
         term.reset(True, True)
         def _on_finish(t: Vte.Terminal, pid: int, error: Optional[GLib.Error], _ud) -> None:
             if error:
-                self._log(f"Failed to open secondary session for {self._host.alias}: {error.message}", False)
+                self._log(_("Failed to open secondary session for {alias}: {error}").format(alias=self._host.alias, error=error.message), Level.ERROR)
         term.spawn_async(
             Vte.PtyFlags.DEFAULT,
             None,
@@ -1120,7 +1115,7 @@ class TerminalTab(Gtk.Box):
             self._start_stats_updates()
             self.focus_terminal()
         except Exception as exc:
-            self._log("Failed to attach terminal session.", False)
+            self._log(_("Failed to attach terminal session."), Level.ERROR)
             LOGGER.warning("attach_session failed: %s", exc)
             if self._bridge:
                 try:
@@ -1152,7 +1147,7 @@ class TerminalTab(Gtk.Box):
     def _on_paramiko_remote_closed(self) -> None:
         self._stop_paramiko_bridge()
         self._set_status("Disconnected", False)
-        self._log(f"{self._host.alias}: Session ended.", False)
+        self._log(_("{alias}: Session ended.").format(alias=self._host.alias), Level.INFO)
         self.emit("session-closed", self._host.alias, True)
     # --- END: PARAMIKO_VTE_ATTACH ---
 
@@ -1177,12 +1172,12 @@ class TerminalTab(Gtk.Box):
                     except Exception:
                         pass
                 self._log(
-                    f"Authentication failed for {self._host.alias}. Stored password removed.",
-                    False,
+                    _("Authentication failed for {alias}. Stored password removed.").format(alias=self._host.alias),
+                    Level.ERROR,
                 )
                 schedule_retry = True
             elif self._password_source in {"prompt", "retry"}:
-                self._log(f"Authentication failed for {self._host.alias}.", False)
+                self._log(_("Authentication failed for {alias}.").format(alias=self._host.alias), Level.ERROR)
                 schedule_retry = True
             self._password_to_save = None
             if schedule_retry:
@@ -1299,7 +1294,7 @@ class TerminalTab(Gtk.Box):
         self._focused_terminal = term
 
     def _on_secondary_child_exited(self, term: Vte.Terminal, _status: int) -> None:
-        self._log(f"{self._host.alias}: Secondary session ended.", False)
+        self._log(_("{alias}: Secondary session ended.").format(alias=self._host.alias), Level.INFO)
         GLib.idle_add(self._close_duplicate_pane)
 
     def save_transcript(self) -> None:
@@ -1317,19 +1312,19 @@ class TerminalTab(Gtk.Box):
         try:
             cleaned = strip_ansi(terminal_text(term))
             write_text_atomic(Path(target), cleaned)
-            self._log(f"Transcript saved to {target}", True)
+            self._log(_("Transcript saved to {path}").format(path=target), Level.SUCCESS)
         except Exception as exc:
-            self._log(f"Transcript save failed: {exc}", False)
+            self._log(_("Transcript save failed: {error}").format(error=exc), Level.ERROR)
 
     def toggle_strip_ansi_copy(self) -> None:
         self._strip_ansi_on_copy = not self._strip_ansi_on_copy
         state = "on" if self._strip_ansi_on_copy else "off"
-        self._log(f"Strip ANSI on copy {state}.", True)
+        self._log(_("Strip ANSI on copy {state}.").format(state=state), Level.INFO)
 
     def _set_strip_ansi(self, active: bool) -> None:
         self._strip_ansi_on_copy = active
         state = "on" if active else "off"
-        self._log(f"Strip ANSI on copy {state}.", True)
+        self._log(_("Strip ANSI on copy {state}.").format(state=state), Level.INFO)
 
     def _update_stats(self) -> bool:
         if not self._session_active:
@@ -1419,7 +1414,7 @@ class TerminalTab(Gtk.Box):
 
     def _show_stats_once(self) -> None:
         if not self._session_active:
-            self._log("Remote stats require an active session.", False)
+            self._log(_("Remote stats require an active session."), Level.INFO)
             return
         self._start_stats_updates()
 
@@ -1887,7 +1882,7 @@ class TerminalNotebook(Gtk.Box):
             self._sync_toolbar()
             return
         if active and len(self._tabs) < 2:
-            self._log("Broadcast needs at least two open sessions.", False)
+            self._log(_("Broadcast needs at least two open sessions."), Level.INFO)
             self._sync_toolbar()
             return
         self._broadcast_mode = active
@@ -1896,10 +1891,10 @@ class TerminalNotebook(Gtk.Box):
         self._update_broadcast_ui()
         self._sync_toolbar()
         self._log(
-            "Broadcast input enabled. Excluded sessions will not receive mirrored input."
+            _("Broadcast input enabled. Excluded sessions will not receive mirrored input.")
             if active
-            else "Broadcast input disabled.",
-            active,
+            else _("Broadcast input disabled."),
+            Level.WARNING if active else Level.INFO,
         )
 
     def toggle_broadcast(self) -> None:
@@ -2046,8 +2041,8 @@ class TerminalNotebook(Gtk.Box):
             self._sync_toolbar()
 
     def _on_tab_session_closed(self, tab: TerminalTab, alias: str, exited_normally: bool) -> None:
-        status = "Session ended cleanly" if exited_normally else "Session terminated unexpectedly"
-        self._log(f"{alias}: {status}", exited_normally)
+        status = _("Session ended cleanly") if exited_normally else _("Session terminated unexpectedly")
+        self._log(_("{alias}: {status}").format(alias=alias, status=status), exited_normally)
         self._set_tab_label_text(tab)
 
     def _on_tab_close_requested(self, tab: TerminalTab) -> None:

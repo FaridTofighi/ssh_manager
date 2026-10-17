@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 import gi
 

@@ -154,6 +154,16 @@ class SidebarView(Gtk.Box):
         box.pack_start(help_label, False, False, 0)
 
         box.pack_start(Gtk.Separator(), False, False, Space.XS)
+        self._build_smart_group_section(box)
+        box.show_all()
+        popover.add(box)
+        popover.connect("show", lambda *_: self.filter_entry.grab_focus())
+        self._update_smart_buttons()
+        return popover
+
+    def _build_smart_group_section(self, box: Gtk.Box) -> None:
+        """Saved filters (smart groups) inside the filter popover."""
+
         sg_title = Gtk.Label(label=_("Smart groups"))
         sg_title.set_xalign(0.0)
         sg_title.get_style_context().add_class("section-title")
@@ -190,12 +200,6 @@ class SidebarView(Gtk.Box):
         clear.connect("clicked", lambda *_: self.filter_entry.set_text(""))
         actions.pack_end(clear, False, False, 0)
         box.pack_start(actions, False, False, 0)
-
-        box.show_all()
-        popover.add(box)
-        popover.connect("show", lambda *_: self.filter_entry.grab_focus())
-        self._update_smart_buttons()
-        return popover
 
     def _build_filter_chip(self) -> Gtk.Widget:
         self._filter_chip_revealer = Gtk.Revealer()

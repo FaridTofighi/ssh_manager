@@ -20,7 +20,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -239,7 +239,8 @@ def _select_first_host(window) -> None:
     host = _first_host(window)
     if host is None:
         return
-    selector = getattr(window, "_select_host", None)
+    tree = getattr(window, "tree", None)
+    selector = getattr(tree, "select_host", None) or getattr(window, "_select_host", None)
     if callable(selector):
         selector(host.parent_group, host.child_group, host.alias)
 

@@ -39,6 +39,20 @@ class ListManagerDialog(BaseDialog):
     ) -> None:
         BaseDialog.__init__(self, parent, title, size=size, height=height)
         self._columns = list(columns)
+        self._build_toolbar(add_label)
+        self._build_list(title, empty_icon, empty_title, empty_description, add_label)
+
+        self.hint = Gtk.Label()
+        self.hint.set_xalign(0.0)
+        self.hint.set_line_wrap(True)
+        self.hint.get_style_context().add_class("form-help")
+        self.hint.set_no_show_all(True)
+        self.add_body(self.hint)
+
+        close = self.add_primary(_("_Close"), Gtk.ResponseType.CLOSE)
+        close.get_style_context().remove_class("suggested-action")
+
+    def _build_toolbar(self, add_label: str) -> None:
         self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.add_button_widget = Gtk.Button.new_with_mnemonic(add_label or _("_Add…"))
         self.add_button_widget.set_image(Gtk.Image.new_from_icon_name(Icons.NEW, Gtk.IconSize.BUTTON))
@@ -54,6 +68,7 @@ class ListManagerDialog(BaseDialog):
         self.toolbar.pack_end(self.delete_button, False, False, 0)
         self.add_body(self.toolbar)
 
+    def _build_list(self, title: str, empty_icon: str, empty_title: str, empty_description: str, add_label: str) -> None:
         self.store = Gtk.ListStore(*([str] * (len(self._columns) + 1)))
         self.view = Gtk.TreeView(model=self.store)
         set_accessible_name(self.view, title)
@@ -85,16 +100,6 @@ class ListManagerDialog(BaseDialog):
         scroller.show_all()
         self.empty_state.show_all()
         self.add_body(self.list_stack, expand=True)
-
-        self.hint = Gtk.Label()
-        self.hint.set_xalign(0.0)
-        self.hint.set_line_wrap(True)
-        self.hint.get_style_context().add_class("form-help")
-        self.hint.set_no_show_all(True)
-        self.add_body(self.hint)
-
-        close = self.add_primary(_("_Close"), Gtk.ResponseType.CLOSE)
-        close.get_style_context().remove_class("suggested-action")
 
     # ----------------------------------------------------------- overrides
     def load_rows(self) -> List[Tuple[str, ...]]:

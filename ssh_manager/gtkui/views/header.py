@@ -75,7 +75,13 @@ class HeaderView(Gtk.HeaderBar):
         self.set_title(_("SSH Manager"))
         self.get_style_context().add_class("sm-headerbar")
 
-        # ---- start: app menu, New split button, sidebar toggle
+        self._build_app_menu()
+        self._build_new_button(template_items)
+        self._build_sidebar_toggle()
+        self._build_end_buttons(history)
+        self._subtitle = ""
+
+    def _build_app_menu(self) -> None:
         self.app_menu_button = Gtk.MenuButton()
         self.app_menu_button.set_tooltip_text(_("Main menu (F10)"))
         set_accessible_name(self.app_menu_button, _("Main menu"))
@@ -93,6 +99,7 @@ class HeaderView(Gtk.HeaderBar):
         self.app_menu_button.set_popover(self._app_popover)
         self.pack_start(self.app_menu_button)
 
+    def _build_new_button(self, template_items) -> None:
         new_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         new_box.get_style_context().add_class("linked")
         self.new_button = Gtk.Button()
@@ -114,6 +121,7 @@ class HeaderView(Gtk.HeaderBar):
         new_box.pack_start(self.new_menu_button, False, False, 0)
         self.pack_start(new_box)
 
+    def _build_sidebar_toggle(self) -> None:
         self.sidebar_button = Gtk.ToggleButton()
         self.sidebar_button.add(Gtk.Image.new_from_icon_name(Icons.SIDEBAR, Gtk.IconSize.BUTTON))
         self.sidebar_button.set_tooltip_text(_("Toggle sidebar (Ctrl+B)"))
@@ -121,7 +129,8 @@ class HeaderView(Gtk.HeaderBar):
         self.sidebar_button.set_active(True)
         self.pack_start(self.sidebar_button)
 
-        # ---- end (packed right-to-left): maximize, settings, history, search
+    def _build_end_buttons(self, history: MessageHistory) -> None:
+        # Packed right-to-left: maximize, settings, history, search.
         self.maximize_button = Gtk.ToggleButton()
         self._maximize_image = Gtk.Image.new_from_icon_name(Icons.MAXIMIZE, Gtk.IconSize.BUTTON)
         self.maximize_button.add(self._maximize_image)
@@ -137,7 +146,6 @@ class HeaderView(Gtk.HeaderBar):
 
         self.search_button = IconButton(Icons.SEARCH, _("Search hosts (Ctrl+F)"), action_name="win.focus-search")
         self.pack_end(self.search_button)
-        self._subtitle = ""
 
     # ---------------------------------------------------------------- api
     def set_inventory_path(self, path: str) -> None:

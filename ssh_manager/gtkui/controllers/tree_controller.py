@@ -184,32 +184,7 @@ def _child_rows(
 
     for child_name, group in sorted(children.items(), key=lambda kv: kv[0].lower()):
         name_match = parent_matches or (bool(query) and query in child_name.lower())
-        include_all_hosts = name_match and bool(query)
-        host_rows: List[TreeRow] = []
-        for host in sorted(group.hosts, key=lambda h: h.alias.lower()):
-            user = callbacks.display_user(host)
-            search = search_text_for_host(host, user)
-            if query and not (include_all_hosts or query in search):
-                continue
-            if terms and not filter_host(host, terms):
-                continue
-            key = host_key(label_parent, child_name, host.alias)
-            status = ConnectionStatus.coerce(callbacks.status(key)).value
-            host_rows.append(
-                TreeRow(
-                    RowKind.HOST,
-                    host.alias,
-                    label_parent,
-                    child=child_name,
-                    alias=host.alias,
-                    host=host,
-                    search=search,
-                    color=callbacks.color(label_parent, child_name, host.alias),
-                    status=status,
-                    tooltip=_host_tooltip(host, user, status),
-                    shared=shared,
-                )
-            )
+        host_rows = _host_rows(label_parent, child_name, group, query, terms, name_match and bool(query), callbacks, shared)
         keep_empty = not filtered or (name_match and bool(query) and not terms)
         if not host_rows and not keep_empty:
             continue
@@ -228,15 +203,58 @@ def _child_rows(
         )
         folder_for(segments[:-1]).append(child_row)
 
-    def total(row: TreeRow) -> int:
-        if row.kind is RowKind.CHILD_FOLDER:
-            row.count = sum(total(child) for child in row.children)
-            row.tooltip = _count_tooltip(row.count)
-        return row.count
-
     for row in top:
-        total(row)
+        _fill_folder_counts(row)
     return top
+
+
+def _host_rows(
+    label_parent: str,
+    child_name: str,
+    group: GroupConfig,
+    query: str,
+    terms: Optional[FilterTerms],
+    include_all_hosts: bool,
+    callbacks: TreeCallbacks,
+    shared: bool,
+) -> List[TreeRow]:
+    """Rows for the hosts of one child group that pass the search and filter."""
+
+    rows: List[TreeRow] = []
+    for host in sorted(group.hosts, key=lambda h: h.alias.lower()):
+        user = callbacks.display_user(host)
+        search = search_text_for_host(host, user)
+        if query and not (include_all_hosts or query in search):
+            continue
+        if terms and not filter_host(host, terms):
+            continue
+        key = host_key(label_parent, child_name, host.alias)
+        status = ConnectionStatus.coerce(callbacks.status(key)).value
+        rows.append(
+            TreeRow(
+                RowKind.HOST,
+                host.alias,
+                label_parent,
+                child=child_name,
+                alias=host.alias,
+                host=host,
+                search=search,
+                color=callbacks.color(label_parent, child_name, host.alias),
+                status=status,
+                tooltip=_host_tooltip(host, user, status),
+                shared=shared,
+            )
+        )
+    return rows
+
+
+def _fill_folder_counts(row: TreeRow) -> int:
+    """Set folder host counts to the sum of their descendants."""
+
+    if row.kind is RowKind.CHILD_FOLDER:
+        row.count = sum(_fill_folder_counts(child) for child in row.children)
+        row.tooltip = _count_tooltip(row.count)
+    return row.count
 
 
 def build_tree_rows(
