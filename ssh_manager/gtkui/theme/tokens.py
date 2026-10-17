@@ -105,6 +105,7 @@ class Layout:
         HEADER_TOP = 29  # sidebar top → header block ("CONNECTION MANAGER" at y = 111)
         HEADER_HEIGHT = 52
         TITLE_GAP = 5  # eyebrow → "Hosts" (cap top at y = 134)
+        TITLE_SLACK = 9  # line-box slack under "Hosts" that the search row may overlap
         ADD_HOST_TOP = 12  # header top → Add host (y = 118)
         SEARCH_TOP = 22  # header bottom → search box (y = 180)
         SEARCH_GAP = 11  # search box → filter button

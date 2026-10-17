@@ -23,6 +23,7 @@ from .tokens import (
     UI_FONT_FAMILIES,
     em,
     FontScale,
+    Layout,
     Motion,
     Palette,
     Radius,
@@ -398,7 +399,12 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     min-height: 1px;
 }
 .sidebar-eyebrow { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
-.sidebar-title { font-size: ${fs_page_title}em; font-weight: 400; color: @sm_text_primary; }
+.sidebar-title {
+    font-size: ${fs_page_title}em;
+    font-weight: 400;
+    color: @sm_text_primary;
+    margin-bottom: -${title_slack}px;
+}
 .sm-window button.add-host { min-height: ${button_inner}px; padding: 0 15px 0 13px; font-size: ${fs_body}em; }
 .sm-window entry.sidebar-search-entry {
     min-height: ${search_inner}px;
@@ -426,7 +432,10 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     color: @sm_text_secondary;
 }
 .filter-dot { color: @sm_accent; }
-.sidebar-pane treeview.view {
+/* "scrolledwindow >" pins the font size to the widget's own node: the nodes
+   TreeView pushes with style_context.save() while drawing would otherwise
+   match again and apply the em scale twice. */
+.sidebar-pane scrolledwindow > treeview.view {
     background-color: transparent;
     color: @sm_text_primary;
     font-size: ${fs_tree}em;
@@ -779,6 +788,7 @@ def _values(palette: Palette, motion: str) -> Dict[str, object]:
         "button_inner": Size.BUTTON - 2, "button_large_inner": Size.BUTTON_LARGE - 2,
         "search_inner": Size.SEARCH - 2, "hero_inner": Size.HERO_BUTTON - 2,
         "empty_card_inner": Size.EMPTY_CARD - 2,
+        "title_slack": Layout.Sidebar.TITLE_SLACK,
         "fs_caps": FontScale.CAPS, "fs_caps_14": FontScale.MONO, "fs_badge": FontScale.BADGE,
         "fs_caption": FontScale.CAPTION, "fs_mono": FontScale.MONO, "fs_body": FontScale.BODY,
         "fs_tree": FontScale.TREE, "fs_subtitle": FontScale.SUBTITLE, "fs_wordmark": FontScale.WORDMARK,

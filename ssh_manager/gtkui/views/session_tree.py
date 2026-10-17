@@ -116,6 +116,25 @@ COUNT_SCALE = 13 / 16  # count font (13px) relative to the row font (16px)
 RADIUS = Layout.Tree.RADIUS
 
 
+TREE_FONT_PX = 16  # the reference row font; rows scale with the actual font size
+
+
+def font_pixel_size(widget: Gtk.Widget) -> float:
+    font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL)
+    size = font.get_size() / Pango.SCALE
+    if not font.get_size_is_absolute():
+        screen = widget.get_screen()
+        dpi = screen.get_resolution() if screen is not None else -1
+        size *= (dpi if dpi > 0 else 96.0) / 72.0
+    return size
+
+
+def row_height_for(widget: Gtk.Widget) -> int:
+    """41px at the default font (16px rows); proportionally taller for larger fonts."""
+
+    return max(ROW_HEIGHT, int(round(ROW_HEIGHT * font_pixel_size(widget) / TREE_FONT_PX)))
+
+
 def row_geometry(kind: object, depth: int) -> Dict[str, int]:
     """x positions (widget coordinates) of the chevron, icon and label for a row."""
 
@@ -174,7 +193,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
             separator = int(widget.style_get_property("vertical-separator"))
         except (TypeError, ValueError):
             separator = 0
-        height = ROW_HEIGHT + self.props.gap - separator
+        height = row_height_for(widget) + self.props.gap - separator
         return height, height
 
     def do_get_preferred_height_for_width(self, widget, _width):

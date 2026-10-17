@@ -47,7 +47,6 @@ FILTER_HELP = _(
 
 # Vertical rhythm of the reference (y from the sidebar top, which is y = 77).
 HEADER_TOP = Layout.Sidebar.HEADER_TOP
-HEADER_HEIGHT = Layout.Sidebar.HEADER_HEIGHT
 TITLE_GAP = Layout.Sidebar.TITLE_GAP
 ADD_HOST_TOP = Layout.Sidebar.ADD_HOST_TOP
 SEARCH_TOP = Layout.Sidebar.SEARCH_TOP
@@ -176,15 +175,11 @@ class SidebarView(Gtk.Box):
         self.title_label.get_style_context().add_class("sidebar-title")
         self.title_label.set_margin_top(TITLE_GAP)
         titles.pack_start(self.title_label, False, False, 0)
-        # The titles float over a fixed-height spacer so the font's line
-        # height cannot push the search row down (the block is 52px tall).
+        # The title's line box is taller than its glyphs; the stylesheet pulls
+        # the search row up over that slack (.sidebar-title margin-bottom), so
+        # the block is 52px tall at the default font and still grows with it.
         titles.set_valign(Gtk.Align.START)
-        title_block = Gtk.Overlay()
-        spacer = Gtk.Box()
-        spacer.set_size_request(-1, HEADER_HEIGHT)
-        title_block.add(spacer)
-        title_block.add_overlay(titles)
-        header.pack_start(title_block, True, True, 0)
+        header.pack_start(titles, True, True, 0)
 
         self.add_host_button = Gtk.Button()
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)

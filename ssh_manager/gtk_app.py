@@ -79,6 +79,7 @@ from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog  # noqa: E40
 from ssh_manager.gtkui.dialogs.vault import VaultDialog  # noqa: E402,F401
 
 from ssh_manager.gtkui.health import compute_health  # noqa: E402
+from ssh_manager.gtkui.host_history import HOST_HISTORY_FILE  # noqa: E402
 from ssh_manager.gtkui.identity import local_user_initials  # noqa: E402
 from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
 from ssh_manager.gtkui.workspaces import workspace_list  # noqa: E402
@@ -265,7 +266,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
-        self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / "host-history.json")
+        self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / HOST_HISTORY_FILE)
 
     def _build_ui(self) -> None:
         self._build_header()
@@ -523,6 +524,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         if hasattr(self, "tree_view"):
             self.tree_view.clear_icon_cache()
+        if hasattr(self, "_host_page"):
+            self.host_page.refresh()  # markup colors (ready-state body) come from the palette
 
     # ------------------------------------------------------------- UI state
     def _load_ui_state(self) -> Dict[str, object]:

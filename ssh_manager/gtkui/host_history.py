@@ -17,6 +17,8 @@ from .host_facts import ActivityEvent, HostActivity
 
 LOGGER = logging.getLogger(__name__)
 
+# A dot-file, like the UI state: the inventory loader ignores hidden files.
+HOST_HISTORY_FILE = ".host_history.json"
 EVENT_LIMIT = 50
 HOST_LIMIT = 500
 
