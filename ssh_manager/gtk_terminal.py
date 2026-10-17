@@ -33,6 +33,17 @@ from ssh_manager.vte_bridge import VTEBridge
 # --- END: PARAMIKO_VTE_IMPORTS ---
 from ssh_manager.settings import TerminalAppearanceSettings
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
+from ssh_manager.gtkui.constants import Icons
+from ssh_manager.gtkui.dialogs.prompt import prompt_text
+from ssh_manager.gtkui.i18n import _
+from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
+from ssh_manager.gtkui.theme.loader import get_theme_manager
+from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Motion, Space
+from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level
+from ssh_manager.gtkui.views.workspace import BroadcastStrip, SessionToolbar, TabLabel, TileFrame, tab_menu_spec
+from ssh_manager.gtkui.widgets.empty_state import EmptyState
+from ssh_manager.gtkui.widgets.icon_button import IconButton, IconMenuButton
+from ssh_manager.gtkui.widgets.menus import build_context_menu, build_menu, popup_menu
 
 LogFn = Callable[[str, bool], None]
 PasswordUpdateFn = Callable[[HostEntry, str], bool]
@@ -221,6 +232,30 @@ def auth_failure_output_detected(output: str) -> bool:
     return bool(output and AUTH_FAILURE_RE.search(strip_ansi(output)))
 
 
+_RESPONSE_RECONNECT = 1
+_RESPONSE_CLOSE = 2
+_FAILURE_WORDS = ("failed", "denied", "terminated", "error")
+
+
+def _status_for_message(message: str, connected: bool) -> ConnectionStatus:
+    """Map a status message to a :class:`ConnectionStatus`."""
+
+    if connected:
+        return ConnectionStatus.CONNECTED
+    text = (message or "").lower()
+    if text.startswith("connecting"):
+        return ConnectionStatus.CONNECTING
+    if any(word in text for word in _FAILURE_WORDS):
+        return ConnectionStatus.FAILED
+    return ConnectionStatus.UNKNOWN
+
+
+def _set_stat_tooltip(label: object, text: str) -> None:
+    setter = getattr(label, "set_tooltip_text", None)
+    if callable(setter):
+        setter(text)
+
+
 def icon_label_content(icon_name: str, label: str) -> Gtk.Box:
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
     image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
@@ -300,59 +335,46 @@ class TerminalTab(Gtk.Box):
         self._strip_ansi_on_copy = False
         self._appearance = appearance
 
+        self._status = ConnectionStatus.UNKNOWN
+        self._stats_enabled = True
+        self._custom_title = ""
+        self._activity_callback: Optional[Callable[["TerminalTab"], None]] = None
+
         self.set_hexpand(True)
         self.set_vexpand(True)
+        self._build_infobar()
+        self._build_terminal_area()
+        self._build_statusbar()
 
-        self._banner = Gtk.Revealer()
-        self._banner.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
-        self._banner.set_reveal_child(False)
+        self._terminal.connect("key-press-event", self._on_terminal_key_press)
+        self._terminal.connect("child-exited", self._on_child_exited)
+        self._terminal.connect("focus-in-event", self._on_terminal_focus)
+        self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
+        self._focused_terminal = self._terminal
+        if autostart:
+            self._spawn()
+        else:
+            self._set_status("Connecting…", False)
 
-        banner_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        banner_box.set_margin_top(6)
-        banner_box.set_margin_bottom(6)
-        banner_box.set_margin_start(12)
-        banner_box.set_margin_end(12)
-        banner_box.get_style_context().add_class("info")
+    # ------------------------------------------------------------------ building
+    def _build_infobar(self) -> None:
+        """Reconnect banner (``Gtk.InfoBar``) shown while the session is not connected."""
 
+        self._banner = Gtk.InfoBar()
+        self._banner.set_message_type(Gtk.MessageType.WARNING)
+        self._banner.set_show_close_button(False)
         self._status_label = Gtk.Label()
         self._status_label.set_xalign(0.0)
-        banner_box.pack_start(self._status_label, True, True, 0)
-
-        self._reconnect_button = Gtk.Button()
-        self._reconnect_button.set_relief(Gtk.ReliefStyle.NONE)
-        recon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        image = Gtk.Image.new_from_icon_name("media-playlist-repeat-symbolic", Gtk.IconSize.BUTTON)
-        recon_box.pack_start(image, False, False, 0)
-        recon_box.pack_start(Gtk.Label(label="Reconnect"), False, False, 0)
-        self._reconnect_button.add(recon_box)
-        self._reconnect_button.connect("clicked", self._on_reconnect_clicked)
-        banner_box.pack_start(self._reconnect_button, False, False, 0)
-
-        self._banner.add(banner_box)
+        self._status_label.set_line_wrap(True)
+        self._banner.get_content_area().pack_start(self._status_label, True, True, 0)
+        self._reconnect_button = self._banner.add_button(_("_Reconnect"), _RESPONSE_RECONNECT)
+        self._banner.add_button(_("_Close Session"), _RESPONSE_CLOSE)
+        self._banner.connect("response", self._on_banner_response)
+        self._banner.set_revealed(False)
+        self._banner.set_no_show_all(True)
         self.pack_start(self._banner, False, False, 0)
 
-        control_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        duplicate_btn = Gtk.Button(label="Duplicate Pane")
-        duplicate_btn.set_tooltip_text("Open a second pane for this same host.")
-        duplicate_btn.connect("clicked", lambda *_: self._duplicate_pane_once())
-        close_duplicate_btn = Gtk.Button(label="Close Duplicate")
-        close_duplicate_btn.set_tooltip_text("Close the duplicate pane for this host.")
-        close_duplicate_btn.connect("clicked", lambda *_: self._close_duplicate_pane())
-        control_row.pack_start(duplicate_btn, False, False, 0)
-        control_row.pack_start(close_duplicate_btn, False, False, 0)
-        save_btn = Gtk.Button(label="Save Transcript")
-        save_btn.connect("clicked", lambda *_: self.save_transcript())
-        control_row.pack_start(save_btn, False, False, 0)
-        strip_btn = Gtk.ToggleButton(label="Strip ANSI on Copy")
-        strip_btn.set_active(False)
-        strip_btn.connect("toggled", lambda btn: self._set_strip_ansi(btn.get_active()))
-        control_row.pack_start(strip_btn, False, False, 0)
-        stats_btn = Gtk.Button(label="Show Stats")
-        stats_btn.connect("clicked", lambda *_: self._show_stats_once())
-        control_row.pack_start(stats_btn, False, False, 0)
-        self._control_row = control_row
-        self.pack_start(control_row, False, False, 0)
-
+    def _build_terminal_area(self) -> None:
         self._terminal = self._create_terminal()
         self._pane_container = TerminalPaneContainer(self._terminal)
         self._pane_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -361,57 +383,26 @@ class TerminalTab(Gtk.Box):
         self._pane_holder.pack_start(self._pane_container, True, True, 0)
         self.pack_start(self._pane_holder, True, True, 0)
 
-        info_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
-        info_box.set_margin_top(6)
-        info_box.set_margin_bottom(4)
-        info_box.set_margin_start(10)
-        info_box.set_margin_end(10)
-        info_box.get_style_context().add_class("terminal-info-bar")
-        info_box.set_hexpand(True)
-
-        self._info_spinner = Gtk.Spinner()
-        self._info_spinner.set_no_show_all(True)
-        self._info_spinner.set_size_request(20, 20)
-        info_box.pack_start(self._info_spinner, False, False, 0)
-
-        self._cpu_label = Gtk.Label()
-        self._cpu_label.set_xalign(0.0)
-        info_box.pack_start(self._cpu_label, False, False, 0)
-
-        self._mem_label = Gtk.Label()
-        self._mem_label.set_xalign(0.0)
-        info_box.pack_start(self._mem_label, False, False, 0)
-
-        self._disk_label = Gtk.Label()
-        self._disk_label.set_xalign(0.0)
-        info_box.pack_start(self._disk_label, False, False, 0)
-
-        self._info_revealer = Gtk.Revealer()
-        self._info_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
-        self._info_revealer.set_transition_duration(220)
-        self._info_revealer.set_reveal_child(True)
-        self._info_revealer.add(info_box)
-        self.pack_start(self._info_revealer, False, False, 0)
+    def _build_statusbar(self) -> None:
+        self._statusbar = SessionStatusBar()
+        # Attribute names kept so the stats helpers (and their tests) stay unchanged.
+        self._info_spinner = self._statusbar.spinner
+        self._cpu_label = self._statusbar.cpu_label
+        self._mem_label = self._statusbar.mem_label
+        self._disk_label = self._statusbar.disk_label
+        self.pack_start(self._statusbar, False, False, 0)
         self._reset_stats_labels()
-
-        self._terminal.connect("key-press-event", self._on_terminal_key_press)
-        self._terminal.connect("child-exited", self._on_child_exited)
-        self._terminal.connect("focus-in-event", self._on_terminal_focus)
-        self._focused_terminal = self._terminal
-        if autostart:
-            self._spawn()
-        else:
-            self._set_status("Connecting…", False)
 
     # ------------------------------------------------------------------ helpers
     def _reset_stats_labels(self) -> None:
-        self._cpu_label.set_text("CPU: —")
-        self._mem_label.set_text("Mem: —")
-        self._disk_label.set_text("Disk: —")
+        for label, text in ((self._cpu_label, "CPU: —"), (self._mem_label, "Mem: —"), (self._disk_label, "Disk: —")):
+            label.set_text(text)
+            label.set_tooltip_text(None)
+            apply_stat_level(label, None)
         self._info_spinner.stop()
         self._info_spinner.hide()
-        if hasattr(self, "_info_revealer"):
-            self._info_revealer.set_reveal_child(False)
+        if hasattr(self, "_statusbar"):
+            self._statusbar.set_stats_visible(False)
 
     def _colors_from_appearance(self) -> Tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, list[Gdk.RGBA]]:
         profile_theme = self._profile.theme if self._profile and self._profile.theme else ""
@@ -535,6 +526,30 @@ class TerminalTab(Gtk.Box):
     def strip_ansi_on_copy(self) -> bool:
         return self._strip_ansi_on_copy
 
+    @property
+    def status(self) -> ConnectionStatus:
+        return getattr(self, "_status", ConnectionStatus.UNKNOWN)
+
+    @property
+    def profile(self):
+        return self._profile
+
+    def connect_activity(self, callback: Callable[["TerminalTab"], None]) -> None:
+        """Call ``callback(tab)`` whenever a terminal of this session produces output."""
+
+        self._activity_callback = callback
+        for term in self._terminals():
+            self._watch_activity(term)
+
+    def _watch_activity(self, term: Vte.Terminal) -> None:
+        if self._activity_callback is None:
+            return
+        term.connect("contents-changed", lambda *_: self._activity_callback and self._activity_callback(self))
+
+    def set_broadcast_highlight(self, active: bool) -> None:
+        ctx = self._pane_holder.get_style_context()
+        (ctx.add_class if active else ctx.remove_class)("broadcast-active")
+
     def copy_clipboard(self) -> None:
         term = self._active_terminal()
         if not term:
@@ -619,11 +634,26 @@ class TerminalTab(Gtk.Box):
     def _on_reconnect_clicked(self, _button: Gtk.Button) -> None:
         self.reconnect()
 
+    def _on_banner_response(self, _bar: Gtk.InfoBar, response: int) -> None:
+        if response == _RESPONSE_RECONNECT:
+            self.reconnect()
+        elif response == _RESPONSE_CLOSE:
+            self._request_close()
+
+    def _on_terminal_size_allocate(self, term: Vte.Terminal, _allocation) -> None:
+        self._statusbar.set_size(int(term.get_column_count() or 0), int(term.get_row_count() or 0))
+
     def _set_status(self, message: str, connected: bool) -> None:
-        indicator = "●" if connected else "○"
-        self._status_label.set_text(f"{indicator} {message}")
-        self._banner.set_reveal_child(not connected)
+        state = _status_for_message(message, connected)
+        self._status = state
+        self._status_label.set_text(message)
+        reveal = not connected and state is not ConnectionStatus.CONNECTING
+        self._banner.set_message_type(Gtk.MessageType.ERROR if state is ConnectionStatus.FAILED else Gtk.MessageType.WARNING)
+        if reveal:
+            self._banner.show()
+        self._banner.set_revealed(reveal)
         self._reconnect_button.set_sensitive(not connected)
+        self._statusbar.set_status(state, message)
         self._session_active = connected
         if connected:
             # Mark as connected immediately so normal disconnects don't wipe stored passwords.
@@ -1224,9 +1254,9 @@ class TerminalTab(Gtk.Box):
         super().destroy()
 
     def _start_stats_updates(self) -> None:
-        if self._stats_source_id:
+        if self._stats_source_id or not self._stats_enabled:
             return
-        self._info_revealer.set_reveal_child(True)
+        self._statusbar.set_stats_visible(True)
         self._update_stats()
         self._stats_source_id = GLib.timeout_add_seconds(10, self._update_stats)
 
@@ -1236,7 +1266,6 @@ class TerminalTab(Gtk.Box):
             self._stats_source_id = 0
         self._stats_updating = False
         self._reset_stats_labels()
-        self._info_revealer.set_reveal_child(False)
 
     def _duplicate_pane_once(self) -> None:
         if self._secondary_terminal is not None:
@@ -1246,6 +1275,7 @@ class TerminalTab(Gtk.Box):
         self._secondary_terminal.connect("key-press-event", self._on_terminal_key_press)
         self._secondary_terminal.connect("focus-in-event", self._on_terminal_focus)
         self._secondary_terminal.connect("child-exited", self._on_secondary_child_exited)
+        self._watch_activity(self._secondary_terminal)
         self._spawn_secondary(self._secondary_terminal)
 
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
@@ -1424,8 +1454,7 @@ class TerminalTab(Gtk.Box):
         if not self._session_active:
             self._log("Remote stats require an active session.", False)
             return
-        self._info_revealer.set_reveal_child(True)
-        self._update_stats()
+        self._start_stats_updates()
 
     def _apply_stats_result(self, data: Optional[Dict[str, float]]) -> bool:
         self._info_spinner.stop()
@@ -1448,29 +1477,45 @@ class TerminalTab(Gtk.Box):
         cpu = numeric(data.get("cpu"))
         if cpu is not None:
             self._cpu_label.set_text(f"CPU: {cpu:.1f}%")
+            _set_stat_tooltip(self._cpu_label, _("CPU usage: {pct:.1f}%").format(pct=cpu))
         else:
             self._cpu_label.set_text("CPU: N/A")
+        apply_stat_level(self._cpu_label, cpu)
         mem_used = numeric(data.get("mem_used"))
         mem_total = numeric(data.get("mem_total"))
+        mem_pct = None
         if mem_used is not None and mem_total is not None and mem_total > 0:
+            mem_pct = mem_used / mem_total * 100.0
             self._mem_label.set_text(
                 f"Mem: {mem_used / 1024:.1f}/{mem_total / 1024:.1f} GB"
             )
+            _set_stat_tooltip(
+                self._mem_label,
+                _("Memory: {used:.0f} MiB of {total:.0f} MiB ({pct:.0f}%)").format(used=mem_used, total=mem_total, pct=mem_pct),
+            )
         else:
             self._mem_label.set_text("Mem: N/A")
+        apply_stat_level(self._mem_label, mem_pct)
         disk_used = numeric(data.get("disk_used"))
         disk_total = numeric(data.get("disk_total"))
+        disk_pct = None
         if disk_used is not None and disk_total is not None and disk_total > 0:
+            disk_pct = disk_used / disk_total * 100.0
             self._disk_label.set_text(
                 f"Disk: {disk_used:.1f}/{disk_total:.1f} GB"
             )
+            _set_stat_tooltip(
+                self._disk_label,
+                _("Disk (/): {used:.2f} GB of {total:.2f} GB ({pct:.0f}%)").format(used=disk_used, total=disk_total, pct=disk_pct),
+            )
         else:
             self._disk_label.set_text("Disk: N/A")
+        apply_stat_level(self._disk_label, disk_pct)
         return False
 
 
 class TerminalNotebook(Gtk.Box):
-    """Container managing multiple terminal tabs."""
+    """Session workspace: one toolbar, the broadcast strip and tabs or tiles."""
 
     def __init__(
         self,
@@ -1486,10 +1531,10 @@ class TerminalNotebook(Gtk.Box):
 
         self._log = log
         self._default_font_scale = default_font_scale
-        self._tab_labels: Dict[TerminalTab, Gtk.Label] = {}
+        self._tab_labels: Dict[TerminalTab, TabLabel] = {}
         self._tab_status: Dict[TerminalTab, bool] = {}
         self._tabs: List[TerminalTab] = []
-        self._tile_wrappers: Dict[TerminalTab, Gtk.Widget] = {}
+        self._tile_wrappers: Dict[TerminalTab, TileFrame] = {}
         self._tile_mode = False
         self._broadcast_mode = False
         self._broadcast_included: Dict[TerminalTab, bool] = {}
@@ -1499,64 +1544,103 @@ class TerminalNotebook(Gtk.Box):
         self._appearance = appearance
         self.on_quick_connect: Optional[Callable[[], None]] = None
         self.on_new_host: Optional[Callable[[], None]] = None
+        self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
 
-        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        toolbar.set_margin_top(6)
-        toolbar.set_margin_bottom(6)
-        toolbar.set_margin_start(8)
-        toolbar.set_margin_end(8)
-        self._show_all_button = Gtk.ToggleButton(label="Show All Sessions")
-        self._show_all_button.set_tooltip_text("Tile every open terminal session together.")
-        self._show_all_button.set_sensitive(False)
-        self._show_all_button.connect("toggled", self._on_show_all_toggled)
-        toolbar.pack_start(self._show_all_button, False, False, 0)
-        self._broadcast_all_button = Gtk.ToggleButton(label="Broadcast Input")
-        self._broadcast_all_button.set_tooltip_text("Mirror typed input to every included active session.")
-        self._broadcast_all_button.set_sensitive(False)
-        self._broadcast_all_button.connect("toggled", self._on_broadcast_all_toggled)
-        toolbar.pack_start(self._broadcast_all_button, False, False, 0)
-        self.pack_start(toolbar, False, False, 0)
+        self._build_toolbar()
+        self._broadcast_strip = BroadcastStrip(lambda: self.set_broadcast_mode(False))
+        self.pack_start(self._broadcast_strip, False, False, 0)
+        self._build_stack()
+        self._sync_toolbar()
 
+    # ------------------------------------------------------------ building
+    def _build_toolbar(self) -> None:
+        bar = SessionToolbar()
+        self._toolbar = bar
+        self._toggle_handlers = {
+            bar.split: bar.split.connect("toggled", self._on_split_toggled),
+            bar.plain_copy: bar.plain_copy.connect("toggled", self._on_plain_copy_toggled),
+            bar.tile: bar.tile.connect("toggled", self._on_tile_toggled),
+            bar.broadcast: bar.broadcast.connect("toggled", self._on_broadcast_toggled),
+            bar.stats: bar.stats.connect("toggled", self._on_stats_toggled),
+        }
+        bar.save.connect("clicked", lambda *_: self.save_current_transcript())
+        bar.reconnect.connect("clicked", lambda *_: self.reconnect_current())
+        bar.set_overflow(self._overflow_menu_spec())
+        self.pack_start(bar, False, False, 0)
+
+    def _build_stack(self) -> None:
         self._notebook = Gtk.Notebook()
         self._notebook.set_scrollable(True)
+        self._notebook.set_show_border(False)
         self._notebook.set_hexpand(True)
         self._notebook.set_vexpand(True)
+        self._notebook.get_style_context().add_class("session-tabs")
+        self._notebook.connect("switch-page", self._on_switch_page)
+        self._notebook.connect("page-reordered", lambda *_: self._sync_tab_order())
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        actions.pack_start(
+            IconButton(Icons.NEW, _("Quick connect (Ctrl+Shift+T)"), self._request_quick_connect),
+            False,
+            False,
+            0,
+        )
+        self._tabs_menu_button = IconMenuButton(Icons.MORE, _("All sessions"))
+        self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
+        actions.pack_start(self._tabs_menu_button, False, False, 0)
+        actions.show_all()
+        self._notebook.set_action_widget(actions, Gtk.PackType.END)
 
         self._tile_grid = Gtk.Grid()
-        self._tile_grid.set_row_spacing(8)
-        self._tile_grid.set_column_spacing(8)
+        self._tile_grid.set_row_spacing(Space.S)
+        self._tile_grid.set_column_spacing(Space.S)
+        self._tile_grid.set_row_homogeneous(True)
+        self._tile_grid.set_column_homogeneous(True)
         self._tile_grid.set_hexpand(True)
         self._tile_grid.set_vexpand(True)
-        self._tile_grid.set_margin_top(8)
-        self._tile_grid.set_margin_bottom(8)
-        self._tile_grid.set_margin_start(8)
-        self._tile_grid.set_margin_end(8)
+        self._tile_grid.set_border_width(Space.S)
         self._tile_scroller = Gtk.ScrolledWindow()
         self._tile_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self._tile_scroller.set_hexpand(True)
-        self._tile_scroller.set_vexpand(True)
         self._tile_scroller.add(self._tile_grid)
 
-        self._placeholder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self._placeholder.set_hexpand(True)
-        self._placeholder.set_vexpand(True)
-        self._placeholder.set_halign(Gtk.Align.CENTER)
-        self._placeholder.set_valign(Gtk.Align.CENTER)
-        icon = Gtk.Image.new_from_icon_name("utilities-terminal-symbolic", Gtk.IconSize.DIALOG)
-        self._placeholder.pack_start(icon, False, False, 0)
-        message = Gtk.Label(label="No active connections")
-        self._placeholder.pack_start(message, False, False, 0)
+        self._placeholder = EmptyState(
+            Icons.TERMINAL,
+            _("No open sessions"),
+            _(
+                "Double-click a host or press Enter to connect. Ctrl+T opens the selected host; "
+                "Ctrl+Shift+T opens Quick Connect."
+            ),
+            action_label=_("_Quick Connect…"),
+            on_action=self._request_quick_connect,
+            secondary_label=_("_New Host…"),
+            on_secondary=lambda: self.on_new_host() if self.on_new_host else None,
+        )
 
         self._stack = Gtk.Stack()
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        self._stack.set_hexpand(True)
-        self._stack.set_vexpand(True)
+        self._stack.set_transition_duration(get_theme_manager().motion_ms(Motion.FAST))
         self._stack.add_named(self._placeholder, "placeholder")
         self._stack.add_named(self._notebook, "tabs")
         self._stack.add_named(self._tile_scroller, "tiles")
         self._stack.set_visible_child_name("placeholder")
-
         self.pack_start(self._stack, True, True, 0)
+
+    def _overflow_menu_spec(self):
+        return [
+            MenuSection("terminal", [
+                MenuItemSpec(_("Send _Interrupt"), self.interrupt_current, Icons.INTERRUPT, "Shift+Ctrl+K"),
+                MenuItemSpec(_("Zoom _In"), self.increase_font, "zoom-in-symbolic", "Ctrl++"),
+                MenuItemSpec(_("Zoom _Out"), self.decrease_font, "zoom-out-symbolic", "Ctrl+-"),
+                MenuItemSpec(_("_Reset Zoom"), self.reset_font, "zoom-original-symbolic", "Ctrl+0"),
+            ]),
+            MenuSection("session", [
+                MenuItemSpec(_("_Duplicate Session"), self.duplicate_current, Icons.DUPLICATE, "Shift+Ctrl+D"),
+                MenuItemSpec(_("Re_name Session…"), self.rename_current, Icons.EDIT, "F2"),
+            ]),
+            MenuSection("close", [
+                MenuItemSpec(_("Close _Other Sessions"), lambda: self.close_others(self._current_tab())),
+                MenuItemSpec(_("_Close Session"), self.close_current, Icons.CLOSE, "Ctrl+W"),
+            ]),
+        ]
 
     # ----------------------------------------------------------------- tab api
     @property
@@ -1586,6 +1670,7 @@ class TerminalNotebook(Gtk.Box):
         tab.connect("close-requested", self._on_tab_close_requested)
         tab.connect("focus-in-event", self._on_tab_focus, tab)
         tab.set_input_observer(self._on_tab_input)
+        tab.connect_activity(self._on_tab_activity)
 
         self._tabs.append(tab)
         self._tab_status[tab] = False
@@ -1597,33 +1682,22 @@ class TerminalNotebook(Gtk.Box):
         else:
             self._append_tab_to_notebook(tab)
         self._update_placeholder()
+        self._update_broadcast_ui()
         GLib.idle_add(tab.focus_terminal)
         return tab
 
     def _append_tab_to_notebook(self, tab: TerminalTab) -> int:
         self._detach_tab(tab)
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        header.set_margin_start(6)
-        header.set_margin_end(6)
-
-        label = Gtk.Label(label=self._tab_label_text(tab))
-        label.set_xalign(0.0)
-        header.pack_start(label, True, True, 0)
-
-        close_button = Gtk.Button()
-        close_button.set_relief(Gtk.ReliefStyle.NONE)
-        close_button.set_tooltip_text("Close session")
-        close_image = Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
-        close_button.add(close_image)
-        close_button.connect("clicked", self._on_close_button_clicked, tab)
-        header.pack_start(close_button, False, False, 0)
-
-        page_num = self._notebook.append_page(tab, header)
+        label = TabLabel(
+            tab.title,
+            on_close=lambda t=tab: self.close_tab(t),
+            on_context_menu=lambda event, t=tab: self._show_tab_menu(t, event),
+        )
+        label.set_title(tab.title, tab.status)
+        page_num = self._notebook.append_page(tab, label)
         tab.show_all()
-        header.show_all()
         self._notebook.set_tab_reorderable(tab, True)
         self._notebook.set_current_page(page_num)
-
         self._tab_labels[tab] = label
         return page_num
 
@@ -1634,9 +1708,7 @@ class TerminalNotebook(Gtk.Box):
 
     def close_tab(self, tab: Optional[TerminalTab] = None) -> None:
         target = tab or self._current_tab()
-        if not target:
-            return
-        if target not in self._tabs:
+        if not target or target not in self._tabs:
             return
         self._detach_tab(target)
         self._tabs.remove(target)
@@ -1651,9 +1723,21 @@ class TerminalNotebook(Gtk.Box):
         if self._tile_mode:
             self._rebuild_tile_grid()
         self._update_placeholder()
+        self._update_broadcast_ui()
 
     def close_current(self) -> None:
         self.close_tab()
+
+    def close_others(self, keep: Optional[TerminalTab]) -> None:
+        for tab in [t for t in self._tabs if t is not keep]:
+            self.close_tab(tab)
+
+    def close_to_right(self, tab: TerminalTab) -> None:
+        ordered = self._ordered_tabs()
+        if tab not in ordered:
+            return
+        for other in ordered[ordered.index(tab) + 1:]:
+            self.close_tab(other)
 
     def copy_current(self) -> None:
         tab = self._current_tab()
@@ -1679,6 +1763,7 @@ class TerminalNotebook(Gtk.Box):
         tab = self._current_tab()
         if tab:
             tab.toggle_strip_ansi_copy()
+            self._sync_toolbar()
 
     def focus_current(self) -> None:
         tab = self._current_tab()
@@ -1730,20 +1815,26 @@ class TerminalNotebook(Gtk.Box):
             if page != -1:
                 self._notebook.set_current_page(page)
         tab.focus_terminal()
+        self._sync_toolbar()
+
+    def _ordered_tabs(self) -> List[TerminalTab]:
+        if self._tile_mode:
+            return list(self._tabs)
+        pages = [self._notebook.get_nth_page(i) for i in range(self._notebook.get_n_pages())]
+        return [page for page in pages if isinstance(page, TerminalTab)]
+
+    def _sync_tab_order(self) -> None:
+        ordered = self._ordered_tabs()
+        if len(ordered) == len(self._tabs):
+            self._tabs = ordered
 
     def _step_tab(self, delta: int) -> None:
-        if not self._tabs:
+        ordered = self._ordered_tabs()
+        if not ordered:
             return
         current = self._current_tab()
-        index = self._tabs.index(current) if current in self._tabs else 0
-        if not self._tile_mode:
-            page = self._notebook.get_current_page()
-            index = page if page >= 0 else index
-            target = self._notebook.get_nth_page((index + delta) % self._notebook.get_n_pages())
-        else:
-            target = self._tabs[(index + delta) % len(self._tabs)]
-        if isinstance(target, TerminalTab):
-            self._focus_tab(target)
+        index = ordered.index(current) if current in ordered else 0
+        self._focus_tab(ordered[(index + delta) % len(ordered)])
 
     def next_tab(self) -> None:
         self._step_tab(1)
@@ -1754,8 +1845,7 @@ class TerminalNotebook(Gtk.Box):
     def goto_tab(self, number: int) -> None:
         """Focus session ``number`` (1-based, in tab order)."""
 
-        ordered = [self._notebook.get_nth_page(i) for i in range(self._notebook.get_n_pages())]
-        ordered = [tab for tab in ordered if isinstance(tab, TerminalTab)] if not self._tile_mode else list(self._tabs)
+        ordered = self._ordered_tabs()
         if 1 <= number <= len(ordered):
             self._focus_tab(ordered[number - 1])
 
@@ -1764,35 +1854,28 @@ class TerminalNotebook(Gtk.Box):
         if tab:
             tab.reconnect()
 
-    @property
-    def broadcast_active(self) -> bool:
-        return self._broadcast_mode
+    def duplicate_current(self) -> None:
+        tab = self._current_tab()
+        if tab:
+            self.duplicate_tab(tab)
 
-    def set_broadcast_mode(self, active: bool) -> None:
-        self._broadcast_all_button.set_active(active)
-
-    def toggle_broadcast(self) -> None:
-        self.set_broadcast_mode(not self._broadcast_mode)
-
-    @property
-    def tile_mode(self) -> bool:
-        return self._tile_mode
-
-    def set_tile_mode(self, active: bool) -> None:
-        self._show_all_button.set_active(active)
-
-    def toggle_tile_mode(self) -> None:
-        self.set_tile_mode(not self._tile_mode)
+    def duplicate_tab(self, tab: TerminalTab) -> None:
+        if self.on_duplicate_session is not None:
+            self.on_duplicate_session(tab)
+        else:
+            self.new_terminal(tab.host, profile=tab.profile)
 
     def toggle_split_current(self) -> None:
         tab = self._current_tab()
         if tab:
             tab.toggle_split()
+            self._sync_toolbar()
 
     def toggle_stats_current(self) -> None:
         tab = self._current_tab()
         if tab:
             tab.set_stats_visible(not tab.stats_visible)
+            self._sync_toolbar()
 
     def rename_current(self) -> None:
         tab = self._current_tab()
@@ -1800,14 +1883,11 @@ class TerminalNotebook(Gtk.Box):
             self.rename_tab(tab)
 
     def rename_tab(self, tab: TerminalTab) -> None:
-        from ssh_manager.gtkui.dialogs.prompt import prompt_text
-        from ssh_manager.gtkui.i18n import _
-
         toplevel = self.get_toplevel()
         title = prompt_text(
             toplevel if isinstance(toplevel, Gtk.Window) else None,
             _("Rename Session"),
-            _("Tab title for {alias} (leave the host alias to reset):").format(alias=tab.host.alias),
+            _("Tab title for {alias} (enter the host alias to reset):").format(alias=tab.host.alias),
             tab.title,
             accept_label=_("_Rename"),
         )
@@ -1815,64 +1895,79 @@ class TerminalNotebook(Gtk.Box):
             tab.title = title
             self._set_tab_label_text(tab)
 
-    # ----------------------------------------------------------------- helpers
-    def _tab_label_text(self, tab: TerminalTab) -> str:
-        connected = self._tab_status.get(tab, False)
-        indicator = "●" if connected else "○"
-        return f"{indicator} {tab.title}"
+    # ------------------------------------------------------- tiles/broadcast
+    @property
+    def tile_mode(self) -> bool:
+        return self._tile_mode
 
-    def _set_tab_label_text(self, tab: TerminalTab) -> None:
-        label = self._tab_labels.get(tab)
-        if label:
-            label.set_text(self._tab_label_text(tab))
+    def set_tile_mode(self, active: bool) -> None:
+        active = bool(active) and len(self._tabs) > 1
+        if not active and self._broadcast_mode:
+            self.set_broadcast_mode(False)
+        self._set_tile_mode(active)
+        self._sync_toolbar()
 
-    def _detach_tab(self, tab: TerminalTab) -> None:
-        page_num = self._notebook.page_num(tab)
-        if page_num != -1:
-            self._notebook.remove_page(page_num)
-        parent = tab.get_parent()
-        if parent and hasattr(parent, "remove"):
-            parent.remove(tab)
-        wrapper = self._tile_wrappers.pop(tab, None)
-        if wrapper and wrapper.get_parent() is self._tile_grid:
-            self._tile_grid.remove(wrapper)
-        self._tab_labels.pop(tab, None)
+    def toggle_tile_mode(self) -> None:
+        self.set_tile_mode(not self._tile_mode)
 
-    def _create_tile_wrapper(self, tab: TerminalTab) -> Gtk.Frame:
+    @property
+    def broadcast_active(self) -> bool:
+        return self._broadcast_mode
+
+    def set_broadcast_mode(self, active: bool) -> None:
+        active = bool(active)
+        if active == self._broadcast_mode:
+            self._sync_toolbar()
+            return
+        if active and len(self._tabs) < 2:
+            self._log("Broadcast needs at least two open sessions.", False)
+            self._sync_toolbar()
+            return
+        self._broadcast_mode = active
+        if active and not self._tile_mode:
+            self._set_tile_mode(True)
+        self._update_broadcast_ui()
+        self._sync_toolbar()
+        self._log(
+            "Broadcast input enabled. Excluded sessions will not receive mirrored input."
+            if active
+            else "Broadcast input disabled.",
+            active,
+        )
+
+    def toggle_broadcast(self) -> None:
+        self.set_broadcast_mode(not self._broadcast_mode)
+
+    def _update_broadcast_ui(self) -> None:
+        targets = [t for t in self._tabs if self._broadcast_included.get(t, True) and self._tab_status.get(t, False)]
+        self._broadcast_strip.set_target_count(len(targets))
+        self._broadcast_strip.set_reveal_child(self._broadcast_mode)
+        for tab in self._tabs:
+            tab.set_broadcast_highlight(self._broadcast_mode and self._broadcast_included.get(tab, True))
+
+    def _on_broadcast_include_toggled(self, tab: TerminalTab, active: bool) -> None:
+        self._broadcast_included[tab] = active
+        self._update_broadcast_ui()
+
+    def _on_tab_input(self, source: TerminalTab, data: str) -> None:
+        self._last_current_tab = source
+        if not self._broadcast_mode or not data:
+            return
+        for target in broadcast_target_tabs(self._tabs, source, self._broadcast_included, self._tab_status):
+            target.feed_input(data)
+
+    def _create_tile_wrapper(self, tab: TerminalTab) -> TileFrame:
         self._detach_tab(tab)
-        frame = Gtk.Frame()
-        frame.set_hexpand(True)
-        frame.set_vexpand(True)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        box.set_hexpand(True)
-        box.set_vexpand(True)
-
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        header.set_margin_top(4)
-        header.set_margin_bottom(4)
-        header.set_margin_start(6)
-        header.set_margin_end(6)
-        label = Gtk.Label(label=self._tab_label_text(tab))
-        label.set_xalign(0.0)
-        header.pack_start(label, True, True, 0)
-        include = Gtk.CheckButton(label="Broadcast")
-        include.set_tooltip_text("Include this session in broadcast input.")
-        include.set_active(self._broadcast_included.get(tab, True))
-        include.connect("toggled", self._on_broadcast_include_toggled, tab)
-        header.pack_start(include, False, False, 0)
-        close_button = Gtk.Button()
-        close_button.set_relief(Gtk.ReliefStyle.NONE)
-        close_button.set_tooltip_text("Close session")
-        close_image = Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
-        close_button.add(close_image)
-        close_button.connect("clicked", self._on_close_button_clicked, tab)
-        header.pack_start(close_button, False, False, 0)
-
-        box.pack_start(header, False, False, 0)
-        box.pack_start(tab, True, True, 0)
-        frame.add(box)
+        frame = TileFrame(
+            tab.title,
+            tab.status,
+            included=self._broadcast_included.get(tab, True),
+            on_include_toggled=lambda active, t=tab: self._on_broadcast_include_toggled(t, active),
+            on_close=lambda t=tab: self.close_tab(t),
+            on_focus=lambda t=tab: self._focus_tab(t),
+        )
+        frame.set_body(tab)
         frame.show_all()
-        self._tab_labels[tab] = label
         self._tile_wrappers[tab] = frame
         return frame
 
@@ -1885,8 +1980,7 @@ class TerminalNotebook(Gtk.Box):
         count = len(self._tabs)
         for index, tab in enumerate(self._tabs):
             row, column = session_tile_position(index, count)
-            wrapper = self._create_tile_wrapper(tab)
-            self._tile_grid.attach(wrapper, column, row, 1, 1)
+            self._tile_grid.attach(self._create_tile_wrapper(tab), column, row, 1, 1)
         self._tile_grid.show_all()
 
     def _set_tile_mode(self, active: bool) -> None:
@@ -1909,46 +2003,36 @@ class TerminalNotebook(Gtk.Box):
                     self._notebook.set_current_page(page_num)
         self._update_placeholder()
 
-    def _on_show_all_toggled(self, button: Gtk.ToggleButton) -> None:
-        if not button.get_active() and self._broadcast_mode:
-            self._broadcast_all_button.set_active(False)
-        self._set_tile_mode(button.get_active())
+    # ----------------------------------------------------------------- helpers
+    def _tab_label_text(self, tab: TerminalTab) -> str:
+        connected = self._tab_status.get(tab, False)
+        indicator = "●" if connected else "○"
+        return f"{indicator} {tab.title}"
 
-    def _on_broadcast_all_toggled(self, button: Gtk.ToggleButton) -> None:
-        active = button.get_active()
-        if active and len(self._tabs) < 2:
-            button.set_active(False)
-            return
-        self._broadcast_mode = active
-        if active and not self._tile_mode:
-            self._show_all_button.set_active(True)
-        if self._tile_mode:
-            self._rebuild_tile_grid()
-            self._update_placeholder()
-        self._log(
-            "Broadcast input enabled. Excluded sessions will not receive mirrored input."
-            if active
-            else "Broadcast input disabled.",
-            active,
-        )
+    def _set_tab_label_text(self, tab: TerminalTab) -> None:
+        label = self._tab_labels.get(tab)
+        if label:
+            label.set_title(tab.title, tab.status)
+        frame = self._tile_wrappers.get(tab)
+        if frame:
+            frame.set_title(tab.title, tab.status)
 
-    def _on_broadcast_include_toggled(self, button: Gtk.CheckButton, tab: TerminalTab) -> None:
-        self._broadcast_included[tab] = button.get_active()
-
-    def _on_tab_input(self, source: TerminalTab, data: str) -> None:
-        self._last_current_tab = source
-        if not self._broadcast_mode or not data:
-            return
-        for target in broadcast_target_tabs(
-            self._tabs,
-            source,
-            self._broadcast_included,
-            self._tab_status,
-        ):
-            target.feed_input(data)
+    def _detach_tab(self, tab: TerminalTab) -> None:
+        page_num = self._notebook.page_num(tab)
+        if page_num != -1:
+            self._notebook.remove_page(page_num)
+        parent = tab.get_parent()
+        if parent and hasattr(parent, "remove"):
+            parent.remove(tab)
+        wrapper = self._tile_wrappers.pop(tab, None)
+        if wrapper and wrapper.get_parent() is self._tile_grid:
+            self._tile_grid.remove(wrapper)
+        self._tab_labels.pop(tab, None)
 
     def _on_tab_focus(self, _widget, _event, tab: TerminalTab) -> bool:
-        self._last_current_tab = tab
+        if self._last_current_tab is not tab:
+            self._last_current_tab = tab
+            self._sync_toolbar()
         return False
 
     def _current_tab(self) -> Optional[TerminalTab]:
@@ -1968,13 +2052,36 @@ class TerminalNotebook(Gtk.Box):
     def _on_close_button_clicked(self, _button: Gtk.Button, tab: TerminalTab) -> None:
         self.close_tab(tab)
 
+    def _on_switch_page(self, _notebook: Gtk.Notebook, page: Gtk.Widget, _num: int) -> None:
+        if isinstance(page, TerminalTab):
+            self._last_current_tab = page
+        for tab, label in self._tab_labels.items():
+            label.set_current(tab is page)
+        GLib.idle_add(self._sync_toolbar_idle)
+
+    def _sync_toolbar_idle(self) -> bool:
+        self._sync_toolbar()
+        return GLib.SOURCE_REMOVE
+
+    def _on_tab_activity(self, tab: TerminalTab) -> None:
+        current = self._current_tab()
+        if tab is current or self._tile_mode:
+            return
+        label = self._tab_labels.get(tab)
+        if label:
+            label.set_activity(True)
+
     def _on_tab_status_changed(self, tab: TerminalTab, alias: str, connected: bool) -> None:
         self._tab_status[tab] = connected
         self._set_tab_label_text(tab)
+        self._update_broadcast_ui()
+        if tab is self._current_tab():
+            self._sync_toolbar()
 
     def _on_tab_session_closed(self, tab: TerminalTab, alias: str, exited_normally: bool) -> None:
         status = "Session ended cleanly" if exited_normally else "Session terminated unexpectedly"
         self._log(f"{alias}: {status}", exited_normally)
+        self._set_tab_label_text(tab)
 
     def _on_tab_close_requested(self, tab: TerminalTab) -> None:
         GLib.idle_add(self._close_tab_after_idle, tab)
@@ -1982,6 +2089,40 @@ class TerminalNotebook(Gtk.Box):
     def _close_tab_after_idle(self, tab: TerminalTab) -> bool:
         self.close_tab(tab)
         return GLib.SOURCE_REMOVE
+
+    def _request_quick_connect(self) -> None:
+        if self.on_quick_connect is not None:
+            self.on_quick_connect()
+
+    def _show_tab_menu(self, tab: TerminalTab, event: Gdk.EventButton) -> None:
+        ordered = self._ordered_tabs()
+        index = ordered.index(tab) if tab in ordered else -1
+        spec = tab_menu_spec(
+            reconnect=tab.reconnect,
+            duplicate=lambda: self.duplicate_tab(tab),
+            split=lambda: (tab.toggle_split(), self._sync_toolbar()),
+            is_split=tab.is_split,
+            rename=lambda: self.rename_tab(tab),
+            save=tab.save_transcript,
+            close=lambda: self.close_tab(tab),
+            close_others=lambda: self.close_others(tab),
+            close_right=lambda: self.close_to_right(tab),
+            has_others=len(self._tabs) > 1,
+            has_right=0 <= index < len(ordered) - 1,
+        )
+        popup_menu(build_context_menu(spec, attach_to=self), event)
+
+    def _on_tabs_menu_toggled(self, button: Gtk.MenuButton) -> None:
+        if not button.get_active():
+            return
+        items = [
+            MenuItemSpec(f"{number}. {tab.title}", lambda t=tab: self._focus_tab(t), accel=f"Alt+{number}" if number < 10 else "")
+            for number, tab in enumerate(self._ordered_tabs(), start=1)
+        ]
+        sections = [MenuSection("tabs", items)] if items else [
+            MenuSection("empty", [MenuItemSpec(_("No open sessions"), sensitive=False)])
+        ]
+        button.set_popup(build_menu(sections))
 
     def _update_placeholder(self) -> None:
         if not self._tabs:
@@ -1991,9 +2132,55 @@ class TerminalNotebook(Gtk.Box):
         else:
             visible = "tabs"
         self._stack.set_visible_child_name(visible)
-        self._show_all_button.set_sensitive(len(self._tabs) > 1)
-        if len(self._tabs) <= 1 and self._tile_mode:
-            self._show_all_button.set_active(False)
-        self._broadcast_all_button.set_sensitive(len(self._tabs) > 1)
-        if len(self._tabs) <= 1 and self._broadcast_mode:
-            self._broadcast_all_button.set_active(False)
+        if len(self._tabs) <= 1:
+            if self._broadcast_mode:
+                self.set_broadcast_mode(False)
+            if self._tile_mode:
+                self._set_tile_mode(False)
+        self._sync_toolbar()
+
+    # ------------------------------------------------------------- toolbar
+    def _set_toggle(self, button: Gtk.ToggleButton, active: bool) -> None:
+        if button.get_active() == active:
+            return
+        handler = self._toggle_handlers[button]
+        button.handler_block(handler)
+        button.set_active(active)
+        button.handler_unblock(handler)
+
+    def _sync_toolbar(self) -> None:
+        bar = self._toolbar
+        tab = self._current_tab()
+        has_tab = tab is not None
+        multiple = len(self._tabs) > 1
+        for widget in (bar.split, bar.save, bar.plain_copy, bar.stats, bar.reconnect, bar.more):
+            widget.set_sensitive(has_tab)
+        bar.tile.set_sensitive(multiple)
+        bar.broadcast.set_sensitive(multiple)
+        self._set_toggle(bar.split, bool(tab and tab.is_split))
+        self._set_toggle(bar.plain_copy, bool(tab and tab.strip_ansi_on_copy))
+        self._set_toggle(bar.stats, bool(tab and tab.stats_visible))
+        self._set_toggle(bar.tile, self._tile_mode)
+        self._set_toggle(bar.broadcast, self._broadcast_mode)
+
+    def _on_split_toggled(self, button: Gtk.ToggleButton) -> None:
+        tab = self._current_tab()
+        if tab and tab.is_split != button.get_active():
+            tab.toggle_split()
+        self._sync_toolbar()
+
+    def _on_plain_copy_toggled(self, button: Gtk.ToggleButton) -> None:
+        tab = self._current_tab()
+        if tab:
+            tab._set_strip_ansi(button.get_active())
+
+    def _on_tile_toggled(self, button: Gtk.ToggleButton) -> None:
+        self.set_tile_mode(button.get_active())
+
+    def _on_broadcast_toggled(self, button: Gtk.ToggleButton) -> None:
+        self.set_broadcast_mode(button.get_active())
+
+    def _on_stats_toggled(self, button: Gtk.ToggleButton) -> None:
+        tab = self._current_tab()
+        if tab:
+            tab.set_stats_visible(button.get_active())

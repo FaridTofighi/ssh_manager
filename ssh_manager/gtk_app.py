@@ -1952,6 +1952,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.terminal_tabs.set_name("terminal-area")
         self.terminal_tabs.on_quick_connect = self._quick_connect
         self.terminal_tabs.on_new_host = lambda: self.prompt_new_host()
+        self.terminal_tabs.on_duplicate_session = lambda tab: self._open_hosts([tab.host])
 
         self._details = DetailsView()
         self._details.on_expanded_changed = lambda _expanded: self._save_ui_state()
@@ -2632,8 +2633,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host_key = self._host_key(host)
         notified = {"connected": False}
 
-        def on_status(_tab, _alias, connected: bool) -> None:
-            self._set_host_status_for_key(host_key, "connected" if connected else "unknown")
+        def on_status(tab, _alias, connected: bool) -> None:
+            status = getattr(tab, "status", None)
+            state = status.value if status is not None else ("connected" if connected else "unknown")
+            self._set_host_status_for_key(host_key, state)
             if connected and not notified["connected"]:
                 notified["connected"] = True
                 self._notify_connection_success(host)
