@@ -211,3 +211,48 @@ class TopBarTests(unittest.TestCase):
         self.assertTrue(win._header.sidebar_expand_button.get_visible())
         win.layout.toggle_sidebar()
         self.assertFalse(win._header.sidebar_expand_button.get_visible())
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class RelayTreeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.sandbox = WindowSandbox()
+        self.win = self.sandbox.window
+
+    def tearDown(self) -> None:
+        self.sandbox.close()
+
+    def test_row_geometry_matches_reference(self) -> None:
+        from ssh_manager.gtkui.views.session_tree import row_geometry
+
+        self.assertEqual(row_geometry("parent", 0), {"chevron": 26, "icon": 52, "text": 79})
+        self.assertEqual(row_geometry("child", 1), {"chevron": 51, "icon": -1, "text": 77})
+        self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 81, "text": 108})
+
+    def test_collapse_state_survives_rebuild_and_keyboard_expands(self) -> None:
+        from gi.repository import Gdk, Gtk
+
+        win = self.win
+        view = win.tree_view
+        self.assertFalse(view.get_show_expanders())
+        view.set_row_collapsed("parent", "staging", "")
+        win.tree.rebuild(refresh=False)
+        staging = next(p for p in self._paths() if view.get_model()[p][1] == "staging")
+        self.assertFalse(view.row_expanded(staging))
+
+        view.set_cursor(staging, None, False)
+        event = Gdk.Event.new(Gdk.EventType.KEY_PRESS)
+        event.keyval = Gdk.KEY_Right
+        event.state = 0
+        self.assertTrue(view._on_key_press(view, event))
+        self.assertTrue(view.row_expanded(staging))
+        event.keyval = Gdk.KEY_Left
+        view._on_key_press(view, event)
+        self.assertFalse(view.row_expanded(staging))
+        self.assertIsInstance(view.row_renderer, Gtk.CellRendererText)  # accessible text
+
+    def _paths(self):
+        model = self.win.tree_view.get_model()
+        paths = []
+        model.foreach(lambda m, path, it: paths.append(path.copy()) and False)
+        return paths

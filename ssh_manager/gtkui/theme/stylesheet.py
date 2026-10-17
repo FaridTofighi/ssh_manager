@@ -437,6 +437,10 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     color: @sm_text_primary;
 }
 .sidebar-pane treeview.view.expander { color: transparent; }
+.sidebar-pane treeview.view, .sidebar-pane treeview.view:focus {
+    outline-width: 0;
+    -gtk-outline-radius: 0;
+}
 .sidebar-pane treeview.view:drop(active) { border: 1px solid @sm_accent; }
 .sidebar-footer {
     border-top: 1px solid @sm_border_subtle;
