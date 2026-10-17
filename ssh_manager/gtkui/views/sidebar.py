@@ -48,6 +48,7 @@ FILTER_HELP = _(
 # Vertical rhythm of the reference (y from the sidebar top, which is y = 77).
 HEADER_TOP = 29  # → header block ("CONNECTION MANAGER" cap top at ≈ +34)
 HEADER_HEIGHT = 52
+TITLE_GAP = 5  # eyebrow → "Hosts" (cap top at y = 134)
 ADD_HOST_TOP = 12  # header top → Add host button (button y = 118)
 SEARCH_TOP = 22  # header block bottom → search box (y = 180)
 TREE_TOP_GAP = 20  # search box bottom → first tree row (y = 245)
@@ -173,6 +174,7 @@ class SidebarView(Gtk.Box):
         self.title_label = Gtk.Label(label=_("Hosts"))
         self.title_label.set_xalign(0.0)
         self.title_label.get_style_context().add_class("sidebar-title")
+        self.title_label.set_margin_top(TITLE_GAP)
         titles.pack_start(self.title_label, False, False, 0)
         # The titles float over a fixed-height spacer so the font's line
         # height cannot push the search row down (the block is 52px tall).

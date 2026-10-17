@@ -7,11 +7,13 @@ Usage::
     python3 tools/compare_to_reference.py OUT/relay-match.png \
         [--reference docs/ui-target/relay-reference.png] [--out OUT/compare]
 
-Writes ``heatmap.png`` (per-pixel difference, amplified, over a dimmed copy of
-the reference), ``side-by-side.png`` and ``report.json`` / ``report.md`` with:
+Writes ``relay-diff.png`` (per-pixel difference, amplified, over a dimmed copy
+of the reference), ``relay-side-by-side.png`` and ``relay-report.json`` /
+``relay-report.md`` with:
 
-* per-region mean absolute error (percent of full scale) and the share of
-  pixels that differ visibly (any channel off by more than 32), and
+* per-region mean absolute error (percent of full scale), the same error with a
+  tolerance mask over antialiased glyph edges, and the share of pixels that
+  differ visibly (any channel off by more than 32), and
 * landmark positions (borders and accent-coloured shapes) located in both
   images, with their offsets in pixels.
 
@@ -41,15 +43,19 @@ Box = Tuple[int, int, int, int]  # left, top, right, bottom (exclusive)
 
 REGIONS: Dict[str, Box] = {
     "top-bar": (0, 0, 1852, 77),
-    "sidebar-header": (0, 77, 407, 240),
+    "sidebar-header": (0, 77, 407, 172),
+    "search-row": (0, 172, 407, 240),
     "tree": (0, 240, 407, 868),
     "sidebar-footer": (0, 868, 407, 934),
     "page-bar": (408, 77, 1852, 151),
     "host-header": (408, 151, 1852, 275),
     "tabs": (408, 275, 1852, 333),
+    "empty-state": (820, 430, 1440, 760),
     "canvas": (408, 333, 1852, 864),
     "info-bar": (408, 864, 1852, 934),
 }
+TEXT = (24, 35, 31)  # #18231F
+MUTED = (140, 151, 145)  # caps labels
 
 ACCENT = (23, 107, 77)  # #176B4D
 BORDER = (223, 229, 225)  # #DFE5E1
@@ -58,7 +64,7 @@ BORDER = (223, 229, 225)  # #DFE5E1
 @dataclass(frozen=True)
 class Landmark:
     name: str
-    kind: str  # "hline" | "vline" | "blob"
+    kind: str  # "hline" | "vline" | "blob" | "text" (vertical extent only: top and baseline)
     probe: Box  # search window
     color: Tuple[int, int, int]
     tolerance: int = 18
@@ -79,6 +85,13 @@ LANDMARKS: Sequence[Landmark] = (
     Landmark("connect button", "blob", (1650, 80, 1840, 145), ACCENT),
     Landmark("tab underline", "blob", (420, 325, 540, 334), ACCENT),
     Landmark("hero button", "blob", (980, 640, 1280, 730), ACCENT),
+    Landmark("sidebar title text", "text", (24, 125, 120, 165), TEXT, 60),
+    Landmark("tree row text (Production)", "text", (79, 250, 200, 282), TEXT, 60),
+    Landmark("host title text", "text", (515, 180, 650, 220), TEXT, 60),
+    Landmark("breadcrumb current text", "text", (515, 100, 640, 128), TEXT, 60),
+    Landmark("empty-state title text", "text", (1000, 540, 1260, 590), TEXT, 60),
+    Landmark("stat caption text", "text", (1560, 188, 1700, 206), MUTED, 30),
+    Landmark("info caption text", "text", (440, 878, 540, 896), MUTED, 30),
 )
 
 
@@ -107,12 +120,37 @@ def locate(image: Image.Image, landmark: Landmark) -> Optional[Box]:
     if landmark.kind == "vline":
         x = min(xs)
         return (x, top, x + 1, bottom)
+    if landmark.kind == "text":
+        # Font substitution changes advance widths and descender depth, so text
+        # is compared by its top (cap height) and its baseline: the lowest row
+        # still carrying dense ink (descender rows are sparse).
+        rows: Dict[int, int] = {}
+        for _x, y in hits:
+            rows[y] = rows.get(y, 0) + 1
+        dense = max(rows.values()) * 0.35
+        baseline = max(y for y, count in rows.items() if count >= dense)
+        return (left, min(ys), left, baseline + 1)
     return (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
 
 
-def region_error(reference: Image.Image, render: Image.Image, box: Box) -> Tuple[float, float]:
+def text_mask(reference: Image.Image) -> Image.Image:
+    """White where the reference has glyph edges (antialiased text), dilated by 2px."""
+
+    from PIL import ImageFilter
+
+    edges = ImageOps.grayscale(reference).filter(ImageFilter.FIND_EDGES).point(lambda v: 255 if v > 40 else 0)
+    return edges.filter(ImageFilter.MaxFilter(5))
+
+
+def region_error(
+    reference: Image.Image, render: Image.Image, box: Box, mask: Optional[Image.Image] = None
+) -> Tuple[float, float]:
     ref = reference.crop(box)
     out = render.crop(box)
+    if mask is not None:
+        keep = ImageOps.invert(mask.crop(box))
+        ref = Image.composite(ref, Image.new("RGB", ref.size), keep)
+        out = Image.composite(out, Image.new("RGB", out.size), keep)
     diff = ImageChops.difference(ref, out)
     histogram = diff.histogram()  # 3 × 256 bins
     total = ref.size[0] * ref.size[1] * 3
@@ -138,10 +176,18 @@ def compare(render_path: Path, reference_path: Path, out_dir: Path) -> Dict[str,
         render = render.resize(reference.size) if abs(render.size[0] - reference.size[0]) > 4 else render.crop((0, 0) + reference.size)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    mask = text_mask(reference)
     regions = {}
     for name, box in REGIONS.items():
         mean, visible = region_error(reference, render, box)
-        regions[name] = {"box": box, "mean_error": mean, "visible_diff": visible, "ok": mean <= ERROR_TARGET}
+        masked, _ = region_error(reference, render, box, mask)
+        regions[name] = {
+            "box": box,
+            "mean_error": mean,
+            "masked_error": masked,
+            "visible_diff": visible,
+            "ok": mean <= ERROR_TARGET,
+        }
 
     landmarks: List[Dict[str, object]] = []
     for landmark in LANDMARKS:
@@ -168,13 +214,13 @@ def compare(render_path: Path, reference_path: Path, out_dir: Path) -> Dict[str,
         "ok": all(r["ok"] for r in regions.values()) and all(entry["ok"] for entry in landmarks),
     }
 
-    heatmap(reference, render).save(out_dir / "heatmap.png")
+    heatmap(reference, render).save(out_dir / "relay-diff.png")
     side = Image.new("RGB", (reference.size[0] * 2, reference.size[1]), "white")
     side.paste(reference, (0, 0))
     side.paste(render, (reference.size[0], 0))
-    side.save(out_dir / "side-by-side.png")
-    (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    (out_dir / "report.md").write_text(markdown(report), encoding="utf-8")
+    side.save(out_dir / "relay-side-by-side.png")
+    (out_dir / "relay-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (out_dir / "relay-report.md").write_text(markdown(report), encoding="utf-8")
     return report
 
 
@@ -185,11 +231,16 @@ def markdown(report: Dict[str, object]) -> str:
         f"Overall mean error **{report['overall']['mean_error']} %**, "
         f"visibly different pixels {report['overall']['visible_diff']} %.",
         "",
-        "| Region | Mean error | Visible diff | Target ≤ 3 % |",
-        "|---|---:|---:|:---:|",
+        "Masked error ignores pixels on the reference's glyph edges (antialiased text),",
+        "which differ wherever a substitute font is used.",
+        "",
+        "| Region | Mean error | Masked error | Visible diff | Target ≤ 3 % |",
+        "|---|---:|---:|---:|:---:|",
     ]
     for name, data in report["regions"].items():
-        lines.append(f"| {name} | {data['mean_error']} % | {data['visible_diff']} % | {'✓' if data['ok'] else '✗'} |")
+        lines.append(
+            f"| {name} | {data['mean_error']} % | {data['masked_error']} % | {data['visible_diff']} % | {'✓' if data['ok'] else '✗'} |"
+        )
     lines += ["", "| Landmark | Reference box | Render box | Offset | ≤ 2 px |", "|---|---|---|---:|:---:|"]
     for entry in report["landmarks"]:
         offset = "—" if entry["offset"] is None else f"{entry['offset']} px"
@@ -206,7 +257,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     out_dir = args.out or args.render.parent / "compare"
     report = compare(args.render, args.reference, out_dir)
     print(markdown(report))
-    print(f"wrote {out_dir}/heatmap.png, side-by-side.png, report.json, report.md")
+    print(f"wrote {out_dir}/relay-diff.png, relay-side-by-side.png, relay-report.json, relay-report.md")
     return 0 if report["ok"] else 1
 
 

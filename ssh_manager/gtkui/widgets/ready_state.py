@@ -26,9 +26,9 @@ from ..theme.tokens import Size, Space  # noqa: E402
 from .icons import make_icon  # noqa: E402
 
 BODY_WIDTH = 520
-TITLE_TOP = 28
+TITLE_TOP = 24
 BODY_TOP = 14
-BUTTON_TOP = 28
+BUTTON_TOP = 32
 CAPTION_TOP = 16
 
 
