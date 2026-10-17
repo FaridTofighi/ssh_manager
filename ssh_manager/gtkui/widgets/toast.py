@@ -10,6 +10,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango  # type: ignore  # noqa: E402
 
+from .icons import make_icon  # noqa: E402
 from ..controllers.notifications import Message, MessageHistory, ToastController  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
@@ -17,10 +18,10 @@ from ..theme.tokens import Level, Motion, Space  # noqa: E402
 from .icon_button import IconButton, set_accessible_name  # noqa: E402
 
 LEVEL_ICONS: Dict[Level, str] = {
-    Level.INFO: "dialog-information-symbolic",
-    Level.SUCCESS: "object-select-symbolic",
-    Level.WARNING: "dialog-warning-symbolic",
-    Level.ERROR: "dialog-error-symbolic",
+    Level.INFO: "sshm-info",
+    Level.SUCCESS: "sshm-check",
+    Level.WARNING: "sshm-warning",
+    Level.ERROR: "sshm-error",
 }
 
 LEVEL_NAMES: Dict[Level, str] = {
@@ -31,8 +32,8 @@ LEVEL_NAMES: Dict[Level, str] = {
 }
 
 
-def level_icon(level: Level, size: Gtk.IconSize = Gtk.IconSize.BUTTON) -> Gtk.Image:
-    image = Gtk.Image.new_from_icon_name(LEVEL_ICONS[level], size)
+def level_icon(level: Level, size: int = 16) -> Gtk.Widget:
+    image = make_icon(LEVEL_ICONS[level], size)
     image.get_style_context().add_class(f"level-{level.value}")
     set_accessible_name(image, LEVEL_NAMES[level])
     return image
@@ -138,7 +139,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         set_accessible_name(self, _("Message history"))
 
         overlay = Gtk.Overlay()
-        overlay.add(Gtk.Image.new_from_icon_name("dialog-information-symbolic", Gtk.IconSize.BUTTON))
+        overlay.add(make_icon("sshm-activity", 18))
         self._badge = Gtk.Label()
         self._badge.get_style_context().add_class("badge")
         self._badge.set_halign(Gtk.Align.END)

@@ -9,6 +9,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
+from .icons import make_icon  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 
 
@@ -36,8 +37,7 @@ class EmptyState(Gtk.Box):
         self.set_margin_top(Space.XL)
         self.set_margin_bottom(Space.XL)
 
-        size = Gtk.IconSize.DND if compact else Gtk.IconSize.DIALOG
-        self._icon = Gtk.Image.new_from_icon_name(icon_name, size)
+        self._icon = make_icon(icon_name, 28 if compact else 32)
         self._icon.get_style_context().add_class("empty-icon")
         self.pack_start(self._icon, False, False, 0)
 

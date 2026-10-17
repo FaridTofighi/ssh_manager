@@ -81,7 +81,7 @@ class UiState:
     theme_mode: str = ""  # "", "system", "light" or "dark"; "" = derive from prefer_dark
     prefer_dark: Optional[bool] = None
     font_scale: float = 1.0
-    ui_font_size: int = 14
+    ui_font_size: int = 11
     details_expanded: bool = True
     filter_query: str = ""
     group_colors: Dict[str, str] = field(default_factory=dict)
@@ -110,7 +110,7 @@ class UiState:
             theme_mode=_str(data.get("theme_mode"), ""),
             prefer_dark=prefer_dark if isinstance(prefer_dark, bool) else None,
             font_scale=_float(data.get("font_scale"), 1.0),
-            ui_font_size=_int(data.get("ui_font_size"), 14),
+            ui_font_size=_int(data.get("ui_font_size"), 11),
             details_expanded=data.get("details_expanded") is not False,
             filter_query=_str(data.get("filter_query"), ""),
             group_colors=_str_map(data.get("group_colors")),

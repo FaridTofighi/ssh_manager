@@ -13,6 +13,7 @@ from ssh_manager.gtkui.theme.tokens import (
     STATUS_GLYPHS,
     ConnectionStatus,
     Level,
+    Radius,
     Space,
     contrast_ratio,
     contrast_report,
@@ -50,7 +51,7 @@ class TokenTests(unittest.TestCase):
         self.assertIs(ConnectionStatus.coerce("weird"), ConnectionStatus.UNKNOWN)
 
     def test_spacing_scale_is_fixed(self) -> None:
-        self.assertEqual(Space.values(), (4, 8, 12, 16, 24))
+        self.assertEqual(Space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
 
 
 class StylesheetTests(unittest.TestCase):
@@ -81,17 +82,22 @@ class StylesheetTests(unittest.TestCase):
 
         for value in re.findall(r"border-radius:\s*([^;]+);", css_dark.css()):
             for part in value.split():
-                self.assertIn(part, {"0", "4px", "8px", "12px", "999px"}, value)
+                self.assertIn(part, {"0"} | {f"{r}px" for r in Radius.values()}, value)
 
     def test_inputs_and_buttons_have_no_drop_shadow(self) -> None:
         import re
 
+        # Only primary buttons and floating surfaces are elevated.
+        ELEVATED = (".toast", "popover", ".primary", ".suggested-action", ".logo-tile", ".empty-card")
+
         css = css_dark.css()
         for block in re.findall(r"([^{}]+)\{([^}]*)\}", css):
             selector, body = block
-            if "box-shadow" in body and "inset" not in body:
+            for shadow in re.findall(r"box-shadow:\s*([^;]+);", body):
+                if shadow.strip() == "none" or "inset" in shadow or shadow.strip().startswith("0 0 0 "):
+                    continue  # no shadow, inner border or focus ring
                 self.assertTrue(
-                    any(name in selector for name in (".toast",)),
+                    any(name in selector for name in ELEVATED),
                     f"unexpected shadow on {selector.strip()}",
                 )
 

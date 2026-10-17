@@ -15,6 +15,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
+from ..widgets.icons import make_icon  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level, Space  # noqa: E402
 from ..widgets.toast import LEVEL_ICONS  # noqa: E402
@@ -23,7 +24,7 @@ from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
 def _message_block(icon_name: str, title: str, message: str, *, icon_class: str = "") -> Gtk.Box:
     row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
-    icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
+    icon = make_icon(icon_name, 32)
     icon.set_valign(Gtk.Align.START)
     if icon_class:
         icon.get_style_context().add_class(icon_class)
@@ -65,7 +66,7 @@ class ConfirmDialog(BaseDialog):
         default_confirm: Optional[bool] = None,
     ) -> None:
         BaseDialog.__init__(self, parent, title, size=DialogSize.SMALL, resizable=False)
-        icon = "dialog-warning-symbolic" if destructive else "dialog-question-symbolic"
+        icon = "sshm-warning" if destructive else "sshm-help"
         self.add_body(_message_block(icon, title, message, icon_class="level-warning" if destructive else ""))
         self.cancel_button = self.add_cancel(cancel_label)
         self.confirm_button = self.add_primary(

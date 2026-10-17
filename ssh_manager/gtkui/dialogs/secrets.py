@@ -9,6 +9,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
+from ..widgets.icons import make_icon  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 from ..widgets.forms import FormSection  # noqa: E402
@@ -18,7 +19,7 @@ from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
 def _intro(icon_name: str, title: str, text: str) -> Gtk.Widget:
     row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
-    icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
+    icon = make_icon(icon_name, 32)
     icon.set_valign(Gtk.Align.START)
     row.pack_start(icon, False, False, 0)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
@@ -50,7 +51,7 @@ class UnlockDialog(BaseDialog):
         verify: Callable[[str], bool],
         *,
         accept_label: str = "",
-        icon_name: str = "changes-prevent-symbolic",
+        icon_name: str = "sshm-lock",
         error_text: str = "",
     ) -> None:
         BaseDialog.__init__(self, parent, title, size=DialogSize.SMALL, resizable=False)
@@ -100,7 +101,7 @@ class NewSecretDialog(BaseDialog):
         description: str = "",
         *,
         accept_label: str = "",
-        icon_name: str = "dialog-password-symbolic",
+        icon_name: str = "sshm-key",
         current_label: str = "",
         verify_current: Optional[Callable[[str], bool]] = None,
         min_length: int = 1,

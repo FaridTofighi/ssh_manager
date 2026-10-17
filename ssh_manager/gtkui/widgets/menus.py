@@ -10,6 +10,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gtk  # type: ignore  # noqa: E402
 
+from .icons import make_icon  # noqa: E402
 from ..menu_spec import MenuItemSpec, MenuSection, menu_layout  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 
@@ -17,7 +18,7 @@ from ..theme.tokens import Space  # noqa: E402
 def _menu_item(spec: MenuItemSpec) -> Gtk.MenuItem:
     item = Gtk.MenuItem()
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
-    icon = Gtk.Image.new_from_icon_name(spec.icon or "", Gtk.IconSize.MENU)
+    icon = make_icon(spec.icon, 16, css_class="menu-icon") if spec.icon else Gtk.Box()
     icon.set_size_request(16, 16)
     box.pack_start(icon, False, False, 0)
     label = Gtk.Label.new_with_mnemonic(spec.label)

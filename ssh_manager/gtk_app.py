@@ -78,10 +78,19 @@ from ssh_manager.gtkui.dialogs.host_dialog import HostDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.vault import VaultDialog  # noqa: E402,F401
 
+from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
+from ssh_manager.gtkui.theme.tokens import UI_FONT_FAMILIES  # noqa: E402
+from ssh_manager.gtkui.widgets.icons import register_icon_path  # noqa: E402
+
 LOGGER = logging.getLogger(__name__)
 
 
 def _system_font_family() -> str:
+    """The Relay UI family when installed, else the desktop font family."""
+
+    relay = first_available(UI_FONT_FAMILIES)
+    if relay:
+        return relay
     settings = Gtk.Settings.get_default()
     if settings:
         font_name = settings.get_property("gtk-font-name") or ""
@@ -105,6 +114,7 @@ class SSHManagerApplication(Gtk.Application):
 
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
+        register_icon_path()
         self._install_css(None)
 
     def do_activate(self) -> None:  # type: ignore[override]

@@ -9,6 +9,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
+from ..widgets.icons import make_icon  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
@@ -55,7 +56,7 @@ class ListManagerDialog(BaseDialog):
     def _build_toolbar(self, add_label: str) -> None:
         self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.add_button_widget = Gtk.Button.new_with_mnemonic(add_label or _("_Add…"))
-        self.add_button_widget.set_image(Gtk.Image.new_from_icon_name(Icons.NEW, Gtk.IconSize.BUTTON))
+        self.add_button_widget.set_image(make_icon(Icons.NEW, 16))
         self.add_button_widget.set_always_show_image(True)
         self.add_button_widget.connect("clicked", lambda *_: self.on_add())
         self.edit_button = Gtk.Button.new_with_mnemonic(_("_Edit…"))
