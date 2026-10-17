@@ -40,6 +40,8 @@ from ssh_manager.master_auth import (
     verify_master_password,
 )
 from ssh_manager.persistence import append_text, write_json_atomic
+from ssh_manager.gtkui.theme.loader import ThemeMode, current_palette, get_theme_manager
+from ssh_manager.gtkui.theme.terminal_schemes import SCHEMES as TERMINAL_SCHEMES, resolve_terminal_colors
 
 UI_STATE_FILE = ".ui_state.json"
 DND_TARGET = "ssh-manager/tree-row"
@@ -60,512 +62,6 @@ def audit_log_key(value: object) -> str:
 def audit_log_value(value: object, *, default: str = "") -> str:
     text = " ".join(str(value).split())
     return text.replace(" ", "_") or default
-
-
-APP_CSS_DARK = """
-/* GTK polish for SSH Manager.
- * - Styles are scoped to named widgets/classes to avoid fighting the system theme.
- * - Keeps a dark-leaning look while remaining readable in light themes by avoiding global overrides.
- * - Spacing uses a small, consistent set of values (6/12/18) and keeps focus outlines visible.
- * - Colors should remain compatible with GNOME/Adwaita; tweak cautiously. */
-@define-color accent #d1d5db;
-@define-color accent-strong #a4acb8;
-@define-color accent-soft rgba(209, 213, 219, 0.22);
-@define-color surface rgb(37, 42, 44);
-@define-color surface-alt rgb(37, 42, 44);
-@define-color surface-elevated rgb(37, 42, 44);
-@define-color sidebar-bg rgb(37, 42, 44);
-@define-color panel-border rgba(180, 188, 202, 0.26);
-@define-color text-primary #f6f7f9;
-@define-color text-muted #c2c7d1;
-@define-color success-text #4ade80;
-@define-color error-text #fca5a5;
-
-headerbar.toolbar-header,
-GtkHeaderBar.toolbar-header {
-    padding-left: 12px;
-    padding-right: 12px;
-    border-bottom: 1px solid rgba(88, 96, 110, 0.45);
-}
-
-headerbar.toolbar-header button,
-GtkHeaderBar.toolbar-header GtkButton {
-    border-radius: 9px;
-    padding: 6px 12px;
-    transition: all 120ms ease;
-}
-
-headerbar.toolbar-header button:hover,
-GtkHeaderBar.toolbar-header GtkButton:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-headerbar.toolbar-header button:focus,
-GtkHeaderBar.toolbar-header GtkButton:focus {
-    box-shadow: 0 0 0 2px rgba(185, 196, 207, 0.45);
-}
-
-.terminal-info-bar {
-    background-color: rgb(37, 42, 44);
-    border-radius: 14px;
-    border: 1px solid rgba(209, 213, 219, 0.18);
-    padding: 6px 12px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.terminal-info-bar GtkLabel {
-    color: @text-primary;
-}
-
-.sidebar-toggle {
-    background-color: rgb(37, 42, 44);
-    border: 1px solid rgba(209, 213, 219, 0.28);
-    border-radius: 0 12px 12px 0;
-    padding: 6px 6px;
-}
-
-.sidebar-toggle:hover {
-    background-color: rgb(37, 42, 44);
-}
-
-.sidebar-toggle:active {
-    background-color: rgb(37, 42, 44);
-}
-
-#root {
-    background-color: rgb(37, 42, 44);
-}
-
-#sidebar {
-    background-color: rgb(37, 42, 44);
-    border-radius: 18px;
-    padding: 16px;
-    border: 1px solid @panel-border;
-    box-shadow: 0 22px 44px rgba(11, 12, 16, 0.32);
-}
-
-#content {
-    background-color: rgb(37, 42, 44);
-    border-radius: 18px;
-    border: 1px solid @panel-border;
-    padding: 16px;
-    box-shadow: 0 26px 52px rgba(9, 9, 11, 0.28);
-}
-
-GtkScrolledWindow {
-    border-radius: 12px;
-    background-color: rgb(37, 42, 44);
-}
-
-GtkViewport {
-    background-color: rgb(37, 42, 44);
-}
-
-GtkTreeView {
-    background-color: rgb(37, 42, 44);
-    color: @text-primary;
-    border-radius: 12px;
-}
-
-GtkTreeView row {
-    background-color: rgb(37, 42, 44);
-}
-
-GtkTreeView row:selected,
-GtkTreeView row:selected:hover {
-    background-color: rgb(37, 42, 44);
-    border-radius: 10px;
-}
-
-GtkTreeView row:hover {
-    background-color: rgb(37, 42, 44);
-}
-
-#detail-frame {
-    border-radius: 18px;
-    border: 1px solid rgba(209, 213, 219, 0.28);
-    background-color: rgb(37, 42, 44);
-    box-shadow: 0 26px 60px rgba(8, 8, 10, 0.4);
-    padding: 0;
-}
-
-#detail-box {
-    background-color: rgb(37, 42, 44);
-    padding: 18px;
-}
-
-#detail-box GtkLabel {
-    color: @text-primary;
-}
-
-#detail-box GtkLabel.detail-subtitle {
-    color: @text-muted;
-    font-size: 13px;
-    letter-spacing: 0.2px;
-}
-
-#detail-box GtkLabel.detail-title {
-    font-weight: 600;
-    font-size: 18px;
-    letter-spacing: 0.25px;
-}
-
-#terminal-area {
-    border-radius: 14px;
-    border: 1px solid @panel-border;
-    background-color: rgb(37, 42, 44);
-}
-
-#status-banner {
-    background-color: rgb(37, 42, 44);
-    border-radius: 24px;
-    padding: 14px 24px;
-    border: 1px solid rgba(209, 213, 219, 0.32);
-    box-shadow: 0 14px 36px rgba(9, 9, 11, 0.32);
-}
-
-GtkButton {
-    border-radius: 9px;
-    background-color: rgb(37, 42, 44);
-    color: @text-primary;
-    padding: 7px 12px;
-    transition: all 120ms ease;
-    border: 1px solid transparent;
-}
-
-GtkButton:hover {
-    background-color: rgb(37, 42, 44);
-    border-color: rgba(185, 196, 207, 0.2);
-}
-
-GtkButton:checked,
-GtkButton:active {
-    background-color: rgb(37, 42, 44);
-    border-color: rgba(185, 196, 207, 0.3);
-}
-
-GtkLabel.dim-label {
-    color: @text-muted;
-}
-
-.tag {
-    background-color: rgb(37, 42, 44);
-    color: @text-primary;
-    border-radius: 999px;
-    padding: 4px 12px;
-    margin: 2px;
-}
-
-.tag GtkLabel {
-    color: @text-primary;
-}
-
-.info {
-    background-color: rgb(37, 42, 44);
-    border-radius: 12px;
-    border: 1px solid rgba(132, 144, 160, 0.24);
-}
-
-.success {
-    color: @success-text;
-}
-
-.error {
-    color: @error-text;
-}
-
-GtkEntry,
-GtkSearchEntry {
-    background-color: rgb(37, 42, 44);
-    color: @text-primary;
-    border-radius: 10px;
-    padding: 6px 10px;
-    border: 1px solid rgba(209, 213, 219, 0.28);
-    box-shadow: 0 22px 44px rgba(11, 12, 16, 0.32);
-}
-
-GtkEntry:focus,
-GtkSearchEntry:focus {
-    border-color: rgba(185, 196, 207, 0.6);
-    box-shadow: 0 0 0 2px rgba(185, 196, 207, 0.24);
-}
-
-.search-card {
-    background-color: rgba(30, 30, 30, 0.92);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 10px 12px;
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-}
-
-.search-card GtkFrame,
-.search-card GtkFrame > border {
-    border: none;
-}
-
-.search-input {
-    transition: border-color 120ms cubic-bezier(0.33, 1, 0.68, 1),
-                box-shadow 120ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.search-input:focus {
-    border-color: #5294e2;
-    box-shadow: 0 0 0 2px rgba(82, 148, 226, 0.45);
-}
-
-.search-toggle-button {
-    border-radius: 999px;
-    padding: 4px;
-    border: 1px solid transparent;
-    background-color: transparent;
-    transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.search-toggle-button:hover,
-.search-toggle-button:focus {
-    background-color: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.12);
-}
-
-.search-toggle-icon {
-    transition: -gtk-icon-transform 150ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.search-toggle-icon.open {
-    -gtk-icon-transform: rotate(90deg);
-}
-
-.search-card-actions {
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.host-section-card {
-    background-color: rgba(30, 30, 30, 0.92);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-    margin-bottom: 12px;
-}
-
-.host-section-card .section-title {
-    color: @text-primary;
-    font-size: 14px;
-}
-
-.section-sidebar-wrapper {
-    background-color: rgba(30, 30, 30, 0.78);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.section-sidebar {
-    background-color: transparent;
-}
-
-.section-sidebar GtkListBoxRow {
-    border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 4px;
-}
-
-.section-sidebar GtkListBoxRow:selected {
-    background-color: rgba(82, 148, 226, 0.25);
-}
-
-.section-nav-label {
-    color: @text-muted;
-}
-
-.section-sidebar GtkListBoxRow:selected .section-nav-label {
-    color: @text-primary;
-    font-weight: 600;
-}
-
-GtkMenu {
-    background-color: rgb(37, 42, 44);
-    color: @text-primary;
-    border-radius: 12px;
-    border: 1px solid @panel-border;
-    padding: 4px;
-}
-
-GtkMenuItem {
-    border-radius: 8px;
-    padding: 6px 12px;
-}
-
-GtkMenuItem:hover {
-    background-color: rgb(37, 42, 44);
-}
-
-GtkSeparator {
-    background-color: rgb(37, 42, 44);
-}
-"""
-
-APP_CSS_LIGHT = """
-/* Light-friendly variant to respect system light themes. */
-@define-color app-base    #f7f8fa;
-@define-color app-panel   #ffffff;
-@define-color app-border  #d0d4d9;
-@define-color app-text    #202124;
-@define-color app-muted   #5f6368;
-
-#root,
-#content,
-GtkScrolledWindow,
-GtkViewport {
-    background-color: @app-base;
-    color: @app-text;
-}
-
-#sidebar {
-    background-color: @app-panel;
-    border: 1px solid @app-border;
-}
-
-#detail-frame,
-#detail-box,
-#terminal-area,
-#status-banner {
-    background-color: @app-panel;
-    color: @app-text;
-    border: 1px solid @app-border;
-}
-
-GtkTreeView {
-    background-color: @app-panel;
-    color: @app-text;
-}
-
-GtkTreeView row:selected,
-GtkTreeView row:selected:hover {
-    background-color: rgba(0, 0, 0, 0.08);
-}
-
-GtkEntry,
-GtkSearchEntry {
-    background-color: @app-panel;
-    color: @app-text;
-    border: 1px solid @app-border;
-    border-radius: 6px;
-}
-
-GtkMenu {
-    background-color: @app-panel;
-    color: @app-text;
-}
-
-GtkButton {
-    padding: 6px 10px;
-}
-
-GtkLabel.dim-label {
-    color: @app-muted;
-}
-
-.tag {
-    background-color: #e9ecf1;
-    color: @app-text;
-}
-
-.host-section-card {
-    background-color: rgba(255, 255, 255, 0.98);
-    border-radius: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
-    margin-bottom: 12px;
-}
-
-.host-section-card .section-title {
-    color: @app-text;
-    font-size: 14px;
-}
-
-.section-sidebar-wrapper {
-    background-color: rgba(255, 255, 255, 0.95);
-    border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.section-sidebar {
-    background-color: transparent;
-}
-
-.section-sidebar GtkListBoxRow {
-    border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 4px;
-}
-
-.section-sidebar GtkListBoxRow:selected {
-    background-color: rgba(74, 144, 226, 0.18);
-}
-
-.section-nav-label {
-    color: @app-muted;
-}
-
-.section-sidebar GtkListBoxRow:selected .section-nav-label {
-    color: @app-text;
-    font-weight: 600;
-}
-
-.search-card {
-    background-color: rgba(245, 245, 245, 0.95);
-    border-radius: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    padding: 10px 12px;
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
-}
-
-.search-card GtkFrame,
-.search-card GtkFrame > border {
-    border: none;
-}
-
-.search-input {
-    transition: border-color 120ms cubic-bezier(0.33, 1, 0.68, 1),
-                box-shadow 120ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.search-input:focus {
-    border-color: #4a90e2;
-    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.35);
-}
-
-.search-toggle-button {
-    border-radius: 999px;
-    padding: 4px;
-    border: 1px solid transparent;
-    background-color: transparent;
-    transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.search-toggle-button:hover,
-.search-toggle-button:focus {
-    background-color: rgba(74, 144, 226, 0.1);
-    border-color: rgba(74, 144, 226, 0.4);
-}
-
-.search-toggle-icon {
-    transition: -gtk-icon-transform 150ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.search-toggle-icon.open {
-    -gtk-icon-transform: rotate(90deg);
-}
-
-.search-card-actions {
-    padding-top: 6px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.host-status-dot.connected { background-color: #4caf50; }
-.host-status-dot.error { background-color: #e53935; }
-.host-status-dot.unknown { background-color: #9e9e9e; }
-"""
 
 
 @dataclass
@@ -1673,96 +1169,20 @@ class PreferencesDialog(Gtk.Dialog):
             self._update_preview_terminal()
 
     def _preview_colors(self, appearance: TerminalAppearanceSettings) -> Tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, list[Gdk.RGBA]]:
+        colors = resolve_terminal_colors(appearance)
+
         def rgba(hex_color: str) -> Gdk.RGBA:
             color = Gdk.RGBA()
             color.parse(hex_color)
             return color
 
-        background_hex = "#1f2329"
-        foreground_hex = "#f5f6f8"
-        cursor_hex = "#b9c4cf"
-        highlight_hex = "#2f333a"
-        palette_hex = [
-            "#1f2329",
-            "#ef9a9a",
-            "#a5d6a7",
-            "#ffe0b2",
-            "#90caf9",
-            "#c7a4ff",
-            "#80cbc4",
-            "#f5f6f8",
-            "#394049",
-            "#f28b82",
-            "#81c995",
-            "#fdd663",
-            "#8ab4f8",
-            "#d7aefb",
-            "#78d9ec",
-            "#ffffff",
-        ]
-
-        scheme = appearance.color_scheme or "default"
-        if appearance.use_custom_colors and appearance.fg_color and appearance.bg_color:
-            foreground_hex = appearance.fg_color
-            background_hex = appearance.bg_color
-        else:
-            if scheme == "dark":
-                background_hex = "#1f2329"
-                foreground_hex = "#f5f6f8"
-            elif scheme == "light":
-                background_hex = "#f8fafc"
-                foreground_hex = "#0f172a"
-            elif scheme == "solarized-dark":
-                background_hex = "#002b36"
-                foreground_hex = "#93a1a1"
-                palette_hex = [
-                    "#073642",
-                    "#dc322f",
-                    "#859900",
-                    "#b58900",
-                    "#268bd2",
-                    "#d33682",
-                    "#2aa198",
-                    "#eee8d5",
-                    "#002b36",
-                    "#cb4b16",
-                    "#586e75",
-                    "#657b83",
-                    "#839496",
-                    "#6c71c4",
-                    "#93a1a1",
-                    "#fdf6e3",
-                ]
-            elif scheme == "solarized-light":
-                background_hex = "#fdf6e3"
-                foreground_hex = "#586e75"
-                palette_hex = [
-                    "#073642",
-                    "#dc322f",
-                    "#859900",
-                    "#b58900",
-                    "#268bd2",
-                    "#d33682",
-                    "#2aa198",
-                    "#eee8d5",
-                    "#002b36",
-                    "#cb4b16",
-                    "#586e75",
-                    "#657b83",
-                    "#839496",
-                    "#6c71c4",
-                    "#93a1a1",
-                    "#fdf6e3",
-                ]
-        if appearance.palette:
-            palette_hex = appearance.palette
-
-        background = rgba(background_hex)
-        foreground = rgba(foreground_hex)
-        cursor = rgba(cursor_hex)
-        highlight = rgba(highlight_hex)
-        palette = [rgba(color) for color in palette_hex]
-        return foreground, background, cursor, highlight, palette
+        return (
+            rgba(colors.foreground),
+            rgba(colors.background),
+            rgba(colors.cursor),
+            rgba(colors.highlight),
+            [rgba(color) for color in colors.palette],
+        )
 
     def _apply_appearance_to_terminal(self, term: Vte.Terminal, appearance: TerminalAppearanceSettings) -> None:
         desc = None
@@ -2331,13 +1751,13 @@ class SSHManagerApplication(Gtk.Application):
         Gtk.Application.__init__(self, application_id="org.codex.SSHManager")
         self._base_dir = base_dir
         self._window: Optional[SSHManagerWindow] = None
-        self._css_provider: Optional[Gtk.CssProvider] = None
+        self._theme = get_theme_manager()
         self._settings = AppSettings.load()
         self._master_password: Optional[str] = None
 
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
-        self._install_css(False)
+        self._install_css(None)
         self._create_actions()
 
     def do_activate(self) -> None:  # type: ignore[override]
@@ -2501,27 +1921,20 @@ class SSHManagerApplication(Gtk.Application):
             dialog.destroy()
             return True
 
-    def _install_css(self, prefer_dark: bool = True) -> None:
-        screen = Gdk.Screen.get_default()
-        if not screen:
-            return
-        if self._css_provider is not None:
-            try:
-                Gtk.StyleContext.remove_provider_for_screen(screen, self._css_provider)
-            except Exception:
-                pass
-            self._css_provider = None
-        if not prefer_dark:
-            return
-        provider = Gtk.CssProvider()
-        try:
-            provider.load_from_data(APP_CSS_DARK.encode("utf-8"))
-        except GLib.Error:
-            return
-        Gtk.StyleContext.add_provider_for_screen(
-            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
-        self._css_provider = provider
+    def _install_css(self, prefer_dark: Optional[bool] = True) -> None:
+        """Load the stylesheet; ``True``/``False`` force dark/light, ``None`` follows the system."""
+
+        mode = ThemeMode.SYSTEM if prefer_dark is None else ThemeMode.from_prefer_dark(prefer_dark)
+        self._theme.apply(mode)
+
+    def set_theme_mode(self, mode: ThemeMode) -> bool:
+        """Switch the theme at runtime. Returns whether the dark variant is active."""
+
+        return self._theme.apply(mode)
+
+    def do_shutdown(self) -> None:  # type: ignore[override]
+        self._theme.shutdown()
+        Gtk.Application.do_shutdown(self)
 
     def _create_actions(self) -> None:
         mapping = {
@@ -2616,7 +2029,12 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         )
         self._color_pixbuf_cache: Dict[str, GdkPixbuf.Pixbuf] = {}
 
-        self._prefer_dark = bool(self._ui_state.get("prefer_dark", True))
+        self._theme_mode = ThemeMode.coerce(
+            self._ui_state.get("theme_mode"),
+            ThemeMode.from_prefer_dark(self._ui_state.get("prefer_dark", True)),
+        )
+        self._prefer_dark = self._theme_mode is ThemeMode.DARK
+        self.get_style_context().add_class("sm-window")
         self._ui_font_size = int(self._ui_state.get("ui_font_size", 14))
         settings = Gtk.Settings.get_default()
         self._base_font_family = "Sans"
@@ -2973,10 +2391,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._update_terminal_toggle_ui()
         self._status_visible_before_max = self._status_revealer.get_reveal_child()
         self._update_toolbar_state()
-        self._apply_dark_theme(self._prefer_dark)
-        app = self.get_application()
-        if app and hasattr(app, "_install_css"):
-            app._install_css(self._prefer_dark)
+        self._apply_theme_mode(self._theme_mode)
+        get_theme_manager().add_listener(self._on_theme_changed)
         self.show_all()
         self._status_revealer.set_reveal_child(False)
         self._bulk_revealer.set_reveal_child(False)
@@ -3221,13 +2637,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return None
 
     def _default_tree_icon_color(self, icon_name: str) -> str:
+        palette = current_palette()
         if icon_name == self.ICON_GROUP:
-            return "#f59e0b"
+            return palette.icon_group
         if icon_name == self.ICON_SUBGROUP:
-            return "#38bdf8"
+            return palette.icon_subgroup
         if icon_name == self.ICON_HOST:
-            return "#94a3b8"
-        return "#9ca3af"
+            return palette.icon_host
+        return palette.text_disabled
 
     def _draw_colored_tree_icon_pixbuf(self, icon_name: str, rgba: Gdk.RGBA) -> GdkPixbuf.Pixbuf:
         size = 18
@@ -3944,11 +3361,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return host_option(host, "user") or ""
 
     def _status_color(self, state: str) -> str:
-        return {
-            "connected": "#22c55e",
-            "failed": "#ef4444",
-            "unknown": "#9ca3af",
-        }.get(state, "#9ca3af")
+        return current_palette().status_color(state)
 
     def _set_host_status_for_key(self, key: str, state: str) -> None:
         state = state if state in {"connected", "failed", "unknown"} else "unknown"
@@ -4862,10 +4275,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
                 git_watch_interval,
                 term_appearance,
             ) = dialog.values()
-            self._apply_dark_theme(dark)
-            app = self.get_application()
-            if app and hasattr(app, "_install_css"):
-                app._install_css(dark)
+            self._apply_theme_mode(ThemeMode.DARK if dark else ThemeMode.LIGHT)
             self.terminal_tabs.set_default_font_scale(font_scale)
             self.terminal_tabs.apply_font_scale_to_all(font_scale)
             self._apply_ui_font(ui_font_size)
@@ -5971,10 +5381,24 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         settings.set_property("gtk-font-name", desc.to_string())
 
     def _apply_dark_theme(self, prefer_dark: bool) -> None:
-        self._prefer_dark = prefer_dark
-        settings = Gtk.Settings.get_default()
-        if settings:
-            settings.set_property("gtk-application-prefer-dark-theme", prefer_dark)
+        self._apply_theme_mode(ThemeMode.DARK if prefer_dark else ThemeMode.LIGHT)
+
+    def _apply_theme_mode(self, mode: ThemeMode) -> None:
+        self._theme_mode = ThemeMode.coerce(mode)
+        app = self.get_application()
+        if app and hasattr(app, "set_theme_mode"):
+            self._prefer_dark = app.set_theme_mode(self._theme_mode)
+        else:
+            self._prefer_dark = get_theme_manager().apply(self._theme_mode)
+
+    def _on_theme_changed(self, _is_dark: bool) -> None:
+        """Re-render rows whose colors come from the active palette."""
+
+        self._color_pixbuf_cache.clear()
+        for key, state in list(self._host_status.items()):
+            self._set_host_status_for_key(key, state)
+        if hasattr(self, "tree_view"):
+            self.tree_view.queue_draw()
 
     def _load_ui_state(self) -> Dict[str, object]:
         if not self._ui_state_path.exists():
@@ -5997,6 +5421,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "is_maximized": self.is_maximized(),
             "sidebar_width": sidebar_width,
             "prefer_dark": self._prefer_dark,
+            "theme_mode": getattr(getattr(self, "_theme_mode", None), "value", None)
+            or ("dark" if self._prefer_dark else "light"),
             "font_scale": self.terminal_tabs.default_font_scale,
             "ui_font_size": self._ui_font_size,
             "sidebar_visible": self._sidebar_visible,
@@ -6051,6 +5477,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return False
 
     def _on_destroy(self, *_args) -> None:
+        get_theme_manager().remove_listener(self._on_theme_changed)
         if self._status_timeout_id:
             GLib.source_remove(self._status_timeout_id)
         if self._shared_poll_id:

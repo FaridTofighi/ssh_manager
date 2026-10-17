@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from ssh_manager.config import HostEntry
+from ssh_manager.gtkui.theme.loader import current_palette
 from ssh_manager.gtk_app import (
     Gdk,
     GdkPixbuf,
@@ -182,7 +183,7 @@ class GtkAppHelperTests(unittest.TestCase):
         SSHManagerWindow._set_host_status_for_key(dummy, "prod::web::app", "connected")
 
         self.assertEqual(dummy._host_status["prod::web::app"], "connected")
-        self.assertEqual(updates, [("iter-1", SSHManagerWindow.COLUMN_STATUS_COLOR, "#22c55e")])
+        self.assertEqual(updates, [("iter-1", SSHManagerWindow.COLUMN_STATUS_COLOR, current_palette().success)])
 
     def test_render_icon_uses_app_drawn_pixbuf_when_row_has_color(self) -> None:
         class FakeCell:

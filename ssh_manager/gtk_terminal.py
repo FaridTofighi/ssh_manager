@@ -32,6 +32,7 @@ from ssh_manager.password_change import PasswordChangeTracker
 from ssh_manager.vte_bridge import VTEBridge
 # --- END: PARAMIKO_VTE_IMPORTS ---
 from ssh_manager.settings import TerminalAppearanceSettings
+from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 
 LogFn = Callable[[str, bool], None]
 PasswordUpdateFn = Callable[[HostEntry, str], bool]
@@ -411,117 +412,23 @@ class TerminalTab(Gtk.Box):
         self._info_spinner.hide()
         if hasattr(self, "_info_revealer"):
             self._info_revealer.set_reveal_child(False)
+
     def _colors_from_appearance(self) -> Tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, list[Gdk.RGBA]]:
+        profile_theme = self._profile.theme if self._profile and self._profile.theme else ""
+        colors = resolve_terminal_colors(self._appearance, profile_theme)
+
         def rgba(hex_color: str) -> Gdk.RGBA:
             color = Gdk.RGBA()
             color.parse(hex_color)
             return color
 
-        background_hex = "#1f2329"
-        foreground_hex = "#f5f6f8"
-        cursor_hex = "#b9c4cf"
-        highlight_hex = "#2f333a"
-        palette_hex = [
-            "#1f2329",
-            "#ef9a9a",
-            "#a5d6a7",
-            "#ffe0b2",
-            "#90caf9",
-            "#c7a4ff",
-            "#80cbc4",
-            "#f5f6f8",
-            "#394049",
-            "#f28b82",
-            "#81c995",
-            "#fdd663",
-            "#8ab4f8",
-            "#d7aefb",
-            "#78d9ec",
-            "#ffffff",
-        ]
-
-        profile_theme = (self._profile.theme.lower() if self._profile and self._profile.theme else "")
-        appearance = self._appearance
-        scheme = (appearance.color_scheme.lower() if appearance else "default") if appearance else "default"
-
-        def solarized(dark: bool) -> Tuple[str, str, list[str]]:
-            if dark:
-                return (
-                    "#002b36",
-                    "#93a1a1",
-                    [
-                        "#073642",
-                        "#dc322f",
-                        "#859900",
-                        "#b58900",
-                        "#268bd2",
-                        "#d33682",
-                        "#2aa198",
-                        "#eee8d5",
-                        "#002b36",
-                        "#cb4b16",
-                        "#586e75",
-                        "#657b83",
-                        "#839496",
-                        "#6c71c4",
-                        "#93a1a1",
-                        "#fdf6e3",
-                    ],
-                )
-            return (
-                "#fdf6e3",
-                "#586e75",
-                [
-                    "#073642",
-                    "#dc322f",
-                    "#859900",
-                    "#b58900",
-                    "#268bd2",
-                    "#d33682",
-                    "#2aa198",
-                    "#eee8d5",
-                    "#002b36",
-                    "#cb4b16",
-                    "#586e75",
-                    "#657b83",
-                    "#839496",
-                    "#6c71c4",
-                    "#93a1a1",
-                    "#fdf6e3",
-                ],
-            )
-
-        if appearance and appearance.use_custom_colors and appearance.fg_color and appearance.bg_color:
-            foreground_hex = appearance.fg_color
-            background_hex = appearance.bg_color
-        elif appearance:
-            if scheme == "dark":
-                background_hex = "#1f2329"
-                foreground_hex = "#f5f6f8"
-            elif scheme == "light":
-                background_hex = "#f8fafc"
-                foreground_hex = "#0f172a"
-            elif scheme in {"solarized-dark", "solarized dark"}:
-                background_hex, foreground_hex, palette_hex = solarized(True)
-            elif scheme in {"solarized-light", "solarized light"}:
-                background_hex, foreground_hex, palette_hex = solarized(False)
-            elif scheme == "default" and profile_theme in {"dark", "light"}:
-                if profile_theme == "light":
-                    background_hex = "#f8fafc"
-                    foreground_hex = "#0f172a"
-                else:
-                    background_hex = "#1f2329"
-                    foreground_hex = "#f5f6f8"
-
-        if appearance and appearance.palette:
-            palette_hex = appearance.palette
-
-        background = rgba(background_hex)
-        foreground = rgba(foreground_hex)
-        cursor = rgba(cursor_hex)
-        highlight = rgba(highlight_hex)
-        palette = [rgba(color) for color in palette_hex]
-        return foreground, background, cursor, highlight, palette
+        return (
+            rgba(colors.foreground),
+            rgba(colors.background),
+            rgba(colors.cursor),
+            rgba(colors.highlight),
+            [rgba(color) for color in colors.palette],
+        )
 
     def _configure_terminal_appearance(self, term: Vte.Terminal) -> None:
         if self._appearance:
