@@ -256,3 +256,106 @@ class RelayTreeTests(unittest.TestCase):
         paths = []
         model.foreach(lambda m, path, it: paths.append(path.copy()) and False)
         return paths
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class HostPageTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.sandbox = WindowSandbox()
+        self.win = self.sandbox.window
+        self.page = self.win.host_page
+
+    def tearDown(self) -> None:
+        self.sandbox.close()
+
+    def _pump(self) -> None:
+        from gi.repository import Gtk
+
+        for _ in range(50):
+            if not Gtk.events_pending():
+                break
+            Gtk.main_iteration_do(False)
+
+    def test_host_selection_fills_every_band(self) -> None:
+        win = self.win
+        win.tree.select_host("prod", "web.conf", "web-01")
+        content = self.page.view.content
+        self.assertEqual(content.kind, "host")
+        self.assertEqual([c.label for c in content.crumbs], ["Hosts", "web-01"])
+        self.assertEqual(content.primary_label, "_Connect")
+        self.assertEqual([caption for caption, _v, _m in content.info], ["Connection", "Auth", "Proxy"])
+        self.assertTrue(content.info[0][1].endswith(":22"))
+        self.assertEqual([caption for caption, _v, _l in content.stats], ["Last connected", "Latency"])
+        self.assertEqual(content.stats[0][1], "Never")
+        self.assertTrue(content.copy_text.startswith("ssh "))
+        self.assertEqual(self.page.terminal_page.get_visible_child_name(), "ready")
+        self.assertEqual(self.page.terminal_page.ready.title.get_text(), "Ready to connect")
+        self.assertIn("web-01", self.page.terminal_page.ready.body_text)
+
+    def test_groups_overview_and_breadcrumb_navigation(self) -> None:
+        win = self.win
+        win.tree.select_child_group("prod", "web.conf")
+        content = self.page.view.content
+        self.assertEqual(content.kind, "group")
+        self.assertEqual(content.primary_label, "Connect _all")
+        self.assertEqual([c.label for c in content.crumbs], ["Hosts", "prod", "web.conf"])
+        self.page.on_crumb(("parent", "prod"))
+        self.assertEqual(self.page.view.content.title, "prod")
+        self.page.on_crumb(())
+        self.assertEqual(self.page.view.content.kind, "empty")
+        self.assertEqual(self.page.terminal_page.ready.title.get_text(), "Select a host")
+
+    def test_tabs_shortcuts_and_maximize(self) -> None:
+        from ssh_manager.gtkui.views.host_page import PageTab
+
+        win = self.win
+        win.lookup_action("page-tab").activate(__import__("gi.repository.GLib", fromlist=["GLib"]).Variant.new_int32(2))
+        self.assertIs(self.page.view.current_tab, PageTab.DETAILS)
+        self.assertEqual(self.page.view.stack.get_visible_child_name(), "details")
+        win.lookup_action("toggle-details").activate(None)
+        self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
+        self.page.goto_page_tab(3)
+        self.assertIs(self.page.view.current_tab, PageTab.ACTIVITY)
+        win.layout.toggle_maximized()
+        self.assertFalse(self.page.view.page_bar.get_visible())
+        self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
+        win.layout.toggle_maximized()
+        self.assertTrue(self.page.view.page_bar.get_visible())
+
+    def test_status_changes_feed_history_and_sessions_dock_status_bar(self) -> None:
+        win = self.win
+        win.tree.select_host("prod", "web.conf", "web-01")
+        host = win.tree.selected_host()
+        key = win.creds.host_key(host)
+        win.tree.set_host_status_for_key(key, "connected")
+        win.tree.set_host_status_for_key(key, "unknown")
+        events = [e.text for e in self.page.history.events(key)]
+        self.assertEqual(events, ["Disconnected", "Connected"])
+        self.assertNotEqual(self.page.view.content.stats[0][1], "Never")
+
+        tab = win.terminal_tabs.new_terminal(host, autostart=False)
+        self._pump()
+        self.assertEqual(self.page.terminal_page.get_visible_child_name(), "sessions")
+        self.assertIs(tab.statusbar.get_parent(), self.page.view.info_bar.live)
+        self.assertTrue(win.terminal_tabs.has_session_for(host))
+        self.page.refresh()
+        self.assertEqual(self.page.view.content.primary_label, "_Reconnect")
+        win.terminal_tabs.close_tab(tab)
+        self._pump()
+        self.assertEqual(self.page.terminal_page.get_visible_child_name(), "ready")
+        self.assertEqual(self.page.view.info_bar.live.get_children(), [])
+
+    def test_latency_uses_cache_and_skips_proxied_hosts(self) -> None:
+        win = self.win
+        from ssh_manager.config import HostEntry
+
+        proxied = HostEntry(alias="p", options={"hostname": "10.0.0.1", "proxyjump": "bastion"})
+        self.assertIsNone(self.page.latency_key(proxied))
+        self.page.latency.enabled = False  # no real sockets in tests
+        win.tree.select_host("prod", "web.conf", "web-01")
+        self.assertEqual(self.page.view.content.stats[1][1], "—")
+        self.page.latency.enabled = True
+        host = win.tree.selected_host()
+        self.page.inject_latency(host, 180.0)
+        self.page.refresh()
+        self.assertEqual(self.page.view.content.stats[1][1:], ("180 ms", "warn"))

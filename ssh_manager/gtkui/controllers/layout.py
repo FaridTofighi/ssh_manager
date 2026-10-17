@@ -91,13 +91,11 @@ class LayoutController:
         self.maximized = maximized
         if maximized:
             self.sidebar_visible_before_max = self.sidebar_visible
-            self.details_visible_before_max = self.win._details.get_visible()
-            self.win._details.hide()
+            self.win.host_page.set_chrome_visible(False)
             if self.sidebar_visible_before_max:
                 self.set_sidebar_visible(False, persist=False)
         else:
-            if self.details_visible_before_max:
-                self.win._details.show()
+            self.win.host_page.set_chrome_visible(True)
             if self.sidebar_visible_before_max:
                 self.set_sidebar_visible(True, persist=False)
         self.update_maximize_ui()

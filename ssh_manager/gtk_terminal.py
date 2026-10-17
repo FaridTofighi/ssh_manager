@@ -392,6 +392,26 @@ class TerminalTab(Gtk.Box):
         self._pane_holder.pack_start(self._pane_container, True, True, 0)
         self.pack_start(self._pane_holder, True, True, 0)
 
+    @property
+    def statusbar(self) -> SessionStatusBar:
+        return self._statusbar
+
+    def release_statusbar(self) -> SessionStatusBar:
+        """Detach the status bar so the window can dock it (info bar)."""
+
+        if self._statusbar.get_parent() is self:
+            self.remove(self._statusbar)
+        return self._statusbar
+
+    def reclaim_statusbar(self) -> None:
+        parent = self._statusbar.get_parent()
+        if parent is self:
+            return
+        if parent is not None:
+            parent.remove(self._statusbar)
+        self.pack_start(self._statusbar, False, False, 0)
+        self._statusbar.show()
+
     def _build_statusbar(self) -> None:
         self._statusbar = SessionStatusBar()
         # Attribute names kept so the stats helpers (and their tests) stay unchanged.
@@ -1508,6 +1528,7 @@ class TerminalNotebook(Gtk.Box):
         self.on_new_host: Optional[Callable[[], None]] = None
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
         self.on_sessions_changed: Optional[Callable[[], None]] = None
+        self._status_dock: Optional[Gtk.Box] = None
 
         self._build_toolbar()
         self._broadcast_strip = BroadcastStrip(lambda: self.set_broadcast_mode(False))
@@ -1969,6 +1990,7 @@ class TerminalNotebook(Gtk.Box):
                 if page_num != -1:
                     self._notebook.set_current_page(page_num)
         self._update_placeholder()
+        self._dock_statusbar()
 
     # ----------------------------------------------------------------- helpers
     def _tab_label_text(self, tab: TerminalTab) -> str:
@@ -2025,6 +2047,11 @@ class TerminalNotebook(Gtk.Box):
         for tab, label in self._tab_labels.items():
             label.set_current(tab is page)
         GLib.idle_add(self._sync_toolbar_idle)
+        GLib.idle_add(self._emit_sessions_changed_idle)
+
+    def _emit_sessions_changed_idle(self) -> bool:
+        self._emit_sessions_changed()
+        return GLib.SOURCE_REMOVE
 
     def _sync_toolbar_idle(self) -> bool:
         self._sync_toolbar()
@@ -2047,8 +2074,53 @@ class TerminalNotebook(Gtk.Box):
         self._emit_sessions_changed()
 
     def _emit_sessions_changed(self) -> None:
+        self._dock_statusbar()
         if self.on_sessions_changed is not None:
             self.on_sessions_changed()
+
+    # ------------------------------------------------------- status docking
+    def set_status_dock(self, dock: Optional[Gtk.Box]) -> None:
+        """Show the current session's status bar in ``dock`` (tabs mode only)."""
+
+        self._status_dock = dock
+        self._dock_statusbar()
+
+    def _dock_statusbar(self) -> None:
+        dock = self._status_dock
+        if dock is None:
+            return
+        current = None if self._tile_mode else self._current_tab()
+        for tab in self._tabs:
+            if tab is not current:
+                tab.reclaim_statusbar()
+        for child in list(dock.get_children()):
+            if current is None or child is not current.statusbar:
+                if isinstance(child, SessionStatusBar):
+                    owner = next((t for t in self._tabs if t.statusbar is child), None)
+                    if owner is not None:
+                        owner.reclaim_statusbar()
+                    else:
+                        dock.remove(child)
+        if current is not None and current.statusbar.get_parent() is not dock:
+            bar = current.release_statusbar()
+            dock.pack_start(bar, True, True, 0)
+            bar.show()
+
+    def has_session_for(self, host) -> bool:
+        return any(self._same_host(tab.host, host) for tab in self._tabs)
+
+    def focus_session_for(self, host) -> bool:
+        for tab in self._ordered_tabs():
+            if self._same_host(tab.host, host):
+                self.focus_tab(tab)
+                return True
+        return False
+
+    @staticmethod
+    def _same_host(a, b) -> bool:
+        if a is None or b is None:
+            return False
+        return (a.parent_group, a.child_group, a.alias) == (b.parent_group, b.child_group, b.alias)
 
     def session_states(self) -> List[ConnectionStatus]:
         return [tab.status for tab in self._tabs]

@@ -85,6 +85,7 @@ class WindowSandbox:
         settings = AppSettings.load()
         settings.master_password_disabled = True
         self.window = SSHManagerWindow(self.app, self.base, settings)
+        self.window.host_page.latency.enabled = False  # tests never open sockets
 
     def close(self) -> None:
         self.window.destroy()

@@ -62,7 +62,7 @@ class Size:
     SIDEBAR = 408
     SIDEBAR_MIN = 300
     SIDEBAR_MAX = 520
-    PAGE_BAR = 74
+    PAGE_BAR = 73  # band heights are content heights; each band adds a 1px border
     HOST_HEADER = 123
     TABS = 57
     INFO_BAR = 69
@@ -354,11 +354,16 @@ _ENV_ALIASES = {
 }
 
 
+def environment_kind(environment: str) -> str:
+    """``production`` / ``staging`` / ``development`` / ``neutral`` for an environment name."""
+
+    return _ENV_ALIASES.get((environment or "").strip().lower(), "neutral")
+
+
 def environment_badge_style(environment: str, dark: bool = False) -> Tuple[str, str]:
     """``(background, foreground)`` of the environment badge for ``environment``."""
 
-    key = _ENV_ALIASES.get((environment or "").strip().lower(), "neutral")
-    return ENV_BADGES["dark" if dark else "light"][key]
+    return ENV_BADGES["dark" if dark else "light"][environment_kind(environment)]
 
 
 PALETTES: Dict[str, Palette] = {"dark": DARK, "light": LIGHT}

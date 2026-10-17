@@ -324,12 +324,11 @@ def prepare_relay_match(window) -> None:
     key_iter = window.tree.host_iters.get(next((k for k in window.tree.host_iters if k.endswith("api-prod-01")), ""))
     if key_iter is not None:
         window.tree_store.set_value(key_iter, TreeColumn.STATUS, "connected")
-    history = getattr(window, "host_history", None)
-    if history is not None and host is not None:
-        history.record_connected(host, time.time() - 2 * 3600)
-    latency = getattr(window, "latency", None)
-    if latency is not None and host is not None:
-        latency.inject(host, 24.0)
+    page = getattr(window, "host_page", None)
+    if page is not None and host is not None:
+        page.history.record_connected(window.creds.host_key(host), time.time() - 2 * 3600 - 60)
+        page.inject_latency(host, 24.0)
+        page.latency.enabled = True  # the injected result is fresh, so no probe runs
     if host is not None:
         window.tree.select_host(host.parent_group, host.child_group, host.alias)
 
@@ -343,12 +342,27 @@ def _make_window(app, base: Path, prefer_dark: bool):
     ui_state = base / ".ui_state.json"
     ui_state.write_text('{"prefer_dark": %s}' % ("true" if prefer_dark else "false"), encoding="utf-8")
     window = SSHManagerWindow(app, base, settings)
+    window.host_page.latency.enabled = False  # snapshots never open sockets
     _pump()
     return window
 
 
+def _pin_resolution(dpi: float = 96.0) -> None:
+    """Render at 96 dpi regardless of the desktop's text scaling (reproducible PNGs)."""
+
+    from gi.repository import Gdk
+
+    screen = Gdk.Screen.get_default()
+    if screen is not None:
+        screen.set_resolution(dpi)
+    settings = Gtk.Settings.get_default()
+    if settings is not None:
+        settings.set_property("gtk-xft-dpi", int(dpi * 1024))
+
+
 def run(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+    _pin_resolution()
     _patch_toplevel_mapping()
     _stub_terminal_io()
 

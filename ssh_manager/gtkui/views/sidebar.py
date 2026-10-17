@@ -179,7 +179,7 @@ class SidebarView(Gtk.Box):
         header.pack_start(title_block, True, True, 0)
 
         self.add_host_button = Gtk.Button()
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 1)
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
         content.pack_start(make_icon(Icons.NEW, 20), False, False, 0)
         content.pack_start(Gtk.Label(label=_("Add host")), False, False, 0)
         self.add_host_button.add(content)

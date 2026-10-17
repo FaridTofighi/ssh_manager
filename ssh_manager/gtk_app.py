@@ -57,7 +57,7 @@ from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # n
 from ssh_manager.gtkui.i18n import _  # noqa: E402
 from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import Level  # noqa: E402
-from ssh_manager.gtkui.views.details import DetailsView  # noqa: E402
+from ssh_manager.gtkui.controllers.host_page import HostPageController  # noqa: E402
 from ssh_manager.gtkui.views.header import HeaderView  # noqa: E402
 from ssh_manager.gtkui.views.session_tree import SessionTreeView, new_tree_store  # noqa: E402
 from ssh_manager.gtkui.views.sidebar import SidebarView  # noqa: E402
@@ -265,6 +265,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
+        self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / "host-history.json")
 
     def _build_ui(self) -> None:
         self._build_header()
@@ -272,12 +273,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._sidebar = self._build_sidebar(self.tree_view)
         self._sidebar_container = self._sidebar
         self.terminal_tabs = self._build_workspace()
-        self._details = DetailsView()
-        self._details.on_expanded_changed = lambda _expanded: self._save_ui_state()
+        self._host_page = self.host_page.build(self.terminal_tabs)
+        self.terminal_tabs.set_status_dock(self._host_page.info_bar.live)
 
-        right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        right_box.pack_start(self.terminal_tabs, True, True, 0)
-        right_box.pack_start(self._details, False, False, 0)
+        right_box = self._host_page
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self._paned.get_style_context().add_class("main-paned")
         self._paned.set_wide_handle(False)
@@ -304,6 +303,17 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def refresh_workspaces(self) -> None:
         shared = self.inventory.shared_path
         self._header.set_workspaces(workspace_list(self.manager.base_dir, self._ui.recent_inventories, shared))
+
+    def _on_password_changed(self, host, password: str) -> bool:
+        saved = self.creds.save_detected_password_change(host, password)
+        if saved:
+            self.host_page.on_password_changed(host)
+        return saved
+
+    def _on_sessions_changed(self) -> None:
+        self._update_health()
+        if hasattr(self, "_host_page"):
+            self.host_page.refresh()
 
     def _update_health(self) -> None:
         if not hasattr(self, "_header"):
@@ -350,14 +360,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._log_event,
             default_font_scale=self._ui.font_scale,
             password_store=self._secure_store,
-            password_update_handler=self.creds.save_detected_password_change,
+            password_update_handler=self._on_password_changed,
             appearance=self._settings.terminal_appearance,
         )
         tabs.set_name("terminal-area")
         tabs.on_quick_connect = self.sessions.quick_connect
         tabs.on_new_host = self.hosts.prompt_new_host
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
-        tabs.on_sessions_changed = self._update_health
+        tabs.on_sessions_changed = self._on_sessions_changed
         return tabs
 
     def _register_actions(self) -> None:
@@ -409,7 +419,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "font-decrease": tabs.decrease_font,
             "font-reset": tabs.reset_font,
             "toggle-sidebar": self.layout.toggle_sidebar,
-            "toggle-details": self._details.toggle_expanded,
+            "toggle-details": self.host_page.toggle_details,
+            "page-tab": self.host_page.goto_page_tab,
             "toggle-maximize": self.layout.toggle_maximized,
         }
         self._actions = register_actions(self, callbacks)
@@ -527,14 +538,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         ui.prefer_dark = self._prefer_dark
         ui.font_scale = self.terminal_tabs.default_font_scale
         ui.ui_font_size = self._ui_font_size
-        ui.details_expanded = self._details.expanded
         ui.filter_query = self.tree.filter_query
         ui.group_colors = dict(self.colors.group_colors)
         ui.host_colors = dict(self.colors.host_colors)
         return ui
 
     def _save_ui_state(self) -> None:
-        if not hasattr(self, "_details"):
+        if not hasattr(self, "_host_page"):
             return  # still constructing
         save_ui_state(self._ui_state_path, self._collect_ui_state().to_dict())
 
@@ -546,7 +556,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self.maximize()
         self.layout.sidebar_width_saved = ui.sidebar_width
         self._paned.set_position(ui.sidebar_width)
-        self._details.set_expanded(ui.details_expanded, notify=False)
         self.layout.set_sidebar_visible(ui.sidebar_visible, initial=True)
         self.layout.sidebar_visible_before_max = ui.sidebar_prev_visible
         self.layout.set_maximized(ui.terminal_maximized, initial=True)
@@ -562,3 +571,4 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         get_theme_manager().remove_listener(self._on_theme_changed)
         self._toasts.shutdown()
         self.inventory.shutdown()
+        self.host_page.shutdown()

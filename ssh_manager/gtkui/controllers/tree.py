@@ -214,7 +214,11 @@ class TreeController:
 
     def set_host_status_for_key(self, key: str, state: str) -> None:
         state = state if state in {"connected", "connecting", "failed", "unknown"} else "unknown"
+        previous = self.host_status.get(key, "unknown")
         self.host_status[key] = state
+        host_page = getattr(self.win, "host_page", None)
+        if host_page is not None:
+            host_page.on_host_status(key, previous, state)
         tree_iter = self.host_iters.get(key)
         if tree_iter:
             try:
@@ -223,8 +227,7 @@ class TreeController:
                 pass
         if getattr(self.win, "closing", False):
             return
-        details = getattr(self.win, "_details", None)
-        if details is not None and self.selected_host() is not None:
+        if host_page is not None and self.selected_host() is not None:
             self.update_details()
 
     def set_host_status(self, host: HostEntry, state: str) -> None:
@@ -457,7 +460,9 @@ class TreeController:
                 action.set_enabled(has_hosts and editable)
 
     def update_details(self) -> None:
-        self.win._details.set_content(self.detail_content())
+        host_page = getattr(self.win, "host_page", None)
+        if host_page is not None:
+            host_page.refresh()
 
     def detail_content(self):
         hosts = self.selected_hosts()

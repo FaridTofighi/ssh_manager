@@ -18,6 +18,7 @@ from typing import Dict, Set
 from .tokens import (
     BADGE_TRACKING,
     CAPS_TRACKING,
+    ENV_BADGES,
     MONO_FONT_FAMILIES,
     UI_FONT_FAMILIES,
     em,
@@ -398,7 +399,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 }
 .sidebar-eyebrow { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .sidebar-title { font-size: ${fs_page_title}em; font-weight: 400; color: @sm_text_primary; }
-.sm-window button.add-host { min-height: ${button_inner}px; padding: 0 11px 0 13px; font-size: ${fs_body}em; }
+.sm-window button.add-host { min-height: ${button_inner}px; padding: 0 15px 0 13px; font-size: ${fs_body}em; }
 .sm-window entry.sidebar-search-entry {
     min-height: ${search_inner}px;
     background-color: @sm_bg_input;
@@ -483,7 +484,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 }
 .sm-window button.breadcrumb-link:hover { background-color: @sm_bg_hover; }
 .sm-window button.page-more { min-width: 40px; min-height: ${button_large_inner}px; padding: 0; color: @sm_text_muted; }
-.sm-window button.page-primary { min-height: ${button_large_inner}px; min-width: 142px; font-size: ${fs_body}em; }
+.sm-window button.page-primary { min-height: ${button_large_inner}px; min-width: 110px; padding: 0 ${l}px; font-size: ${fs_body}em; }
 .host-header {
     background-color: @sm_bg_surface;
     border-bottom: 1px solid @sm_border_subtle;
@@ -507,6 +508,12 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     font-weight: 700;
     letter-spacing: $badge_tracking;
 }
+$env_badges
+.latency-dot.good, .latency-good { color: @sm_success; }
+.latency-dot.warn, .latency-warn { color: @sm_warning; }
+.latency-dot.bad, .latency-bad { color: @sm_danger; }
+.host-tile image, .host-tile { color: @sm_accent; }
+.sm-window button.info-copy { color: @sm_text_muted; }
 .stat-label { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .stat-value { font-size: ${fs_body}em; font-weight: 600; color: @sm_text_primary; }
 .stat-good { color: @sm_success; }
@@ -553,8 +560,8 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     background-color: @sm_bg_surface;
     border: 1px solid @sm_border_subtle;
     border-radius: ${r_card}px;
-    min-width: ${empty_card}px;
-    min-height: ${empty_card}px;
+    min-width: ${empty_card_inner}px;
+    min-height: ${empty_card_inner}px;
     box-shadow: 0 1px 2px @sm_shadow;
     color: @sm_text_secondary;
 }
@@ -737,8 +744,16 @@ def _families(names) -> str:
     return quoted
 
 
+def _env_badges(palette: Palette) -> str:
+    rules = []
+    for kind, (background, foreground) in ENV_BADGES["dark" if palette.name == "dark" else "light"].items():
+        rules.append(f".env-badge.env-{kind} {{ background-color: {background}; color: {foreground}; }}")
+    return "\n".join(rules)
+
+
 def _values(palette: Palette, motion: str) -> Dict[str, object]:
     return {
+        "env_badges": _env_badges(palette),
         "name": palette.name,
         "defines": _defines(palette),
         "motion": motion,
@@ -759,6 +774,7 @@ def _values(palette: Palette, motion: str) -> Dict[str, object]:
         # GTK's min-height excludes the 1px borders: tokens are outer sizes.
         "button_inner": Size.BUTTON - 2, "button_large_inner": Size.BUTTON_LARGE - 2,
         "search_inner": Size.SEARCH - 2, "hero_inner": Size.HERO_BUTTON - 2,
+        "empty_card_inner": Size.EMPTY_CARD - 2,
         "fs_caps": FontScale.CAPS, "fs_caps_14": FontScale.MONO, "fs_badge": FontScale.BADGE,
         "fs_caption": FontScale.CAPTION, "fs_mono": FontScale.MONO, "fs_body": FontScale.BODY,
         "fs_tree": FontScale.TREE, "fs_subtitle": FontScale.SUBTITLE, "fs_wordmark": FontScale.WORDMARK,
