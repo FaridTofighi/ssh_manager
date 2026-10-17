@@ -41,6 +41,13 @@ from ssh_manager.master_auth import (
 )
 from ssh_manager.persistence import append_text, write_json_atomic
 from ssh_manager.gtkui.theme.loader import ThemeMode, current_palette, get_theme_manager
+from ssh_manager.gtkui.i18n import _
+from ssh_manager.gtkui.theme.tokens import Level
+from ssh_manager.gtkui.dialogs.confirm import confirm, show_message
+from ssh_manager.gtkui.dialogs.credentials import CredentialEditDialog
+from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
+from ssh_manager.gtkui.dialogs.prompt import prompt_text
+from ssh_manager.gtkui.validation import validate_child_path, validate_group_name
 from ssh_manager.gtkui.theme.terminal_schemes import SCHEMES as TERMINAL_SCHEMES, resolve_terminal_colors
 
 UI_STATE_FILE = ".ui_state.json"
@@ -562,91 +569,6 @@ class HostDialog(Gtk.Dialog):
 
     def selected_credential_id(self) -> Optional[str]:
         return self._selected_credential_id
-
-
-class GroupPickerDialog(Gtk.Dialog):
-    """Dialog for choosing or creating a parent/child group destination."""
-
-    def __init__(
-        self,
-        parent: Gtk.Window,
-        manager: ConfigManager,
-        title: str,
-        *,
-        allow_new_child: bool = False,
-        initial_parent: Optional[str] = None,
-        initial_child: Optional[str] = None,
-    ) -> None:
-        Gtk.Dialog.__init__(self, title=title, transient_for=parent, modal=True)
-        self.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        self.add_button("_Apply", Gtk.ResponseType.OK)
-        self.set_default_size(420, 0)
-
-        self._allow_new_child = allow_new_child
-
-        box = self.get_content_area()
-        box.set_border_width(16)
-        box.set_spacing(12)
-
-        self._parent_combo = Gtk.ComboBoxText()
-        parents = sorted(manager.tree.keys(), key=str.lower)
-        for name in parents:
-            self._parent_combo.append_text(name)
-        if initial_parent and initial_parent in parents:
-            self._parent_combo.set_active(parents.index(initial_parent))
-        elif parents:
-            self._parent_combo.set_active(0)
-
-        parent_label = Gtk.Label(label="Parent group")
-        parent_label.set_xalign(0.0)
-        parent_label.get_style_context().add_class("dim-label")
-        box.pack_start(parent_label, False, False, 0)
-        box.pack_start(self._parent_combo, False, False, 0)
-
-        self._child_combo = Gtk.ComboBoxText()
-        box.pack_start(self._child_combo, False, False, 0)
-
-        self._new_child_entry = Gtk.Entry()
-        self._new_child_entry.set_placeholder_text("New child group name")
-        if allow_new_child:
-            hint = Gtk.Label(label="Leave blank to use existing child group")
-            hint.set_xalign(0.0)
-            hint.get_style_context().add_class("dim-label")
-            box.pack_start(hint, False, False, 0)
-            box.pack_start(self._new_child_entry, False, False, 0)
-
-        self._manager = manager
-        self._parent_combo.connect("changed", self._on_parent_changed)
-        self._refresh_child_combo(initial_child)
-        self.show_all()
-
-    def selected(self) -> Optional[Tuple[str, str, bool]]:
-        parent = self._parent_combo.get_active_text()
-        if not parent:
-            return None
-        new_child = self._new_child_entry.get_text().strip() if self._allow_new_child else ""
-        if new_child:
-            return parent, new_child, True
-        child = self._child_combo.get_active_text()
-        if not child:
-            return None
-        return parent, child, False
-
-    def _on_parent_changed(self, *_args) -> None:
-        self._refresh_child_combo(None)
-
-    def _refresh_child_combo(self, initial_child: Optional[str]) -> None:
-        self._child_combo.remove_all()
-        parent = self._parent_combo.get_active_text()
-        if not parent:
-            return
-        names = sorted(self._manager.tree.get(parent, {}).keys(), key=str.lower)
-        for name in names:
-            self._child_combo.append_text(name)
-        if initial_child and initial_child in names:
-            self._child_combo.set_active(names.index(initial_child))
-        elif names:
-            self._child_combo.set_active(0)
 
 
 class PreferencesDialog(Gtk.Dialog):
@@ -1263,72 +1185,6 @@ class PreferencesDialog(Gtk.Dialog):
             self._git_path_entry.set_text(folder)
 
 
-class CredentialEditDialog(Gtk.Dialog):
-    """Dialog for adding or editing a stored credential."""
-
-    def __init__(self, parent: Gtk.Window, credential: Optional[Credential] = None) -> None:
-        title = "Edit Credential" if credential else "New Credential"
-        Gtk.Dialog.__init__(self, title=title, transient_for=parent, modal=True)
-        self.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        save_btn = self.add_button("_Save", Gtk.ResponseType.OK)
-        save_btn.get_style_context().add_class("suggested-action")
-        self.set_default_response(Gtk.ResponseType.OK)
-
-        box = self.get_content_area()
-        box.set_border_width(16)
-        box.set_spacing(10)
-
-        self.name_entry = Gtk.Entry()
-        self.name_entry.set_placeholder_text("Label (e.g. Production)")
-        box.pack_start(self._row("Name", self.name_entry), False, False, 0)
-
-        self.user_entry = Gtk.Entry()
-        self.user_entry.set_placeholder_text("Username")
-        box.pack_start(self._row("Username", self.user_entry), False, False, 0)
-
-        self.pass_entry = Gtk.Entry()
-        self.pass_entry.set_visibility(False)
-        self.pass_entry.set_invisible_char("•")
-        box.pack_start(self._row("Password", self.pass_entry), False, False, 0)
-
-        self._error_label = Gtk.Label()
-        self._error_label.get_style_context().add_class("error")
-        self._error_label.set_xalign(0.0)
-        self._error_label.set_no_show_all(True)
-        box.pack_start(self._error_label, False, False, 0)
-
-        if credential:
-            self.name_entry.set_text(credential.name)
-            self.user_entry.set_text(credential.username)
-            hint = Gtk.Label(label="Leave password blank to keep existing.")
-            hint.get_style_context().add_class("dim-label")
-            hint.set_xalign(0.0)
-            box.pack_start(hint, False, False, 0)
-
-        self.show_all()
-        self.name_entry.grab_focus()
-
-    def _row(self, label: str, widget: Gtk.Widget) -> Gtk.Box:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lbl = Gtk.Label(label=label)
-        lbl.set_xalign(0.0)
-        lbl.get_style_context().add_class("dim-label")
-        row.pack_start(lbl, False, False, 0)
-        row.pack_start(widget, True, True, 0)
-        return row
-
-    def values(self) -> Optional[Tuple[str, str, Optional[str]]]:
-        name = self.name_entry.get_text().strip()
-        user = self.user_entry.get_text().strip()
-        password = self.pass_entry.get_text()
-        if not name or not user:
-            self._error_label.set_text("Name and username are required.")
-            self._error_label.show()
-            return None
-        self._error_label.hide()
-        return name, user, password or None
-
-
 class CredentialManagerDialog(Gtk.Dialog):
     """Simple CRUD list for saved credentials."""
 
@@ -1400,16 +1256,7 @@ class CredentialManagerDialog(Gtk.Dialog):
             self._delete_btn.set_sensitive(has_sel)
 
     def _show_store_error(self, message: str, exc: SecureStoreError) -> None:
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            buttons=Gtk.ButtonsType.OK,
-            message_type=Gtk.MessageType.ERROR,
-            text=message,
-        )
-        dialog.format_secondary_text(str(exc))
-        dialog.run()
-        dialog.destroy()
+        show_message(self, message, str(exc), level=Level.ERROR)
 
     def _add(self) -> None:
         dialog = CredentialEditDialog(self)
@@ -1461,17 +1308,13 @@ class CredentialManagerDialog(Gtk.Dialog):
         if not cred:
             self._refresh()
             return
-        confirm = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            buttons=Gtk.ButtonsType.OK_CANCEL,
-            message_type=Gtk.MessageType.QUESTION,
-            text=f"Delete credential '{cred.name}'?",
-        )
-        confirm.format_secondary_text("This will remove the stored username/password and unbind any hosts using it.")
-        response = confirm.run()
-        confirm.destroy()
-        if response == Gtk.ResponseType.OK:
+        if confirm(
+            self,
+            _("Delete credential “{name}”?").format(name=cred.name),
+            _("The stored username and password are removed and any hosts using it are unbound."),
+            confirm_label=_("_Delete Credential"),
+            destructive=True,
+        ):
             try:
                 self._store.delete(cred_id)
                 self._refresh()
@@ -3005,17 +2848,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return False
 
     def _confirm_policy_override(self, message: str) -> bool:
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.OK_CANCEL,
-            text=message,
+        return confirm(
+            self,
+            _("Save plain-text password?"),
+            message,
+            confirm_label=_("_Save Anyway"),
+            destructive=True,
         )
-        dialog.set_default_response(Gtk.ResponseType.CANCEL)
-        response = dialog.run()
-        dialog.destroy()
-        return response == Gtk.ResponseType.OK
 
     def _check_secrets_policy(self, host: HostEntry) -> bool:
         policy = (
@@ -3421,16 +3260,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._audit_log("connect", host_obj)
             perms = self._permissions_for_host(host_obj)
             if not perms.get("can_connect", True):
-                dialog = Gtk.MessageDialog(
-                    transient_for=self,
-                    modal=True,
-                    buttons=Gtk.ButtonsType.OK_CANCEL,
-                    message_type=Gtk.MessageType.QUESTION,
-                    text="Connection is locally disabled for this host. Connect anyway?",
-                )
-                response = dialog.run()
-                dialog.destroy()
-                if response != Gtk.ResponseType.OK:
+                if not confirm(
+                    self,
+                    _("Connect to “{alias}” anyway?").format(alias=host_obj.alias),
+                    _("Connecting is disabled for this host by its local permissions."),
+                    confirm_label=_("C_onnect Anyway"),
+                    destructive=True,
+                ):
                     continue
             resolved = self._resolve_host_credentials(host_obj)
             if not isinstance(resolved, HostEntry):
@@ -4485,16 +4321,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         message = "Remote updates are available. Run 'git pull' in the tracked directory to refresh."
         if path_text:
             message += f"\nDirectory: {path_text}"
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            buttons=Gtk.ButtonsType.OK,
-            message_type=Gtk.MessageType.INFO,
-            text="Git updates detected",
-        )
-        dialog.format_secondary_text(message)
-        dialog.run()
-        dialog.destroy()
+        show_message(self, _("Git updates available"), message, level=Level.INFO)
 
     def _start_shared_poll(self) -> None:
         if self._shared_poll_id:
@@ -4967,7 +4794,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host = self._selected_host()
         if not host:
             return
-        if not self._confirm(f"Delete host '{host.alias}'?"):
+        if not self._confirm(
+            _("Delete host “{alias}”?").format(alias=host.alias),
+            detail=_("The host entry is removed from {path}.").format(path=f"{host.parent_group}/{host.child_group}"),
+            confirm_label=_("_Delete Host"),
+        ):
             return
         success, msg = self.manager.delete_host(host.parent_group, host.child_group, host.alias)
         self._log_event(msg, success)
@@ -4977,7 +4808,12 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._rebuild_tree(refresh=True)
 
     def _create_parent_group(self) -> None:
-        name = self._prompt_text("Create parent group", "Folder name:")
+        name = self._prompt_text(
+            _("New Group"),
+            _("Name of the new top-level group (a folder under the config directory)."),
+            validator=validate_group_name,
+            accept_label=_("_Create"),
+        )
         if not name:
             return
         success, msg = self.manager.create_parent_group(name)
@@ -5123,7 +4959,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if kind != "parent":
             return
         current = data["parent"]
-        new_name = self._prompt_text("Rename parent group", "New name:", current)
+        new_name = self._prompt_text(
+            _("Rename Group"), _("New name for “{name}”:").format(name=current), current,
+            validator=validate_group_name, accept_label=_("_Rename"),
+        )
         if not new_name:
             return
         success, msg = self.manager.rename_parent_group(current, new_name)
@@ -5139,7 +4978,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             return
         source = data["parent"]
         default = f"{source}-copy"
-        new_name = self._prompt_text("Duplicate parent group", "New parent group name:", default)
+        new_name = self._prompt_text(
+            _("Duplicate Group"), _("Name of the copy:"), default,
+            validator=validate_group_name, accept_label=_("_Duplicate"),
+        )
         if not new_name:
             return
         success, msg = self.manager.duplicate_parent_group(source, new_name)
@@ -5154,7 +4996,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             return
         parent = data["parent"]
         current = data["child"]
-        new_name = self._prompt_text("Rename child group", "New filename:", current)
+        new_name = self._prompt_text(
+            _("Rename Child Group"), _("New file name for “{name}”:").format(name=current), current,
+            validator=validate_child_path, accept_label=_("_Rename"),
+        )
         if not new_name:
             return
         success, msg = self.manager.rename_child_group(parent, current, new_name)
@@ -5174,7 +5019,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         parent = data["parent"]
         child = data["child"]
         default = f"{child}-copy"
-        new_name = self._prompt_text("Duplicate child group", "New filename:", default)
+        new_name = self._prompt_text(
+            _("Duplicate Child Group"), _("File name of the copy:"), default,
+            validator=validate_child_path, accept_label=_("_Duplicate"),
+        )
         if not new_name:
             return
         success, msg = self.manager.duplicate_child_group(parent, child, new_name)
@@ -5188,7 +5036,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if kind != "parent":
             return
         name = data["parent"]
-        if not self._confirm(f"Delete parent group '{name}' and all hosts?"):
+        if not self._confirm(
+            _("Delete group “{name}”?").format(name=name),
+            detail=_("All child groups and hosts in this folder are deleted. This cannot be undone."),
+            confirm_label=_("_Delete Group"),
+        ):
             return
         success, msg = self.manager.delete_parent_group(name)
         self._log_event(msg, success)
@@ -5202,7 +5054,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             return
         parent = data["parent"]
         child = data["child"]
-        if not self._confirm(f"Delete child group '{parent}/{child}'?"):
+        if not self._confirm(
+            _("Delete child group “{name}”?").format(name=f"{parent}/{child}"),
+            detail=_("The config file and every host in it are deleted. This cannot be undone."),
+            confirm_label=_("_Delete Child Group"),
+        ):
             return
         success, msg = self.manager.delete_child_group(parent, child)
         self._log_event(msg, success)
@@ -5329,43 +5185,32 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._status_timeout_id = 0
         return GLib.SOURCE_REMOVE
 
-    def _prompt_text(self, title: str, message: str, default: str = "") -> Optional[str]:
-        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("_OK", Gtk.ResponseType.OK)
-        dialog.set_default_response(Gtk.ResponseType.OK)
+    def _prompt_text(
+        self,
+        title: str,
+        message: str,
+        default: str = "",
+        *,
+        validator=None,
+        accept_label: str = "",
+    ) -> Optional[str]:
+        return prompt_text(self, title, message, default, validator=validator, accept_label=accept_label)
 
-        box = dialog.get_content_area()
-        box.set_border_width(16)
-        box.set_spacing(12)
-        box.pack_start(Gtk.Label(label=message), False, False, 0)
-        entry = Gtk.Entry()
-        entry.set_text(default)
-        entry.set_activates_default(True)
-        box.pack_start(entry, False, False, 0)
-
-        dialog.show_all()
-        response = dialog.run()
-        text = entry.get_text().strip()
-        dialog.destroy()
-        if response == Gtk.ResponseType.OK and text:
-            return text
-        return None
-
-    def _confirm(self, message: str) -> bool:
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,
-            text=message,
+    def _confirm(
+        self,
+        message: str,
+        *,
+        detail: str = "",
+        confirm_label: str = "",
+        destructive: bool = True,
+    ) -> bool:
+        return confirm(
+            self,
+            message,
+            detail,
+            confirm_label=confirm_label or _("_Delete"),
+            destructive=destructive,
         )
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("_Delete", Gtk.ResponseType.OK)
-        dialog.set_default_response(Gtk.ResponseType.CANCEL)
-        response = dialog.run()
-        dialog.destroy()
-        return response == Gtk.ResponseType.OK
 
     # -------------------------------------------------------------- UI state I/O
     def _apply_ui_font(self, size: int) -> None:
