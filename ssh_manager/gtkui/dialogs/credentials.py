@@ -9,12 +9,17 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
-from ...credentials import Credential  # noqa: E402
+from ...credentials import Credential, CredentialStore  # noqa: E402
+from ...secure_store import SecureStoreError  # noqa: E402
+from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..theme.tokens import Level  # noqa: E402
 from ..validation import validate_required  # noqa: E402
 from ..widgets.forms import FormSection, entry  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
+from .confirm import confirm, show_message  # noqa: E402
+from .list_manager import ListManagerDialog  # noqa: E402
 
 
 class CredentialEditDialog(BaseDialog):
@@ -63,3 +68,85 @@ class CredentialEditDialog(BaseDialog):
         if not valid or not name or not user:
             return None
         return name, user, password or None
+
+
+class CredentialManagerDialog(ListManagerDialog):
+    """List, add, edit and delete reusable credentials."""
+
+    def __init__(self, parent: Gtk.Window, store: CredentialStore) -> None:
+        ListManagerDialog.__init__(
+            self,
+            parent,
+            _("Credentials"),
+            [_("Name"), _("Username")],
+            empty_icon=Icons.CREDENTIALS,
+            empty_title=_("No saved credentials"),
+            empty_description=_("Save a username and password once and reuse it for many hosts."),
+            add_label=_("_Add Credential…"),
+        )
+        self._store = store
+        self.set_hint(_("Passwords are kept in the system keyring or the encrypted password file."))
+        self.refresh()
+
+    def load_rows(self):
+        return [(cred.id, cred.name, cred.username) for cred in self._store.list()]
+
+    def _show_store_error(self, message: str, exc: SecureStoreError) -> None:
+        show_message(self, message, str(exc), level=Level.ERROR)
+
+    def _run_editor(self, credential: Optional[Credential]) -> Optional[Tuple[str, str, Optional[str]]]:
+        dialog = CredentialEditDialog(self, credential)
+        try:
+            if not is_accept(dialog.run()):
+                return None
+            return dialog.values()
+        finally:
+            dialog.destroy()
+
+    def on_add(self) -> None:
+        values = self._run_editor(None)
+        if not values or values[2] is None:
+            return
+        name, user, password = values
+        try:
+            created = self._store.add(name, user, password)
+        except SecureStoreError as exc:
+            self._show_store_error(_("Could not save the credential."), exc)
+            return
+        self.refresh()
+        self.select_id(created.id)
+
+    def on_edit(self, item_id: str) -> None:
+        cred = self._store.get(item_id)
+        if not cred:
+            return
+        values = self._run_editor(cred)
+        if not values:
+            return
+        name, user, password = values
+        try:
+            self._store.update(cred.id, name, user, password=password)
+        except SecureStoreError as exc:
+            self._show_store_error(_("Could not update the credential."), exc)
+            return
+        self.refresh()
+
+    def on_delete(self, item_id: str) -> None:
+        cred = self._store.get(item_id)
+        if not cred:
+            self.refresh()
+            return
+        if not confirm(
+            self,
+            _("Delete credential “{name}”?").format(name=cred.name),
+            _("The stored username and password are removed and any hosts using it are unbound."),
+            confirm_label=_("_Delete Credential"),
+            destructive=True,
+        ):
+            return
+        try:
+            self._store.delete(item_id)
+        except SecureStoreError as exc:
+            self._show_store_error(_("Could not delete the credential."), exc)
+            return
+        self.refresh()

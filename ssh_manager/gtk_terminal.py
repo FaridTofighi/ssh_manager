@@ -34,6 +34,7 @@ from ssh_manager.vte_bridge import VTEBridge
 from ssh_manager.settings import TerminalAppearanceSettings
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 from ssh_manager.gtkui.constants import Icons
+from ssh_manager.gtkui.dialogs.files import choose_save_file
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
@@ -689,40 +690,14 @@ class TerminalTab(Gtk.Box):
 
     def _prompt_for_password(self) -> Optional[str]:
         parent = self.get_toplevel()
-        transient = parent if isinstance(parent, Gtk.Window) else None
-        dialog = Gtk.Dialog(title="SSH Password", transient_for=transient, modal=True)
-        dialog.set_destroy_with_parent(True)
-        if transient:
-            dialog.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
-        else:
-            dialog.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("_Connect", Gtk.ResponseType.OK)
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        content = dialog.get_content_area()
-        content.set_border_width(16)
-        content.set_spacing(12)
-
-        label = Gtk.Label(label=f"Enter password for {self._host.alias}")
-        label.set_xalign(0.0)
-        content.pack_start(label, False, False, 0)
-
-        entry = Gtk.Entry()
-        entry.set_visibility(False)
-        entry.set_invisible_char("•")
-        entry.set_activates_default(True)
-        content.pack_start(entry, False, False, 0)
-
-        dialog.show_all()
-        entry.grab_focus()
-        response = dialog.run()
-        text = entry.get_text()
-        dialog.destroy()
-
-        if response == Gtk.ResponseType.OK and text:
-            return text
-        return None
+        hostname, port, username = host_connection_params(self._host)
+        return prompt_text(
+            parent if isinstance(parent, Gtk.Window) else None,
+            _("SSH Password"),
+            _("Enter the password for {target}.").format(target=f"{username}@{hostname}:{port}"),
+            secret=True,
+            accept_label=_("C_onnect"),
+        )
 
     def _finalize_password_save(self) -> bool:
         self._password_save_source_id = 0
@@ -1331,20 +1306,12 @@ class TerminalTab(Gtk.Box):
         term = self._active_terminal()
         if not term:
             return
-        chooser = Gtk.FileChooserDialog(
-            title="Save Transcript",
-            parent=self.get_toplevel(),
-            action=Gtk.FileChooserAction.SAVE,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_SAVE,
-                Gtk.ResponseType.OK,
-            ),
+        parent = self.get_toplevel()
+        target = choose_save_file(
+            parent if isinstance(parent, Gtk.Window) else None,
+            _("Save Transcript"),
+            current_name=f"{self.title}-{time.strftime('%Y%m%d-%H%M%S')}.txt",
         )
-        resp = chooser.run()
-        target = chooser.get_filename() if resp == Gtk.ResponseType.OK else None
-        chooser.destroy()
         if not target:
             return
         try:

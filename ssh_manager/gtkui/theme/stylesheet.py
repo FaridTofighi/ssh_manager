@@ -162,6 +162,13 @@ button.destructive-action {{
     border-color: @sm_danger_strong;
 }}
 
+button.suggested-action:disabled,
+button.destructive-action:disabled {{
+    background-color: @sm_chip_bg;
+    color: @sm_text_disabled;
+    border-color: @sm_border_subtle;
+}}
+
 /* -------------------------------------------------------------- chips */
 .chip {{
     background-color: @sm_chip_bg;

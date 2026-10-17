@@ -28,7 +28,7 @@ from ssh_manager.connector import Connector
 from ssh_manager.connection_state import ConnectionStateMachine
 from ssh_manager.gtk_terminal import TerminalNotebook
 from ssh_manager.credentials import CredentialStore, Credential
-from ssh_manager.config_viewer import ConfigViewerDialog
+from ssh_manager.gtkui.dialogs.config_viewer import ConfigViewerDialog
 from ssh_manager.vault import CredentialVault, VaultEntry, VaultError, default_vault_path
 from ssh_manager.smart_groups import SmartGroup, load_smart_groups, save_smart_groups
 from ssh_manager.templates import built_in_templates, HostTemplate
@@ -44,7 +44,14 @@ from ssh_manager.gtkui.theme.loader import ThemeMode, current_palette, get_theme
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.theme.tokens import Level
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message
-from ssh_manager.gtkui.dialogs.credentials import CredentialEditDialog
+from ssh_manager.gtkui.dialogs.base import is_accept
+from ssh_manager.gtkui.dialogs.bulk_tag import BulkTagDialog
+from ssh_manager.gtkui.dialogs.credentials import CredentialEditDialog, CredentialManagerDialog
+from ssh_manager.gtkui.dialogs.files import choose_open_file, choose_save_file
+from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog, PreferencesValues
+from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog
+from ssh_manager.gtkui.dialogs.vault import VaultDialog
 from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.validation import validate_child_path, validate_group_name
@@ -124,1511 +131,6 @@ class UIHostConfig:
     options: Dict[str, str] = field(default_factory=dict)
 
 
-class HostDialog(Gtk.Dialog):
-    """Dialog for creating or editing a host entry."""
-
-    def __init__(
-        self,
-        parent: Gtk.Window,
-        host: Optional[HostEntry] = None,
-        *,
-        credentials: Optional[List[Credential]] = None,
-        selected_credential_id: Optional[str] = None,
-        metadata: Optional[Dict[str, str]] = None,
-        vault_entries: Optional[List[VaultEntry]] = None,
-        vault_unlocked: bool = False,
-        template_defaults: Optional[Dict[str, str]] = None,
-        profiles: Optional[Dict[str, SessionProfile]] = None,
-    ) -> None:
-        Gtk.Dialog.__init__(self, title="Connection Details", transient_for=parent, modal=True)
-        self.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        self.add_button("_Save", Gtk.ResponseType.OK)
-        self.set_default_size(900, 650)
-        self.set_resizable(True)
-        self._credential_choices: List[Credential] = []
-        self._selected_credential_id: Optional[str] = selected_credential_id
-        if credentials:
-            self._credential_choices = list(credentials)
-        self._metadata = dict(metadata or {})
-        self._selected_vault_id: Optional[str] = self._metadata.get("vault_id")
-        self._vault_entries = list(vault_entries or [])
-        self._vault_unlocked = vault_unlocked
-        self._template_defaults = template_defaults or {}
-        self._profiles = profiles or {}
-        self._selected_profile_id: Optional[str] = self._metadata.get("default_session_profile_id")
-        perms = self._metadata.get("permissions", {})
-        self._perm_view = bool(perms.get("can_view", True)) if isinstance(perms, dict) else True
-        self._perm_connect = bool(perms.get("can_connect", True)) if isinstance(perms, dict) else True
-        self._perm_edit = bool(perms.get("can_edit", True)) if isinstance(perms, dict) else True
-
-        self.alias_entry = Gtk.Entry()
-        self.alias_entry.set_placeholder_text("Alias (required)")
-
-        self.hostname_entry = Gtk.Entry()
-        self.hostname_entry.set_placeholder_text("example.com")
-
-        self.user_entry = Gtk.Entry()
-        self.user_entry.set_placeholder_text("ubuntu")
-
-        self.port_entry = Gtk.Entry()
-        self.port_entry.set_placeholder_text("22")
-
-        self.identity_entry = Gtk.Entry()
-        self.identity_entry.set_placeholder_text("~/.ssh/id_ed25519")
-
-        self.proxy_entry = Gtk.Entry()
-        self.proxy_entry.set_placeholder_text("jump-host or user@jump")
-
-        self.tags_entry = Gtk.Entry()
-        self.tags_entry.set_placeholder_text("production, web, eu")
-
-        self.environment_entry = Gtk.Entry()
-        self.environment_entry.set_placeholder_text("prod / staging")
-
-        self.owner_entry = Gtk.Entry()
-        self.owner_entry.set_placeholder_text("team / owner")
-
-        self.service_entry = Gtk.Entry()
-        self.service_entry.set_placeholder_text("service/component")
-
-        self.notes_entry = Gtk.Entry()
-        self.notes_entry.set_placeholder_text("Notes")
-
-        self.extras_view = Gtk.TextView()
-        self.extras_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        self.extras_view.set_monospace(True)
-
-        self._credential_combo = Gtk.ComboBoxText()
-        self._credential_combo.append_text("None")
-        for cred in self._credential_choices:
-            self._credential_combo.append(cred.id, f"{cred.name} ({cred.username})")
-        if self._selected_credential_id:
-            try:
-                self._credential_combo.set_active_id(self._selected_credential_id)
-            except Exception:
-                self._selected_credential_id = None
-                self._credential_combo.set_active(0)
-        if self._credential_combo.get_active() < 0:
-            self._selected_credential_id = None
-            self._credential_combo.set_active(0)
-        self._credential_combo.connect("changed", self._on_credential_changed)
-
-        self._vault_combo = Gtk.ComboBoxText()
-        self._vault_combo.append_text("None")
-        for entry in self._vault_entries:
-            self._vault_combo.append(entry.id, f"{entry.label} ({entry.username})")
-        if self._selected_vault_id:
-            try:
-                self._vault_combo.set_active_id(self._selected_vault_id)
-            except Exception:
-                self._vault_combo.set_active(0)
-        else:
-            self._vault_combo.set_active(0)
-        self._vault_combo.set_sensitive(self._vault_unlocked and bool(self._vault_entries))
-        self._vault_combo.connect("changed", self._on_vault_changed)
-
-        self._profile_combo = Gtk.ComboBoxText()
-        self._profile_combo.append_text("None")
-        for pid, prof in self._profiles.items():
-            self._profile_combo.append(pid, prof.name)
-        if self._selected_profile_id:
-            try:
-                self._profile_combo.set_active_id(self._selected_profile_id)
-            except Exception:
-                self._profile_combo.set_active(0)
-        else:
-            self._profile_combo.set_active(0)
-        self._profile_combo.connect("changed", self._on_profile_changed)
-
-        self._perm_view_check = Gtk.CheckButton(label="Allow viewing details")
-        self._perm_connect_check = Gtk.CheckButton(label="Allow connecting")
-        self._perm_edit_check = Gtk.CheckButton(label="Allow editing")
-        self._perm_view_check.set_active(self._perm_view)
-        self._perm_connect_check.set_active(self._perm_connect)
-        self._perm_edit_check.set_active(self._perm_edit)
-
-        content = self.get_content_area()
-        content.set_border_width(16)
-        content.set_spacing(0)
-
-        root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        content.add(root)
-
-        self._section_stack = Gtk.Stack()
-        self._section_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        self._section_stack.set_transition_duration(200)
-
-        nav = Gtk.ListBox()
-        nav.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        nav.connect("row-selected", self._on_section_selected)
-        nav.get_style_context().add_class("section-sidebar")
-        nav.set_activate_on_single_click(True)
-
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        sidebar.set_border_width(10)
-        sidebar.get_style_context().add_class("section-sidebar-wrapper")
-        sidebar.pack_start(nav, True, True, 0)
-        sidebar.set_size_request(220, -1)
-        root.pack_start(sidebar, False, False, 0)
-
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.add(self._section_stack)
-        root.pack_start(scroller, True, True, 0)
-
-        sections: List[Tuple[str, str, Callable[[], Gtk.Widget]]] = [
-            ("general", "General", self._build_general_section),
-            ("connection", "Connection", self._build_connection_section),
-            ("ssh_options", "SSH Options", self._build_ssh_options_section),
-            ("ports", "Ports & Forwarding", self._build_ports_section),
-            ("credentials", "Credentials", self._build_credentials_section),
-            ("tags", "Tags / Groups", self._build_tags_section),
-            ("metadata", "Metadata / Notes", self._build_metadata_section),
-            ("advanced", "Advanced", self._build_advanced_section),
-        ]
-
-        for sec_id, label, builder in sections:
-            page = builder()
-            self._section_stack.add_titled(page, sec_id, label)
-            row = self._make_section_row(label, sec_id)
-            nav.add(row)
-
-        first_row = nav.get_row_at_index(0)
-        if first_row:
-            nav.select_row(first_row)
-
-        self.show_all()
-
-        if host:
-            self.alias_entry.set_text(host.alias)
-            self.hostname_entry.set_text(host_option(host, "hostname") or "")
-            self.user_entry.set_text(host_option(host, "user") or "")
-            self.port_entry.set_text(host_option(host, "port") or "")
-            self.identity_entry.set_text(host_option(host, "identityfile") or "")
-            self.proxy_entry.set_text(
-                host_option(host, "proxyjump")
-                or host_option(host, "jump_host")
-                or host_option(host, "proxycommand")
-                or ""
-            )
-            self.tags_entry.set_text(host_option(host, "tags") or "")
-            self.environment_entry.set_text(host.metadata.get("environment", ""))
-            self.owner_entry.set_text(host.metadata.get("owner", ""))
-            self.service_entry.set_text(host.metadata.get("service", ""))
-            self.notes_entry.set_text(host.metadata.get("notes", ""))
-            vault_id = host.metadata.get("vault_id", "")
-            if vault_id:
-                self._selected_vault_id = vault_id
-            prof_id = host.metadata.get("default_session_profile_id", "")
-            if prof_id:
-                self._selected_profile_id = prof_id
-            perms = host.metadata.get("permissions", {})
-            if isinstance(perms, dict):
-                self._perm_view_check.set_active(bool(perms.get("can_view", True)))
-                self._perm_connect_check.set_active(bool(perms.get("can_connect", True)))
-                self._perm_edit_check.set_active(bool(perms.get("can_edit", True)))
-            buf = self.extras_view.get_buffer()
-            extras: List[str] = []
-            for key, value in host.options.items():
-                lowered = str(key).lower()
-                if lowered in {
-                    "hostname",
-                    "user",
-                    "port",
-                    "identityfile",
-                    "proxyjump",
-                    "jump_host",
-                    "proxycommand",
-                    "tags",
-                }:
-                    continue
-                extras.append(f"{key}={value}")
-            buf.set_text("\n".join(extras))
-        elif self._template_defaults:
-            self.hostname_entry.set_text(self._template_defaults.get("hostname", ""))
-            self.user_entry.set_text(self._template_defaults.get("user", ""))
-            self.port_entry.set_text(self._template_defaults.get("port", ""))
-            self.identity_entry.set_text(self._template_defaults.get("identityfile", ""))
-            self.proxy_entry.set_text(self._template_defaults.get("proxyjump", ""))
-            self.tags_entry.set_text(self._template_defaults.get("tags", ""))
-            self.environment_entry.set_text(self._template_defaults.get("environment", ""))
-            self.owner_entry.set_text(self._template_defaults.get("owner", ""))
-            self.service_entry.set_text(self._template_defaults.get("service", ""))
-            self.notes_entry.set_text(self._template_defaults.get("notes", ""))
-            buf = self.extras_view.get_buffer()
-            buf.set_text("")
-        self._apply_selected_credential()
-        self._apply_selected_profile()
-
-    def set_alias(self, alias: str) -> None:
-        self.alias_entry.set_text(alias)
-
-    def _apply_selected_credential(self) -> None:
-        cred_id = self._selected_credential_id
-        if cred_id:
-            cred = next((c for c in self._credential_choices if c.id == cred_id), None)
-            if cred:
-                self.user_entry.set_text(cred.username)
-                self.user_entry.set_sensitive(False)
-                return
-        self.user_entry.set_sensitive(True)
-
-    def _on_credential_changed(self, combo: Gtk.ComboBoxText) -> None:
-        self._selected_credential_id = combo.get_active_id() or None
-        self._apply_selected_credential()
-
-    def _on_vault_changed(self, combo: Gtk.ComboBoxText) -> None:
-        self._selected_vault_id = combo.get_active_id() or None
-        entry = next((e for e in self._vault_entries if e.id == self._selected_vault_id), None)
-        if entry:
-            self.user_entry.set_text(entry.username)
-            self.user_entry.set_sensitive(False)
-        else:
-            self.user_entry.set_sensitive(True)
-
-    def _apply_selected_profile(self) -> None:
-        if self._selected_profile_id:
-            try:
-                self._profile_combo.set_active_id(self._selected_profile_id)
-            except Exception:
-                self._profile_combo.set_active(0)
-
-    def _on_profile_changed(self, combo: Gtk.ComboBoxText) -> None:
-        self._selected_profile_id = combo.get_active_id() or None
-
-    def _make_section_row(self, label: str, sec_id: str) -> Gtk.ListBoxRow:
-        row = Gtk.ListBoxRow()
-        setattr(row, "section_id", sec_id)
-        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        row_box.set_border_width(6)
-        lbl = Gtk.Label(label=label)
-        lbl.set_xalign(0.0)
-        lbl.get_style_context().add_class("section-nav-label")
-        row_box.pack_start(lbl, True, True, 0)
-        row.add(row_box)
-        return row
-
-    def _on_section_selected(self, listbox: Gtk.ListBox, row: Optional[Gtk.ListBoxRow]) -> None:
-        if not row:
-            return
-        sec_id = getattr(row, "section_id", None)
-        if sec_id:
-            self._section_stack.set_visible_child_name(sec_id)
-
-    def _section_page(self) -> Gtk.Box:
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        page.set_border_width(16)
-        return page
-
-    def _section_card(self, title: str) -> Tuple[Gtk.Frame, Gtk.Box]:
-        frame = Gtk.Frame()
-        frame.set_shadow_type(Gtk.ShadowType.NONE)
-        frame.get_style_context().add_class("host-section-card")
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        inner.set_border_width(14)
-        frame.add(inner)
-        heading = Gtk.Label()
-        heading.set_xalign(0.0)
-        heading.set_use_markup(True)
-        heading.set_markup(f"<b>{GLib.markup_escape_text(title)}</b>")
-        heading.get_style_context().add_class("section-title")
-        inner.pack_start(heading, False, False, 0)
-        return frame, inner
-
-    def _append_form_row(self, container: Gtk.Box, label: str, widget: Gtk.Widget) -> None:
-        row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        lbl = Gtk.Label(label=label)
-        lbl.set_xalign(0.0)
-        lbl.get_style_context().add_class("dim-label")
-        row.pack_start(lbl, False, False, 0)
-        widget.set_hexpand(True)
-        row.pack_start(widget, False, False, 0)
-        container.pack_start(row, False, False, 0)
-
-    def _build_general_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("General Details")
-        self._append_form_row(body, "Alias", self.alias_entry)
-        self._append_form_row(body, "Host name", self.hostname_entry)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_connection_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Connection & SSH")
-        self._append_form_row(body, "User", self.user_entry)
-        self._append_form_row(body, "Port", self.port_entry)
-        self._append_form_row(body, "Private key", self.identity_entry)
-        self._append_form_row(body, "Jump host (-J)", self.proxy_entry)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_ssh_options_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Custom SSH Options")
-        hint = Gtk.Label(label="Enter additional SSH options as key=value pairs (one per line).")
-        hint.set_xalign(0.0)
-        hint.set_line_wrap(True)
-        hint.get_style_context().add_class("dim-label")
-        body.pack_start(hint, False, False, 0)
-        expander = Gtk.Expander(label="Advanced options editor")
-        expander.set_expanded(True)
-        expander_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        expander_box.set_border_width(6)
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_min_content_height(160)
-        scroller.add(self.extras_view)
-        expander_box.pack_start(scroller, True, True, 0)
-        expander.add(expander_box)
-        body.pack_start(expander, True, True, 0)
-        page.pack_start(card, True, True, 0)
-        return page
-
-    def _build_ports_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Port & Forwarding Guidance")
-        text = (
-            "Configure LocalForward/RemoteForward/DynamicForward directives via the "
-            "custom SSH options section to mirror ssh_config behavior."
-        )
-        label = Gtk.Label(label=text)
-        label.set_xalign(0.0)
-        label.set_line_wrap(True)
-        body.pack_start(label, False, False, 0)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_credentials_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Credentials & Profiles")
-        self._append_form_row(body, "Credential", self._credential_combo)
-        self._append_form_row(body, "Vault credential", self._vault_combo)
-        self._append_form_row(body, "Default Session Profile", self._profile_combo)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_tags_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Tags & Grouping")
-        info = Gtk.Label(
-            label="Use comma-separated tags to classify hosts for filtering and smart groups."
-        )
-        info.set_xalign(0.0)
-        info.set_line_wrap(True)
-        info.get_style_context().add_class("dim-label")
-        body.pack_start(info, False, False, 0)
-        self._append_form_row(body, "Tags", self.tags_entry)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_metadata_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Metadata & Notes")
-        self._append_form_row(body, "Environment", self.environment_entry)
-        self._append_form_row(body, "Owner", self.owner_entry)
-        self._append_form_row(body, "Service", self.service_entry)
-        self._append_form_row(body, "Notes", self.notes_entry)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def _build_advanced_section(self) -> Gtk.Widget:
-        page = self._section_page()
-        card, body = self._section_card("Local Permissions (advisory)")
-        body.pack_start(self._perm_view_check, False, False, 0)
-        body.pack_start(self._perm_connect_check, False, False, 0)
-        body.pack_start(self._perm_edit_check, False, False, 0)
-        page.pack_start(card, False, False, 0)
-        return page
-
-    def build_host(self, parent: str, child: str) -> Optional[HostEntry]:
-        alias = self.alias_entry.get_text().strip()
-        if not alias:
-            return None
-
-        options: Dict[str, str] = {}
-        hostname = self.hostname_entry.get_text().strip()
-        user = self.user_entry.get_text().strip()
-        port = self.port_entry.get_text().strip()
-        identity = self.identity_entry.get_text().strip()
-        jump = self.proxy_entry.get_text().strip()
-        tags = self.tags_entry.get_text().strip()
-
-        if hostname:
-            options["hostname"] = hostname
-        if user:
-            options["user"] = user
-        if port:
-            options["port"] = port
-        if identity:
-            options["identityfile"] = identity
-        if jump:
-            options["proxyjump"] = jump
-        if tags:
-            options["tags"] = ",".join(part.strip() for part in tags.split(",") if part.strip())
-
-        cred_id = self._selected_credential_id
-        if cred_id:
-            cred = next((c for c in self._credential_choices if c.id == cred_id), None)
-            if cred:
-                options["user"] = cred.username
-
-        buf = self.extras_view.get_buffer()
-        start_iter = buf.get_start_iter()
-        end_iter = buf.get_end_iter()
-        for line in buf.get_text(start_iter, end_iter, False).splitlines():
-            line = line.strip()
-            if not line or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            options[key.strip()] = value.strip()
-
-        metadata = {
-            "environment": self.environment_entry.get_text().strip(),
-            "owner": self.owner_entry.get_text().strip(),
-            "service": self.service_entry.get_text().strip(),
-            "notes": self.notes_entry.get_text().strip(),
-        }
-        if self._selected_vault_id:
-            metadata["vault_id"] = self._selected_vault_id
-        if self._selected_profile_id:
-            metadata["default_session_profile_id"] = self._selected_profile_id
-        perms = {
-            "can_view": self._perm_view_check.get_active(),
-            "can_connect": self._perm_connect_check.get_active(),
-            "can_edit": self._perm_edit_check.get_active(),
-        }
-        if not all(perms.values()):
-            metadata["permissions"] = perms
-
-        return HostEntry(
-            alias=alias,
-            options=options,
-            metadata={k: v for k, v in metadata.items() if v},
-            parent_group=parent,
-            child_group=child,
-        )
-
-    def selected_credential_id(self) -> Optional[str]:
-        return self._selected_credential_id
-
-
-class PreferencesDialog(Gtk.Dialog):
-    """Settings for theme and font defaults."""
-
-    def __init__(
-        self,
-        parent: Gtk.Window,
-        prefer_dark: bool,
-        terminal_font_scale: float,
-        ui_font_size: int,
-        settings: AppSettings,
-        *,
-        on_reset: Optional[Callable[[], None]] = None,
-        on_export: Optional[Callable[[], None]] = None,
-    ) -> None:
-        Gtk.Dialog.__init__(self, title="Settings", transient_for=parent, modal=True)
-        self.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        self.add_button("_Apply", Gtk.ResponseType.OK)
-        self._on_reset = on_reset
-        self._on_export = on_export
-        self._appearance = settings.terminal_appearance or TerminalAppearanceSettings()
-
-        content = self.get_content_area()
-        content.set_border_width(12)
-        root_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        content.add(root_box)
-
-        stack = Gtk.Stack()
-        stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        stack.set_transition_duration(200)
-
-        sidebar = Gtk.StackSidebar()
-        sidebar.set_stack(stack)
-        root_box.pack_start(sidebar, False, False, 0)
-        root_box.pack_start(stack, True, True, 0)
-
-        def page_box() -> Gtk.Box:
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            box.set_border_width(12)
-            return box
-
-        general_page = page_box()
-        passwords_page = page_box()
-        secrets_page = page_box()
-        terminal_page = page_box()
-        connection_page = page_box()
-        ssh_page = page_box()
-        git_page = page_box()
-        audit_page = page_box()
-        master_page = page_box()
-
-        stack.add_titled(general_page, "general", "General")
-        stack.add_titled(passwords_page, "passwords", "Passwords")
-        stack.add_titled(secrets_page, "secrets", "Secrets Policy")
-        stack.add_titled(terminal_page, "terminal", "Terminal")
-        stack.add_titled(connection_page, "connection", "Connection")
-        stack.add_titled(ssh_page, "ssh_security", "SSH Security")
-        stack.add_titled(git_page, "git", "Git Sync")
-        stack.add_titled(audit_page, "audit", "Audit Logging")
-        stack.add_titled(master_page, "master_password", "Master Password")
-
-        theme_box = Gtk.Box(spacing=8)
-        label = Gtk.Label(label="Prefer dark theme")
-        label.set_xalign(0.0)
-        theme_box.pack_start(label, True, True, 0)
-        self._dark_switch = Gtk.Switch()
-        self._dark_switch.set_active(prefer_dark)
-        theme_box.pack_start(self._dark_switch, False, False, 0)
-        general_page.pack_start(theme_box, False, False, 0)
-
-        ui_font_box = Gtk.Box(spacing=8)
-        ui_font_label = Gtk.Label(label="Application font size")
-        ui_font_label.set_xalign(0.0)
-        ui_font_box.pack_start(ui_font_label, True, True, 0)
-        self._ui_font_combo = Gtk.ComboBoxText()
-        self._ui_font_sizes = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48]
-        for size in self._ui_font_sizes:
-            self._ui_font_combo.append_text(str(size))
-        nearest = min(self._ui_font_sizes, key=lambda val: abs(val - ui_font_size))
-        self._ui_font_combo.set_active(self._ui_font_sizes.index(nearest))
-        ui_font_box.pack_start(self._ui_font_combo, False, False, 0)
-        general_page.pack_start(ui_font_box, False, False, 0)
-
-        font_box = Gtk.Box(spacing=8)
-        font_label = Gtk.Label(label="Terminal font scale")
-        font_label.set_xalign(0.0)
-        font_box.pack_start(font_label, True, True, 0)
-        self._font_spin = Gtk.SpinButton.new_with_range(0.6, 2.5, 0.1)
-        self._font_spin.set_value(terminal_font_scale)
-        font_box.pack_start(self._font_spin, False, False, 0)
-        general_page.pack_start(font_box, False, False, 0)
-
-        remember_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        remember_label = Gtk.Label(label="Passwords")
-        remember_label.set_xalign(0.0)
-        remember_box.pack_start(remember_label, False, False, 0)
-        self._remember_check = Gtk.CheckButton(label="Remember passwords by default")
-        self._remember_check.set_active(settings.remember_password_default)
-        remember_box.pack_start(self._remember_check, False, False, 0)
-        passwords_page.pack_start(remember_box, False, False, 0)
-
-        policy = settings.secrets_policy_with_defaults() if hasattr(settings, "secrets_policy_with_defaults") else {}
-        secrets_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        secrets_label = Gtk.Label(label="Secrets policy")
-        secrets_label.set_xalign(0.0)
-        secrets_box.pack_start(secrets_label, False, False, 0)
-        self._allow_plaintext_check = Gtk.CheckButton(label="Allow plain-text passwords on hosts")
-        self._allow_plaintext_check.set_active(bool(policy.get("allow_plaintext_host_passwords", True)))
-        secrets_box.pack_start(self._allow_plaintext_check, False, False, 0)
-        self._warn_plaintext_check = Gtk.CheckButton(label="Warn when saving plain-text passwords")
-        self._warn_plaintext_check.set_active(bool(policy.get("warn_on_plaintext_host_passwords", True)))
-        secrets_box.pack_start(self._warn_plaintext_check, False, False, 0)
-        self._prefer_vault_check = Gtk.CheckButton(label="Prefer using the credential vault for passwords")
-        self._prefer_vault_check.set_active(bool(policy.get("prefer_vault_for_passwords", True)))
-        secrets_box.pack_start(self._prefer_vault_check, False, False, 0)
-        rotation_row = Gtk.Box(spacing=8)
-        rotation_label = Gtk.Label(label="Suggest rotation after (days)")
-        rotation_label.set_xalign(0.0)
-        rotation_row.pack_start(rotation_label, True, True, 0)
-        self._rotation_spin = Gtk.SpinButton.new_with_range(1, 3650, 1)
-        self._rotation_spin.set_value(float(policy.get("rotation_hint_days", 90)))
-        rotation_row.pack_start(self._rotation_spin, False, False, 0)
-        secrets_box.pack_start(rotation_row, False, False, 0)
-        secrets_page.pack_start(secrets_box, False, False, 0)
-
-        audit_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        audit_label = Gtk.Label(label="Audit logging")
-        audit_label.set_xalign(0.0)
-        audit_box.pack_start(audit_label, False, False, 0)
-        self._audit_enable = Gtk.CheckButton(label="Enable audit logging")
-        self._audit_enable.set_active(bool(getattr(settings, "enable_audit_logging", False)))
-        audit_box.pack_start(self._audit_enable, False, False, 0)
-        path_row = Gtk.Box(spacing=8)
-        path_row.set_sensitive(self._audit_enable.get_active())
-        path_label = Gtk.Label(label="Audit log file")
-        path_label.set_xalign(0.0)
-        path_row.pack_start(path_label, False, False, 0)
-        self._audit_path_entry = Gtk.Entry()
-        self._audit_path_entry.set_hexpand(True)
-        self._audit_path_entry.set_text(str(getattr(settings, "audit_log_path", "")))
-        self._audit_path_entry.set_editable(False)
-        path_row.pack_start(self._audit_path_entry, True, True, 0)
-        browse = Gtk.Button(label="Change…")
-        browse.connect("clicked", self._choose_audit_path)
-        path_row.pack_start(browse, False, False, 0)
-        audit_box.pack_start(path_row, False, False, 0)
-        self._audit_enable.connect("toggled", lambda btn: path_row.set_sensitive(btn.get_active()))
-        audit_page.pack_start(audit_box, False, False, 0)
-
-        git_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        git_label = Gtk.Label(label="Git update notifications")
-        git_label.set_xalign(0.0)
-        git_box.pack_start(git_label, False, False, 0)
-        self._git_watch_enable = Gtk.CheckButton(label="Enable Git remote update checks")
-        self._git_watch_enable.set_active(bool(getattr(settings, "git_watch_enabled", False)))
-        git_box.pack_start(self._git_watch_enable, False, False, 0)
-        git_path_row = Gtk.Box(spacing=8)
-        git_path_row.set_sensitive(self._git_watch_enable.get_active())
-        git_path_label = Gtk.Label(label="Git directory")
-        git_path_label.set_xalign(0.0)
-        git_path_row.pack_start(git_path_label, False, False, 0)
-        self._git_path_entry = Gtk.Entry()
-        self._git_path_entry.set_hexpand(True)
-        self._git_path_entry.set_text(str(getattr(settings, "git_watch_path", "")))
-        self._git_path_entry.set_editable(False)
-        git_path_row.pack_start(self._git_path_entry, True, True, 0)
-        git_browse = Gtk.Button(label="Change…")
-        git_browse.connect("clicked", self._choose_git_path)
-        git_path_row.pack_start(git_browse, False, False, 0)
-        git_box.pack_start(git_path_row, False, False, 0)
-        self._git_watch_enable.connect("toggled", lambda btn: git_path_row.set_sensitive(btn.get_active()))
-        interval_row = Gtk.Box(spacing=8)
-        interval_label = Gtk.Label(label="Check interval (seconds)")
-        interval_label.set_xalign(0.0)
-        interval_row.pack_start(interval_label, False, False, 0)
-        self._git_interval_spin = Gtk.SpinButton.new_with_range(60, 3600, 30)
-        self._git_interval_spin.set_value(float(getattr(settings, "git_watch_interval", 600)))
-        interval_row.pack_start(self._git_interval_spin, False, False, 0)
-        git_box.pack_start(interval_row, False, False, 0)
-        git_page.pack_start(git_box, False, False, 0)
-
-        term_label = Gtk.Label(label="Terminal appearance")
-        term_label.set_xalign(0.0)
-        term_label.get_style_context().add_class("dim-label")
-        terminal_page.pack_start(term_label, False, False, 0)
-
-        term_list = Gtk.ListBox()
-        term_list.set_selection_mode(Gtk.SelectionMode.NONE)
-        terminal_page.pack_start(term_list, False, False, 0)
-
-        # Font row
-        font_row = Gtk.ListBoxRow()
-        font_row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        font_label = Gtk.Label(label="Font")
-        font_label.set_xalign(0.0)
-        font_label.set_valign(Gtk.Align.CENTER)
-        font_row_box.pack_start(font_label, False, False, 0)
-        font_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self._use_system_font = Gtk.CheckButton(label="Use system fixed-width font")
-        self._use_system_font.set_active(self._appearance.use_system_mono_font)
-        self._use_system_font.connect("toggled", lambda *_: self._update_font_controls())
-        font_controls.pack_start(self._use_system_font, False, False, 0)
-        custom_font_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self._font_button = Gtk.Button(label="Custom font…")
-        self._font_button.connect("clicked", self._choose_font)
-        custom_font_box.pack_start(self._font_button, False, False, 0)
-        self._font_size_spin = Gtk.SpinButton.new_with_range(8.0, 36.0, 0.5)
-        if self._appearance.font_size:
-            self._font_size_spin.set_value(self._appearance.font_size)
-        custom_font_box.pack_start(Gtk.Label(label="Size"), False, False, 0)
-        custom_font_box.pack_start(self._font_size_spin, False, False, 0)
-        font_controls.pack_start(custom_font_box, False, False, 0)
-        font_row_box.pack_start(font_controls, True, True, 0)
-        font_row.add(font_row_box)
-        term_list.add(font_row)
-
-        # Color row
-        color_row = Gtk.ListBoxRow()
-        color_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        color_label = Gtk.Label(label="Colors")
-        color_label.set_xalign(0.0)
-        color_label.set_valign(Gtk.Align.CENTER)
-        color_box.pack_start(color_label, False, False, 0)
-        color_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self._scheme_combo = Gtk.ComboBoxText()
-        schemes = [
-            ("default", "Default"),
-            ("dark", "Dark"),
-            ("light", "Light"),
-            ("solarized-dark", "Solarized Dark"),
-            ("solarized-light", "Solarized Light"),
-        ]
-        for _key, label_text in schemes:
-            self._scheme_combo.append_text(label_text)
-        scheme_keys = [s[0] for s in schemes]
-        if self._appearance.color_scheme in scheme_keys:
-            self._scheme_combo.set_active(scheme_keys.index(self._appearance.color_scheme))
-        else:
-            self._scheme_combo.set_active(0)
-        self._scheme_combo.connect("changed", lambda *_: self._update_preview_terminal())
-        color_controls.pack_start(self._scheme_combo, False, False, 0)
-        self._custom_colors_check = Gtk.CheckButton(label="Use custom colors")
-        self._custom_colors_check.set_active(self._appearance.use_custom_colors)
-        self._custom_colors_check.connect("toggled", lambda *_: self._update_color_controls())
-        color_controls.pack_start(self._custom_colors_check, False, False, 0)
-        fg_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        fg_row.pack_start(Gtk.Label(label="Foreground"), False, False, 0)
-        self._fg_button = Gtk.ColorButton()
-        if self._appearance.fg_color:
-            rgba = Gdk.RGBA()
-            if rgba.parse(self._appearance.fg_color):
-                self._fg_button.set_rgba(rgba)
-        self._fg_button.connect("color-set", lambda *_: self._update_preview_terminal())
-        fg_row.pack_start(self._fg_button, False, False, 0)
-        color_controls.pack_start(fg_row, False, False, 0)
-        bg_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        bg_row.pack_start(Gtk.Label(label="Background"), False, False, 0)
-        self._bg_button = Gtk.ColorButton()
-        if self._appearance.bg_color:
-            rgba = Gdk.RGBA()
-            if rgba.parse(self._appearance.bg_color):
-                self._bg_button.set_rgba(rgba)
-        self._bg_button.connect("color-set", lambda *_: self._update_preview_terminal())
-        bg_row.pack_start(self._bg_button, False, False, 0)
-        color_controls.pack_start(bg_row, False, False, 0)
-        color_box.pack_start(color_controls, True, True, 0)
-        color_row.add(color_box)
-        term_list.add(color_row)
-
-        # Cursor row
-        cursor_row = Gtk.ListBoxRow()
-        cursor_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        cursor_label = Gtk.Label(label="Cursor & rendering")
-        cursor_label.set_xalign(0.0)
-        cursor_label.set_valign(Gtk.Align.CENTER)
-        cursor_box.pack_start(cursor_label, False, False, 0)
-        cursor_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self._cursor_combo = Gtk.ComboBoxText()
-        shapes = [("block", "Block"), ("ibeam", "I‑beam"), ("underline", "Underline")]
-        for key, text in shapes:
-            self._cursor_combo.append_text(text)
-        shape_keys = [s[0] for s in shapes]
-        try:
-            self._cursor_combo.set_active(shape_keys.index(self._appearance.cursor_shape))
-        except ValueError:
-            self._cursor_combo.set_active(0)
-        self._cursor_combo.connect("changed", lambda *_: self._update_preview_terminal())
-        cursor_controls.pack_start(self._cursor_combo, False, False, 0)
-        self._cursor_blink_check = Gtk.CheckButton(label="Cursor blinks")
-        self._cursor_blink_check.set_active(self._appearance.cursor_blink)
-        self._cursor_blink_check.connect("toggled", lambda *_: self._update_preview_terminal())
-        cursor_controls.pack_start(self._cursor_blink_check, False, False, 0)
-        self._bold_is_bright_check = Gtk.CheckButton(label="Bold text is bright")
-        self._bold_is_bright_check.set_active(self._appearance.bold_is_bright)
-        self._bold_is_bright_check.connect("toggled", lambda *_: self._update_preview_terminal())
-        cursor_controls.pack_start(self._bold_is_bright_check, False, False, 0)
-        cursor_box.pack_start(cursor_controls, True, True, 0)
-        cursor_row.add(cursor_box)
-        term_list.add(cursor_row)
-
-        preview_label = Gtk.Label(label="Preview")
-        preview_label.set_xalign(0.0)
-        preview_label.get_style_context().add_class("dim-label")
-        terminal_page.pack_start(preview_label, False, False, 0)
-        self._preview_term = Vte.Terminal()
-        self._preview_term.set_size_request(-1, 140)
-        self._preview_term.set_scrollback_lines(500)
-        self._preview_term.spawn_async(
-            Vte.PtyFlags.DEFAULT,
-            os.environ.get("HOME", "/"),
-            ["/bin/sh", "-c", "printf 'ssh-manager terminal preview\\n$ echo example\\n'"],
-            [],
-            GLib.SpawnFlags.DEFAULT,
-            None,
-            None,
-            -1,
-            None,
-            None,
-        )
-        preview_frame = Gtk.Frame()
-        preview_frame.set_shadow_type(Gtk.ShadowType.IN)
-        preview_frame.add(self._preview_term)
-        terminal_page.pack_start(preview_frame, False, False, 0)
-
-        policy_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        policy_label = Gtk.Label(label="Host key policy")
-        policy_label.set_xalign(0.0)
-        policy_box.pack_start(policy_label, False, False, 0)
-        self._policy_strict = Gtk.RadioButton.new_with_label(None, "Strict (reject unknown hosts)")
-        self._policy_auto = Gtk.RadioButton.new_with_label_from_widget(
-            self._policy_strict,
-            "Auto-add new hosts",
-        )
-        if settings.host_key_policy == "auto-add":
-            self._policy_auto.set_active(True)
-        else:
-            self._policy_strict.set_active(True)
-        policy_box.pack_start(self._policy_strict, False, False, 0)
-        policy_box.pack_start(self._policy_auto, False, False, 0)
-        ssh_page.pack_start(policy_box, False, False, 0)
-
-        cipher_label = Gtk.Label(label="Allowed ciphers (comma-separated, optional)")
-        cipher_label.set_xalign(0.0)
-        ssh_page.pack_start(cipher_label, False, False, 0)
-        self._cipher_entry = Gtk.Entry()
-        self._cipher_entry.set_text(", ".join(settings.allowed_ciphers))
-        ssh_page.pack_start(self._cipher_entry, False, False, 0)
-
-        kex_label = Gtk.Label(label="Allowed KEX algorithms (comma-separated, optional)")
-        kex_label.set_xalign(0.0)
-        ssh_page.pack_start(kex_label, False, False, 0)
-        self._kex_entry = Gtk.Entry()
-        self._kex_entry.set_text(", ".join(settings.allowed_kex))
-        ssh_page.pack_start(self._kex_entry, False, False, 0)
-
-        timeout_label = Gtk.Label(label="Timeouts (seconds)")
-        timeout_label.set_xalign(0.0)
-        connection_page.pack_start(timeout_label, False, False, 0)
-
-        timeout_grid = Gtk.Grid(column_spacing=12, row_spacing=6)
-        connection_page.pack_start(timeout_grid, False, False, 0)
-
-        def timeout_row(row: int, text: str, value: float) -> Gtk.SpinButton:
-            lbl = Gtk.Label(label=text)
-            lbl.set_xalign(0.0)
-            timeout_grid.attach(lbl, 0, row, 1, 1)
-            spin = Gtk.SpinButton.new_with_range(1.0, 600.0, 1.0)
-            spin.set_digits(1)
-            spin.set_value(value)
-            timeout_grid.attach(spin, 1, row, 1, 1)
-            return spin
-
-        self._connect_timeout_spin = timeout_row(0, "Connection timeout", settings.connect_timeout)
-        self._auth_timeout_spin = timeout_row(1, "Authentication timeout", settings.auth_timeout)
-        self._banner_timeout_spin = timeout_row(2, "Banner timeout", settings.banner_timeout)
-
-        self._paramiko_check = Gtk.CheckButton(label="Enable Paramiko + VTE bridge (experimental)")
-        self._paramiko_check.set_active(settings.use_paramiko_vte)
-        connection_page.pack_start(self._paramiko_check, False, False, 0)
-
-        disable_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        disable_label = Gtk.Label(label="Master password")
-        disable_label.set_xalign(0.0)
-        disable_box.pack_start(disable_label, False, False, 0)
-        self._disable_master_check = Gtk.CheckButton(label="Disable master password prompt on startup")
-        self._disable_master_check.set_active(settings.master_password_disabled)
-        disable_box.pack_start(self._disable_master_check, False, False, 0)
-        master_page.pack_start(disable_box, False, False, 0)
-
-        reset_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        reset_label = Gtk.Label(label="Master password")
-        reset_label.set_xalign(0.0)
-        reset_row.pack_start(reset_label, True, True, 0)
-        reset_btn = Gtk.Button(label="Reset…")
-        reset_btn.get_style_context().add_class("destructive-action")
-        reset_btn.connect("clicked", self._on_reset_clicked)
-        reset_row.pack_start(reset_btn, False, False, 0)
-        master_page.pack_start(reset_row, False, False, 0)
-
-        export_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        export_label = Gtk.Label(label="Export settings & policies")
-        export_label.set_xalign(0.0)
-        export_row.pack_start(export_label, True, True, 0)
-        export_btn = Gtk.Button(label="Export…")
-        export_btn.connect("clicked", self._on_export_clicked)
-        export_row.pack_start(export_btn, False, False, 0)
-        master_page.pack_start(export_row, False, False, 0)
-
-        self._update_font_controls()
-        self._update_color_controls()
-        self._update_preview_terminal()
-
-        self.show_all()
-
-    def values(
-        self,
-    ) -> Tuple[
-        bool,
-        float,
-        int,
-        bool,
-        str,
-        float,
-        float,
-        float,
-        bool,
-        bool,
-        list[str],
-        list[str],
-        Dict[str, Any],
-        bool,
-        str,
-        bool,
-        str,
-        int,
-        TerminalAppearanceSettings,
-    ]:
-        ui_font_text = self._ui_font_combo.get_active_text()
-        ui_font_size = int(ui_font_text) if ui_font_text else 14
-        return (
-            self._dark_switch.get_active(),
-            float(self._font_spin.get_value()),
-            ui_font_size,
-            self._remember_check.get_active(),
-            "auto-add" if self._policy_auto.get_active() else "reject",
-            float(self._connect_timeout_spin.get_value()),
-            float(self._auth_timeout_spin.get_value()),
-            float(self._banner_timeout_spin.get_value()),
-            self._paramiko_check.get_active(),
-            self._disable_master_check.get_active(),
-            [val.strip() for val in self._cipher_entry.get_text().split(",") if val.strip()],
-            [val.strip() for val in self._kex_entry.get_text().split(",") if val.strip()],
-            {
-                "allow_plaintext_host_passwords": self._allow_plaintext_check.get_active(),
-                "warn_on_plaintext_host_passwords": self._warn_plaintext_check.get_active(),
-                "prefer_vault_for_passwords": self._prefer_vault_check.get_active(),
-                "rotation_hint_days": int(self._rotation_spin.get_value()),
-            },
-            self._audit_enable.get_active(),
-            self._audit_path_entry.get_text().strip(),
-            self._git_watch_enable.get_active(),
-            self._git_path_entry.get_text().strip(),
-            int(self._git_interval_spin.get_value()),
-            self._appearance_from_controls(),
-        )
-
-    def _appearance_from_controls(self) -> TerminalAppearanceSettings:
-        fg = self._color_to_hex(self._fg_button.get_rgba()) if self._custom_colors_check.get_active() else None
-        bg = self._color_to_hex(self._bg_button.get_rgba()) if self._custom_colors_check.get_active() else None
-        scheme_keys = ["default", "dark", "light", "solarized-dark", "solarized-light"]
-        scheme_idx = self._scheme_combo.get_active()
-        scheme = scheme_keys[scheme_idx] if 0 <= scheme_idx < len(scheme_keys) else "default"
-        shape_idx = self._cursor_combo.get_active()
-        shape_keys = ["block", "ibeam", "underline"]
-        cursor_shape = shape_keys[shape_idx] if 0 <= shape_idx < len(shape_keys) else "block"
-        custom_font = self._appearance.custom_font
-        return TerminalAppearanceSettings(
-            use_system_mono_font=self._use_system_font.get_active(),
-            custom_font=None if self._use_system_font.get_active() else custom_font,
-            font_size=self._font_size_spin.get_value() if not self._use_system_font.get_active() else None,
-            color_scheme=scheme,
-            use_custom_colors=self._custom_colors_check.get_active(),
-            fg_color=fg,
-            bg_color=bg,
-            palette=self._appearance.palette,
-            cursor_shape=cursor_shape,
-            cursor_blink=self._cursor_blink_check.get_active(),
-            bold_is_bright=self._bold_is_bright_check.get_active(),
-        )
-
-    def _color_to_hex(self, rgba: Gdk.RGBA) -> str:
-        r = int(rgba.red * 255 + 0.5)
-        g = int(rgba.green * 255 + 0.5)
-        b = int(rgba.blue * 255 + 0.5)
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def _update_font_controls(self) -> None:
-        custom_enabled = not self._use_system_font.get_active()
-        self._font_button.set_sensitive(custom_enabled)
-        self._font_size_spin.set_sensitive(custom_enabled)
-        self._update_preview_terminal()
-
-    def _update_color_controls(self) -> None:
-        enabled = self._custom_colors_check.get_active()
-        self._fg_button.set_sensitive(enabled)
-        self._bg_button.set_sensitive(enabled)
-        self._scheme_combo.set_sensitive(not enabled)
-        self._update_preview_terminal()
-
-    def _choose_font(self, _button: Gtk.Button) -> None:
-        chooser = Gtk.FontChooserDialog(title="Select font", transient_for=self, modal=True)
-        if self._appearance.custom_font:
-            chooser.set_font(self._appearance.custom_font)
-        resp = chooser.run()
-        font_name = chooser.get_font() if resp == Gtk.ResponseType.OK else None
-        chooser.destroy()
-        if font_name:
-            self._appearance.custom_font = font_name
-            self._update_preview_terminal()
-
-    def _preview_colors(self, appearance: TerminalAppearanceSettings) -> Tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, list[Gdk.RGBA]]:
-        colors = resolve_terminal_colors(appearance)
-
-        def rgba(hex_color: str) -> Gdk.RGBA:
-            color = Gdk.RGBA()
-            color.parse(hex_color)
-            return color
-
-        return (
-            rgba(colors.foreground),
-            rgba(colors.background),
-            rgba(colors.cursor),
-            rgba(colors.highlight),
-            [rgba(color) for color in colors.palette],
-        )
-
-    def _apply_appearance_to_terminal(self, term: Vte.Terminal, appearance: TerminalAppearanceSettings) -> None:
-        desc = None
-        if not appearance.use_system_mono_font:
-            desc = Pango.FontDescription(appearance.custom_font or "Monospace")
-            if appearance.font_size:
-                desc.set_size(int(appearance.font_size * Pango.SCALE))
-        if desc:
-            term.set_font(desc)
-        fg, bg, cursor, highlight, palette = self._preview_colors(appearance)
-        term.set_colors(fg, bg, palette)
-        term.set_color_background(bg)
-        term.set_color_foreground(fg)
-        term.set_color_cursor(cursor)
-        term.set_color_highlight(highlight)
-        term.set_bold_is_bright(appearance.bold_is_bright)
-        shape = appearance.cursor_shape
-        if shape == "ibeam":
-            term.set_cursor_shape(Vte.CursorShape.IBEAM)
-        elif shape == "underline":
-            term.set_cursor_shape(Vte.CursorShape.UNDERLINE)
-        else:
-            term.set_cursor_shape(Vte.CursorShape.BLOCK)
-        term.set_cursor_blink_mode(Vte.CursorBlinkMode.ON if appearance.cursor_blink else Vte.CursorBlinkMode.OFF)
-
-    def _update_preview_terminal(self) -> None:
-        appearance = self._appearance_from_controls()
-        self._apply_appearance_to_terminal(self._preview_term, appearance)
-
-    def _on_reset_clicked(self, _button: Gtk.Button) -> None:
-        if self._on_reset:
-            self._on_reset()
-
-    def _on_export_clicked(self, _button: Gtk.Button) -> None:
-        if self._on_export:
-            self._on_export()
-
-    def _choose_audit_path(self, _button: Gtk.Button) -> None:
-        chooser = Gtk.FileChooserDialog(
-            title="Select audit log file",
-            parent=self,
-            action=Gtk.FileChooserAction.SAVE,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_SAVE,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        current = self._audit_path_entry.get_text()
-        if current:
-            chooser.set_filename(current)
-        response = chooser.run()
-        filename = chooser.get_filename() if response == Gtk.ResponseType.OK else None
-        chooser.destroy()
-        if filename:
-            self._audit_path_entry.set_text(filename)
-
-    def _choose_git_path(self, _button: Gtk.Button) -> None:
-        chooser = Gtk.FileChooserDialog(
-            title="Select Git directory",
-            parent=self,
-            action=Gtk.FileChooserAction.SELECT_FOLDER,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_OPEN,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        current = self._git_path_entry.get_text()
-        if current:
-            chooser.set_current_folder(current)
-        resp = chooser.run()
-        folder = chooser.get_filename() if resp == Gtk.ResponseType.OK else None
-        chooser.destroy()
-        if folder:
-            self._git_path_entry.set_text(folder)
-
-
-class CredentialManagerDialog(Gtk.Dialog):
-    """Simple CRUD list for saved credentials."""
-
-    def __init__(self, parent: Gtk.Window, store: CredentialStore) -> None:
-        Gtk.Dialog.__init__(self, title="Credentials", transient_for=parent, modal=True)
-        self.add_button("_Close", Gtk.ResponseType.CLOSE)
-        self.set_default_size(520, 360)
-        self._store = store
-
-        box = self.get_content_area()
-        box.set_border_width(12)
-        box.set_spacing(8)
-
-        self._list_store = Gtk.ListStore(str, str, str)  # id, name, username
-        self._tree = Gtk.TreeView(model=self._list_store)
-        self._tree.set_headers_visible(True)
-        for idx, (title, col_id) in enumerate([("Name", 1), ("Username", 2)]):
-            renderer = Gtk.CellRendererText()
-            column = Gtk.TreeViewColumn(title, renderer, text=col_id)
-            column.set_resizable(True)
-            self._tree.append_column(column)
-        self._tree.connect("row-activated", lambda *_: self._edit())
-        selection = self._tree.get_selection()
-        selection.connect("changed", lambda *_: self._update_buttons())
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroller.add(self._tree)
-        box.pack_start(scroller, True, True, 0)
-
-        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        add_btn = Gtk.Button(label="Add")
-        add_btn.connect("clicked", lambda *_: self._add())
-        edit_btn = Gtk.Button(label="Edit")
-        edit_btn.connect("clicked", lambda *_: self._edit())
-        del_btn = Gtk.Button(label="Delete")
-        del_btn.connect("clicked", lambda *_: self._delete())
-        self._edit_btn = edit_btn
-        self._delete_btn = del_btn
-        for btn in (add_btn, edit_btn, del_btn):
-            btn_row.pack_start(btn, False, False, 0)
-        box.pack_start(btn_row, False, False, 0)
-
-        hint = Gtk.Label(label="Passwords are stored encrypted using the master password.")
-        hint.get_style_context().add_class("dim-label")
-        hint.set_xalign(0.0)
-        box.pack_start(hint, False, False, 0)
-
-        self._refresh()
-        self._update_buttons()
-        self.show_all()
-
-    def _refresh(self) -> None:
-        self._list_store.clear()
-        for cred in self._store.list():
-            self._list_store.append([cred.id, cred.name, cred.username])
-
-    def _current_id(self) -> Optional[str]:
-        selection = self._tree.get_selection()
-        model, itr = selection.get_selected()
-        if not model or not itr:
-            return None
-        return model.get_value(itr, 0)
-
-    def _update_buttons(self) -> None:
-        has_sel = bool(self._current_id())
-        if hasattr(self, "_edit_btn"):
-            self._edit_btn.set_sensitive(has_sel)
-        if hasattr(self, "_delete_btn"):
-            self._delete_btn.set_sensitive(has_sel)
-
-    def _show_store_error(self, message: str, exc: SecureStoreError) -> None:
-        show_message(self, message, str(exc), level=Level.ERROR)
-
-    def _add(self) -> None:
-        dialog = CredentialEditDialog(self)
-        while True:
-            response = dialog.run()
-            if response != Gtk.ResponseType.OK:
-                break
-            values = dialog.values()
-            if values:
-                name, user, password = values
-                if name and user and password is not None:
-                    try:
-                        self._store.add(name, user, password)
-                        self._refresh()
-                    except SecureStoreError as exc:
-                        self._show_store_error("Could not save credential.", exc)
-                break
-        dialog.destroy()
-
-    def _edit(self) -> None:
-        cred_id = self._current_id()
-        if not cred_id:
-            return
-        cred = self._store.get(cred_id)
-        if not cred:
-            return
-        dialog = CredentialEditDialog(self, cred)
-        while True:
-            response = dialog.run()
-            if response != Gtk.ResponseType.OK:
-                break
-            values = dialog.values()
-            if values:
-                name, user, password = values
-                if name and user:
-                    try:
-                        self._store.update(cred.id, name, user, password=password)
-                        self._refresh()
-                    except SecureStoreError as exc:
-                        self._show_store_error("Could not update credential.", exc)
-                break
-        dialog.destroy()
-
-    def _delete(self) -> None:
-        cred_id = self._current_id()
-        if not cred_id:
-            return
-        cred = self._store.get(cred_id)
-        if not cred:
-            self._refresh()
-            return
-        if confirm(
-            self,
-            _("Delete credential “{name}”?").format(name=cred.name),
-            _("The stored username and password are removed and any hosts using it are unbound."),
-            confirm_label=_("_Delete Credential"),
-            destructive=True,
-        ):
-            try:
-                self._store.delete(cred_id)
-                self._refresh()
-            except SecureStoreError as exc:
-                self._show_store_error("Could not delete credential.", exc)
-
-
-class VaultDialog(Gtk.Dialog):
-    """Manage encrypted vault (optional, additive)."""
-
-    def __init__(self, parent: Gtk.Window, vault: CredentialVault) -> None:
-        Gtk.Dialog.__init__(self, title="Credential Vault", transient_for=parent, modal=True)
-        self.add_button("_Close", Gtk.ResponseType.CLOSE)
-        self.set_default_size(520, 420)
-        self._vault = vault
-
-        box = self.get_content_area()
-        box.set_border_width(12)
-        box.set_spacing(10)
-
-        if not vault.available:
-            label = Gtk.Label(
-                label="Encryption support is unavailable (missing 'cryptography' package).\nExisting flows are unchanged."
-            )
-            label.set_line_wrap(True)
-            box.pack_start(label, True, True, 0)
-            self.show_all()
-            return
-
-        self._status_label = Gtk.Label()
-        self._status_label.set_xalign(0.0)
-        box.pack_start(self._status_label, False, False, 0)
-
-        action_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self._unlock_entry = Gtk.Entry()
-        self._unlock_entry.set_visibility(False)
-        self._unlock_entry.set_invisible_char("•")
-        self._unlock_entry.set_placeholder_text("Master password")
-        action_row.pack_start(self._unlock_entry, True, True, 0)
-        unlock_btn = Gtk.Button(label="Unlock")
-        unlock_btn.connect("clicked", lambda *_: self._unlock())
-        action_row.pack_start(unlock_btn, False, False, 0)
-        box.pack_start(action_row, False, False, 0)
-
-        create_btn = Gtk.Button(label="Create/Reset Vault")
-        create_btn.connect("clicked", lambda *_: self._create_master())
-        box.pack_start(create_btn, False, False, 0)
-
-        change_btn = Gtk.Button(label="Change Master Password")
-        change_btn.connect("clicked", lambda *_: self._change_master())
-        box.pack_start(change_btn, False, False, 0)
-
-        self._list_store = Gtk.ListStore(str, str, str)  # id, label, username
-        self._tree = Gtk.TreeView(model=self._list_store)
-        for idx, (title, col_idx) in enumerate([("Label", 1), ("Username", 2)]):
-            renderer = Gtk.CellRendererText()
-            column = Gtk.TreeViewColumn(title, renderer, text=col_idx)
-            column.set_resizable(True)
-            self._tree.append_column(column)
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroller.add(self._tree)
-        box.pack_start(scroller, True, True, 0)
-
-        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        add_btn = Gtk.Button(label="Add")
-        add_btn.connect("clicked", lambda *_: self._add())
-        edit_btn = Gtk.Button(label="Edit")
-        edit_btn.connect("clicked", lambda *_: self._edit())
-        del_btn = Gtk.Button(label="Delete")
-        del_btn.connect("clicked", lambda *_: self._delete())
-        export_btn = Gtk.Button(label="Export…")
-        export_btn.connect("clicked", lambda *_: self._export())
-        import_btn = Gtk.Button(label="Import…")
-        import_btn.connect("clicked", lambda *_: self._import())
-        for btn in (add_btn, edit_btn, del_btn, export_btn, import_btn):
-            btn_row.pack_start(btn, False, False, 0)
-        box.pack_start(btn_row, False, False, 0)
-
-        self._refresh()
-        self.show_all()
-
-    # -------------------------------------------------------------- helpers
-    def _set_status(self, text: str) -> None:
-        if self._status_label:
-            self._status_label.set_text(text)
-
-    def _current_id(self) -> Optional[str]:
-        selection = self._tree.get_selection()
-        model, itr = selection.get_selected()
-        if not model or not itr:
-            return None
-        return model.get_value(itr, 0)
-
-    def _refresh(self) -> None:
-        self._list_store.clear()
-        if not self._vault.unlocked:
-            self._set_status("Locked")
-            return
-        for entry in self._vault.entries():
-            self._list_store.append([entry.id, entry.label, entry.username])
-        self._set_status("Unlocked")
-
-    def _prompt_text(self, title: str, placeholder: str, secret: bool = False) -> Optional[str]:
-        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("_OK", Gtk.ResponseType.OK)
-        entry = Gtk.Entry()
-        entry.set_placeholder_text(placeholder)
-        if secret:
-            entry.set_visibility(False)
-            entry.set_invisible_char("•")
-        box = dialog.get_content_area()
-        box.set_border_width(12)
-        box.pack_start(entry, False, False, 0)
-        dialog.show_all()
-        response = dialog.run()
-        text = entry.get_text()
-        dialog.destroy()
-        if response == Gtk.ResponseType.OK and text:
-            return text
-        return None
-
-    # -------------------------------------------------------------- actions
-    def _unlock(self) -> None:
-        password = self._unlock_entry.get_text()
-        if not password:
-            self._set_status("Enter master password to unlock.")
-            return
-        ok = False
-        try:
-            ok = self._vault.unlock(password)
-        except VaultError as exc:
-            self._set_status(str(exc))
-            return
-        if ok:
-            self._set_status("Unlocked")
-            self._refresh()
-        else:
-            self._set_status("Incorrect master password.")
-
-    def _create_master(self) -> None:
-        password = self._prompt_text("Set Master Password", "New master password", secret=True)
-        confirm = self._prompt_text("Confirm Master Password", "Confirm", secret=True) if password else None
-        if not password or password != confirm:
-            self._set_status("Master password not set (empty or mismatch).")
-            return
-        try:
-            self._vault.create_master(password)
-            self._set_status("Vault created and unlocked.")
-            self._refresh()
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _change_master(self) -> None:
-        old_pw = self._prompt_text("Current Master Password", "Current password", secret=True)
-        new_pw = self._prompt_text("New Master Password", "New password", secret=True) if old_pw else None
-        confirm = self._prompt_text("Confirm New Master Password", "Confirm", secret=True) if new_pw else None
-        if not old_pw or not new_pw or new_pw != confirm:
-            self._set_status("Master password change cancelled or mismatch.")
-            return
-        try:
-            if self._vault.change_master(old_pw, new_pw):
-                self._set_status("Master password updated.")
-                self._refresh()
-            else:
-                self._set_status("Incorrect current master password.")
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _add(self) -> None:
-        if not self._vault.unlocked:
-            self._set_status("Unlock vault first.")
-            return
-        label = self._prompt_text("Credential Label", "Label")
-        username = self._prompt_text("Username", "Username")
-        password = self._prompt_text("Password", "Password", secret=True)
-        if not label or not username or password is None:
-            return
-        import uuid
-        entry = VaultEntry(uuid.uuid4().hex, label, username, password)
-        try:
-            self._vault.add_entry(entry)
-            self._refresh()
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _edit(self) -> None:
-        vid = self._current_id()
-        if not vid:
-            return
-        entry = self._vault.get_entry(vid)
-        if not entry:
-            return
-        label = self._prompt_text("Credential Label", "Label") or entry.label
-        username = self._prompt_text("Username", "Username") or entry.username
-        password = self._prompt_text("Password (blank to keep)", "Password", secret=True)
-        new_entry = VaultEntry(entry.id, label, username, entry.password if password is None else password)
-        try:
-            self._vault.update_entry(new_entry)
-            self._refresh()
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _delete(self) -> None:
-        vid = self._current_id()
-        if not vid:
-            return
-        try:
-            self._vault.delete_entry(vid)
-            self._refresh()
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _export(self) -> None:
-        if not self._vault.unlocked:
-            self._set_status("Unlock vault first.")
-            return
-        chooser = Gtk.FileChooserDialog(
-            title="Export Vault",
-            parent=self,
-            action=Gtk.FileChooserAction.SAVE,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_SAVE,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        response = chooser.run()
-        target = chooser.get_filename() if response == Gtk.ResponseType.OK else None
-        chooser.destroy()
-        if not target:
-            return
-        pw = self._prompt_text("Export Password", "Password", secret=True)
-        if not pw:
-            return
-        try:
-            self._vault.export_encrypted(Path(target), pw)
-            self._set_status("Exported vault.")
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-    def _import(self) -> None:
-        chooser = Gtk.FileChooserDialog(
-            title="Import Vault",
-            parent=self,
-            action=Gtk.FileChooserAction.OPEN,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_OPEN,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        response = chooser.run()
-        src = chooser.get_filename() if response == Gtk.ResponseType.OK else None
-        chooser.destroy()
-        if not src:
-            return
-        pw = self._prompt_text("Import Password", "Password", secret=True)
-        if not pw:
-            return
-        try:
-            ok = self._vault.import_encrypted(Path(src), pw)
-            self._set_status("Imported entries." if ok else "Import failed.")
-            if ok:
-                self._refresh()
-        except VaultError as exc:
-            self._set_status(str(exc))
-
-
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
@@ -1665,145 +167,37 @@ class SSHManagerApplication(Gtk.Application):
         return self._prompt_master_auth()
 
     def _prompt_master_auth(self) -> bool:
-        dialog = Gtk.Dialog(modal=True)
-        dialog.set_destroy_with_parent(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        unlock_btn = dialog.add_button("_Unlock", Gtk.ResponseType.OK)
-        unlock_btn.get_style_context().add_class("suggested-action")
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        header = Gtk.HeaderBar(title="Unlock SSH Manager")
-        header.set_show_close_button(True)
-        dialog.set_titlebar(header)
-
-        content = dialog.get_content_area()
-        content.set_border_width(18)
-        content.set_spacing(14)
-
-        intro = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        icon = Gtk.Image.new_from_icon_name("changes-prevent-symbolic", Gtk.IconSize.DIALOG)
-        intro.pack_start(icon, False, False, 0)
-        label = Gtk.Label(label="<b>Enter your master password</b>\nThis protects saved SSH credentials.", use_markup=True)
-        label.set_xalign(0.0)
-        label.set_line_wrap(True)
-        intro.pack_start(label, True, True, 0)
-        content.pack_start(intro, False, False, 0)
-
-        entry = Gtk.Entry()
-        entry.set_visibility(False)
-        entry.set_invisible_char("•")
-        entry.set_activates_default(True)
-        entry.set_placeholder_text("Master password")
-        entry.set_margin_top(4)
-        content.pack_start(entry, False, False, 0)
-
-        show_toggle = Gtk.CheckButton(label="Show password")
-        show_toggle.connect("toggled", lambda btn: entry.set_visibility(btn.get_active()))
-        show_toggle.set_halign(Gtk.Align.START)
-        content.pack_start(show_toggle, False, False, 0)
-
-        error_label = Gtk.Label()
-        error_label.get_style_context().add_class("error")
-        error_label.set_no_show_all(True)
-        error_label.set_xalign(0.0)
-        content.pack_start(error_label, False, False, 0)
-
-        def show_error(message: str) -> None:
-            error_label.set_text(message)
-            error_label.show()
-
-        dialog.show_all()
-        entry.grab_focus()
-
-        while True:
-            response = dialog.run()
-            text = entry.get_text().strip()
-            if response != Gtk.ResponseType.OK:
-                dialog.destroy()
-                return False
-            if text:
-                if verify_master_password(text, self._settings.master_password_hash):
-                    if master_hash_needs_upgrade(self._settings.master_password_hash):
-                        self._settings.master_password_hash = hash_master_password(text)
-                        self._settings.save()
-                    self._master_password = text
-                    dialog.destroy()
-                    return True
-            entry.set_text("")
-            show_error("Incorrect master password. Please try again.")
+        stored = self._settings.master_password_hash
+        password = UnlockDialog(
+            None,
+            _("Unlock SSH Manager"),
+            _("Enter your master password"),
+            _("It protects saved SSH credentials."),
+            lambda text: verify_master_password(text, stored),
+            error_text=_("Incorrect master password. Please try again."),
+        ).ask()
+        if password is None:
+            return False
+        if master_hash_needs_upgrade(stored):
+            self._settings.master_password_hash = hash_master_password(password)
+            self._settings.save()
+        self._master_password = password
+        return True
 
     def _prompt_set_master_password(self) -> bool:
-        dialog = Gtk.Dialog(modal=True)
-        dialog.set_destroy_with_parent(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        save_btn = dialog.add_button("_Save", Gtk.ResponseType.OK)
-        save_btn.get_style_context().add_class("suggested-action")
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        header = Gtk.HeaderBar(title="Set Master Password")
-        header.set_show_close_button(True)
-        dialog.set_titlebar(header)
-
-        content = dialog.get_content_area()
-        content.set_border_width(18)
-        content.set_spacing(14)
-
-        intro = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        icon = Gtk.Image.new_from_icon_name("emblem-readonly", Gtk.IconSize.DIALOG)
-        intro.pack_start(icon, False, False, 0)
-        label = Gtk.Label(label="<b>Create a master password</b>\nIt secures stored SSH passwords.", use_markup=True)
-        label.set_xalign(0.0)
-        label.set_line_wrap(True)
-        intro.pack_start(label, True, True, 0)
-        content.pack_start(intro, False, False, 0)
-
-        entry = Gtk.Entry()
-        entry.set_visibility(False)
-        entry.set_invisible_char("•")
-        entry.set_activates_default(True)
-        entry.set_placeholder_text("New master password")
-        entry.set_margin_top(4)
-        content.pack_start(entry, False, False, 0)
-
-        confirm = Gtk.Entry()
-        confirm.set_visibility(False)
-        confirm.set_invisible_char("•")
-        confirm.set_activates_default(True)
-        confirm.set_placeholder_text("Confirm password")
-        content.pack_start(confirm, False, False, 0)
-
-        error_label = Gtk.Label()
-        error_label.get_style_context().add_class("error")
-        error_label.set_no_show_all(True)
-        error_label.set_xalign(0.0)
-        content.pack_start(error_label, False, False, 0)
-
-        def show_error(message: str) -> None:
-            error_label.set_text(message)
-            error_label.show()
-
-        dialog.show_all()
-        entry.grab_focus()
-        while True:
-            response = dialog.run()
-            text = entry.get_text().strip()
-            confirm_text = confirm.get_text().strip()
-            if response != Gtk.ResponseType.OK:
-                dialog.destroy()
-                return False
-            if not text:
-                show_error("Password cannot be empty.")
-                continue
-            if text != confirm_text:
-                show_error("Passwords do not match.")
-                continue
-            self._settings.master_password_hash = hash_master_password(text)
-            self._settings.save()
-            self._master_password = text
-            dialog.destroy()
-            return True
+        password = NewSecretDialog(
+            None,
+            _("Set Master Password"),
+            _("Create a master password"),
+            _("It unlocks SSH Manager and encrypts passwords stored on this computer."),
+            accept_label=_("_Save"),
+        ).ask()
+        if password is None:
+            return False
+        self._settings.master_password_hash = hash_master_password(password)
+        self._settings.save()
+        self._master_password = password
+        return True
 
     def _install_css(self, prefer_dark: Optional[bool] = True) -> None:
         """Load the stylesheet; ``True``/``False`` force dark/light, ``None`` follows the system."""
@@ -2086,6 +480,39 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if not initial:
             self._save_ui_state()
 
+    def _pick_group(self, title: str, **kwargs) -> Optional[Tuple[str, str, bool]]:
+        """Run a :class:`GroupPickerDialog`; return ``(parent, child, create_child)``."""
+
+        picker = GroupPickerDialog(self, self.manager, title, **kwargs)
+        try:
+            return picker.selected() if is_accept(picker.run()) else None
+        finally:
+            picker.destroy()
+
+    def _run_host_dialog(self, dialog: HostDialog, parent: str, child: str) -> Tuple[Optional[HostEntry], Optional[str]]:
+        """Run ``dialog``; return ``(host, credential_id)`` (``host`` is None when cancelled)."""
+
+        try:
+            if not is_accept(dialog.run()):
+                return None, None
+            return dialog.build_host(parent, child), dialog.selected_credential_id()
+        finally:
+            dialog.destroy()
+
+    def _host_dialog(self, host: Optional[HostEntry] = None, **kwargs) -> HostDialog:
+        binding = self._credential_store.binding_for_host(self._host_key(host)) if host else None
+        return HostDialog(
+            self,
+            host,
+            credentials=self._credential_store.list(),
+            selected_credential_id=binding,
+            metadata=host.metadata if host else {},
+            vault_entries=self._vault.entries() if self._vault.unlocked else [],
+            vault_unlocked=self._vault.unlocked,
+            profiles=self._profiles,
+            **kwargs,
+        )
+
     def _bulk_connect_selected(self) -> None:
         hosts = self._selected_hosts()
         if len(hosts) < 2:
@@ -2097,15 +524,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         hosts = self._selected_hosts()
         if len(hosts) < 2:
             return
-        picker = GroupPickerDialog(
-            self,
-            self.manager,
-            "Move selected hosts",
-            allow_new_child=True,
-        )
-        response = picker.run()
-        selection = picker.selected() if response == Gtk.ResponseType.OK else None
-        picker.destroy()
+        selection = self._pick_group(_("Move Selected Hosts"), allow_new_child=True, accept_label=_("_Move"))
         if not selection:
             return
         target_parent, target_child, create_child = selection
@@ -2124,30 +543,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         hosts = self._selected_hosts()
         if len(hosts) < 2:
             return
-        dialog = Gtk.Dialog(title="Tag/Color Selected Hosts", transient_for=self, modal=True)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("_Apply", Gtk.ResponseType.OK)
-        box = dialog.get_content_area()
-        box.set_border_width(12)
-        box.set_spacing(8)
-
-        color_entry = Gtk.Entry()
-        color_entry.set_placeholder_text("Color (e.g., #ff0000 or leave empty)")
-        box.pack_start(Gtk.Label(label="Color"), False, False, 0)
-        box.pack_start(color_entry, False, False, 0)
-
-        tag_entry = Gtk.Entry()
-        tag_entry.set_placeholder_text("Tag to add (comma-separated accepted)")
-        box.pack_start(Gtk.Label(label="Tag"), False, False, 0)
-        box.pack_start(tag_entry, False, False, 0)
-
-        dialog.show_all()
-        response = dialog.run()
-        color_val = color_entry.get_text().strip()
-        tag_val = tag_entry.get_text().strip()
-        dialog.destroy()
-        if response != Gtk.ResponseType.OK:
+        result = BulkTagDialog(self, len(hosts)).ask()
+        if result is None:
             return
+        tags_to_add, color_val = result
+        tag_val = ",".join(tags_to_add)
 
         if color_val:
             for h in hosts:
@@ -3343,94 +1743,63 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def _on_settings_clicked(self) -> None:
         dialog = PreferencesDialog(
             self,
-            self._prefer_dark,
+            self._theme_mode,
             self.terminal_tabs.default_font_scale,
             self._ui_font_size,
             self._settings,
             on_reset=self._reset_master_password_flow,
             on_export=self._export_settings_snapshot,
         )
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            (
-                dark,
-                font_scale,
-                ui_font_size,
-                remember_default,
-                host_key_policy,
-                connect_timeout,
-                auth_timeout,
-                banner_timeout,
-                use_paramiko_vte,
-                disable_master_password,
-                allowed_ciphers,
-                allowed_kex,
-                secrets_policy,
-                enable_audit,
-                audit_path,
-                git_watch_enabled,
-                git_watch_path,
-                git_watch_interval,
-                term_appearance,
-            ) = dialog.values()
-            self._apply_theme_mode(ThemeMode.DARK if dark else ThemeMode.LIGHT)
-            self.terminal_tabs.set_default_font_scale(font_scale)
-            self.terminal_tabs.apply_font_scale_to_all(font_scale)
-            self._apply_ui_font(ui_font_size)
-            self._ui_state["prefer_dark"] = dark
-            self._ui_state["font_scale"] = font_scale
-            self._ui_state["ui_font_size"] = self._ui_font_size
-            self._save_ui_state()
-            self._settings.remember_password_default = remember_default
-            self._settings.host_key_policy = host_key_policy
-            self._settings.connect_timeout = connect_timeout
-            self._settings.auth_timeout = auth_timeout
-            self._settings.banner_timeout = banner_timeout
-            self._settings.use_paramiko_vte = use_paramiko_vte
-            master_toggled = disable_master_password != self._settings.master_password_disabled
-            self._settings.master_password_disabled = disable_master_password
-            self._settings.allowed_ciphers = allowed_ciphers
-            self._settings.allowed_kex = allowed_kex
-            self._settings.secrets_policy = secrets_policy
-            self._settings.enable_audit_logging = enable_audit
-            self._settings.audit_log_path = audit_path
-            self._settings.git_watch_enabled = git_watch_enabled
-            self._settings.git_watch_path = git_watch_path
-            self._settings.git_watch_interval = git_watch_interval
-            self._settings.terminal_appearance = term_appearance
-            self._settings.save()
-            if master_toggled:
-                if disable_master_password:
-                    self._rekey_password_file(None)
-                elif self._master_password:
-                    self._rekey_password_file(self._master_password)
-                elif self._secure_store.uses_file_backend:
-                    self._notify_info("Saved passwords will be encrypted after the next master password unlock.")
-            try:
-                self.terminal_tabs.set_appearance(term_appearance)
-            except Exception:
-                pass
-            self._refresh_git_watch()
-        dialog.destroy()
+        try:
+            values = dialog.values() if is_accept(dialog.run()) else None
+        finally:
+            dialog.destroy()
+        if values is not None:
+            self._apply_preferences(values)
+
+    def _apply_preferences(self, values: PreferencesValues) -> None:
+        self._apply_theme_mode(values.theme_mode)
+        self.terminal_tabs.set_default_font_scale(values.terminal_font_scale)
+        self.terminal_tabs.apply_font_scale_to_all(values.terminal_font_scale)
+        self._apply_ui_font(values.ui_font_size)
+        self._ui_state["theme_mode"] = values.theme_mode.value
+        self._ui_state["font_scale"] = values.terminal_font_scale
+        self._ui_state["ui_font_size"] = self._ui_font_size
+        settings = self._settings
+        master_toggled = values.master_password_disabled != settings.master_password_disabled
+        settings.remember_password_default = values.remember_password_default
+        settings.host_key_policy = values.host_key_policy
+        settings.connect_timeout = values.connect_timeout
+        settings.auth_timeout = values.auth_timeout
+        settings.banner_timeout = values.banner_timeout
+        settings.use_paramiko_vte = values.use_paramiko_vte
+        settings.master_password_disabled = values.master_password_disabled
+        settings.allowed_ciphers = values.allowed_ciphers
+        settings.allowed_kex = values.allowed_kex
+        settings.secrets_policy = values.secrets_policy
+        settings.enable_audit_logging = values.enable_audit_logging
+        settings.audit_log_path = values.audit_log_path
+        settings.git_watch_enabled = values.git_watch_enabled
+        settings.git_watch_path = values.git_watch_path
+        settings.git_watch_interval = values.git_watch_interval
+        settings.terminal_appearance = values.terminal_appearance
+        settings.save()
+        self._save_ui_state()
+        if master_toggled:
+            if values.master_password_disabled:
+                self._rekey_password_file(None)
+            elif self._master_password:
+                self._rekey_password_file(self._master_password)
+            elif self._secure_store.uses_file_backend:
+                self._notify_info(_("Saved passwords will be encrypted after the next master password unlock."))
+        self.terminal_tabs.set_appearance(values.terminal_appearance)
+        self._refresh_git_watch()
+        self._notify(_("Settings saved."), Level.SUCCESS)
 
     def _export_settings_snapshot(self) -> None:
         timestamp = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
-        chooser = Gtk.FileChooserDialog(
-            title="Export Settings & Policies",
-            parent=self,
-            action=Gtk.FileChooserAction.SAVE,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_SAVE,
-                Gtk.ResponseType.OK,
-            ),
-        )
         default_name = f"settings_export_{time.strftime('%Y%m%d_%H%M')}.json"
-        chooser.set_current_name(default_name)
-        response = chooser.run()
-        target = chooser.get_filename() if response == Gtk.ResponseType.OK else None
-        chooser.destroy()
+        target = choose_save_file(self, _("Export Settings & Policies"), current_name=default_name)
         if not target:
             return
 
@@ -3468,9 +1837,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._notify_warning(f"Export failed: {exc}")
 
     def _on_credentials_clicked(self) -> None:
-        dialog = CredentialManagerDialog(self, self._credential_store)
-        dialog.run()
-        dialog.destroy()
+        CredentialManagerDialog(self, self._credential_store).run_and_destroy()
+        self._update_details()
 
     def _resolve_config_view_path(self) -> Path:
         # Prefer explicit config file if base_dir is a file
@@ -3488,9 +1856,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _on_config_view_clicked(self) -> None:
         path = self._resolve_config_view_path()
-        dialog = ConfigViewerDialog(self, path)
-        dialog.run()
-        dialog.destroy()
+        ConfigViewerDialog(self, path).run_and_destroy()
 
     def _set_git_updates(self, available: bool) -> None:
         newly_available = available and not self._git_updates_available
@@ -3604,9 +1970,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         GLib.idle_add(self._set_git_updates, available, priority=GLib.PRIORITY_DEFAULT)
 
     def _on_vault_clicked(self) -> None:
-        dialog = VaultDialog(self, self._vault)
-        dialog.run()
-        dialog.destroy()
+        VaultDialog(self, self._vault).run_and_destroy()
+        self._update_details()
 
     def _on_git_updates_clicked(self) -> None:
         path_text = str(self._git_watch_path) if self._git_watch_path else ""
@@ -3661,20 +2026,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return True
 
     def _on_open_shared_clicked(self) -> None:
-        chooser = Gtk.FileChooserDialog(
-            title="Open Shared Inventory",
-            parent=self,
-            action=Gtk.FileChooserAction.OPEN,
-            buttons=(
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_OPEN,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        response = chooser.run()
-        filename = chooser.get_filename() if response == Gtk.ResponseType.OK else None
-        chooser.destroy()
+        filename = choose_open_file(self, _("Open Shared Inventory"))
         if not filename:
             return
         path = Path(filename)
@@ -3694,152 +2046,21 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._start_shared_poll()
         self._refresh_git_watch()
 
-    def _prompt_master_reset(self) -> Optional[str]:
-        dialog = Gtk.Dialog(modal=True)
-        dialog.set_destroy_with_parent(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        next_btn = dialog.add_button("_Next", Gtk.ResponseType.OK)
-        next_btn.get_style_context().add_class("suggested-action")
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        header = Gtk.HeaderBar(title="Reset Master Password")
-        header.set_show_close_button(True)
-        dialog.set_titlebar(header)
-
-        content = dialog.get_content_area()
-        content.set_border_width(18)
-        content.set_spacing(12)
-
-        intro = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        icon = Gtk.Image.new_from_icon_name("dialog-password-symbolic", Gtk.IconSize.DIALOG)
-        intro.pack_start(icon, False, False, 0)
-        label = Gtk.Label(
-            label="<b>Verify current master password</b>\nYou must confirm before changing it.",
-            use_markup=True,
-        )
-        label.set_xalign(0.0)
-        label.set_line_wrap(True)
-        intro.pack_start(label, True, True, 0)
-        content.pack_start(intro, False, False, 0)
-
-        current = Gtk.Entry()
-        current.set_visibility(False)
-        current.set_invisible_char("•")
-        current.set_activates_default(True)
-        current.set_placeholder_text("Current master password")
-        content.pack_start(current, False, False, 0)
-
-        error_label = Gtk.Label()
-        error_label.get_style_context().add_class("error")
-        error_label.set_no_show_all(True)
-        error_label.set_xalign(0.0)
-        content.pack_start(error_label, False, False, 0)
-
-        def show_error(msg: str) -> None:
-            error_label.set_text(msg)
-            error_label.show()
-
-        dialog.show_all()
-        current.grab_focus()
-        while True:
-            response = dialog.run()
-            text = current.get_text().strip()
-            if response != Gtk.ResponseType.OK:
-                dialog.destroy()
-                return None
-            if not text:
-                show_error("Password cannot be empty.")
-                continue
-            if verify_master_password(text, self._settings.master_password_hash):
-                if master_hash_needs_upgrade(self._settings.master_password_hash):
-                    self._settings.master_password_hash = hash_master_password(text)
-                    self._settings.save()
-                dialog.destroy()
-                return text
-            show_error("Incorrect master password. Try again.")
-
-    def _prompt_master_reset_new(self) -> Optional[str]:
-        dialog = Gtk.Dialog(modal=True)
-        dialog.set_destroy_with_parent(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
-        save_btn = dialog.add_button("_Save", Gtk.ResponseType.OK)
-        save_btn.get_style_context().add_class("suggested-action")
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        header = Gtk.HeaderBar(title="Set New Master Password")
-        header.set_show_close_button(True)
-        dialog.set_titlebar(header)
-
-        content = dialog.get_content_area()
-        content.set_border_width(18)
-        content.set_spacing(12)
-
-        intro = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        icon = Gtk.Image.new_from_icon_name("emblem-readonly", Gtk.IconSize.DIALOG)
-        intro.pack_start(icon, False, False, 0)
-        label = Gtk.Label(
-            label="<b>Choose a new master password</b>\nConfirm to apply the change.",
-            use_markup=True,
-        )
-        label.set_xalign(0.0)
-        label.set_line_wrap(True)
-        intro.pack_start(label, True, True, 0)
-        content.pack_start(intro, False, False, 0)
-
-        entry = Gtk.Entry()
-        entry.set_visibility(False)
-        entry.set_invisible_char("•")
-        entry.set_activates_default(True)
-        entry.set_placeholder_text("New master password")
-        content.pack_start(entry, False, False, 0)
-
-        confirm = Gtk.Entry()
-        confirm.set_visibility(False)
-        confirm.set_invisible_char("•")
-        confirm.set_activates_default(True)
-        confirm.set_placeholder_text("Confirm password")
-        content.pack_start(confirm, False, False, 0)
-
-        error_label = Gtk.Label()
-        error_label.get_style_context().add_class("error")
-        error_label.set_no_show_all(True)
-        error_label.set_xalign(0.0)
-        content.pack_start(error_label, False, False, 0)
-
-        def show_error(msg: str) -> None:
-            error_label.set_text(msg)
-            error_label.show()
-
-        dialog.show_all()
-        entry.grab_focus()
-        while True:
-            response = dialog.run()
-            text = entry.get_text().strip()
-            confirm_text = confirm.get_text().strip()
-            if response != Gtk.ResponseType.OK:
-                dialog.destroy()
-                return None
-            if not text:
-                show_error("Password cannot be empty.")
-                continue
-            if text != confirm_text:
-                show_error("Passwords do not match.")
-                continue
-            dialog.destroy()
-            return text
-
     def _reset_master_password_flow(self) -> None:
-        if not self._settings.master_password_hash:
+        stored = self._settings.master_password_hash
+        if not stored:
             return
-        current = self._prompt_master_reset()
-        if current is None:
-            return
-        new_password = self._prompt_master_reset_new()
+        dialog = NewSecretDialog(
+            self,
+            _("Change Master Password"),
+            _("Choose a new master password"),
+            _("Confirm the current password first. Passwords stored on this computer are re-encrypted."),
+            accept_label=_("_Change"),
+            verify_current=lambda text: verify_master_password(text, stored),
+        )
+        new_password = dialog.ask()
         if new_password is None:
             return
-
         self._settings.master_password_hash = hash_master_password(new_password)
         self._settings.save()
         self._master_password = new_password
@@ -3868,35 +2089,19 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         parent, child = self._infer_target_group()
         create_child = False
         if not parent or not child:
-            picker = GroupPickerDialog(
-                self,
-                self.manager,
-                "Select host destination",
+            selection = self._pick_group(
+                _("Choose a Group for the New Host"),
                 allow_new_child=True,
                 initial_parent=parent,
                 initial_child=child,
+                accept_label=_("_Continue"),
             )
-            response = picker.run()
-            selection = picker.selected() if response == Gtk.ResponseType.OK else None
-            picker.destroy()
             if not selection:
                 return
             parent, child, create_child = selection
 
-        dialog = HostDialog(
-            self,
-            credentials=self._credential_store.list(),
-            selected_credential_id=None,
-            metadata={},
-            vault_entries=self._vault.entries() if self._vault.unlocked else [],
-            vault_unlocked=self._vault.unlocked,
-            template_defaults=template.defaults if template else None,
-            profiles=self._profiles,
-        )
-        response = dialog.run()
-        host = dialog.build_host(parent, child) if response == Gtk.ResponseType.OK else None
-        cred_id = dialog.selected_credential_id() if response == Gtk.ResponseType.OK else None
-        dialog.destroy()
+        dialog = self._host_dialog(template_defaults=template.defaults if template else None)
+        host, cred_id = self._run_host_dialog(dialog, parent, child)
         if not host:
             return
         if create_child:
@@ -3957,21 +2162,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host = self._selected_host()
         if not host:
             return
-        current_binding = self._credential_store.binding_for_host(self._host_key(host))
-        dialog = HostDialog(
-            self,
-            host,
-            credentials=self._credential_store.list(),
-            selected_credential_id=current_binding,
-            metadata=host.metadata,
-            vault_entries=self._vault.entries() if self._vault.unlocked else [],
-            vault_unlocked=self._vault.unlocked,
-            profiles=self._profiles,
-        )
-        response = dialog.run()
-        updated = dialog.build_host(host.parent_group, host.child_group) if response == Gtk.ResponseType.OK else None
-        cred_id = dialog.selected_credential_id() if response == Gtk.ResponseType.OK else None
-        dialog.destroy()
+        updated, cred_id = self._run_host_dialog(self._host_dialog(host), host.parent_group, host.child_group)
         if not updated:
             return
         if not self._check_secrets_policy(updated):
@@ -4004,22 +2195,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host = self._selected_host()
         if not host:
             return
-        current_binding = self._credential_store.binding_for_host(self._host_key(host))
-        dialog = HostDialog(
-            self,
-            host,
-            credentials=self._credential_store.list(),
-            selected_credential_id=current_binding,
-            metadata=host.metadata,
-            vault_entries=self._vault.entries() if self._vault.unlocked else [],
-            vault_unlocked=self._vault.unlocked,
-            profiles=self._profiles,
-        )
+        dialog = self._host_dialog(host)
         dialog.set_alias(self._generate_duplicate_alias(host))
-        response = dialog.run()
-        clone = dialog.build_host(host.parent_group, host.child_group) if response == Gtk.ResponseType.OK else None
-        cred_id = dialog.selected_credential_id() if response == Gtk.ResponseType.OK else None
-        dialog.destroy()
+        dialog.set_title(_("Duplicate Host"))
+        clone, cred_id = self._run_host_dialog(dialog, host.parent_group, host.child_group)
         if not clone:
             return
         if not self._check_secrets_policy(clone):
@@ -4043,17 +2222,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         host = self._selected_host()
         if not host:
             return
-        picker = GroupPickerDialog(
-            self,
-            self.manager,
-            "Move host",
+        selection = self._pick_group(
+            _("Move Host “{alias}”").format(alias=host.alias),
             allow_new_child=True,
             initial_parent=host.parent_group,
             initial_child=host.child_group,
+            accept_label=_("_Move"),
         )
-        response = picker.run()
-        selection = picker.selected() if response == Gtk.ResponseType.OK else None
-        picker.destroy()
         if not selection:
             return
         target_parent, target_child, create_child = selection
@@ -4151,17 +2326,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _create_child_group(self) -> None:
         parent, _child = self._infer_target_group()
-        picker = GroupPickerDialog(
-            self,
-            self.manager,
-            "Create child group",
+        selection = self._pick_group(
+            _("New Child Group"),
             allow_new_child=True,
             initial_parent=parent,
             initial_child=None,
+            accept_label=_("_Create"),
         )
-        response = picker.run()
-        selection = picker.selected() if response == Gtk.ResponseType.OK else None
-        picker.destroy()
         if not selection:
             return
         parent_name, child_name, create_child = selection
@@ -4215,19 +2386,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._create_host_in_group(parent, child)
 
     def _create_host_in_group(self, parent: str, child: str) -> None:
-        dialog = HostDialog(
-            self,
-            credentials=self._credential_store.list(),
-            selected_credential_id=None,
-            metadata={},
-            vault_entries=self._vault.entries() if self._vault.unlocked else [],
-            vault_unlocked=self._vault.unlocked,
-            profiles=self._profiles,
-        )
-        response = dialog.run()
-        host = dialog.build_host(parent, child) if response == Gtk.ResponseType.OK else None
-        cred_id = dialog.selected_credential_id() if response == Gtk.ResponseType.OK else None
-        dialog.destroy()
+        host, cred_id = self._run_host_dialog(self._host_dialog(), parent, child)
         if not host:
             return
         if not self._check_secrets_policy(host):
