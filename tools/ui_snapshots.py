@@ -75,6 +75,62 @@ Host stage-worker
 """,
 }
 
+# The inventory shown in docs/ui-target/relay-reference.png.
+RELAY_INVENTORY = {
+    "Production/Core services": """Host api-prod-01
+# meta environment=production
+    hostname 10.60.110.98
+    user deploy
+    port 22
+    identityfile ~/.ssh/id_ed25519
+
+Host api-prod-02
+# meta environment=production
+    hostname 10.60.110.99
+    user deploy
+
+Host worker-prod-01
+# meta environment=production
+    hostname 10.60.111.20
+    user deploy
+""",
+    "Production/Databases": """Host db-prod-01
+    hostname 10.60.120.10
+    user postgres
+
+Host db-prod-02
+    hostname 10.60.120.11
+    user postgres
+""",
+    "Staging/Web cluster": """Host web-stage-01
+# meta environment=staging
+    hostname 10.70.10.11
+    user deploy
+
+Host web-stage-02
+# meta environment=staging
+    hostname 10.70.10.12
+    user deploy
+""",
+    "Staging/Data services": """Host zookeeper-01
+    hostname 10.70.20.5
+    user ops
+
+Host kafka-stage-01
+    hostname 10.70.20.9
+    user ops
+""",
+    "Development/Sandboxes": """Host dev-box-01
+    hostname 10.80.0.21
+    user dev
+
+Host dev-box-02
+    hostname 10.80.0.22
+    user dev
+""",
+}
+RELAY_SIZE = (1852, 934)
+
 SAMPLE_OUTPUT = (
     "Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 6.8.0-45-generic x86_64)\r\n\r\n"
     "Last login: Fri Oct 17 09:12:44 2026 from 10.0.0.15\r\n"
@@ -124,11 +180,11 @@ def _stub_terminal_io() -> None:
     )
 
 
-def _write_inventory(base: Path, populated: bool) -> None:
+def _write_inventory(base: Path, populated: bool, inventory: dict = SAMPLE_INVENTORY) -> None:
     base.mkdir(parents=True, exist_ok=True)
     if not populated:
         return
-    for rel, text in SAMPLE_INVENTORY.items():
+    for rel, text in inventory.items():
         path = base / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -248,6 +304,36 @@ def _select_first_host(window) -> None:
         selector(host.parent_group, host.child_group, host.alias)
 
 
+def prepare_relay_match(window) -> None:
+    """Put a window in the exact state shown by the reference screenshot.
+
+    Window decorations are hidden: the reference is a borderless mock, the real
+    app keeps the native minimize/maximize/close buttons.
+    """
+
+    import time
+
+    from ssh_manager.gtkui.constants import TreeColumn
+
+    window._header.set_show_close_button(False)
+    window._header.set_user_initials("AF")
+    view = window.tree_view
+    view.set_row_collapsed("child", "Production", "Databases")
+    view.set_row_collapsed("parent", "Development", "")
+    host = window.tree.find_host_by_alias("api-prod-01")
+    key_iter = window.tree.host_iters.get(next((k for k in window.tree.host_iters if k.endswith("api-prod-01")), ""))
+    if key_iter is not None:
+        window.tree_store.set_value(key_iter, TreeColumn.STATUS, "connected")
+    history = getattr(window, "host_history", None)
+    if history is not None and host is not None:
+        history.record_connected(host, time.time() - 2 * 3600)
+    latency = getattr(window, "latency", None)
+    if latency is not None and host is not None:
+        latency.inject(host, 24.0)
+    if host is not None:
+        window.tree.select_host(host.parent_group, host.child_group, host.alias)
+
+
 def _make_window(app, base: Path, prefer_dark: bool):
     from ssh_manager.gtk_app import SSHManagerWindow
     from ssh_manager.settings import AppSettings
@@ -332,6 +418,19 @@ def run(out_dir: Path) -> None:
         _set_toggle(window, "set_broadcast_mode", "_broadcast_all_button", True)
         _pump()
         capture_window(window, out_dir / "main-broadcast.png")
+        window.destroy()
+
+    relay_base = _SANDBOX / "Infrastructure"
+    _write_inventory(relay_base, populated=True, inventory=RELAY_INVENTORY)
+
+    @scenario("relay-match")
+    def _relay_match() -> None:
+        """Reproduce docs/ui-target/relay-reference.png (light theme, 1852×934)."""
+
+        window = _make_window(app, relay_base, False)
+        prepare_relay_match(window)
+        _pump()
+        capture_window(window, out_dir / "relay-match.png", *RELAY_SIZE)
         window.destroy()
 
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:

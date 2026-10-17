@@ -108,7 +108,7 @@ LEAD = 26  # x of the level-0 chevron box
 CHEVRON = 14
 FOLDER = 18
 HOST_ICON = 16
-BAR_WIDTH, BAR_HEIGHT = 4, 22
+BAR_WIDTH, BAR_HEIGHT = 4, 24
 COUNT_RIGHT = 25  # count right edge from the row's right edge
 DOT_RIGHT = 28  # status-dot centre from the row's right edge
 DOT = 7
@@ -203,7 +203,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
             cr.fill()
         if selected:
             cr.set_source_rgba(*self._channels(palette.accent))
-            bar_y = top + (height - BAR_HEIGHT) / 2
+            bar_y = top + (height - BAR_HEIGHT + 1) // 2
             cr.new_sub_path()
             cr.move_to(rect_x, bar_y)
             cr.line_to(rect_x + BAR_WIDTH - 2, bar_y)

@@ -74,7 +74,6 @@ class TreeRowTests(unittest.TestCase):
         self.assertEqual(
             labels(rows),
             [
-                "parent:empty-parent:0",
                 "parent:prod:3",
                 "  child-folder:db:1",
                 "    child:primary.conf:1",
@@ -86,7 +85,17 @@ class TreeRowTests(unittest.TestCase):
                 "  child:empty.conf:0",
                 "  child:hosts.conf:1",
                 "    host:stage-app:",
+                "parent:empty-parent:0",
             ],
+        )
+
+    def test_stage_named_groups_come_first_in_pipeline_order(self) -> None:
+        from ssh_manager.gtkui.controllers.tree_controller import group_sort_key
+
+        names = ["Zeta", "Development", "alpha", "Staging", "Production", "qa"]
+        self.assertEqual(
+            sorted(names, key=group_sort_key),
+            ["Production", "Staging", "Development", "qa", "alpha", "Zeta"],
         )
 
     def test_host_search_keeps_child_path_and_hides_unmatched_groups(self) -> None:

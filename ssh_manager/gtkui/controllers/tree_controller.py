@@ -257,6 +257,21 @@ def _fill_folder_counts(row: TreeRow) -> int:
     return row.count
 
 
+# Top-level groups named after a deployment stage are listed in pipeline
+# order (as in the reference design); every other group follows alphabetically.
+STAGE_ORDER = {
+    "production": 0, "prod": 0, "live": 0,
+    "staging": 1, "stage": 1, "preprod": 1, "uat": 1,
+    "development": 2, "dev": 2,
+    "test": 3, "testing": 3, "qa": 3,
+}
+
+
+def group_sort_key(name: str) -> Tuple[int, str]:
+    lowered = (name or "").strip().lower()
+    return STAGE_ORDER.get(lowered, len(set(STAGE_ORDER.values()))), lowered
+
+
 def build_tree_rows(
     inventories: Sequence[Tuple[Inventory, bool]],
     query: str = "",
@@ -270,7 +285,7 @@ def build_tree_rows(
     filtered = bool(query) or bool(terms)
     rows: List[TreeRow] = []
     for tree, shared in inventories:
-        for parent_name, children in sorted(tree.items(), key=lambda kv: kv[0].lower()):
+        for parent_name, children in sorted(tree.items(), key=lambda kv: group_sort_key(kv[0])):
             label_parent = f"{SHARED_PREFIX}{parent_name}" if shared else parent_name
             parent_matches = not query or query in label_parent.lower()
             child_rows = _child_rows(label_parent, children, query, terms, parent_matches, callbacks, shared)

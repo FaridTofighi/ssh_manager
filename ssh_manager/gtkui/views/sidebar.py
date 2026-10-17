@@ -45,9 +45,12 @@ FILTER_HELP = _(
 )
 
 
-HEADER_TOP = 29  # sidebar top edge → "CONNECTION MANAGER" (reference)
-SEARCH_TOP = 22  # header block → search row
-TREE_TOP_GAP = 20  # search row → first tree row
+# Vertical rhythm of the reference (y from the sidebar top, which is y = 77).
+HEADER_TOP = 29  # → header block ("CONNECTION MANAGER" cap top at ≈ +34)
+HEADER_HEIGHT = 52
+ADD_HOST_TOP = 12  # header top → Add host button (button y = 118)
+SEARCH_TOP = 22  # header block bottom → search box (y = 180)
+TREE_TOP_GAP = 20  # search box bottom → first tree row (y = 245)
 
 
 def _add_menu_model(template_items) -> Gio.Menu:
@@ -165,17 +168,26 @@ class SidebarView(Gtk.Box):
         self.title_label.set_xalign(0.0)
         self.title_label.get_style_context().add_class("sidebar-title")
         titles.pack_start(self.title_label, False, False, 0)
-        header.pack_start(titles, True, True, 0)
+        # The titles float over a fixed-height spacer so the font's line
+        # height cannot push the search row down (the block is 52px tall).
+        titles.set_valign(Gtk.Align.START)
+        title_block = Gtk.Overlay()
+        spacer = Gtk.Box()
+        spacer.set_size_request(-1, HEADER_HEIGHT)
+        title_block.add(spacer)
+        title_block.add_overlay(titles)
+        header.pack_start(title_block, True, True, 0)
 
         self.add_host_button = Gtk.Button()
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
-        content.pack_start(make_icon(Icons.NEW, 16), False, False, 0)
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 1)
+        content.pack_start(make_icon(Icons.NEW, 20), False, False, 0)
         content.pack_start(Gtk.Label(label=_("Add host")), False, False, 0)
         self.add_host_button.add(content)
         ctx = self.add_host_button.get_style_context()
         ctx.add_class("suggested-action")
         ctx.add_class("add-host")
-        self.add_host_button.set_valign(Gtk.Align.END)
+        self.add_host_button.set_valign(Gtk.Align.START)
+        self.add_host_button.set_margin_top(ADD_HOST_TOP)
         self.add_host_button.set_tooltip_text(
             _("Add a new host (Ctrl+N). Right-click or Shift+click for templates, groups and Quick Connect.")
         )

@@ -398,9 +398,9 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 }
 .sidebar-eyebrow { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .sidebar-title { font-size: ${fs_page_title}em; font-weight: 400; color: @sm_text_primary; }
-.sm-window button.add-host { min-height: ${button}px; padding: 0 ${l}px; font-size: ${fs_body}em; }
+.sm-window button.add-host { min-height: ${button_inner}px; padding: 0 11px 0 13px; font-size: ${fs_body}em; }
 .sm-window entry.sidebar-search-entry {
-    min-height: ${search}px;
+    min-height: ${search_inner}px;
     background-color: @sm_bg_input;
     border-radius: ${r_input}px;
     font-size: ${fs_body}em;
@@ -417,8 +417,8 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     background-color: @sm_bg_surface;
 }
 .sm-window button.filter-button {
-    min-width: 34px;
-    min-height: ${search}px;
+    min-width: 32px;
+    min-height: ${search_inner}px;
     padding: 0;
     border-radius: ${r_md}px;
     background-color: @sm_bg_surface;
@@ -482,8 +482,8 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     font-weight: 400;
 }
 .sm-window button.breadcrumb-link:hover { background-color: @sm_bg_hover; }
-.sm-window button.page-more { min-width: 40px; min-height: ${button_large}px; padding: 0; color: @sm_text_muted; }
-.sm-window button.page-primary { min-height: ${button_large}px; min-width: 144px; font-size: ${fs_body}em; }
+.sm-window button.page-more { min-width: 40px; min-height: ${button_large_inner}px; padding: 0; color: @sm_text_muted; }
+.sm-window button.page-primary { min-height: ${button_large_inner}px; min-width: 142px; font-size: ${fs_body}em; }
 .host-header {
     background-color: @sm_bg_surface;
     border-bottom: 1px solid @sm_border_subtle;
@@ -562,7 +562,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 .empty-state .empty-title { font-size: ${fs_hero_title}em; font-weight: 400; color: @sm_text_primary; }
 .empty-state .empty-description { color: @sm_text_secondary; font-size: ${fs_subtitle}em; }
 .empty-state .empty-caption { color: @sm_text_faint; font-size: ${fs_caption}em; }
-.sm-window button.hero { min-height: ${hero}px; padding: 0 ${xxl}px; font-size: ${fs_subtitle}em; }
+.sm-window button.hero { min-height: ${hero_inner}px; padding: 0 ${xxl}px; font-size: ${fs_subtitle}em; }
 
 /* ------------------------------------------------------------- cards */
 .card {
@@ -756,6 +756,9 @@ def _values(palette: Palette, motion: str) -> Dict[str, object]:
         "button_large": Size.BUTTON_LARGE, "hero": Size.HERO_BUTTON, "host_tile": Size.HOST_TILE,
         "empty_card": Size.EMPTY_CARD, "badge": Size.BADGE,
         "search_text_inset": Space.GUTTER + Space.S + 1,
+        # GTK's min-height excludes the 1px borders: tokens are outer sizes.
+        "button_inner": Size.BUTTON - 2, "button_large_inner": Size.BUTTON_LARGE - 2,
+        "search_inner": Size.SEARCH - 2, "hero_inner": Size.HERO_BUTTON - 2,
         "fs_caps": FontScale.CAPS, "fs_caps_14": FontScale.MONO, "fs_badge": FontScale.BADGE,
         "fs_caption": FontScale.CAPTION, "fs_mono": FontScale.MONO, "fs_body": FontScale.BODY,
         "fs_tree": FontScale.TREE, "fs_subtitle": FontScale.SUBTITLE, "fs_wordmark": FontScale.WORDMARK,
