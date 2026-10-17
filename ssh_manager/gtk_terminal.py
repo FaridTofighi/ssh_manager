@@ -1561,7 +1561,8 @@ class TerminalNotebook(Gtk.Box):
         self._tile_grid.set_vexpand(True)
         self._tile_grid.set_border_width(Space.S)
         self._tile_scroller = Gtk.ScrolledWindow()
-        self._tile_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        # Tiles shrink to the workspace width; only scroll vertically when there are many.
+        self._tile_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self._tile_scroller.add(self._tile_grid)
 
         self._placeholder = EmptyState(
@@ -1579,6 +1580,7 @@ class TerminalNotebook(Gtk.Box):
 
         self._stack = Gtk.Stack()
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self._stack.set_hhomogeneous(False)
         self._stack.set_transition_duration(get_theme_manager().motion_ms(Motion.FAST))
         self._stack.add_named(self._placeholder, "placeholder")
         self._stack.add_named(self._notebook, "tabs")

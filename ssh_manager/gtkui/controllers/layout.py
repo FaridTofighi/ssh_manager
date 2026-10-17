@@ -19,6 +19,9 @@ if TYPE_CHECKING:  # pragma: no cover
 LOGGER = logging.getLogger(__name__)
 
 
+COMPACT_SIDEBAR_WIDTH = 280
+
+
 class LayoutController:
     """Sidebar visibility, workspace maximization and responsive tweaks."""
 
@@ -115,3 +118,6 @@ class LayoutController:
         if compact != self.compact:
             self.compact = compact
             self.win._header.set_compact(compact)
+            if compact and self.sidebar_visible and self.win._paned.get_position() > COMPACT_SIDEBAR_WIDTH:
+                # Narrow window: give the workspace room; the user can still drag the divider.
+                GLib.idle_add(self.win._paned.set_position, COMPACT_SIDEBAR_WIDTH)

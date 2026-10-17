@@ -22,6 +22,7 @@ class Chip(Gtk.Label):
         if accent:
             ctx.add_class("accent")
         self.set_ellipsize(Pango.EllipsizeMode.END)
+        self.set_width_chars(min(len(text), 8))
         self.set_max_width_chars(24)
         if tooltip:
             self.set_tooltip_text(tooltip)

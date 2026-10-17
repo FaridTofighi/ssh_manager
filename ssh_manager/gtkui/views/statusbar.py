@@ -14,7 +14,7 @@ from typing import Optional
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
@@ -57,6 +57,7 @@ def _stat(icon_name: str, accessible: str) -> tuple:
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
     image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.MENU)
     label = Gtk.Label()
+    label.set_ellipsize(Pango.EllipsizeMode.END)  # let tiles shrink below the text width
     set_accessible_name(label, accessible)
     box.pack_start(image, False, False, 0)
     box.pack_start(label, False, False, 0)
@@ -73,6 +74,7 @@ class SessionStatusBar(Gtk.Box):
         self.dot = StatusDot(size=9)
         self.pack_start(self.dot, False, False, 0)
         self.status_label = Gtk.Label(label=status_text(ConnectionStatus.UNKNOWN))
+        self.status_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.pack_start(self.status_label, False, False, 0)
         self.size_label = Gtk.Label()
         self.size_label.set_tooltip_text(_("Terminal size (columns × rows)"))

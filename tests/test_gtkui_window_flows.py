@@ -150,6 +150,16 @@ class WindowFlowTests(unittest.TestCase):
         win.inventory.check_git_now()
         self.assertTrue(any("Git update checks are off" in text for _level, text in self.toasts))
 
+    def test_window_fits_minimum_width(self) -> None:
+        win = self.win
+        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+            win.tree.select_host("prod", "web.conf", "web-01")
+            win.sessions.connect_selected()
+            win.tree.select_host("prod", "web.conf", "web-02")
+            win.sessions.connect_selected()
+        minimum = win.get_child().get_preferred_width()[0]
+        self.assertLessEqual(minimum, 960, "content must fit the 960 px minimum window width")
+
     def test_quick_connect_opens_adhoc_session(self) -> None:
         win = self.win
         with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog.ask", return_value="root@10.1.2.3:2200"), \

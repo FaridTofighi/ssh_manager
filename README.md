@@ -46,12 +46,42 @@ Files directly inside the base directory are also loaded as root-level child
 groups. Pointing `--base-dir` at a single OpenSSH config file is supported, and
 that direct file mode follows `Include` directives.
 
+## Using the GTK App
+
+- **Sidebar**: search hosts by alias, host name, user, tags or jump host. The
+  filter button next to the search field takes `key:value` terms joined with
+  `AND` (for example `tag:prod AND owner:alice`) and saves filters as smart
+  groups. Right-click a row, or press Shift+F10, for its actions.
+- **Details drawer** (F9): facts about the selected host or group, plus
+  Connect, Edit, Duplicate and Copy SSH/SCP actions. Select several hosts to
+  connect, move or tag them together.
+- **Sessions**: double-click a host, press Enter, or use Quick Connect
+  (Ctrl+Shift+T) for an ad-hoc `user@host:port`. The session toolbar acts on
+  the active tab: split pane, save transcript, copy as plain text, show all
+  sessions, broadcast and remote stats.
+- **Messages** appear as toasts; the message-history button in the header keeps
+  every message.
+- **Keyboard shortcuts**: press Ctrl+? or F1 for the full list. The most
+  common are Ctrl+N (new host), Ctrl+T (connect), Ctrl+W (close session),
+  Ctrl+Tab (next session), Alt+1…9 (go to session), Ctrl+B (sidebar),
+  Ctrl+Shift+B (broadcast) and F11 (maximize workspace). Terminal copy and
+  paste are Ctrl+Shift+C / Ctrl+Shift+V.
+
 ## Broadcast Input
 
-Open multiple sessions, then use `Show All Sessions` to tile every active
-terminal together. Enable `Broadcast Input` to mirror typed input from the
-focused session to all included connected sessions. In the tiled view, uncheck
-`Broadcast` on any session that should be excluded from command fan-out.
+Open two or more sessions and turn on Broadcast (toolbar or Ctrl+Shift+B).
+The workspace switches to tile view, a red strip shows how many sessions
+receive your typing, and those sessions get a red border. Uncheck
+`Broadcast` on a tile to leave that session out. Stop with the strip's
+button, Ctrl+Shift+B, or Esc when focus is outside a terminal.
+
+## Theming
+
+Settings → Appearance offers *Follow system*, *Light* and *Dark*. Changes
+apply immediately. The application font size scales the whole interface.
+All colors, spacing and type sizes come from design tokens in
+`ssh_manager/gtkui/theme/`; see `docs/ui-design-system.md`. Terminal colors
+are configured separately under Settings → Terminal.
 
 ## Expired Passwords
 
@@ -76,6 +106,14 @@ With "Paramiko + VTE" enabled in Settings, connections honor the host's
 `IdentityFile`, `ProxyCommand`, and `ProxyJump` options. Jump hops are reached
 through the system `ssh` client in batch mode, so they need key or agent
 authentication.
+
+## Documentation
+
+- `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
+- `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
+- `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
+- `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
+  `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)
 
 ## Verification
 

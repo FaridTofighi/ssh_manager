@@ -48,6 +48,7 @@ class DetailsView(Gtk.Box):
         self.title_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.title_label.set_selectable(True)
         self.title_label.set_can_focus(False)
+        self.title_label.set_width_chars(10)
         self.title_label.get_style_context().add_class("section-title")
         titles.pack_start(self.title_label, False, False, 0)
         self.subtitle_label = Gtk.Label()
@@ -55,15 +56,14 @@ class DetailsView(Gtk.Box):
         self.subtitle_label.set_ellipsize(Pango.EllipsizeMode.END)
         self.subtitle_label.set_selectable(True)
         self.subtitle_label.set_can_focus(False)
+        self.subtitle_label.set_width_chars(14)
         self.subtitle_label.get_style_context().add_class("dim-label")
         titles.pack_start(self.subtitle_label, False, False, 0)
-        header.pack_start(titles, False, False, 0)
-
         self.chips = ChipFlow()
-        self.chips.set_valign(Gtk.Align.CENTER)
         self.chips.set_halign(Gtk.Align.START)
-        header.pack_start(self.chips, True, True, 0)
-        titles.set_size_request(200, -1)
+        self.chips.set_margin_top(Space.XS)
+        titles.pack_start(self.chips, False, False, 0)
+        header.pack_start(titles, True, True, 0)
 
         self._actions_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
         self._actions_box.set_valign(Gtk.Align.CENTER)
@@ -82,6 +82,9 @@ class DetailsView(Gtk.Box):
         self._revealer.set_reveal_child(True)
         self.pack_start(self._revealer, False, False, 0)
         self._expanded = True
+        self._facts: List[Tuple[str, str]] = []
+        self._columns = 2
+        self.connect("size-allocate", self._on_size_allocate)
         self.set_content(placeholder_content())
 
     # ------------------------------------------------------------------ api
@@ -117,10 +120,17 @@ class DetailsView(Gtk.Box):
         self._render_actions(content.actions)
 
     # ------------------------------------------------------------ internal
+    def _on_size_allocate(self, _widget, allocation) -> None:
+        columns = 1 if allocation.width < 720 else 2
+        if columns != self._columns:
+            self._columns = columns
+            self._render_facts(self._facts)
+
     def _render_facts(self, facts: List[Tuple[str, str]]) -> None:
+        self._facts = list(facts)
         for child in list(self._grid.get_children()):
             self._grid.remove(child)
-        columns = 2
+        columns = self._columns
         for index, (key, value) in enumerate(facts):
             row, col = divmod(index, columns)
             key_label = Gtk.Label(label=key)

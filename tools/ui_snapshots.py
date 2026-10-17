@@ -176,6 +176,9 @@ def capture_window(window: Gtk.Window, path: Path, width: int = 1280, height: in
     holder.get_style_context().add_class("background")
     for css_class in window.get_style_context().list_classes():
         holder.get_style_context().add_class(css_class)
+    if isinstance(window, Gtk.ApplicationWindow):
+        # Moved widgets must still resolve win.* actions, or actionable buttons render insensitive.
+        holder.insert_action_group("win", window)
     if titlebar is not None:
         window.set_titlebar(None)
         holder.pack_start(titlebar, False, False, 0)

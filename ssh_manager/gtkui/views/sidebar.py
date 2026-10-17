@@ -69,6 +69,9 @@ class SidebarView(Gtk.Box):
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        # Size to the visible page only, so hidden empty states don't widen the sidebar.
+        self.stack.set_hhomogeneous(False)
+        self.stack.set_vhomogeneous(False)
         self.stack.add_named(scroller, TreePage.TREE.value)
         self.no_results = EmptyState(
             Icons.SEARCH,

@@ -55,7 +55,9 @@ class EmptyState(Gtk.Box):
         self._description.set_no_show_all(not description)
         self.pack_start(self._description, False, False, 0)
 
-        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        # Compact states live in narrow panes: stack their buttons vertically.
+        orientation = Gtk.Orientation.VERTICAL if compact else Gtk.Orientation.HORIZONTAL
+        buttons = Gtk.Box(orientation=orientation, spacing=Space.S)
         buttons.set_halign(Gtk.Align.CENTER)
         buttons.set_margin_top(Space.S)
         self.primary_button: Optional[Gtk.Button] = None

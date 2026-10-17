@@ -69,6 +69,7 @@ class ConfigViewerDialog(BaseDialog):
         path_label.set_xalign(0.0)
         path_label.set_ellipsize(Pango.EllipsizeMode.START)  # keeps the file name visible
         path_label.set_selectable(True)
+        path_label.set_can_focus(False)
         path_label.get_style_context().add_class("dim-label")
         bar.pack_start(path_label, True, True, 0)
         self._edit_toggle = Gtk.ToggleButton.new_with_mnemonic(_("_Edit"))
