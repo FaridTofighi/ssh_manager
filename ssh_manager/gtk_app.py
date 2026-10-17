@@ -339,6 +339,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.on_add_host = self.hosts.prompt_new_host
         sidebar.on_open_folder = self.inventory.open_inventory_folder
         sidebar.on_escape_to_tree = lambda: self.tree_view.grab_focus()
+        sidebar.on_bulk_connect = self.actions.bulk_connect_selected
+        sidebar.on_bulk_move = self.actions.bulk_move_selected
+        sidebar.on_bulk_tag = self.actions.bulk_tag_selected
+        sidebar.on_bulk_clear = lambda: self.tree_view.get_selection().unselect_all()
         sidebar.set_filter_text(self.tree.filter_query)
         sidebar.set_filter_active(self.tree.filter_query)
         sidebar.set_smart_groups([group.name for group in self.tree.smart_groups])

@@ -359,3 +359,51 @@ class HostPageTests(unittest.TestCase):
         self.page.inject_latency(host, 180.0)
         self.page.refresh()
         self.assertEqual(self.page.view.content.stats[1][1:], ("180 ms", "warn"))
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class WorkspaceStripTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.sandbox = WindowSandbox()
+        self.win = self.sandbox.window
+
+    def tearDown(self) -> None:
+        self.sandbox.close()
+
+    def test_bulk_bar_follows_multi_selection(self) -> None:
+        win = self.win
+        selection = win.tree_view.get_selection()
+        for key in list(win.tree.host_iters)[:2]:
+            selection.select_iter(win.tree.host_iters[key])
+        self.assertTrue(win._sidebar.bulk_revealer.get_reveal_child())
+        self.assertIn("2 hosts selected", win._sidebar.bulk_label.get_text())
+        self.assertEqual(win.host_page.view.content.kind, "multi")
+        win._sidebar.on_bulk_clear()
+        self.assertFalse(win._sidebar.bulk_revealer.get_reveal_child())
+
+    def test_toolbar_moves_between_strip_and_row(self) -> None:
+        win = self.win
+        notebook = win.terminal_tabs
+        hosts = [win.tree.host_lookup[key] for key in list(win.tree.host_lookup)[:2]]
+        for host in hosts:
+            notebook.new_terminal(host, autostart=False)
+        self.assertTrue(notebook.toolbar_in_strip)
+        notebook.set_tile_mode(True)
+        self.assertFalse(notebook.toolbar_in_strip)
+        for tab in notebook.tabs():
+            self.assertIsNot(tab.statusbar.get_parent(), win.host_page.view.info_bar.live)
+        notebook.set_tile_mode(False)
+        self.assertTrue(notebook.toolbar_in_strip)
+
+    def test_latency_preference_round_trip(self) -> None:
+        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+
+        win = self.win
+        dialog = PreferencesDialog(win, win._theme_mode, 1.0, 11, win._settings, latency_probe=False)
+        values = dialog.values()
+        dialog.destroy()
+        self.assertFalse(values.latency_probe)
+        win.app_dialogs.apply_preferences(values)
+        self.assertFalse(win._ui.latency_probe)
+        self.assertFalse(win.host_page.latency.enabled)
+        self.assertFalse(win._load_ui_state().get("latency_probe", True))

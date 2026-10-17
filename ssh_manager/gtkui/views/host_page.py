@@ -22,7 +22,7 @@ from typing import Callable, List, Sequence, Tuple
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
+from gi.repository import GLib, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..host_facts import ActivityEvent, Crumb, LatencyLevel, format_relative_time  # noqa: E402
@@ -386,6 +386,26 @@ class InfoBar(Gtk.Box):
         self.copy_button = IconButton(Icons.COPY, _("Copy SSH command"), lambda: self.on_copy(), css_classes=("info-copy",))
         self.copy_button.set_valign(Gtk.Align.CENTER)
         self.pack_end(self.copy_button, False, False, 0)
+        self._compact = False
+        self.connect("size-allocate", self._on_size_allocate)
+
+    COMPACT_WIDTH = 1250  # below this, a live session hides AUTH and PROXY (Details tab has them)
+
+    def _on_size_allocate(self, _widget, allocation) -> None:
+        self._compact = allocation.width < self.COMPACT_WIDTH
+        hide = self._want_hidden()
+        columns = self.fields.get_children()[1:]
+        if any(column.get_visible() == hide for column in columns):  # also undoes a parent's show_all()
+            self._sync_compact()  # converges: only acts while the visibility is wrong
+
+    def _want_hidden(self) -> bool:
+        return self._compact and bool(self.live.get_children())
+
+    def _sync_compact(self) -> bool:
+        hide = self._want_hidden()
+        for index, column in enumerate(self.fields.get_children()):
+            column.set_visible(index == 0 or not hide)
+        return GLib.SOURCE_REMOVE
 
     def set_content(self, content: HostPageContent) -> None:
         for child in list(self.fields.get_children()):
@@ -405,6 +425,7 @@ class InfoBar(Gtk.Box):
             column.pack_start(label, False, False, 0)
             self.fields.pack_start(column, False, False, 0)
         self.fields.show_all()
+        self._sync_compact()
         self.copy_button.set_visible(bool(content.copy_text))
         self.copy_button.set_tooltip_text(
             _("Copy “{command}”").format(command=content.copy_text) if content.copy_text else _("Copy SSH command")

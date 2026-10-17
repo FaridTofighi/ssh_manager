@@ -252,6 +252,9 @@ class TreeController:
     def on_selection_changed(self, *_args) -> None:
         self.update_details()
         self.update_action_state()
+        sidebar = getattr(self.win, "_sidebar", None)
+        if sidebar is not None and hasattr(sidebar, "set_bulk_count"):
+            sidebar.set_bulk_count(len(self.selected_hosts()))
 
     def on_row_activated(self, view: Gtk.TreeView, path, _column) -> None:
         # Double-click connects the activated host, even if it was not part of the selection.

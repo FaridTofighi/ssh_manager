@@ -633,13 +633,17 @@ notebook.session-tabs > header > tabs > tab:checked {
 }
 notebook.session-tabs > stack {
     background-color: @sm_bg_canvas;
-    padding: ${l}px;
+    padding: ${xs}px ${l}px ${l}px ${l}px;
 }
 .terminal-card {
     border: 1px solid @sm_border_subtle;
     border-radius: ${r_lg}px;
     background-color: @sm_bg_surface;
+    padding: ${s}px;
 }
+.session-toolbar-row { background-color: @sm_bg_canvas; padding: ${s}px ${l}px 0 ${l}px; }
+.session-strip-actions { padding-right: ${xs}px; }
+.info-live .statusbar { padding: 0; font-size: ${fs_mono}em; }
 .tab-activity { font-weight: bold; color: @sm_accent_text; }
 .statusbar {
     background-color: transparent;

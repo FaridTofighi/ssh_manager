@@ -26,6 +26,7 @@ from ..widgets.icon_button import (  # noqa: E402
     IconToggleButton,
     set_accessible_name,
 )
+from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.menus import build_menu  # noqa: E402
 from ..widgets.status_dot import StatusDot  # noqa: E402
 
@@ -68,7 +69,7 @@ class BroadcastStrip(Gtk.Revealer):
         self.set_transition_duration(get_theme_manager().motion_ms(Motion.FAST))
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         box.get_style_context().add_class("broadcast-strip")
-        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic", Gtk.IconSize.BUTTON)
+        icon = make_icon(Icons.WARNING, 16)
         box.pack_start(icon, False, False, 0)
         self._label = Gtk.Label()
         self._label.set_xalign(0.0)

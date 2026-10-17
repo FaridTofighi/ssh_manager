@@ -96,6 +96,7 @@ class UiState:
     group_colors: Dict[str, str] = field(default_factory=dict)
     host_colors: Dict[str, str] = field(default_factory=dict)
     recent_inventories: List[str] = field(default_factory=list)
+    latency_probe: bool = True
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "UiState":
@@ -126,6 +127,7 @@ class UiState:
             group_colors=_str_map(data.get("group_colors")),
             host_colors=_str_map(data.get("host_colors")),
             recent_inventories=_str_list(data.get("recent_inventories")),
+            latency_probe=_bool(data.get("latency_probe"), True),
         )
 
     def to_dict(self) -> Dict[str, object]:
@@ -145,5 +147,6 @@ class UiState:
             "filter_query": self.filter_query,
             "group_colors": dict(self.group_colors),
             "recent_inventories": list(self.recent_inventories),
+            "latency_probe": self.latency_probe,
             "host_colors": dict(self.host_colors),
         }

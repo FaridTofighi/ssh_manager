@@ -387,6 +387,9 @@ class TerminalTab(Gtk.Box):
         self._terminal = self._create_terminal()
         self._pane_container = TerminalPaneContainer(self._terminal)
         self._pane_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self._pane_holder.get_style_context().add_class("terminal-card")
+        self._card_css = Gtk.CssProvider()
+        self._pane_holder.get_style_context().add_provider(self._card_css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
         self._pane_holder.set_hexpand(True)
         self._pane_holder.set_vexpand(True)
         self._pane_holder.pack_start(self._pane_container, True, True, 0)
@@ -472,6 +475,7 @@ class TerminalTab(Gtk.Box):
             term.set_bold_is_bright(self._appearance.bold_is_bright)
         foreground, background, cursor, highlight, palette = self._colors_from_appearance()
         term.set_colors(foreground, background, palette)
+        self._paint_card(background)
         term.set_color_background(background)
         term.set_color_foreground(foreground)
         term.set_color_cursor(cursor)
@@ -483,6 +487,18 @@ class TerminalTab(Gtk.Box):
         try:
             term.set_color_highlight_foreground(foreground)
         except AttributeError:
+            pass
+
+    def _paint_card(self, background: Gdk.RGBA) -> None:
+        """The rounded card around the terminal takes the terminal's background."""
+
+        provider = getattr(self, "_card_css", None)
+        if provider is None:
+            return
+        css = ".terminal-card { background-color: %s; }" % background.to_string()
+        try:
+            provider.load_from_data(css.encode("utf-8"))
+        except GLib.Error:
             pass
 
     def _apply_terminal_theme(self) -> None:
@@ -1550,7 +1566,12 @@ class TerminalNotebook(Gtk.Box):
         bar.save.connect("clicked", lambda *_: self.save_current_transcript())
         bar.reconnect.connect("clicked", lambda *_: self.reconnect_current())
         bar.set_overflow(self._overflow_menu_spec())
-        self.pack_start(bar, False, False, 0)
+        # In tabs mode the toolbar lives at the right end of the session strip
+        # (the notebook's tab row); in tile mode it gets this row of its own.
+        self._toolbar_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._toolbar_row.get_style_context().add_class("session-toolbar-row")
+        self._toolbar_row.pack_end(bar, False, False, 0)
+        self.pack_start(self._toolbar_row, False, False, 0)
 
     def _build_stack(self) -> None:
         self._notebook = Gtk.Notebook()
@@ -1562,15 +1583,22 @@ class TerminalNotebook(Gtk.Box):
         self._notebook.connect("switch-page", self._on_switch_page)
         self._notebook.connect("page-reordered", lambda *_: self._sync_tab_order())
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        actions.get_style_context().add_class("session-strip-actions")
         actions.pack_start(
             IconButton(Icons.NEW, _("Quick connect (Ctrl+Shift+T)"), self._request_quick_connect),
             False,
             False,
             0,
         )
-        self._tabs_menu_button = IconMenuButton(Icons.MORE, _("All sessions"))
+        self._tabs_menu_button = IconMenuButton(Icons.CHEVRON_DOWN, _("All sessions"))
         self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
         actions.pack_start(self._tabs_menu_button, False, False, 0)
+        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        separator.set_margin_top(Space.S)
+        separator.set_margin_bottom(Space.S)
+        actions.pack_start(separator, False, False, Space.XS)
+        self._toolbar_slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        actions.pack_start(self._toolbar_slot, False, False, 0)
         actions.show_all()
         self._notebook.set_action_widget(actions, Gtk.PackType.END)
 
@@ -2179,6 +2207,7 @@ class TerminalNotebook(Gtk.Box):
         else:
             visible = "tabs"
         self._stack.set_visible_child_name(visible)
+        self._place_toolbar(in_strip=visible == "tabs")
         if len(self._tabs) <= 1:
             if self._broadcast_mode:
                 self.set_broadcast_mode(False)
@@ -2187,6 +2216,23 @@ class TerminalNotebook(Gtk.Box):
         self._sync_toolbar()
 
     # ------------------------------------------------------------- toolbar
+    def _place_toolbar(self, *, in_strip: bool) -> None:
+        target = self._toolbar_slot if in_strip else self._toolbar_row
+        parent = self._toolbar.get_parent()
+        if parent is not target:
+            if parent is not None:
+                parent.remove(self._toolbar)
+            if in_strip:
+                target.pack_start(self._toolbar, False, False, 0)
+            else:
+                target.pack_end(self._toolbar, False, False, 0)
+            self._toolbar.show_all()
+        self._toolbar_row.set_visible(not in_strip)
+
+    @property
+    def toolbar_in_strip(self) -> bool:
+        return self._toolbar.get_parent() is self._toolbar_slot
+
     def _set_toggle(self, button: Gtk.ToggleButton, active: bool) -> None:
         if button.get_active() == active:
             return

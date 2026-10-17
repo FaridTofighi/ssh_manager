@@ -30,7 +30,7 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
-from ..i18n import _  # noqa: E402
+from ..i18n import _, ngettext  # noqa: E402
 from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
@@ -111,6 +111,10 @@ class SidebarView(Gtk.Box):
         self.on_add_host: Callable[[], None] = lambda: None
         self.on_open_folder: Callable[[], None] = lambda: None
         self.on_escape_to_tree: Callable[[], None] = lambda: None
+        self.on_bulk_connect: Callable[[], None] = lambda: None
+        self.on_bulk_move: Callable[[], None] = lambda: None
+        self.on_bulk_tag: Callable[[], None] = lambda: None
+        self.on_bulk_clear: Callable[[], None] = lambda: None
 
         self.pack_start(self._build_header(list(template_items)), False, False, 0)
         self.pack_start(self._build_search_row(), False, False, 0)
@@ -151,6 +155,7 @@ class SidebarView(Gtk.Box):
         self.stack.add_named(self.first_run, TreePage.EMPTY.value)
         self.pack_start(self.stack, True, True, 0)
         self.pack_end(self._build_footer(), False, False, 0)
+        self.pack_end(self._build_bulk_bar(), False, False, 0)
 
     # ------------------------------------------------------------ building
     def _build_header(self, template_items) -> Gtk.Widget:
@@ -215,6 +220,7 @@ class SidebarView(Gtk.Box):
         self.search_entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, None)
         self.search_entry.set_placeholder_text(_("Search hosts…"))
         self.search_entry.set_hexpand(True)
+        self.search_entry.set_width_chars(6)  # expands; a small minimum keeps narrow windows usable
         set_accessible_name(self.search_entry, _("Search hosts"))
         self.search_entry.connect("search-changed", lambda e: self.on_search_changed(e.get_text()))
         self.search_entry.connect("key-press-event", self._on_search_key)
@@ -256,8 +262,35 @@ class SidebarView(Gtk.Box):
         self._sync_keycap()
         return row
 
+    def _build_bulk_bar(self) -> Gtk.Widget:
+        """Slim accent-tint bar docked under the tree while ≥ 2 hosts are selected."""
+
+        self.bulk_revealer = Gtk.Revealer()
+        self.bulk_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        bar.get_style_context().add_class("bulk-bar")
+        self.bulk_label = Gtk.Label()
+        self.bulk_label.set_xalign(0.0)
+        self.bulk_label.set_ellipsize(Pango.EllipsizeMode.END)
+        bar.pack_start(self.bulk_label, True, True, 0)
+        for icon, tip, action in (
+            (Icons.CONNECT, _("Connect selected hosts"), lambda: self.on_bulk_connect()),
+            (Icons.MOVE, _("Move selected hosts…"), lambda: self.on_bulk_move()),
+            (Icons.TAG, _("Tag or color selected hosts…"), lambda: self.on_bulk_tag()),
+            (Icons.CLEAR, _("Clear selection"), lambda: self.on_bulk_clear()),
+        ):
+            bar.pack_start(IconButton(icon, tip, action), False, False, 0)
+        self.bulk_revealer.add(bar)
+        return self.bulk_revealer
+
+    def set_bulk_count(self, count: int) -> None:
+        active = count >= 2
+        if active:
+            self.bulk_label.set_text(ngettext("{n} host selected", "{n} hosts selected", count).format(n=count))
+        self.bulk_revealer.set_reveal_child(active)
+
     def _build_footer(self) -> Gtk.Widget:
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XL)
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
         footer.get_style_context().add_class("sidebar-footer")
         footer.set_size_request(-1, Size.SIDEBAR_FOOTER)
         self.settings_link = _footer_link(Icons.SETTINGS, _("Settings"), "win.settings", _("Settings (Ctrl+,)"))

@@ -21,6 +21,7 @@ from ..i18n import _  # noqa: E402
 from ..theme.tokens import ConnectionStatus, Space  # noqa: E402
 from ..view_models import status_text  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
+from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.status_dot import StatusDot  # noqa: E402
 
 WARN_PERCENT = 80.0
@@ -55,7 +56,7 @@ def apply_stat_level(label: object, percent: Optional[float]) -> None:
 
 def _stat(icon_name: str, accessible: str) -> tuple:
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
-    image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.MENU)
+    image = make_icon(icon_name, 14, css_class="stat-icon")
     label = Gtk.Label()
     label.set_ellipsize(Pango.EllipsizeMode.END)  # let tiles shrink below the text width
     set_accessible_name(label, accessible)

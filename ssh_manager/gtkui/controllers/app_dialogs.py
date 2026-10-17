@@ -49,6 +49,7 @@ class AppDialogs:
             self.win._settings,
             on_reset=self.change_master_password,
             on_export=self.export_settings_snapshot,
+            latency_probe=self.win._ui.latency_probe,
         )
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
@@ -65,6 +66,8 @@ class AppDialogs:
         self.win._ui.theme_mode = values.theme_mode.value
         self.win._ui.font_scale = values.terminal_font_scale
         self.win._ui.ui_font_size = self.win._ui_font_size
+        self.win._ui.latency_probe = values.latency_probe
+        self.win.host_page.set_latency_enabled(values.latency_probe)
         settings = self.win._settings
         master_toggled = values.master_password_disabled != settings.master_password_disabled
         settings.remember_password_default = values.remember_password_default

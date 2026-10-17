@@ -58,6 +58,7 @@ class PreferencesValues:
     git_watch_enabled: bool
     git_watch_path: str
     git_watch_interval: int
+    latency_probe: bool = True
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
 
     @property
@@ -116,8 +117,10 @@ class PreferencesDialog(BaseDialog):
         *,
         on_reset: Optional[Callable[[], None]] = None,
         on_export: Optional[Callable[[], None]] = None,
+        latency_probe: bool = True,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
+        self._latency_probe = latency_probe
         content = self.get_content_area()
         for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top):
             setter(0)
@@ -244,6 +247,12 @@ class PreferencesDialog(BaseDialog):
         self._paramiko_check.set_active(settings.use_paramiko_vte)
         self._paramiko_check.set_tooltip_text(_("Authenticate in-process instead of running the system ssh client."))
         behaviour.add_widget(self._paramiko_check)
+        self._latency_check = Gtk.CheckButton.new_with_mnemonic(_("Measure _latency to the selected host"))
+        self._latency_check.set_active(self._latency_probe)
+        self._latency_check.set_tooltip_text(
+            _("Times a TCP connection to the selected host's SSH port. Hosts behind a jump host are never probed.")
+        )
+        behaviour.add_widget(self._latency_check)
 
     def _build_security(self) -> None:
         settings = self._settings
@@ -354,6 +363,7 @@ class PreferencesDialog(BaseDialog):
             git_watch_enabled=self._git_watch_enable.get_active(),
             git_watch_path=self._git_path_entry.get_text().strip(),
             git_watch_interval=int(self._git_interval_spin.get_value()),
+            latency_probe=self._latency_check.get_active(),
             terminal_appearance=self._appearance_from_controls(),
         )
 
