@@ -512,7 +512,7 @@ $env_badges
 .latency-dot.good, .latency-good { color: @sm_success; }
 .latency-dot.warn, .latency-warn { color: @sm_warning; }
 .latency-dot.bad, .latency-bad { color: @sm_danger; }
-.host-tile image, .host-tile { color: @sm_accent; }
+.host-tile image, .host-tile { color: @sm_accent_text; }
 .sm-window button.info-copy { color: @sm_text_muted; }
 .stat-label { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .stat-value { font-size: ${fs_body}em; font-weight: 600; color: @sm_text_primary; }

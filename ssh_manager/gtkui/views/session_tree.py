@@ -222,14 +222,14 @@ class RelayRowRenderer(Gtk.CellRendererText):
         geometry = row_geometry(kind, self.props.depth)
         mid = top + height / 2.0
         scale = widget.get_scale_factor()
-        text_color = palette.accent if selected else palette.text_primary
+        text_color = palette.accent_text if selected else palette.text_primary
 
         if geometry["chevron"] >= 0 and self.props.expandable:
             name = Icons.CHEVRON_DOWN if self.props.expanded else Icons.CHEVRON_RIGHT
             self._paint_icon(cr, name, palette.text_secondary, CHEVRON, geometry["chevron"], mid, scale)
         if geometry["icon"] >= 0:
             if kind is RowKind.HOST:
-                color = palette.accent if selected else (self.props.color or palette.text_secondary)
+                color = palette.accent_text if selected else (self.props.color or palette.text_secondary)
                 self._paint_icon(cr, Icons.HOST, color, HOST_ICON, geometry["icon"], mid, scale)
             else:
                 self._paint_icon(cr, Icons.GROUP, self.props.color or palette.icon_group, FOLDER, geometry["icon"], mid, scale)

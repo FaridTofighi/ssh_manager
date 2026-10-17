@@ -54,6 +54,23 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(Space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
 
 
+class RelayContrastTests(unittest.TestCase):
+    def test_environment_badges_meet_aa(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import ENV_BADGES
+
+        for theme, badges in ENV_BADGES.items():
+            for kind, (background, foreground) in badges.items():
+                with self.subTest(theme=theme, kind=kind):
+                    self.assertGreaterEqual(contrast_ratio(foreground, background), 4.5)
+
+    def test_selected_tree_row_and_tabs_meet_aa(self) -> None:
+        for palette in PALETTES.values():
+            with self.subTest(palette=palette.name):
+                self.assertGreaterEqual(contrast_ratio(palette.accent_text, palette.bg_selected), 4.5)
+                self.assertGreaterEqual(contrast_ratio(palette.accent_text, palette.bg_surface), 4.5)
+                self.assertGreaterEqual(contrast_ratio(palette.on_accent, palette.accent), 4.5)
+
+
 class StylesheetTests(unittest.TestCase):
     def test_both_themes_have_no_unresolved_color_names(self) -> None:
         for module in (css_dark, css_light):

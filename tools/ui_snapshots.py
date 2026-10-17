@@ -210,8 +210,12 @@ def _render(widget: Gtk.Widget, path: Path, width: int, height: int) -> None:
     widget.set_size_request(width, height)
     offscreen.show_all()
     _pump()
-    pixbuf = offscreen.get_pixbuf()
-    if pixbuf is not None:
+    surface = offscreen.get_surface() if offscreen.get_scale_factor() > 1 else None
+    pixbuf = None if surface is not None else offscreen.get_pixbuf()
+    if surface is not None:
+        surface.write_to_png(str(path))  # device pixels (HiDPI: GDK_SCALE=2)
+        print(f"saved {path}")
+    elif pixbuf is not None:
         pixbuf.savev(str(path), "png", [], [])
         print(f"saved {path}")
     else:
@@ -445,6 +449,28 @@ def run(out_dir: Path) -> None:
         prepare_relay_match(window)
         _pump()
         capture_window(window, out_dir / "relay-match.png", *RELAY_SIZE)
+        window.destroy()
+
+    @scenario("relay-dark")
+    def _relay_dark() -> None:
+        """The reference scene in the derived dark theme."""
+
+        window = _make_window(app, relay_base, True)
+        prepare_relay_match(window)
+        _pump()
+        capture_window(window, out_dir / "relay-dark.png", *RELAY_SIZE)
+        window.destroy()
+
+    @scenario("relay-compact")
+    def _relay_compact() -> None:
+        """The reference scene at the 960 px minimum width (compact top bar)."""
+
+        window = _make_window(app, relay_base, False)
+        prepare_relay_match(window)
+        window._header.set_compact(True)
+        window._paned.set_position(300)
+        _pump()
+        capture_window(window, out_dir / "relay-compact.png", 960, 720)
         window.destroy()
 
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:

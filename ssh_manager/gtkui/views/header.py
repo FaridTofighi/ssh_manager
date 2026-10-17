@@ -100,6 +100,7 @@ class HeaderView(Gtk.HeaderBar):
         self._build_brand()
         self._build_workspace_switcher()
         self._build_end_cluster(history)
+        self.set_compact(False)
 
     # ------------------------------------------------------------ building
     def _build_brand(self) -> None:
@@ -143,6 +144,7 @@ class HeaderView(Gtk.HeaderBar):
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._workspace_caption = Gtk.Label(label=_("WORKSPACE"))
         self._workspace_caption.get_style_context().add_class("workspace-label")
+        self._workspace_caption.set_no_show_all(True)  # visibility belongs to set_compact()
         content.pack_start(self._workspace_caption, False, False, 0)
         self._workspace_name = Gtk.Label(label="")
         self._workspace_name.get_style_context().add_class("workspace-name")
@@ -211,6 +213,7 @@ class HeaderView(Gtk.HeaderBar):
         self._health_dot = Dot(9, css_class="health-dot")
         health.pack_start(self._health_dot, False, False, 0)
         self._health_label = Gtk.Label(label=_("All systems operational"))
+        self._health_label.set_no_show_all(True)  # visibility belongs to set_compact()
         health.pack_start(self._health_label, False, False, 0)
         self.health_button.add(health)
         self.health_button.connect("clicked", lambda *_: self.history_button.set_active(True))

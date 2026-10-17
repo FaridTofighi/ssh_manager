@@ -167,6 +167,7 @@ class SidebarView(Gtk.Box):
         titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         eyebrow = Gtk.Label(label=_("CONNECTION MANAGER"))
         eyebrow.set_xalign(0.0)
+        eyebrow.set_ellipsize(Pango.EllipsizeMode.END)
         eyebrow.get_style_context().add_class("sidebar-eyebrow")
         titles.pack_start(eyebrow, False, False, 0)
         self.title_label = Gtk.Label(label=_("Hosts"))
