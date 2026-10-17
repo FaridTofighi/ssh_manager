@@ -19,7 +19,10 @@ if TYPE_CHECKING:  # pragma: no cover
 LOGGER = logging.getLogger(__name__)
 
 
-COMPACT_SIDEBAR_WIDTH = 280
+COMPACT_SIDEBAR_WIDTH = 300
+# The pane separator sits at x = position; the reference puts the top-bar
+# divider one pixel to its right, i.e. the brand block is position + 2 wide.
+BRAND_DIVIDER_OFFSET = 2
 
 
 class LayoutController:
@@ -34,26 +37,24 @@ class LayoutController:
         self.maximized = False
         self.details_visible_before_max = True
         self.compact = False
-        self.sidebar_button_handler = 0
-        self.maximize_button_handler = 0
 
     def toggle_sidebar(self) -> None:
         if self.maximized:
             self.set_maximized(False)
         self.set_sidebar_visible(not self.sidebar_visible)
 
-    def on_sidebar_button_toggled(self, button: Gtk.ToggleButton) -> None:
-        if button.get_active() != self.sidebar_visible:
-            if self.maximized and button.get_active():
-                self.set_maximized(False)
-            self.set_sidebar_visible(button.get_active())
-
     def update_sidebar_toggle_ui(self) -> None:
-        button = self.win._header.sidebar_button
-        if button.get_active() != self.sidebar_visible:
-            button.handler_block(self.sidebar_button_handler)
-            button.set_active(self.sidebar_visible)
-            button.handler_unblock(self.sidebar_button_handler)
+        """Keep the top-bar brand block aligned with the sidebar edge."""
+
+        header = self.win._header
+        if self.sidebar_visible:
+            header.set_brand_width(self.win._paned.get_position() + BRAND_DIVIDER_OFFSET)
+        else:
+            header.set_brand_width(None)
+
+    def on_paned_position(self, *_args) -> None:
+        if self.sidebar_visible:
+            self.win._header.set_brand_width(self.win._paned.get_position() + BRAND_DIVIDER_OFFSET)
 
     def set_sidebar_visible(self, visible: bool, *, initial: bool = False, persist: bool = True) -> None:
         if self.win._sidebar_container is None:
@@ -80,16 +81,7 @@ class LayoutController:
     def toggle_maximized(self) -> None:
         self.set_maximized(not self.maximized)
 
-    def on_maximize_button_toggled(self, button: Gtk.ToggleButton) -> None:
-        if button.get_active() != self.maximized:
-            self.set_maximized(button.get_active())
-
     def update_maximize_ui(self) -> None:
-        button = self.win._header.maximize_button
-        if button.get_active() != self.maximized:
-            button.handler_block(self.maximize_button_handler)
-            button.set_active(self.maximized)
-            button.handler_unblock(self.maximize_button_handler)
         self.win._header.set_maximized(self.maximized)
 
     def set_maximized(self, maximized: bool, *, initial: bool = False) -> None:

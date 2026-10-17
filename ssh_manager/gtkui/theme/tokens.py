@@ -91,7 +91,7 @@ class Motion:
     EASING = "cubic-bezier(0.25, 0.46, 0.45, 0.94)"
 
 
-BASE_FONT_PX = 15.0  # 1em at the default application font size (11 pt)
+BASE_FONT_PX = 11 * 96 / 72  # 1em at the default application font size (11 pt @ 96 dpi)
 
 
 def em(px: float) -> float:

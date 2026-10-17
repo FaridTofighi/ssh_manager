@@ -20,7 +20,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 
-from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango  # type: ignore  # noqa: E402,F401
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango, Vte  # type: ignore  # noqa: E402,F401
 
 from ssh_manager.config import ConfigManager  # noqa: E402
 from ssh_manager.credentials import CredentialStore  # noqa: E402
@@ -78,7 +78,10 @@ from ssh_manager.gtkui.dialogs.host_dialog import HostDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.vault import VaultDialog  # noqa: E402,F401
 
+from ssh_manager.gtkui.health import compute_health  # noqa: E402
+from ssh_manager.gtkui.identity import local_user_initials  # noqa: E402
 from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
+from ssh_manager.gtkui.workspaces import workspace_list  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import UI_FONT_FAMILIES  # noqa: E402
 from ssh_manager.gtkui.widgets.icons import register_icon_path  # noqa: E402
 
@@ -276,8 +279,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         right_box.pack_start(self.terminal_tabs, True, True, 0)
         right_box.pack_start(self._details, False, False, 0)
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._paned.get_style_context().add_class("main-paned")
+        self._paned.set_wide_handle(False)
         self._paned.pack1(self._sidebar, resize=False, shrink=False)
         self._paned.pack2(right_box, resize=True, shrink=False)
+        self._paned.connect("notify::position", self.layout.on_paned_position)
         self._toast_overlay = ToastOverlay(self._toasts)
         self._toast_overlay.add(self._paned)
         self.add(self._toast_overlay)
@@ -288,16 +294,33 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.connect("size-allocate", self.layout.on_size_allocate)
 
     def _build_header(self) -> None:
-        templates = [(t.label, f"win.new-host-template('{t.id}')") for t in built_in_templates()]
-        self._header = HeaderView(self._toasts.history, template_items=templates)
-        self._header.set_inventory_path(str(self.manager.base_dir))
+        self._header = HeaderView(self._toasts.history)
+        self._header.set_user_initials(local_user_initials())
+        self._header.on_workspace_selected = self.inventory.switch_workspace
         self.set_titlebar(self._header)
-        layout = self.layout
-        layout.sidebar_button_handler = self._header.sidebar_button.connect("toggled", layout.on_sidebar_button_toggled)
-        layout.maximize_button_handler = self._header.maximize_button.connect("toggled", layout.on_maximize_button_toggled)
+        self.refresh_workspaces()
+        self._toasts.history.add_listener(self._update_health)
+
+    def refresh_workspaces(self) -> None:
+        shared = self.inventory.shared_path
+        self._header.set_workspaces(workspace_list(self.manager.base_dir, self._ui.recent_inventories, shared))
+
+    def _update_health(self) -> None:
+        if not hasattr(self, "_header"):
+            return
+        history = self._toasts.history
+        sessions = self.terminal_tabs.session_states() if hasattr(self, "terminal_tabs") else []
+        self._header.set_health(
+            compute_health(
+                sessions,
+                warnings=history.unread_count(levels={Level.WARNING}),
+                errors=history.unread_count(levels={Level.ERROR}),
+            )
+        )
 
     def _build_sidebar(self, tree_view: Gtk.TreeView) -> SidebarView:
-        sidebar = SidebarView(tree_view)
+        templates = [(t.label, f"win.new-host-template('{t.id}')") for t in built_in_templates()]
+        sidebar = SidebarView(tree_view, template_items=templates)
         sidebar.on_search_changed = lambda _text: self.tree.rebuild(refresh=False)
         sidebar.on_filter_changed = self.tree.on_filter_text_changed
         sidebar.on_smart_group_activated = self.tree.on_smart_group_activated
@@ -334,6 +357,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         tabs.on_quick_connect = self.sessions.quick_connect
         tabs.on_new_host = self.hosts.prompt_new_host
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
+        tabs.on_sessions_changed = self._update_health
         return tabs
 
     def _register_actions(self) -> None:
@@ -355,6 +379,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,
             "about": dialogs.show_about,
+            "documentation": dialogs.open_documentation,
+            "open-folder": self.inventory.open_inventory_folder,
+            "quit": self.close,
             "host-connect": sessions.connect_current_item,
             "host-edit": hosts.edit_selected,
             "host-duplicate": hosts.duplicate_selected,
@@ -418,9 +445,24 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # ---------------------------------------------------------- public API
     def focus_search(self) -> None:
+        if self._pass_ctrl_k_to_terminal():
+            return
         if not self.layout.sidebar_visible:
             self.layout.set_sidebar_visible(True)
         self._sidebar.focus_search()
+
+    def _pass_ctrl_k_to_terminal(self) -> bool:
+        """Ctrl+K inside a terminal stays readline's kill-line instead of searching."""
+
+        event = Gtk.get_current_event()
+        focus = self.get_focus()
+        if event is None or not isinstance(focus, Vte.Terminal):
+            return False
+        ok, keyval = event.get_keyval()
+        if not ok or Gdk.keyval_to_lower(keyval) != Gdk.KEY_k:
+            return False
+        focus.feed_child(b"\x0b")
+        return True
 
     def open_selected_host(self) -> None:
         self.sessions.open_selected_host()

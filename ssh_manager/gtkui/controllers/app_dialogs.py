@@ -12,7 +12,7 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...master_auth import hash_master_password, verify_master_password  # noqa: E402
 from ...persistence import write_json_atomic  # noqa: E402
@@ -151,6 +151,16 @@ class AppDialogs:
     def show_shortcuts(self) -> None:
         window = build_shortcuts_window(self.win)
         window.show_all()
+
+    def open_documentation(self) -> None:
+        readme = Path(__file__).resolve().parents[3] / "README.md"
+        if not readme.exists():
+            self.win._notify_info(_("The documentation (README.md) is not installed."))
+            return
+        try:
+            Gtk.show_uri_on_window(self.win, readme.as_uri(), Gtk.get_current_event_time())
+        except GLib.Error as exc:
+            self.win._notify_error(_("Unable to open the documentation: {error}").format(error=exc.message))
 
     def show_about(self) -> None:
         about = Gtk.AboutDialog(transient_for=self.win, modal=True)

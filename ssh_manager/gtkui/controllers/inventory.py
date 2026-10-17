@@ -19,6 +19,7 @@ from ..dialogs.confirm import show_message  # noqa: E402
 from ..dialogs.files import choose_folder, choose_open_file  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
+from ..workspaces import Workspace, remember_workspace  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -49,10 +50,27 @@ class InventoryController:
         folder = choose_folder(self.win, _("Open SSH Config Folder"), current_folder=str(Path.home() / ".ssh"))
         if not folder:
             return
-        self.win.manager = ConfigManager(Path(folder))
-        self.win._header.set_inventory_path(str(self.win.manager.base_dir))
+        self.load_workspace(Path(folder))
+
+    def load_workspace(self, path: Path) -> None:
+        """Switch the main inventory to ``path`` and remember the previous one."""
+
+        ui = self.win._ui
+        ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
+        self.win.manager = ConfigManager(Path(path))
+        ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
+        self.win.refresh_workspaces()
         self.win.tree.rebuild(refresh=False)
-        self.win._notify_info(_("Loaded configuration from {path}.").format(path=folder))
+        self.win._save_ui_state()
+        self.win._notify_info(_("Loaded configuration from {path}.").format(path=path))
+
+    def switch_workspace(self, workspace: Workspace) -> None:
+        if workspace.read_only:
+            return
+        if not workspace.path.exists():
+            self.win._notify(_("Workspace folder not found: {path}").format(path=workspace.path), Level.WARNING)
+            return
+        self.load_workspace(workspace.path)
 
     def set_git_updates(self, available: bool) -> None:
         newly_available = available and not self.git_updates_available
@@ -235,6 +253,7 @@ class InventoryController:
         self.shared_missing_warned = False
         self.win._notify(_("Loaded shared inventory from {path}.").format(path=path), Level.SUCCESS)
         self.win.tree.rebuild(refresh=True)
+        self.win.refresh_workspaces()
         self.start_shared_poll()
         self.refresh_git_watch()
 

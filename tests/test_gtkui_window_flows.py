@@ -117,7 +117,7 @@ class WindowFlowTests(unittest.TestCase):
         win = self.win
         win.layout.toggle_sidebar()
         self.assertFalse(win.layout.sidebar_visible)
-        self.assertFalse(win._header.sidebar_button.get_active())
+        self.assertTrue(win._header.sidebar_expand_button.get_visible())
         win.layout.toggle_maximized()
         self.assertTrue(win.layout.maximized)
         win.layout.toggle_maximized()
@@ -173,3 +173,41 @@ class WindowFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class TopBarTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.sandbox = WindowSandbox()
+        self.win = self.sandbox.window
+
+    def tearDown(self) -> None:
+        self.sandbox.close()
+
+    def test_health_follows_unread_problems(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import Level
+
+        win = self.win
+        self.assertEqual(win._header.health_text, "All systems operational")
+        win._notify("Authentication failed", Level.ERROR)
+        self.assertEqual(win._header.health_text, "1 error")
+        win._toasts.history.mark_all_read()
+        self.assertEqual(win._header.health_text, "All systems operational")
+
+    def test_workspace_switcher_and_sidebar_affordances(self) -> None:
+        from pathlib import Path
+
+        win = self.win
+        self.assertEqual(win._header.workspace_name, Path(win.manager.base_dir).name)
+        other = Path(self.sandbox.base).parent / "Lab"
+        other.mkdir(exist_ok=True)
+        win.inventory.load_workspace(other)
+        self.assertEqual(win._header.workspace_name, "Lab")
+        self.assertTrue(win._ui.recent_inventories)
+        for name in ("open-folder", "documentation", "quit", "focus-search"):
+            self.assertIsNotNone(win.lookup_action(name), name)
+        self.assertIsNotNone(win._sidebar.add_menu)
+        win.layout.toggle_sidebar()
+        self.assertTrue(win._header.sidebar_expand_button.get_visible())
+        win.layout.toggle_sidebar()
+        self.assertFalse(win._header.sidebar_expand_button.get_visible())

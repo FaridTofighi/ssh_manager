@@ -56,7 +56,8 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("new-group", _("New group"), G_GENERAL),
     ActionSpec("new-child-group", _("New child group"), G_GENERAL),
     ActionSpec("quick-connect", _("Quick connect"), G_GENERAL, ("<Primary><Shift>t",)),
-    ActionSpec("focus-search", _("Search hosts"), G_GENERAL, ("<Primary>f",)),
+    ActionSpec("focus-search", _("Search hosts"), G_GENERAL, ("<Primary>k", "<Primary>f")),
+    ActionSpec("open-folder", _("Open config folder"), G_GENERAL),
     ActionSpec("refresh", _("Reload configuration"), G_GENERAL, ("F5",)),
     ActionSpec("settings", _("Settings"), G_GENERAL, ("<Primary>comma",)),
     ActionSpec("app-menu", _("Open the application menu"), G_GENERAL, ("F10",)),
@@ -67,6 +68,8 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("open-shared", _("Open shared inventory"), G_GENERAL),
     ActionSpec("git-check", _("Check for Git updates"), G_GENERAL),
     ActionSpec("about", _("About"), G_GENERAL),
+    ActionSpec("documentation", _("Documentation"), G_GENERAL),
+    ActionSpec("quit", _("Quit"), G_GENERAL, ("<Primary>q",)),
     # Hosts
     ActionSpec("host-connect", _("Connect to selected host"), G_HOSTS, ("<Primary>t",), ("Return",)),
     ActionSpec("host-edit", _("Edit selected host"), G_HOSTS),

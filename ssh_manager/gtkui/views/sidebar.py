@@ -1,4 +1,13 @@
-"""Sidebar: always-visible search, advanced-filter popover and the session tree.
+"""Sidebar: "Hosts" header with *Add host*, search, filter popover, tree and footer.
+
+Relay layout (top → bottom)::
+
+    CONNECTION MANAGER
+    Hosts                                   [+ Add host]
+    [🔍 Search hosts…            Ctrl K] [⚙ filter]
+    <tree>
+    ───────────────────────────────────────────────
+    ⚙ Settings   ⚷ Keys                          ‹
 
 The sidebar owns no inventory logic. It exposes widgets and emits callbacks:
 
@@ -18,13 +27,15 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, Gtk, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
+from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
+from ..widgets.icons import make_icon  # noqa: E402
 
 FILTER_HELP = _(
     "Combine <b>key:value</b> terms with <b>AND</b>.\n"
@@ -32,6 +43,45 @@ FILTER_HELP = _(
     "or any SSH option such as <tt>user</tt> or <tt>port</tt>.\n"
     "Example: <tt>tag:prod AND owner:alice</tt>"
 )
+
+
+HEADER_TOP = 29  # sidebar top edge → "CONNECTION MANAGER" (reference)
+SEARCH_TOP = 22  # header block → search row
+TREE_TOP_GAP = 20  # search row → first tree row
+
+
+def _add_menu_model(template_items) -> Gio.Menu:
+    """Secondary *Add host* menu: templates, Quick Connect and groups."""
+
+    menu = Gio.Menu()
+    hosts = Gio.Menu()
+    hosts.append(_("New Host…"), "win.new-host")
+    if template_items:
+        templates = Gio.Menu()
+        for label, detailed_action in template_items:
+            templates.append(label, detailed_action)
+        hosts.append_submenu(_("New Host from Template"), templates)
+    hosts.append(_("Quick Connect…"), "win.quick-connect")
+    menu.append_section(None, hosts)
+    groups = Gio.Menu()
+    groups.append(_("New Group…"), "win.new-group")
+    groups.append(_("New Child Group…"), "win.new-child-group")
+    menu.append_section(None, groups)
+    return menu
+
+
+def _footer_link(icon: str, label: str, action: str, tooltip: str) -> Gtk.Button:
+    button = Gtk.Button()
+    button.get_style_context().add_class("footer-link")
+    button.set_relief(Gtk.ReliefStyle.NONE)
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M - 2)
+    box.pack_start(make_icon(icon, 18), False, False, 0)
+    box.pack_start(Gtk.Label(label=label), False, False, 0)
+    button.add(box)
+    button.set_action_name(action)
+    button.set_tooltip_text(tooltip)
+    button.set_valign(Gtk.Align.CENTER)
+    return button
 
 
 class TreePage(str, Enum):
@@ -45,10 +95,10 @@ class TreePage(str, Enum):
 class SidebarView(Gtk.Box):
     """Left pane of the main window."""
 
-    def __init__(self, tree_view: Gtk.TreeView) -> None:
+    def __init__(self, tree_view: Gtk.TreeView, *, template_items: Sequence = ()) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.get_style_context().add_class("sidebar-pane")
-        self.set_size_request(220, -1)
+        self.set_size_request(Size.SIDEBAR_MIN - 80, -1)
 
         self.on_search_changed: Callable[[str], None] = lambda _t: None
         self.on_filter_changed: Callable[[str], None] = lambda _t: None
@@ -59,12 +109,15 @@ class SidebarView(Gtk.Box):
         self.on_open_folder: Callable[[], None] = lambda: None
         self.on_escape_to_tree: Callable[[], None] = lambda: None
 
+        self.pack_start(self._build_header(list(template_items)), False, False, 0)
         self.pack_start(self._build_search_row(), False, False, 0)
         self.pack_start(self._build_filter_chip(), False, False, 0)
 
         self.tree_view = tree_view
         scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_overlay_scrolling(True)
+        scroller.set_margin_top(TREE_TOP_GAP)
         scroller.add(tree_view)
 
         self.stack = Gtk.Stack()
@@ -94,34 +147,116 @@ class SidebarView(Gtk.Box):
         )
         self.stack.add_named(self.first_run, TreePage.EMPTY.value)
         self.pack_start(self.stack, True, True, 0)
+        self.pack_end(self._build_footer(), False, False, 0)
 
     # ------------------------------------------------------------ building
+    def _build_header(self, template_items) -> Gtk.Widget:
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
+        header.get_style_context().add_class("sidebar-header")
+        header.set_margin_start(Space.XXL)
+        header.set_margin_end(Space.XXL)
+        header.set_margin_top(HEADER_TOP)
+        titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        eyebrow = Gtk.Label(label=_("CONNECTION MANAGER"))
+        eyebrow.set_xalign(0.0)
+        eyebrow.get_style_context().add_class("sidebar-eyebrow")
+        titles.pack_start(eyebrow, False, False, 0)
+        self.title_label = Gtk.Label(label=_("Hosts"))
+        self.title_label.set_xalign(0.0)
+        self.title_label.get_style_context().add_class("sidebar-title")
+        titles.pack_start(self.title_label, False, False, 0)
+        header.pack_start(titles, True, True, 0)
+
+        self.add_host_button = Gtk.Button()
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 2)
+        content.pack_start(make_icon(Icons.NEW, 16), False, False, 0)
+        content.pack_start(Gtk.Label(label=_("Add host")), False, False, 0)
+        self.add_host_button.add(content)
+        ctx = self.add_host_button.get_style_context()
+        ctx.add_class("suggested-action")
+        ctx.add_class("add-host")
+        self.add_host_button.set_valign(Gtk.Align.END)
+        self.add_host_button.set_tooltip_text(
+            _("Add a new host (Ctrl+N). Right-click or Shift+click for templates, groups and Quick Connect.")
+        )
+        set_accessible_name(self.add_host_button, _("Add host"))
+        self.add_host_button.connect("clicked", self._on_add_host_clicked)
+        self.add_host_button.connect("button-press-event", self._on_add_host_pressed)
+        self.add_host_button.connect("popup-menu", lambda *_: self.show_add_menu() or True)
+        self._long_press = Gtk.GestureLongPress.new(self.add_host_button)
+        self._long_press.connect("pressed", lambda *_: self.show_add_menu())
+        self.add_menu = Gtk.Popover.new_from_model(self.add_host_button, _add_menu_model(template_items))
+        self.add_menu.get_style_context().add_class("sm-popover")
+        header.pack_end(self.add_host_button, False, False, 0)
+        return header
+
     def _build_search_row(self) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M - 1)
         row.get_style_context().add_class("sidebar-search")
+        row.set_margin_start(Space.XXL)
+        row.set_margin_end(Space.XXL + 1)
+        row.set_margin_top(SEARCH_TOP)
+
+        overlay = Gtk.Overlay()
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text(_("Search hosts, users, tags…"))
+        self.search_entry.get_style_context().add_class("sidebar-search-entry")
+        self.search_entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, None)
+        self.search_entry.set_placeholder_text(_("Search hosts…"))
         self.search_entry.set_hexpand(True)
         set_accessible_name(self.search_entry, _("Search hosts"))
         self.search_entry.connect("search-changed", lambda e: self.on_search_changed(e.get_text()))
         self.search_entry.connect("key-press-event", self._on_search_key)
-        row.pack_start(self.search_entry, True, True, 0)
+        for signal in ("changed", "focus-in-event", "focus-out-event"):
+            self.search_entry.connect(signal, lambda *_: self._sync_keycap() or False)
+        overlay.add(self.search_entry)
+        search_icon = make_icon(Icons.SEARCH, 16, css_class="search-icon")
+        search_icon.set_halign(Gtk.Align.START)
+        search_icon.set_valign(Gtk.Align.CENTER)
+        search_icon.set_margin_start(Space.L - 1)
+        overlay.add_overlay(search_icon)
+        overlay.set_overlay_pass_through(search_icon, True)
+        self.keycap = Gtk.Label(label=_("Ctrl K"))
+        self.keycap.get_style_context().add_class("keycap")
+        self.keycap.set_halign(Gtk.Align.END)
+        self.keycap.set_valign(Gtk.Align.CENTER)
+        self.keycap.set_margin_end(Space.M)
+        self.keycap.set_no_show_all(True)
+        overlay.add_overlay(self.keycap)
+        overlay.set_overlay_pass_through(self.keycap, True)
+        row.pack_start(overlay, True, True, 0)
 
         self.filter_button = Gtk.MenuButton()
-        overlay = Gtk.Overlay()
-        overlay.add(Gtk.Image.new_from_icon_name(Icons.FILTER, Gtk.IconSize.BUTTON))
-        self._filter_badge = Gtk.Label(label="•")
-        self._filter_badge.get_style_context().add_class("badge")
+        self.filter_button.get_style_context().add_class("filter-button")
+        filter_overlay = Gtk.Overlay()
+        filter_overlay.add(make_icon(Icons.FILTER, 18))
+        self._filter_badge = Dot(6, css_class="filter-dot")
         self._filter_badge.set_halign(Gtk.Align.END)
         self._filter_badge.set_valign(Gtk.Align.START)
+        self._filter_badge.set_margin_top(Space.S)
+        self._filter_badge.set_margin_end(Space.XS + 2)
         self._filter_badge.set_no_show_all(True)
-        overlay.add_overlay(self._filter_badge)
-        self.filter_button.add(overlay)
+        filter_overlay.add_overlay(self._filter_badge)
+        self.filter_button.add(filter_overlay)
         self.filter_button.set_tooltip_text(_("Advanced filter and smart groups"))
         set_accessible_name(self.filter_button, _("Advanced filter"))
         self.filter_button.set_popover(self._build_filter_popover())
         row.pack_start(self.filter_button, False, False, 0)
+        self._sync_keycap()
         return row
+
+    def _build_footer(self) -> Gtk.Widget:
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XL)
+        footer.get_style_context().add_class("sidebar-footer")
+        footer.set_size_request(-1, Size.SIDEBAR_FOOTER)
+        self.settings_link = _footer_link(Icons.SETTINGS, _("Settings"), "win.settings", _("Settings (Ctrl+,)"))
+        footer.pack_start(self.settings_link, False, False, 0)
+        self.keys_link = _footer_link(Icons.KEY, _("Keys"), "win.credentials", _("Credentials and keys"))
+        footer.pack_start(self.keys_link, False, False, 0)
+        self.collapse_button = IconButton(
+            Icons.CHEVRON_LEFT, _("Hide sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("footer-icon",)
+        )
+        footer.pack_end(self.collapse_button, False, False, 0)
+        return footer
 
     def _build_filter_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
@@ -268,6 +403,26 @@ class SidebarView(Gtk.Box):
     def selected_smart_group(self) -> Optional[int]:
         row = self.smart_group_list.get_selected_row()
         return row.get_index() if row is not None else None
+
+    def show_add_menu(self) -> None:
+        self.add_menu.popup()
+
+    def _on_add_host_clicked(self, _button: Gtk.Button) -> None:
+        event = Gtk.get_current_event()
+        state = event.get_state()[1] if event is not None and event.get_state()[0] else 0
+        if state & Gdk.ModifierType.SHIFT_MASK:
+            self.show_add_menu()
+        else:
+            self.on_add_host()
+
+    def _on_add_host_pressed(self, _button: Gtk.Button, event: Gdk.EventButton) -> bool:
+        if event.type == Gdk.EventType.BUTTON_PRESS and event.button == Gdk.BUTTON_SECONDARY:
+            self.show_add_menu()
+            return True
+        return False
+
+    def _sync_keycap(self) -> None:
+        self.keycap.set_visible(not self.search_entry.get_text() and not self.search_entry.has_focus())
 
     def focus_search(self) -> None:
         self.search_entry.grab_focus()

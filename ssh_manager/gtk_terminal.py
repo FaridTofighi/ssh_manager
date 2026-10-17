@@ -1507,6 +1507,7 @@ class TerminalNotebook(Gtk.Box):
         self.on_quick_connect: Optional[Callable[[], None]] = None
         self.on_new_host: Optional[Callable[[], None]] = None
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
+        self.on_sessions_changed: Optional[Callable[[], None]] = None
 
         self._build_toolbar()
         self._broadcast_strip = BroadcastStrip(lambda: self.set_broadcast_mode(False))
@@ -1647,6 +1648,7 @@ class TerminalNotebook(Gtk.Box):
             self._append_tab_to_notebook(tab)
         self._update_placeholder()
         self._update_broadcast_ui()
+        self._emit_sessions_changed()
         GLib.idle_add(tab.focus_terminal)
         return tab
 
@@ -1688,6 +1690,7 @@ class TerminalNotebook(Gtk.Box):
             self._rebuild_tile_grid()
         self._update_placeholder()
         self._update_broadcast_ui()
+        self._emit_sessions_changed()
 
     def close_current(self) -> None:
         self.close_tab()
@@ -2041,6 +2044,14 @@ class TerminalNotebook(Gtk.Box):
         self._update_broadcast_ui()
         if tab is self._current_tab():
             self._sync_toolbar()
+        self._emit_sessions_changed()
+
+    def _emit_sessions_changed(self) -> None:
+        if self.on_sessions_changed is not None:
+            self.on_sessions_changed()
+
+    def session_states(self) -> List[ConnectionStatus]:
+        return [tab.status for tab in self._tabs]
 
     def _on_tab_session_closed(self, tab: TerminalTab, alias: str, exited_normally: bool) -> None:
         status = _("Session ended cleanly") if exited_normally else _("Session terminated unexpectedly")

@@ -277,7 +277,7 @@ class GtkAppHelperTests(unittest.TestCase):
             }
         )
         self.assertIsNone(loaded.window_size)
-        self.assertEqual((loaded.sidebar_width, loaded.ui_font_size, loaded.font_scale), (320, 11, 1.0))
+        self.assertEqual((loaded.sidebar_width, loaded.ui_font_size, loaded.font_scale), (407, 11, 1.0))
         self.assertTrue(loaded.details_expanded)
         self.assertEqual(loaded.filter_query, "")
         self.assertEqual(loaded.group_colors, {})

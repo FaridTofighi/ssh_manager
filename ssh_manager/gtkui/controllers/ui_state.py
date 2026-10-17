@@ -12,9 +12,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ...persistence import write_json_atomic
+from ..theme.tokens import Size
+
+DEFAULT_SIDEBAR_WIDTH = Size.SIDEBAR - 1  # + the 1px pane separator = 408
 
 UI_STATE_FILE = ".ui_state.json"
 
@@ -68,13 +71,19 @@ def _str_map(value: object) -> Dict[str, str]:
     return {str(k): str(v) for k, v in value.items() if isinstance(v, str)}
 
 
+def _str_list(value: object) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
 @dataclass
 class UiState:
     """Typed view of the persisted UI state."""
 
     window_size: Optional[Tuple[int, int]] = None
     is_maximized: bool = False
-    sidebar_width: int = 320
+    sidebar_width: int = DEFAULT_SIDEBAR_WIDTH
     sidebar_visible: bool = True
     sidebar_prev_visible: bool = True
     terminal_maximized: bool = False
@@ -86,6 +95,7 @@ class UiState:
     filter_query: str = ""
     group_colors: Dict[str, str] = field(default_factory=dict)
     host_colors: Dict[str, str] = field(default_factory=dict)
+    recent_inventories: List[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "UiState":
@@ -103,7 +113,7 @@ class UiState:
         return cls(
             window_size=window_size,
             is_maximized=data.get("is_maximized") is True,
-            sidebar_width=max(0, _int(data.get("sidebar_width"), 320)),
+            sidebar_width=max(0, _int(data.get("sidebar_width"), DEFAULT_SIDEBAR_WIDTH)),
             sidebar_visible=sidebar_visible,
             sidebar_prev_visible=_bool(data.get("sidebar_prev_visible"), sidebar_visible),
             terminal_maximized=data.get("terminal_maximized") is True,
@@ -115,6 +125,7 @@ class UiState:
             filter_query=_str(data.get("filter_query"), ""),
             group_colors=_str_map(data.get("group_colors")),
             host_colors=_str_map(data.get("host_colors")),
+            recent_inventories=_str_list(data.get("recent_inventories")),
         )
 
     def to_dict(self) -> Dict[str, object]:
@@ -133,5 +144,6 @@ class UiState:
             "details_expanded": self.details_expanded,
             "filter_query": self.filter_query,
             "group_colors": dict(self.group_colors),
+            "recent_inventories": list(self.recent_inventories),
             "host_colors": dict(self.host_colors),
         }

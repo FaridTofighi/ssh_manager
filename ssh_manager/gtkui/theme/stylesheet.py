@@ -20,6 +20,7 @@ from .tokens import (
     CAPS_TRACKING,
     MONO_FONT_FAMILIES,
     UI_FONT_FAMILIES,
+    em,
     FontScale,
     Motion,
     Palette,
@@ -324,7 +325,10 @@ headerbar.sm-topbar button.titlebutton {
     background: transparent;
     color: @sm_text_muted;
 }
-.topbar-brand { padding-left: ${xxl}px; border-right: 1px solid @sm_border_subtle; }
+.topbar-divider { background-color: @sm_border_subtle; min-width: 1px; margin: 0; }
+.accent-icon { color: @sm_accent; }
+.workspace-chevron { color: @sm_text_secondary; }
+.sm-window button.avatar.attention { box-shadow: 0 0 0 2px @sm_bg_surface, 0 0 0 4px @sm_warning; }
 .logo-tile {
     background-color: @sm_accent;
     color: @sm_on_accent;
@@ -342,7 +346,8 @@ headerbar.sm-topbar button.titlebutton {
     padding: ${xs}px ${s}px;
 }
 .sm-window button.workspace-switcher:hover { background-color: @sm_bg_hover; }
-.health { color: @sm_text_muted; font-size: ${fs_caps_14}em; }
+.sm-window button.health { color: @sm_text_muted; font-size: ${fs_caps_14}em; font-weight: 400; padding: ${xs}px ${s}px; }
+.sm-window button.health:hover { color: @sm_text_primary; }
 .health-dot { color: @sm_success; }
 .health-dot.warning { color: @sm_warning; }
 .health-dot.error { color: @sm_danger; }
@@ -380,11 +385,17 @@ headerbar.sm-topbar button.titlebutton {
 .badge.subtle { background-color: @sm_chip_bg; color: @sm_text_secondary; }
 
 /* ------------------------------------------------------------ sidebar */
-.sidebar-pane {
-    background-color: @sm_bg_surface;
-    border-right: 1px solid @sm_border_subtle;
+.sidebar-pane { background-color: @sm_bg_surface; }
+paned.main-paned > separator, paned.main-paned > separator.wide {
+    background-image: none;
+    background-color: @sm_border_subtle;
+    -gtk-icon-source: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    min-width: 1px;
+    min-height: 1px;
 }
-.sidebar-pane:dir(rtl) { border-right: none; border-left: 1px solid @sm_border_subtle; }
 .sidebar-eyebrow { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .sidebar-title { font-size: ${fs_page_title}em; font-weight: 400; color: @sm_text_primary; }
 .sm-window button.add-host { min-height: ${button}px; padding: 0 ${l}px; font-size: ${fs_body}em; }
@@ -393,8 +404,10 @@ headerbar.sm-topbar button.titlebutton {
     background-color: @sm_bg_input;
     border-radius: ${r_input}px;
     font-size: ${fs_body}em;
-    padding-left: ${m}px;
+    padding-left: ${search_text_inset}px;
+    padding-right: ${m}px;
 }
+.sidebar-search .search-icon { color: @sm_text_muted; }
 .keycap {
     border: 1px solid @sm_border_input;
     border-radius: ${r_keycap}px;
@@ -428,8 +441,9 @@ headerbar.sm-topbar button.titlebutton {
 .sidebar-footer {
     border-top: 1px solid @sm_border_subtle;
     min-height: ${sidebar_footer}px;
-    padding: 0 ${xxl}px;
+    padding: 0 ${l}px;
 }
+.sm-window button.footer-icon { color: @sm_text_muted; }
 .sm-window button.footer-link {
     background: transparent;
     border-color: transparent;
@@ -737,12 +751,13 @@ def _values(palette: Palette, motion: str) -> Dict[str, object]:
         "avatar": Size.AVATAR, "icon_button": Size.ICON_BUTTON, "search": Size.SEARCH, "button": Size.BUTTON,
         "button_large": Size.BUTTON_LARGE, "hero": Size.HERO_BUTTON, "host_tile": Size.HOST_TILE,
         "empty_card": Size.EMPTY_CARD, "badge": Size.BADGE,
+        "search_text_inset": Space.GUTTER + Space.S + 1,
         "fs_caps": FontScale.CAPS, "fs_caps_14": FontScale.MONO, "fs_badge": FontScale.BADGE,
         "fs_caption": FontScale.CAPTION, "fs_mono": FontScale.MONO, "fs_body": FontScale.BODY,
         "fs_tree": FontScale.TREE, "fs_subtitle": FontScale.SUBTITLE, "fs_wordmark": FontScale.WORDMARK,
         "fs_hero_title": FontScale.HERO_TITLE, "fs_host_title": FontScale.HOST_TITLE,
         "fs_page_title": FontScale.PAGE_TITLE, "fs_title": FontScale.TITLE,
-        "fs_dialog_title": round(18 / 15, 3),
+        "fs_dialog_title": em(18),
     }
 
 
