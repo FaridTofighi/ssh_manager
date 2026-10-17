@@ -48,6 +48,16 @@ from ssh_manager.gtkui.dialogs.credentials import CredentialEditDialog
 from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.validation import validate_child_path, validate_group_name
+from ssh_manager.gtkui.controllers.notifications import ToastController
+from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window, register_actions
+from ssh_manager.gtkui.controllers import details_presenter
+from ssh_manager.gtkui.constants import RowKind
+from ssh_manager.gtkui.dialogs.files import choose_folder
+from ssh_manager.gtkui.views.details import DetailsView
+from ssh_manager.gtkui.views.header import HeaderView
+from ssh_manager.gtkui.views.sidebar import SidebarView, TreePage
+from ssh_manager.gtkui.widgets.toast import ToastOverlay
+from ssh_manager.ssh_command import build_ssh_command
 from ssh_manager.gtkui.theme.terminal_schemes import SCHEMES as TERMINAL_SCHEMES, resolve_terminal_colors
 
 UI_STATE_FILE = ".ui_state.json"
@@ -58,6 +68,27 @@ LOGGER = logging.getLogger(__name__)
 
 def ui_state_path_for_base(base_dir: Path) -> Path:
     return (base_dir.parent if base_dir.is_file() else base_dir) / UI_STATE_FILE
+
+
+def _int_state(value: object, default: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def _float_state(value: object, default: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return float(value)
+
+
+def _system_font_family() -> str:
+    settings = Gtk.Settings.get_default()
+    if settings:
+        font_name = settings.get_property("gtk-font-name") or ""
+        if font_name:
+            family = Pango.FontDescription(font_name).get_family()
+            if family:
+                return family
+    return "Sans"
 
 
 def audit_log_key(value: object) -> str:
@@ -1601,7 +1632,6 @@ class SSHManagerApplication(Gtk.Application):
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
         self._install_css(None)
-        self._create_actions()
 
     def do_activate(self) -> None:  # type: ignore[override]
         if not self._window:
@@ -1779,39 +1809,6 @@ class SSHManagerApplication(Gtk.Application):
         self._theme.shutdown()
         Gtk.Application.do_shutdown(self)
 
-    def _create_actions(self) -> None:
-        mapping = {
-            "new-host": lambda: self._with_window(lambda win: win.prompt_new_host()),
-            "new-tab": lambda: self._with_window(lambda win: win.open_selected_host()),
-            "close-tab": lambda: self._with_window(lambda win: win.terminal_tabs.close_current()),
-            "copy": lambda: self._with_window(lambda win: win.terminal_tabs.copy_current()),
-            "paste": lambda: self._with_window(lambda win: win.terminal_tabs.paste_current()),
-            "interrupt": lambda: self._with_window(lambda win: win.terminal_tabs.interrupt_current()),
-            "focus-search": lambda: self._with_window(lambda win: win.focus_search()),
-            "font-increase": lambda: self._with_window(lambda win: win.terminal_tabs.increase_font()),
-            "font-decrease": lambda: self._with_window(lambda win: win.terminal_tabs.decrease_font()),
-            "font-reset": lambda: self._with_window(lambda win: win.terminal_tabs.reset_font()),
-        }
-        for name, callback in mapping.items():
-            action = Gio.SimpleAction.new(name, None)
-            action.connect("activate", lambda _act, _param, cb=callback: cb())
-            self.add_action(action)
-
-        self.set_accels_for_action("app.new-host", ("<Primary>n",))
-        self.set_accels_for_action("app.new-tab", ("<Primary>t",))
-        self.set_accels_for_action("app.close-tab", ("<Primary>w",))
-        self.set_accels_for_action("app.copy", ("<Primary><Shift>c",))
-        self.set_accels_for_action("app.paste", ("<Primary><Shift>v",))
-        self.set_accels_for_action("app.interrupt", ("<Primary><Shift>k",))
-        self.set_accels_for_action("app.focus-search", ("<Primary>f",))
-        self.set_accels_for_action("app.font-increase", ("<Primary>plus", "<Primary>equal", "<Primary>KP_Add"))
-        self.set_accels_for_action("app.font-decrease", ("<Primary>minus", "<Primary>KP_Subtract"))
-        self.set_accels_for_action("app.font-reset", ("<Primary>0", "<Primary>KP_0"))
-
-    def _with_window(self, func) -> None:
-        if self._window:
-            func(self._window)
-
 
 class SSHManagerWindow(Gtk.ApplicationWindow):
     """Main window for the SSH manager."""
@@ -1839,11 +1836,25 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         master_password: Optional[str] = None,
     ) -> None:
         Gtk.ApplicationWindow.__init__(self, application=app)
-        self.set_title("SSH Manager")
+        self.set_title(_("SSH Manager"))
         self.set_default_size(1280, 820)
-        self.set_size_request(960, 640)
+        self.set_size_request(960, 600)
         self.set_name("ssh-manager-window")
+        self.get_style_context().add_class("sm-window")
 
+        self._init_services(base_dir, settings, master_password)
+        self._init_state()
+        self._build_ui()
+        self._register_actions()
+        self._apply_ui_state()
+        self._rebuild_tree(refresh=True)
+        self._refresh_git_watch()
+        self._warn_if_password_file_locked()
+
+        self.connect("delete-event", self._on_delete_event)
+        self.connect("destroy", self._on_destroy)
+
+    def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str]) -> None:
         self.manager = ConfigManager(base_dir)
         self._settings = settings
         self._master_password = master_password
@@ -1856,365 +1867,68 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._ui_state_path = ui_state_path_for_base(base_dir)
         self._ui_state = self._load_ui_state()
         self._profiles: Dict[str, SessionProfile] = {p.id: p for p in built_in_profiles()}
+        self._toasts = ToastController()
         self._shared_manager: Optional[ConfigManager] = None
         self._shared_path: Optional[Path] = None
         self._read_only_keys: set[str] = set()
         self._shared_poll_id: int = 0
         self._shared_mtime: Optional[float] = None
         self._shared_missing_warned = False
-        colors = self._ui_state.get("group_colors", {})
+
+    def _init_state(self) -> None:
+        state = self._ui_state
+        colors = state.get("group_colors", {})
         self._group_colors: Dict[str, str] = (
             {str(k): str(v) for k, v in colors.items()} if isinstance(colors, dict) else {}
         )
-        host_colors = self._ui_state.get("host_colors", {})
+        host_colors = state.get("host_colors", {})
         self._host_colors: Dict[str, str] = (
             {str(k): str(v) for k, v in host_colors.items()} if isinstance(host_colors, dict) else {}
         )
         self._color_pixbuf_cache: Dict[str, GdkPixbuf.Pixbuf] = {}
-
         self._theme_mode = ThemeMode.coerce(
-            self._ui_state.get("theme_mode"),
-            ThemeMode.from_prefer_dark(self._ui_state.get("prefer_dark", True)),
+            state.get("theme_mode"),
+            ThemeMode.from_prefer_dark(state.get("prefer_dark", True)),
         )
         self._prefer_dark = self._theme_mode is ThemeMode.DARK
-        self.get_style_context().add_class("sm-window")
-        self._ui_font_size = int(self._ui_state.get("ui_font_size", 14))
-        settings = Gtk.Settings.get_default()
-        self._base_font_family = "Sans"
-        if settings:
-            font_name = settings.get_property("gtk-font-name") or ""
-            if font_name:
-                desc = Pango.FontDescription(font_name)
-                family = desc.get_family()
-                if family:
-                    self._base_font_family = family
+        self._ui_font_size = _int_state(state.get("ui_font_size"), 14)
+        self._base_font_family = _system_font_family()
         self._apply_ui_font(self._ui_font_size)
         self._host_lookup: Dict[str, HostEntry] = {}
         self._host_status: Dict[str, str] = {}
         self._host_iters: Dict[str, Gtk.TreeIter] = {}
-        self._filter_query: str = ""
+        last_filter = state.get("filter_query")
+        self._filter_query: str = last_filter if isinstance(last_filter, str) else ""
         self._filter_error: str = ""
         self._smart_groups: List[SmartGroup] = load_smart_groups()
-        self._status_timeout_id = 0
         self._git_watch_thread: Optional[threading.Thread] = None
         self._git_watch_stop = threading.Event()
         self._git_updates_available = False
         self._git_watch_path: Optional[Path] = None
-        self._sidebar_visible = bool(self._ui_state.get("sidebar_visible", True))
-        self._sidebar_width_saved = int(self._ui_state.get("sidebar_width", 320))
+        self._sidebar_visible = bool(state.get("sidebar_visible", True))
+        self._sidebar_width_saved = _int_state(state.get("sidebar_width"), 320)
         self._sidebar_container: Optional[Gtk.Widget] = None
-        self._sidebar_toggle_button: Optional[Gtk.Button] = None
-        self._sidebar_toggle_icon: Optional[Gtk.Image] = None
         self._sidebar_visible_before_max = self._sidebar_visible
         self._terminal_maximized = False
-        self._terminal_toggle_button: Optional[Gtk.Button] = None
-        self._detail_revealer: Optional[Gtk.Revealer] = None
-        self._status_visible_before_max = False
-        self.search_revealer: Optional[Gtk.Revealer] = None
-        self.search_entry: Optional[Gtk.SearchEntry] = None
-        self.filter_entry: Optional[Gtk.Entry] = None
-        self._search_inputs_box: Optional[Gtk.Box] = None
-        self._search_toggle_button: Optional[Gtk.Button] = None
-        self._search_toggle_icon: Optional[Gtk.Image] = None
-        self._search_inputs_orientation = Gtk.Orientation.VERTICAL
-        self._search_panel_escape_ready = False
-
+        self._details_visible_before_max = True
+        self._compact = False
         self.tree_store = Gtk.TreeStore(str, str, str, str, str, str, object, str, str, str)
 
-        self._build_ui()
-        self._register_actions()
-        self._apply_ui_state()
-        self._rebuild_tree(refresh=True)
-        self._refresh_git_watch()
+    def _warn_if_password_file_locked(self) -> None:
         backend = self._secure_store.backend
         if isinstance(backend, FileKeyring) and backend.locked:
             self._notify_warning(
-                "Saved passwords are encrypted but could not be unlocked; enable the master password to use them."
+                _("Saved passwords are encrypted but could not be unlocked; enable the master password to use them.")
             )
-
-        self.connect("delete-event", self._on_delete_event)
-        self.connect("destroy", self._on_destroy)
 
     # ------------------------------------------------------------------ setup UI
     def _build_ui(self) -> None:
-        header = Gtk.HeaderBar(title="SSH Manager")
-        header.set_show_close_button(True)
-        header.get_style_context().add_class("toolbar-header")
-        header.get_style_context().add_class("toolbar-header")
+        self._build_header()
+        self.tree_view = self._build_tree_view()
+        self._sidebar = self._build_sidebar(self.tree_view)
+        self._sidebar_container = self._sidebar
 
-        end_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        header.pack_end(end_box)
-
-        self._credentials_button = self._toolbar_button(
-            "dialog-password-symbolic",
-            "Credentials",
-            self._on_credentials_clicked,
-        )
-        self._credentials_button.set_tooltip_text("Manage saved credentials (username/password).")
-        end_box.pack_start(self._credentials_button, False, False, 0)
-
-        self._settings_button = self._toolbar_button("emblem-system-symbolic", "Settings", self._on_settings_clicked)
-        self._settings_button.set_tooltip_text("Open application settings and policies.")
-        end_box.pack_start(self._settings_button, False, False, 0)
-
-        self._config_view_button = self._toolbar_button(
-            "text-x-generic-symbolic",
-            "Config",
-            self._on_config_view_clicked,
-        )
-        self._config_view_button.set_tooltip_text("View or edit SSH config files.")
-        end_box.pack_start(self._config_view_button, False, False, 0)
-
-        self._vault_button = self._toolbar_button(
-            "dialog-password-symbolic",
-            "Vault",
-            self._on_vault_clicked,
-        )
-        self._vault_button.set_tooltip_text("Open the encrypted credential vault.")
-        end_box.pack_start(self._vault_button, False, False, 0)
-
-        self._shared_button = self._toolbar_button(
-            "folder-remote-symbolic",
-            "Open Shared",
-            self._on_open_shared_clicked,
-        )
-        self._shared_button.set_tooltip_text("Load an additional read-only shared inventory.")
-        end_box.pack_start(self._shared_button, False, False, 0)
-
-        self._git_update_button = self._toolbar_button(
-            "software-update-available-symbolic",
-            "Git updates",
-            self._on_git_updates_clicked,
-        )
-        self._git_update_button.set_tooltip_text("New commits available in remote repository.")
-        self._git_update_button.hide()
-        end_box.pack_start(self._git_update_button, False, False, 0)
-
-        self._terminal_toggle_button = self._toolbar_button(
-            "view-fullscreen-symbolic",
-            "Maximize",
-            self._toggle_terminal_maximized,
-        )
-        end_box.pack_start(self._terminal_toggle_button, False, False, 0)
-
-        self.set_titlebar(header)
-
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        root.set_name("root")
-        self.add(root)
-
-        self._status_revealer = Gtk.Revealer()
-        self._status_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
-        self._status_revealer.set_transition_duration(220)
-        self._status_revealer.set_reveal_child(False)
-
-        self._bulk_revealer = Gtk.Revealer()
-        self._bulk_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
-        self._bulk_revealer.set_transition_duration(180)
-        self._bulk_revealer.set_reveal_child(False)
-
-        self._status_label = Gtk.Label()
-        self._status_label.set_xalign(0.0)
-        status_box = Gtk.Box(spacing=6)
-        status_box.set_border_width(8)
-        status_box.set_name("status-banner")
-        status_box.pack_start(self._status_label, True, True, 0)
-
-        bulk_box = Gtk.Box(spacing=6)
-        bulk_box.set_border_width(8)
-        bulk_box.set_name("status-banner")
-        bulk_label = Gtk.Label(label="Bulk actions:")
-        bulk_label.set_xalign(0.0)
-        bulk_box.pack_start(bulk_label, False, False, 0)
-        bulk_connect_btn = Gtk.Button(label="Connect Selected")
-        bulk_connect_btn.connect("clicked", lambda *_: self._bulk_connect_selected())
-        bulk_box.pack_start(bulk_connect_btn, False, False, 0)
-        bulk_move_btn = Gtk.Button(label="Move Selected…")
-        bulk_move_btn.connect("clicked", lambda *_: self._bulk_move_selected())
-        bulk_box.pack_start(bulk_move_btn, False, False, 0)
-        bulk_tag_btn = Gtk.Button(label="Tag/Color Selected…")
-        bulk_tag_btn.connect("clicked", lambda *_: self._bulk_tag_selected())
-        bulk_box.pack_start(bulk_tag_btn, False, False, 0)
-        self._bulk_revealer.add(bulk_box)
-
-        self._status_revealer.add(status_box)
-        self._status_revealer.connect("notify::child-revealed", self._on_status_revealer_revealed)
-        if not self._status_revealer.get_child_revealed():
-            self._status_revealer.hide()
-
-        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        root.pack_start(main_box, True, True, 0)
-
-        toggle_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        toggle_box.set_border_width(0)
-        toggle_box.set_vexpand(True)
-        main_box.pack_start(toggle_box, False, False, 0)
-
-        self._sidebar_toggle_button = Gtk.Button()
-        self._sidebar_toggle_button.set_relief(Gtk.ReliefStyle.NONE)
-        self._sidebar_toggle_button.get_style_context().add_class("sidebar-toggle")
-        self._sidebar_toggle_button.set_size_request(28, -1)
-        self._sidebar_toggle_icon = Gtk.Image.new_from_icon_name("go-previous-symbolic", Gtk.IconSize.BUTTON)
-        self._sidebar_toggle_button.add(self._sidebar_toggle_icon)
-        self._sidebar_toggle_button.connect("clicked", lambda _btn: self._toggle_sidebar())
-        toggle_box.pack_start(self._sidebar_toggle_button, False, False, 6)
-        toggle_box.pack_start(Gtk.Box(), True, True, 0)
-
-        self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
-        main_box.pack_start(self._paned, True, True, 0)
-
-        sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        sidebar_box.set_border_width(12)
-        sidebar_box.set_name("sidebar")
-        self._sidebar_container = sidebar_box
-
-        search_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        search_label = Gtk.Label(label="Search & Filter")
-        search_label.set_xalign(0.0)
-        search_label.get_style_context().add_class("dim-label")
-        search_header.pack_start(search_label, True, True, 0)
-        self._search_toggle_button = Gtk.Button()
-        self._search_toggle_button.set_relief(Gtk.ReliefStyle.NONE)
-        self._search_toggle_button.get_style_context().add_class("search-toggle-button")
-        self._search_toggle_button.set_tooltip_text("Show search panel")
-        self._search_toggle_icon = Gtk.Image.new_from_icon_name("system-search-symbolic", Gtk.IconSize.BUTTON)
-        self._search_toggle_icon.get_style_context().add_class("search-toggle-icon")
-        self._search_toggle_button.add(self._search_toggle_icon)
-        self._search_toggle_button.connect("clicked", lambda _btn: self._toggle_search_panel())
-        search_header.pack_start(self._search_toggle_button, False, False, 0)
-        sidebar_box.pack_start(search_header, False, False, 0)
-
-        self.search_revealer = Gtk.Revealer()
-        self.search_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
-        self.search_revealer.set_transition_duration(150)
-        self.search_revealer.set_reveal_child(False)
-        self.search_revealer.connect("notify::child-revealed", self._on_search_panel_reveal)
-        sidebar_box.pack_start(self.search_revealer, False, False, 0)
-
-        search_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        search_card.set_hexpand(True)
-        search_card.set_margin_bottom(6)
-        search_card.get_style_context().add_class("search-card")
-        self._search_inputs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        search_card.pack_start(self._search_inputs_box, False, False, 0)
-
-        self._search_entry = Gtk.SearchEntry()
-        self._search_entry.set_placeholder_text("Search hosts, users, tags…")
-        self._search_entry.connect("search-changed", self._on_search_changed)
-        self._search_entry.connect("key-press-event", self._on_search_key_press)
-        self._search_entry.get_style_context().add_class("search-input")
-        self._search_entry.set_hexpand(True)
-        self._search_inputs_box.pack_start(self._search_entry, True, True, 0)
-        self._search_escape_time = 0.0
-        self.search_entry = self._search_entry
-
-        self._filter_entry = Gtk.Entry()
-        self._filter_entry.set_placeholder_text("Filter (e.g. tag:prod AND owner:alice)")
-        self._filter_entry.connect("changed", self._on_filter_changed)
-        self._filter_entry.connect("key-press-event", self._on_filter_key_press)
-        self._filter_entry.get_style_context().add_class("search-input")
-        self._filter_entry.set_hexpand(True)
-        self._search_inputs_box.pack_start(self._filter_entry, True, True, 0)
-        self.filter_entry = self._filter_entry
-
-        self._filter_error_label = Gtk.Label()
-        self._filter_error_label.set_xalign(0.0)
-        self._filter_error_label.get_style_context().add_class("error")
-        self._filter_error_label.set_no_show_all(True)
-        search_card.pack_start(self._filter_error_label, False, False, 0)
-
-        self._smart_group_list = Gtk.ListBox()
-        self._smart_group_list.connect("row-activated", self._on_smart_group_activated)
-        smart_frame = Gtk.Frame(label="Smart Groups")
-        smart_frame.get_style_context().add_class("dim-label")
-        smart_frame.add(self._smart_group_list)
-        search_card.pack_start(smart_frame, False, False, 0)
-        self._refresh_smart_group_list()
-
-        sg_btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        sg_btn_row.get_style_context().add_class("search-card-actions")
-        add_sg_btn = Gtk.Button(label="Save Filter")
-        add_sg_btn.connect("clicked", lambda *_: self._save_current_filter_as_group())
-        del_sg_btn = Gtk.Button(label="Delete")
-        del_sg_btn.connect("clicked", lambda *_: self._delete_selected_smart_group())
-        for btn in (add_sg_btn, del_sg_btn):
-            sg_btn_row.pack_start(btn, False, False, 0)
-        search_card.pack_start(sg_btn_row, False, False, 0)
-
-        self.search_revealer.add(search_card)
-        if not self.search_revealer.get_child_revealed():
-            self.search_revealer.hide()
-        self._update_search_toggle_state()
-
-        self.tree_view = Gtk.TreeView(model=self.tree_store)
-        self.tree_view.set_headers_visible(False)
-        self.tree_view.set_enable_tree_lines(True)
-        self.tree_view.connect("row-activated", self._on_row_activated)
-        self.tree_view.connect("button-press-event", self._on_tree_button_press)
-        self.tree_view.connect("key-press-event", self._on_tree_key_press)
-        selection = self.tree_view.get_selection()
-        selection.set_mode(Gtk.SelectionMode.MULTIPLE)
-        selection.connect("changed", self._on_selection_changed)
-        self._configure_drag_and_drop()
-
-        icon_renderer = Gtk.CellRendererPixbuf()
-        text_renderer = Gtk.CellRendererText()
-        text_renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
-
-        column = Gtk.TreeViewColumn()
-        column.pack_start(icon_renderer, False)
-        column.pack_start(text_renderer, True)
-        column.set_cell_data_func(icon_renderer, self._render_icon)
-        column.set_cell_data_func(text_renderer, self._render_text)
-        self.tree_view.append_column(column)
-
-        tree_scroller = Gtk.ScrolledWindow()
-        tree_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        tree_scroller.add(self.tree_view)
-        sidebar_box.pack_start(tree_scroller, True, True, 0)
-
-        self._paned.pack1(sidebar_box, resize=True, shrink=False)
-
-        right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        right_box.set_border_width(12)
-        right_box.set_name("content")
-
-        self._detail_frame = Gtk.Frame()
-        self._detail_frame.set_shadow_type(Gtk.ShadowType.NONE)
-        self._detail_frame.set_name("detail-frame")
-        self._detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self._detail_box.set_name("detail-box")
-        self._detail_frame.add(self._detail_box)
-        self._detail_revealer = Gtk.Revealer()
-        self._detail_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
-        self._detail_revealer.set_transition_duration(250)
-        self._detail_revealer.set_reveal_child(True)
-        self._detail_revealer.add(self._detail_frame)
-        self._detail_revealer.connect("notify::child-revealed", self._on_detail_revealer_revealed)
-        if not self._detail_revealer.get_child_revealed():
-            self._detail_revealer.hide()
-        right_box.pack_start(self._detail_revealer, False, False, 0)
-
-        self._detail_title = Gtk.Label()
-        self._detail_title.set_xalign(0.0)
-        self._detail_title.get_style_context().add_class("detail-title")
-        self._detail_box.pack_start(self._detail_title, False, False, 0)
-
-        self._detail_subtitle = Gtk.Label()
-        self._detail_subtitle.set_xalign(0.0)
-        self._detail_subtitle.get_style_context().add_class("detail-subtitle")
-        self._detail_box.pack_start(self._detail_subtitle, False, False, 0)
-
-        self._tag_flow = Gtk.FlowBox()
-        self._tag_flow.set_selection_mode(Gtk.SelectionMode.NONE)
-        self._tag_flow.set_column_spacing(4)
-        self._tag_flow.set_row_spacing(4)
-        self._detail_box.pack_start(self._tag_flow, False, False, 0)
-
-        self._detail_grid = Gtk.Grid(column_spacing=12, row_spacing=6)
-        self._detail_box.pack_start(self._detail_grid, False, False, 0)
-
-        default_font = float(self._ui_state.get("font_scale", 1.0))
+        default_font = _float_state(self._ui_state.get("font_scale"), 1.0)
         self.terminal_tabs = TerminalNotebook(
             self._log_event,
             default_font_scale=default_font,
@@ -2223,55 +1937,94 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             appearance=self._settings.terminal_appearance,
         )
         self.terminal_tabs.set_name("terminal-area")
+        self.terminal_tabs.on_quick_connect = self._quick_connect
+        self.terminal_tabs.on_new_host = lambda: self.prompt_new_host()
+
+        self._details = DetailsView()
+        self._details.on_expanded_changed = lambda _expanded: self._save_ui_state()
+
+        right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         right_box.pack_start(self.terminal_tabs, True, True, 0)
+        right_box.pack_start(self._details, False, False, 0)
 
-        right_box.pack_start(self._status_revealer, False, False, 0)
-        right_box.pack_start(self._bulk_revealer, False, False, 0)
-
+        self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._paned.pack1(self._sidebar, resize=False, shrink=False)
         self._paned.pack2(right_box, resize=True, shrink=False)
 
-        self._update_sidebar_toggle_ui()
-        self._update_terminal_toggle_ui()
-        self._status_visible_before_max = self._status_revealer.get_reveal_child()
-        self._update_toolbar_state()
+        self._toast_overlay = ToastOverlay(self._toasts)
+        self._toast_overlay.add(self._paned)
+        self.add(self._toast_overlay)
+
         self._apply_theme_mode(self._theme_mode)
         get_theme_manager().add_listener(self._on_theme_changed)
         self.show_all()
-        self._status_revealer.set_reveal_child(False)
-        self._bulk_revealer.set_reveal_child(False)
         self.connect("size-allocate", self._on_window_size_allocate)
 
-    def _toolbar_button(self, icon_name: str, label: str, callback) -> Gtk.Button:
-        button = Gtk.Button()
-        button.set_relief(Gtk.ReliefStyle.NONE)
-        image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
-        button.set_image(image)
-        button.set_always_show_image(True)
-        button.set_label(label)
-        button.connect("clicked", lambda _btn: callback())
-        return button
+    def _build_header(self) -> None:
+        templates = [(t.label, f"win.new-host-template('{t.id}')") for t in built_in_templates()]
+        self._header = HeaderView(self._toasts.history, template_items=templates)
+        self._header.set_inventory_path(str(self.manager.base_dir))
+        self.set_titlebar(self._header)
+        self._sidebar_button_handler = self._header.sidebar_button.connect("toggled", self._on_sidebar_button_toggled)
+        self._maximize_button_handler = self._header.maximize_button.connect("toggled", self._on_maximize_button_toggled)
 
-    def _update_sidebar_toggle_ui(self) -> None:
-        if not self._sidebar_toggle_icon or not self._sidebar_toggle_button:
-            return
-        if self._sidebar_visible:
-            icon_name = "go-previous-symbolic"
-            tooltip = "Hide sidebar"
-        else:
-            icon_name = "go-next-symbolic"
-            tooltip = "Show sidebar"
-        if self._terminal_maximized:
-            self._sidebar_toggle_button.set_sensitive(False)
-            tooltip = "Restore terminals to adjust sidebar"
-        else:
-            self._sidebar_toggle_button.set_sensitive(True)
-        self._sidebar_toggle_icon.set_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
-        self._sidebar_toggle_button.set_tooltip_text(tooltip)
+    def _build_sidebar(self, tree_view: Gtk.TreeView) -> SidebarView:
+        sidebar = SidebarView(tree_view)
+        sidebar.on_search_changed = lambda _text: self._rebuild_tree(refresh=False)
+        sidebar.on_filter_changed = self._on_filter_text_changed
+        sidebar.on_smart_group_activated = self._on_smart_group_activated
+        sidebar.on_save_smart_group = self._save_current_filter_as_group
+        sidebar.on_delete_smart_group = self._delete_smart_group
+        sidebar.on_add_host = lambda: self.prompt_new_host()
+        sidebar.on_open_folder = self._open_inventory_folder
+        sidebar.on_escape_to_tree = lambda: self.tree_view.grab_focus()
+        sidebar.set_filter_text(self._filter_query)
+        sidebar.set_filter_active(self._filter_query)
+        sidebar.set_smart_groups([group.name for group in self._smart_groups])
+        return sidebar
 
+    def _build_tree_view(self) -> Gtk.TreeView:
+        tree_view = Gtk.TreeView(model=self.tree_store)
+        tree_view.set_headers_visible(False)
+        tree_view.set_enable_tree_lines(True)
+        tree_view.connect("row-activated", self._on_row_activated)
+        tree_view.connect("button-press-event", self._on_tree_button_press)
+        tree_view.connect("key-press-event", self._on_tree_key_press)
+        selection = tree_view.get_selection()
+        selection.set_mode(Gtk.SelectionMode.MULTIPLE)
+        selection.connect("changed", self._on_selection_changed)
+        self.tree_view = tree_view
+        self._configure_drag_and_drop()
+
+        icon_renderer = Gtk.CellRendererPixbuf()
+        text_renderer = Gtk.CellRendererText()
+        text_renderer.set_property("ellipsize", Pango.EllipsizeMode.END)
+        column = Gtk.TreeViewColumn()
+        column.pack_start(icon_renderer, False)
+        column.pack_start(text_renderer, True)
+        column.set_cell_data_func(icon_renderer, self._render_icon)
+        column.set_cell_data_func(text_renderer, self._render_text)
+        tree_view.append_column(column)
+        return tree_view
+
+    # ------------------------------------------------------------ sidebar state
     def _toggle_sidebar(self) -> None:
         if self._terminal_maximized:
-            return
+            self._set_terminal_maximized(False)
         self._set_sidebar_visible(not self._sidebar_visible)
+
+    def _on_sidebar_button_toggled(self, button: Gtk.ToggleButton) -> None:
+        if button.get_active() != self._sidebar_visible:
+            if self._terminal_maximized and button.get_active():
+                self._set_terminal_maximized(False)
+            self._set_sidebar_visible(button.get_active())
+
+    def _update_sidebar_toggle_ui(self) -> None:
+        button = self._header.sidebar_button
+        if button.get_active() != self._sidebar_visible:
+            button.handler_block(self._sidebar_button_handler)
+            button.set_active(self._sidebar_visible)
+            button.handler_unblock(self._sidebar_button_handler)
 
     def _set_sidebar_visible(self, visible: bool, *, initial: bool = False, persist: bool = True) -> None:
         if self._sidebar_container is None:
@@ -2281,14 +2034,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._update_sidebar_toggle_ui()
             return
         if visible:
-            self._sidebar_container.show_all()
+            self._sidebar_container.show()
             width = max(220, self._sidebar_width_saved)
             GLib.idle_add(self._paned.set_position, width)
         else:
             if self._sidebar_visible:
                 self._sidebar_width_saved = max(220, self._paned.get_position())
             self._sidebar_container.hide()
-            self._paned.set_position(0)
         self._sidebar_visible = visible
         if not self._terminal_maximized and persist:
             self._sidebar_visible_before_max = visible
@@ -2296,20 +2048,21 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if not initial and persist:
             self._save_ui_state()
 
-    def _update_terminal_toggle_ui(self) -> None:
-        if not self._terminal_toggle_button:
-            return
-        tooltip = "Restore panels" if self._terminal_maximized else "Maximize terminals"
-        image = Gtk.Image.new_from_icon_name(
-            "view-restore-symbolic" if self._terminal_maximized else "view-fullscreen-symbolic",
-            Gtk.IconSize.BUTTON,
-        )
-        self._terminal_toggle_button.set_image(image)
-        self._terminal_toggle_button.set_label("")
-        self._terminal_toggle_button.set_tooltip_text(tooltip)
-
+    # ---------------------------------------------------------- maximize state
     def _toggle_terminal_maximized(self) -> None:
         self._set_terminal_maximized(not self._terminal_maximized)
+
+    def _on_maximize_button_toggled(self, button: Gtk.ToggleButton) -> None:
+        if button.get_active() != self._terminal_maximized:
+            self._set_terminal_maximized(button.get_active())
+
+    def _update_terminal_toggle_ui(self) -> None:
+        button = self._header.maximize_button
+        if button.get_active() != self._terminal_maximized:
+            button.handler_block(self._maximize_button_handler)
+            button.set_active(self._terminal_maximized)
+            button.handler_unblock(self._maximize_button_handler)
+        self._header.set_maximized(self._terminal_maximized)
 
     def _set_terminal_maximized(self, maximized: bool, *, initial: bool = False) -> None:
         if maximized == self._terminal_maximized and not initial:
@@ -2318,42 +2071,19 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._terminal_maximized = maximized
         if maximized:
             self._sidebar_visible_before_max = self._sidebar_visible
-            self._status_visible_before_max = self._status_revealer.get_reveal_child()
-            if self._detail_revealer:
-                self._detail_revealer.show()
-                self._detail_revealer.set_reveal_child(False)
-            self._status_revealer.show()
-            self._status_revealer.set_reveal_child(False)
+            self._details_visible_before_max = self._details.get_visible()
+            self._details.hide()
             if self._sidebar_visible_before_max:
                 self._set_sidebar_visible(False, persist=False)
         else:
-            if self._detail_revealer:
-                self._detail_revealer.show()
-                self._detail_revealer.set_reveal_child(True)
-            self._status_revealer.show()
-            self._status_revealer.set_reveal_child(self._status_visible_before_max)
+            if self._details_visible_before_max:
+                self._details.show()
             if self._sidebar_visible_before_max:
                 self._set_sidebar_visible(True, persist=False)
         self._update_terminal_toggle_ui()
         self._update_sidebar_toggle_ui()
         if not initial:
             self._save_ui_state()
-
-    def _on_detail_revealer_revealed(self, revealer: Gtk.Revealer, _pspec: GObject.ParamSpec) -> None:
-        if revealer.get_child_revealed():
-            revealer.show()
-        else:
-            revealer.hide()
-
-    def _on_status_revealer_revealed(self, revealer: Gtk.Revealer, _pspec: GObject.ParamSpec) -> None:
-        if revealer.get_child_revealed():
-            revealer.show()
-        else:
-            revealer.hide()
-
-    def _update_bulk_bar(self) -> None:
-        count = len(self._selected_hosts())
-        self._bulk_revealer.set_reveal_child(count >= 2)
 
     def _bulk_connect_selected(self) -> None:
         hosts = self._selected_hosts()
@@ -2637,15 +2367,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def _rebuild_tree(self, *, refresh: bool = False) -> None:
         if refresh:
             self.manager.refresh()
-        query = self._search_entry.get_text().strip().lower()
+        query = self._sidebar.search_text.lower()
         filter_query = self._filter_query.strip()
         filter_terms = self._parse_filter(filter_query) if filter_query else None
         if filter_query and filter_terms is None:
-            self._filter_error_label.set_text(self._filter_error or "Invalid filter.")
-            self._filter_error_label.show()
+            self._sidebar.set_filter_error(self._filter_error or _("Invalid filter."))
             filter_terms = None
         else:
-            self._filter_error_label.hide()
+            self._sidebar.set_filter_error("")
 
         self.tree_store.clear()
         self._host_lookup.clear()
@@ -2793,8 +2522,19 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             walk_inventory(self._shared_manager.tree, shared=True)
 
         self.tree_view.expand_all()
+        self._update_sidebar_page(bool(query or filter_terms))
         self._update_details()
         self._update_toolbar_state()
+
+    def _update_sidebar_page(self, filtered: bool) -> None:
+        has_inventory = bool(self.manager.tree) or bool(self._shared_manager and self._shared_manager.tree)
+        if not has_inventory:
+            page = TreePage.EMPTY
+        elif self.tree_store.get_iter_first() is None and filtered:
+            page = TreePage.NO_RESULTS
+        else:
+            page = TreePage.TREE
+        self._sidebar.set_page(page)
 
     def _host_matches(self, host: HostEntry, query: str) -> bool:
         return query in self._search_text_for_host(host)
@@ -2905,56 +2645,53 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return " ".join(filter(None, parts))
 
     def _refresh_smart_group_list(self) -> None:
-        if not hasattr(self, "_smart_group_list") or self._smart_group_list is None:
-            return
-        for row in list(self._smart_group_list.get_children()):
-            self._smart_group_list.remove(row)
-        for grp in self._smart_groups:
-            row = Gtk.ListBoxRow()
-            label = Gtk.Label(label=grp.name)
-            label.set_xalign(0.0)
-            row.add(label)
-            row.show_all()
-            self._smart_group_list.add(row)
-        self._smart_group_list.show_all()
+        self._sidebar.set_smart_groups([group.name for group in self._smart_groups])
 
-    def _on_smart_group_activated(self, listbox: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
-        idx = row.get_index()
-        if idx < 0 or idx >= len(self._smart_groups):
-            return
-        grp = self._smart_groups[idx]
-        self._filter_entry.set_text(grp.query)
-        self._filter_query = grp.query
+    def _on_filter_text_changed(self, text: str) -> None:
+        self._filter_query = text.strip()
+        self._sidebar.set_filter_active(self._filter_query)
         self._rebuild_tree(refresh=False)
+
+    def _on_smart_group_activated(self, index: int) -> None:
+        if index < 0 or index >= len(self._smart_groups):
+            return
+        group = self._smart_groups[index]
+        self._sidebar.set_filter_text(group.query)
+        self._on_filter_text_changed(group.query)
 
     def _save_current_filter_as_group(self) -> None:
         if not self._filter_query:
-            self._filter_error_label.set_text("Enter a filter to save.")
-            self._filter_error_label.show()
+            self._sidebar.set_filter_error(_("Enter a filter to save it as a smart group."))
             return
-        name = self._prompt_text("Save Smart Group", "Name")
+        name = self._prompt_text(
+            _("Save Smart Group"),
+            _("Name for the filter “{query}”:").format(query=self._filter_query),
+            accept_label=_("_Save"),
+        )
         if not name:
             return
         self._smart_groups.append(SmartGroup(name=name, query=self._filter_query))
         if not save_smart_groups(self._smart_groups):
             self._smart_groups.pop()
-            self._filter_error_label.set_text("Could not save smart group.")
-            self._filter_error_label.show()
+            self._notify_error(_("Could not save the smart group."))
             return
         self._refresh_smart_group_list()
+        self._notify_info(_("Saved smart group “{name}”.").format(name=name))
 
-    def _delete_selected_smart_group(self) -> None:
-        sel = self._smart_group_list.get_selected_row()
-        if not sel:
+    def _delete_smart_group(self, index: int) -> None:
+        if index < 0 or index >= len(self._smart_groups):
             return
-        idx = sel.get_index()
-        if idx < 0 or idx >= len(self._smart_groups):
+        group = self._smart_groups[index]
+        if not self._confirm(
+            _("Delete smart group “{name}”?").format(name=group.name),
+            detail=_("Only the saved filter is deleted; hosts are not affected."),
+            confirm_label=_("_Delete Smart Group"),
+        ):
             return
-        removed = self._smart_groups.pop(idx)
+        removed = self._smart_groups.pop(index)
         if not save_smart_groups(self._smart_groups):
-            self._smart_groups.insert(idx, removed)
-            self._filter_error_label.set_text("Could not delete smart group.")
-            self._filter_error_label.show()
+            self._smart_groups.insert(index, removed)
+            self._notify_error(_("Could not delete the smart group."))
             return
         self._refresh_smart_group_list()
 
@@ -3241,7 +2978,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             pass
 
     def focus_search(self) -> None:
-        self.show_search_panel()
+        if not self._sidebar_visible:
+            self._set_sidebar_visible(True)
+        self._sidebar.focus_search()
 
     def _open_hosts(self, hosts: List[HostEntry], source: Optional[str] = None) -> None:
         if not hosts:
@@ -3347,7 +3086,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         )
 
     def _notify_info(self, message: str) -> None:
-        self._log_event(message, True)
+        self._notify(message, Level.INFO)
 
     def _notify_connection_success(self, host: HostEntry) -> None:
         message = f"Connected to {host.alias}."
@@ -3360,10 +3099,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._log_event(message, True)
 
     def _notify_warning(self, message: str) -> None:
-        self._log_event(message, False)
+        self._notify(message, Level.WARNING)
 
     def _notify_error(self, message: str) -> None:
-        self._log_event(message, False)
+        self._notify(message, Level.ERROR)
 
     def _audit_log(self, action: str, host: HostEntry, *, extra: Optional[Dict[str, str]] = None) -> None:
         if not getattr(self._settings, "enable_audit_logging", False):
@@ -3442,57 +3181,25 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         return child, create_child
 
     # --------------------------------------------------------- sidebar handlers
-    def _on_search_changed(self, _entry: Gtk.SearchEntry) -> None:
-        self._rebuild_tree(refresh=False)
-
-    def _on_search_key_press(self, _entry: Gtk.SearchEntry, event: Gdk.EventKey) -> bool:
-        if event.keyval == Gdk.KEY_Escape:
-            self._search_escape_time = time.monotonic()
-            self.clear_focus()
-            self._search_panel_escape_ready = True
-            return True
-        self._search_panel_escape_ready = False
-        return False
-
-    def _on_filter_changed(self, entry: Gtk.Entry) -> None:
-        self._filter_query = entry.get_text().strip()
-        self._rebuild_tree(refresh=False)
-
-    def _on_filter_key_press(self, _entry: Gtk.Entry, event: Gdk.EventKey) -> bool:
-        if event.keyval == Gdk.KEY_Escape:
-            self.clear_focus()
-            self._search_panel_escape_ready = True
-            return True
-        self._search_panel_escape_ready = False
-        return False
-
     def _on_tree_key_press(self, _widget: Gtk.TreeView, event: Gdk.EventKey) -> bool:
-        if event.keyval == Gdk.KEY_Escape:
-            now = time.monotonic()
-            if (
-                self._search_panel_escape_ready
-                and self.search_revealer
-                and self.search_revealer.get_reveal_child()
-            ):
-                self.hide_search_panel()
-                self._search_panel_escape_ready = False
-                self._search_escape_time = 0.0
+        modifiers = event.state & Gtk.accelerator_get_default_mod_mask()
+        if event.keyval == Gdk.KEY_Escape and not modifiers:
+            if self.terminal_tabs.broadcast_active:
+                self.terminal_tabs.set_broadcast_mode(False)
                 return True
-            if self._search_escape_time and now - self._search_escape_time < 0.5:
-                self._search_entry.set_text("")
-                self._search_escape_time = 0.0
-                self.tree_view.get_selection().unselect_all()
+            if self._sidebar.search_text:
+                self._sidebar.search_entry.set_text("")
                 return True
-            self._search_escape_time = now
-        else:
-            self._search_escape_time = 0.0
-            self._search_panel_escape_ready = False
+            self.tree_view.get_selection().unselect_all()
+            return True
+        if event.keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete) and not modifiers:
+            self._on_delete_clicked()
+            return True
         return False
 
     def _on_selection_changed(self, *_args) -> None:
         self._update_details()
         self._update_toolbar_state()
-        self._update_bulk_bar()
 
     def _on_row_activated(self, view: Gtk.TreeView, path, _column) -> None:
         # Double-click connects the activated host, even if it was not part of the selection.
@@ -3898,98 +3605,51 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # --------------------------------------------------------------- detail view
     def _update_details(self) -> None:
-        for child in list(self._tag_flow.get_children()):
-            self._tag_flow.remove(child)
-        for child in list(self._detail_grid.get_children()):
-            self._detail_grid.remove(child)
+        self._details.set_content(self._detail_content())
 
+    def _detail_content(self):
         hosts = self._selected_hosts()
         if len(hosts) > 1:
-            self._detail_title.set_text(f"{len(hosts)} hosts selected")
-            summary = ", ".join(host.alias for host in hosts[:3])
-            if len(hosts) > 3:
-                summary += "…"
-            self._detail_subtitle.set_text(summary or "")
-            self._detail_box.show_all()
-            return
-
-        kind, data = self._current_item()
-        if kind == "host":
+            return details_presenter.multi_detail(hosts, self)
+        kind_value, data = self._current_item()
+        kind = RowKind.coerce(kind_value)
+        if kind is RowKind.HOST:
             host = self._selected_host()
             if not host:
-                return
+                return details_presenter.empty_detail()
             perms = self._permissions_for_host(host)
-            if not perms.get("can_view", True):
-                self._detail_title.set_text("Viewing disabled")
-                self._detail_subtitle.set_text("Viewing details is disabled for this host.")
-                self._detail_box.show_all()
-                return
-            self._detail_title.set_text(host.alias)
-            subtitle = host_option(host, "hostname") or host.alias
-            display_user = self._display_username_for_host(host)
-            if display_user:
-                subtitle = f"{display_user}@{subtitle}"
-            self._detail_subtitle.set_text(subtitle)
-
-            tags = [tag.strip() for tag in (host_option(host, "tags") or "").split(",") if tag.strip()]
-            for tag in tags:
-                frame = Gtk.EventBox()
-                label = Gtk.Label(label=tag)
-                frame.add(label)
-                frame.get_style_context().add_class("tag")
-                self._tag_flow.add(frame)
-
-            rows = [
-                ("Group", f"{host.parent_group}/{host.child_group}"),
-                ("Host name", host_option(host, "hostname") or host.alias),
-                ("User", display_user),
-                ("Port", host_option(host, "port") or ""),
-                (
-                    "Jump host",
-                    host_option(host, "proxyjump")
-                    or host_option(host, "proxycommand")
-                    or "",
-                ),
-                ("Identity file", host_option(host, "identityfile") or ""),
-                ("Environment", host.metadata.get("environment", "")),
-                ("Owner", host.metadata.get("owner", "")),
-                ("Service", host.metadata.get("service", "")),
-                ("Notes", host.metadata.get("notes", "")),
-                ("Default Profile", self._profiles.get(host.metadata.get("default_session_profile_id", ""), None).name if host.metadata.get("default_session_profile_id", "") in self._profiles else ""),
-                ("Permissions", self._render_permissions(host)),
-            ]
-            row_idx = 0
-            for label_text, value in rows:
-                if not value:
-                    continue
-                key_label = Gtk.Label(label=label_text)
-                key_label.set_xalign(0.0)
-                key_label.get_style_context().add_class("dim-label")
-                self._detail_grid.attach(key_label, 0, row_idx, 1, 1)
-
-                value_label = Gtk.Label(label=value)
-                value_label.set_xalign(0.0)
-                value_label.set_selectable(True)
-                self._detail_grid.attach(value_label, 1, row_idx, 1, 1)
-                row_idx += 1
-        elif kind == "child":
-            parent = data["parent"]
-            child = data["child"]
-            self._detail_title.set_text(f"{parent}/{child}")
+            key = self._make_host_key(data.get("parent", ""), data.get("child", ""), data.get("alias", ""))
+            profile = self._profile_for_host(host)
+            return details_presenter.host_detail(
+                host,
+                self,
+                display_user=self._display_username_for_host(host),
+                status=self._host_status.get(key, "unknown"),
+                profile_name=profile.name if profile else "",
+                permissions_text=self._render_permissions(host),
+                read_only=self._host_is_read_only(host),
+                can_view=perms.get("can_view", True),
+                can_connect=perms.get("can_connect", True),
+            )
+        if kind is not None:
+            parent = data.get("parent", "")
+            child = data.get("child", "")
+            if kind is RowKind.PARENT:
+                children = self.manager.tree.get(parent, {})
+                host_count = sum(len(group.hosts) for group in children.values())
+                path = str(self.manager.base_dir / parent)
+                return details_presenter.group_detail(
+                    kind, parent, child, self, host_count=host_count, child_count=len(children), path=path,
+                    read_only=parent.startswith("[Shared] "),
+                )
+            host_count = len(self._collect_hosts_for_child_group(parent, child))
             group = self.manager.tree.get(parent, {}).get(child)
-            count = len(group.hosts) if group else 0
-            self._detail_subtitle.set_text(f"{count} host(s)")
-        elif kind == "parent":
-            parent = data["parent"]
-            self._detail_title.set_text(parent)
-            children = self.manager.tree.get(parent, {})
-            host_count = sum(len(group.hosts) for group in children.values())
-            self._detail_subtitle.set_text(f"{len(children)} child group(s) · {host_count} host(s)")
-        else:
-            self._detail_title.set_text("Select a host or group")
-            self._detail_subtitle.set_text("Connections open in tabs on the right.")
-
-        self._detail_box.show_all()
+            path = str(group.path) if group else str(self.manager.base_dir / parent / child)
+            return details_presenter.group_detail(
+                kind, parent, child, self, host_count=host_count, path=path,
+                read_only=parent.startswith("[Shared] "),
+            )
+        return details_presenter.empty_detail()
 
     # ------------------------------------------------------------ toolbar actions
     def _on_refresh_clicked(self) -> None:
@@ -4231,11 +3891,41 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         dialog.destroy()
 
     def _set_git_updates(self, available: bool) -> None:
+        newly_available = available and not self._git_updates_available
         self._git_updates_available = available
-        if available:
-            self._git_update_button.show()
-        else:
-            self._git_update_button.hide()
+        self._header.set_git_updates(available)
+        if newly_available:
+            self._notify(
+                _("New commits are available in the tracked Git repository."),
+                Level.INFO,
+                action_label=_("_Details"),
+                action=self._on_git_updates_clicked,
+            )
+
+    def _on_git_check(self) -> None:
+        if self._git_updates_available:
+            self._on_git_updates_clicked()
+            return
+        if not self._git_watch_path:
+            self._notify(
+                _("Git update checks are off. Enable them under Settings → Git Sync."),
+                Level.INFO,
+                action_label=_("Open _Settings"),
+                action=self._on_settings_clicked,
+            )
+            return
+
+        def worker() -> None:
+            self._check_git_repo_for_updates()
+            GLib.idle_add(self._report_git_check)
+
+        threading.Thread(target=worker, daemon=True).start()
+        self._notify_info(_("Checking {path} for updates…").format(path=self._git_watch_path))
+
+    def _report_git_check(self) -> bool:
+        if not self._git_updates_available:
+            self._notify(_("The tracked repository is up to date."), Level.SUCCESS)
+        return GLib.SOURCE_REMOVE
 
     def _git_watch_loop(self, interval: int) -> None:
         while not self._git_watch_stop.is_set():
@@ -5168,22 +4858,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         # Bulk bar handled separately.
 
     def _log_event(self, message: str, success: bool) -> None:
-        self._status_label.set_text(message)
-        context = self._status_label.get_style_context()
-        context.remove_class("error")
-        context.remove_class("success")
-        context.add_class("success" if success else "error")
-        self._status_revealer.show()
-        self._status_revealer.set_reveal_child(True)
-        self._bulk_revealer.set_reveal_child(len(self._selected_hosts()) >= 2)
-        if self._status_timeout_id:
-            GLib.source_remove(self._status_timeout_id)
-        self._status_timeout_id = GLib.timeout_add_seconds(5, self._hide_status)
+        """Legacy two-state feedback hook (also used by the terminal notebook)."""
 
-    def _hide_status(self) -> bool:
-        self._status_revealer.set_reveal_child(False)
-        self._status_timeout_id = 0
-        return GLib.SOURCE_REMOVE
+        self._notify(message, Level.SUCCESS if success else Level.ERROR)
+
+    def _notify(self, message: str, level: Level = Level.INFO, *, action_label: str = "", action=None) -> None:
+        if not message:
+            return
+        self._toasts.notify(message, level, action_label=action_label, action=action)
 
     def _prompt_text(
         self,
@@ -5273,6 +4955,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "sidebar_visible": self._sidebar_visible,
             "sidebar_prev_visible": self._sidebar_visible_before_max,
             "terminal_maximized": self._terminal_maximized,
+            "details_expanded": bool(getattr(getattr(self, "_details", None), "expanded", True)),
+            "filter_query": getattr(self, "_filter_query", ""),
             "group_colors": self._group_colors,
             "host_colors": self._host_colors,
         }
@@ -5283,16 +4967,21 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _apply_ui_state(self) -> None:
         size = self._ui_state.get("window_size")
-        if isinstance(size, list) and len(size) == 2:
+        if (
+            isinstance(size, list)
+            and len(size) == 2
+            and all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in size)
+        ):
             self.resize(int(size[0]), int(size[1]))
-        if self._ui_state.get("is_maximized"):
+        if self._ui_state.get("is_maximized") is True:
             self.maximize()
-        sidebar_width = int(self._ui_state.get("sidebar_width", 320))
+        sidebar_width = _int_state(self._ui_state.get("sidebar_width"), 320)
         self._sidebar_width_saved = sidebar_width
         self._paned.set_position(sidebar_width)
         ui_font = self._ui_state.get("ui_font_size")
-        if isinstance(ui_font, int):
+        if isinstance(ui_font, int) and not isinstance(ui_font, bool):
             self._apply_ui_font(ui_font)
+        self._details.set_expanded(self._ui_state.get("details_expanded", True) is not False, notify=False)
         visible = bool(self._ui_state.get("sidebar_visible", True))
         self._set_sidebar_visible(visible, initial=True)
         self._sidebar_visible_before_max = bool(
@@ -5302,19 +4991,147 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._set_terminal_maximized(maximized, initial=True)
 
     def _register_actions(self) -> None:
-        for name, callback in {
-            "host-connect": self._connect_selected,
+        tabs = self.terminal_tabs
+        callbacks = {
+            "new-host": lambda: self.prompt_new_host(),
+            "new-host-template": self._new_host_from_template,
+            "new-group": self._create_parent_group,
+            "new-child-group": self._create_child_group,
+            "quick-connect": self._quick_connect,
+            "focus-search": self.focus_search,
+            "refresh": self._on_refresh_clicked,
+            "settings": self._on_settings_clicked,
+            "app-menu": self._header.open_app_menu,
+            "shortcuts": self._show_shortcuts,
+            "credentials": self._on_credentials_clicked,
+            "vault": self._on_vault_clicked,
+            "config-file": self._on_config_view_clicked,
+            "open-shared": self._on_open_shared_clicked,
+            "git-check": self._on_git_check,
+            "about": self._show_about,
+            "host-connect": self._on_connect_clicked,
             "host-edit": self._edit_selected,
             "host-duplicate": self._duplicate_selected,
             "host-move": self._move_selected,
-            "host-delete": self._delete_selected,
-            "save-transcript": lambda: self.terminal_tabs.save_current_transcript(),
-            "toggle-strip-ansi": lambda: self.terminal_tabs.toggle_strip_ansi_copy(),
+            "host-delete": self._on_delete_clicked,
+            "copy-ssh": self._copy_ssh_command,
             "copy-scp": self._copy_scp_command,
-        }.items():
-            action = Gio.SimpleAction.new(name, None)
-            action.connect("activate", lambda _act, _param, cb=callback: cb())
-            self.add_action(action)
+            "rename": self._rename_focused,
+            "close-tab": tabs.close_current,
+            "next-tab": tabs.next_tab,
+            "prev-tab": tabs.prev_tab,
+            "goto-tab": tabs.goto_tab,
+            "duplicate-session": self._duplicate_current_session,
+            "reconnect": tabs.reconnect_current,
+            "save-transcript": tabs.save_current_transcript,
+            "toggle-broadcast": tabs.toggle_broadcast,
+            "toggle-tile": tabs.toggle_tile_mode,
+            "split-pane": tabs.toggle_split_current,
+            "toggle-stats": tabs.toggle_stats_current,
+            "toggle-strip-ansi": tabs.toggle_strip_ansi_copy,
+            "copy": tabs.copy_current,
+            "paste": tabs.paste_current,
+            "interrupt": tabs.interrupt_current,
+            "font-increase": tabs.increase_font,
+            "font-decrease": tabs.decrease_font,
+            "font-reset": tabs.reset_font,
+            "toggle-sidebar": self._toggle_sidebar,
+            "toggle-details": self._details.toggle_expanded,
+            "toggle-maximize": self._toggle_terminal_maximized,
+        }
+        self._actions = register_actions(self, callbacks)
+
+    def _new_host_from_template(self, template_id: str) -> None:
+        template = next((t for t in built_in_templates() if t.id == template_id), None)
+        self.prompt_new_host(template=template)
+
+    def _show_shortcuts(self) -> None:
+        window = build_shortcuts_window(self)
+        window.show_all()
+
+    def _show_about(self) -> None:
+        about = Gtk.AboutDialog(transient_for=self, modal=True)
+        about.set_program_name(_("SSH Manager"))
+        about.set_logo_icon_name("utilities-terminal")
+        about.set_comments(_("Browse grouped OpenSSH configs, manage credentials and run embedded SSH sessions."))
+        about.run()
+        about.destroy()
+
+    def _rename_focused(self) -> None:
+        if self.tree_view.has_focus():
+            self._on_edit_clicked()
+        else:
+            self.terminal_tabs.rename_current()
+
+    def _duplicate_current_session(self) -> None:
+        tab = self.terminal_tabs.current_tab()
+        if tab is None:
+            self._notify_info(_("Open a session first."))
+            return
+        self._open_hosts([tab.host])
+
+    def _quick_connect(self) -> None:
+        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+
+        def validate(text: str) -> Optional[str]:
+            if self._find_host_by_alias(text.strip()) is not None:
+                return None
+            if details_presenter.parse_quick_connect(text) is None:
+                return _("Use [user@]host[:port] or the alias of a saved host.")
+            return None
+
+        value = PromptDialog(
+            self,
+            _("Quick Connect"),
+            _("Connect to a saved host by alias, or to any server as [user@]host[:port]."),
+            placeholder=_("deploy@web-01.example.com:22"),
+            accept_label=_("C_onnect"),
+            validator=validate,
+        ).ask()
+        if not value:
+            return
+        saved = self._find_host_by_alias(value)
+        if saved is not None:
+            self._open_hosts([saved])
+            return
+        parsed = details_presenter.parse_quick_connect(value)
+        if parsed is None:
+            return
+        user, host, port = parsed
+        options = {"hostname": host}
+        if user:
+            options["user"] = user
+        if port:
+            options["port"] = port
+        adhoc = HostEntry(alias=value, options=options, parent_group=_("Quick Connect"), child_group="")
+        self._open_hosts([adhoc])
+
+    def _find_host_by_alias(self, alias: str) -> Optional[HostEntry]:
+        for groups in self.manager.tree.values():
+            for group in groups.values():
+                for host in group.hosts:
+                    if host.alias == alias:
+                        return host
+        return None
+
+    def _open_inventory_folder(self) -> None:
+        folder = choose_folder(self, _("Open SSH Config Folder"), current_folder=str(Path.home() / ".ssh"))
+        if not folder:
+            return
+        self.manager = ConfigManager(Path(folder))
+        self._header.set_inventory_path(str(self.manager.base_dir))
+        self._rebuild_tree(refresh=False)
+        self._notify_info(_("Loaded configuration from {path}.").format(path=folder))
+
+    def _copy_ssh_command(self) -> None:
+        host = self._selected_host()
+        if not host:
+            self._notify_info(_("Select a host to copy its SSH command."))
+            return
+        resolved = self._host_with_resolved_identity(host)
+        command = shlex.join(build_ssh_command(resolved))
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(command, -1)
+        self._notify(_("SSH command copied to the clipboard."), Level.SUCCESS)
 
     # ------------------------------------------------------------------- signals
     def _on_delete_event(self, *_args) -> bool:
@@ -5323,82 +5140,24 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _on_destroy(self, *_args) -> None:
         get_theme_manager().remove_listener(self._on_theme_changed)
-        if self._status_timeout_id:
-            GLib.source_remove(self._status_timeout_id)
+        self._toasts.shutdown()
         if self._shared_poll_id:
             GLib.source_remove(self._shared_poll_id)
             self._shared_poll_id = 0
         self._stop_git_watch_thread()
     def show_search_panel(self) -> None:
-        if not self.search_revealer:
-            return
-        self.search_revealer.show_all()
-        if not self.search_revealer.get_reveal_child():
-            self.search_revealer.set_reveal_child(True)
-        self._search_panel_escape_ready = False
-        self._update_search_toggle_state()
-        entry = getattr(self, "search_entry", None)
+        """Focus the always-visible search entry (kept for compatibility)."""
 
-        def _focus() -> bool:
-            if entry:
-                entry.grab_focus()
-                entry.select_region(0, -1)
-            return GLib.SOURCE_REMOVE
-
-        GLib.idle_add(_focus)
+        self.focus_search()
 
     def hide_search_panel(self) -> None:
-        if not self.search_revealer:
-            return
-        if self.search_revealer.get_reveal_child():
-            self.search_revealer.set_reveal_child(False)
-        self._search_panel_escape_ready = False
-        self._update_search_toggle_state()
+        self.tree_view.grab_focus()
 
     def clear_focus(self) -> None:
-        focus_widget = self.get_focus()
-        search_entry = getattr(self, "search_entry", None)
-        filter_entry = getattr(self, "filter_entry", None)
-        if focus_widget in {search_entry, filter_entry} and hasattr(self, "tree_view"):
-            self.tree_view.grab_focus()
-
-    def _toggle_search_panel(self) -> None:
-        if not self.search_revealer:
-            return
-        if self.search_revealer.get_reveal_child():
-            self.hide_search_panel()
-        else:
-            self.show_search_panel()
-
-    def _on_search_panel_reveal(self, revealer: Gtk.Revealer, _param: GObject.ParamSpec) -> None:
-        if revealer.get_child_revealed():
-            revealer.show()
-        else:
-            revealer.hide()
-        self._update_search_toggle_state()
-
-    def _update_search_toggle_state(self) -> None:
-        if not self._search_toggle_button or not self.search_revealer:
-            return
-        revealed = self.search_revealer.get_reveal_child()
-        self._search_toggle_button.set_tooltip_text(
-            "Hide search panel" if revealed else "Show search panel"
-        )
-        if self._search_toggle_icon:
-            ctx = self._search_toggle_icon.get_style_context()
-            if revealed:
-                ctx.add_class("open")
-            else:
-                ctx.remove_class("open")
+        self.tree_view.grab_focus()
 
     def _on_window_size_allocate(self, _widget: Gtk.Widget, allocation: Gtk.Allocation) -> None:
-        box = self._search_inputs_box
-        if not box:
-            return
-        horizontal = allocation.width > 900
-        orientation = Gtk.Orientation.HORIZONTAL if horizontal else Gtk.Orientation.VERTICAL
-        if orientation == self._search_inputs_orientation:
-            return
-        box.set_orientation(orientation)
-        box.set_homogeneous(horizontal)
-        self._search_inputs_orientation = orientation
+        compact = allocation.width < 1100
+        if compact != self._compact:
+            self._compact = compact
+            self._header.set_compact(compact)

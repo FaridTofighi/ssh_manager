@@ -174,6 +174,8 @@ def capture_window(window: Gtk.Window, path: Path, width: int = 1280, height: in
     child = window.get_child()
     holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     holder.get_style_context().add_class("background")
+    for css_class in window.get_style_context().list_classes():
+        holder.get_style_context().add_class(css_class)
     if titlebar is not None:
         window.set_titlebar(None)
         holder.pack_start(titlebar, False, False, 0)

@@ -501,6 +501,40 @@ class TerminalTab(Gtk.Box):
     def host(self) -> HostEntry:
         return self._host
 
+    @property
+    def title(self) -> str:
+        return getattr(self, "_custom_title", "") or self._host.alias
+
+    @title.setter
+    def title(self, value: str) -> None:
+        text = (value or "").strip()
+        self._custom_title = "" if text == self._host.alias else text
+
+    @property
+    def is_split(self) -> bool:
+        return self._secondary_terminal is not None
+
+    def toggle_split(self) -> None:
+        if self._secondary_terminal is None:
+            self._duplicate_pane_once()
+        else:
+            self._close_duplicate_pane()
+
+    @property
+    def stats_visible(self) -> bool:
+        return getattr(self, "_stats_enabled", True)
+
+    def set_stats_visible(self, visible: bool) -> None:
+        self._stats_enabled = bool(visible)
+        if visible:
+            self._show_stats_once()
+        else:
+            self._stop_stats_updates()
+
+    @property
+    def strip_ansi_on_copy(self) -> bool:
+        return self._strip_ansi_on_copy
+
     def copy_clipboard(self) -> None:
         term = self._active_terminal()
         if not term:
@@ -1463,6 +1497,8 @@ class TerminalNotebook(Gtk.Box):
         self._secure_store = password_store
         self._password_update_handler = password_update_handler
         self._appearance = appearance
+        self.on_quick_connect: Optional[Callable[[], None]] = None
+        self.on_new_host: Optional[Callable[[], None]] = None
 
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         toolbar.set_margin_top(6)
@@ -1667,11 +1703,110 @@ class TerminalNotebook(Gtk.Box):
     def tab_count(self) -> int:
         return len(self._tabs)
 
+    # ------------------------------------------------------- session commands
+    def current_tab(self) -> Optional[TerminalTab]:
+        return self._current_tab()
+
+    def tabs(self) -> List[TerminalTab]:
+        return list(self._tabs)
+
+    def _focus_tab(self, tab: TerminalTab) -> None:
+        self._last_current_tab = tab
+        if not self._tile_mode:
+            page = self._notebook.page_num(tab)
+            if page != -1:
+                self._notebook.set_current_page(page)
+        tab.focus_terminal()
+
+    def _step_tab(self, delta: int) -> None:
+        if not self._tabs:
+            return
+        current = self._current_tab()
+        index = self._tabs.index(current) if current in self._tabs else 0
+        if not self._tile_mode:
+            page = self._notebook.get_current_page()
+            index = page if page >= 0 else index
+            target = self._notebook.get_nth_page((index + delta) % self._notebook.get_n_pages())
+        else:
+            target = self._tabs[(index + delta) % len(self._tabs)]
+        if isinstance(target, TerminalTab):
+            self._focus_tab(target)
+
+    def next_tab(self) -> None:
+        self._step_tab(1)
+
+    def prev_tab(self) -> None:
+        self._step_tab(-1)
+
+    def goto_tab(self, number: int) -> None:
+        """Focus session ``number`` (1-based, in tab order)."""
+
+        ordered = [self._notebook.get_nth_page(i) for i in range(self._notebook.get_n_pages())]
+        ordered = [tab for tab in ordered if isinstance(tab, TerminalTab)] if not self._tile_mode else list(self._tabs)
+        if 1 <= number <= len(ordered):
+            self._focus_tab(ordered[number - 1])
+
+    def reconnect_current(self) -> None:
+        tab = self._current_tab()
+        if tab:
+            tab.reconnect()
+
+    @property
+    def broadcast_active(self) -> bool:
+        return self._broadcast_mode
+
+    def set_broadcast_mode(self, active: bool) -> None:
+        self._broadcast_all_button.set_active(active)
+
+    def toggle_broadcast(self) -> None:
+        self.set_broadcast_mode(not self._broadcast_mode)
+
+    @property
+    def tile_mode(self) -> bool:
+        return self._tile_mode
+
+    def set_tile_mode(self, active: bool) -> None:
+        self._show_all_button.set_active(active)
+
+    def toggle_tile_mode(self) -> None:
+        self.set_tile_mode(not self._tile_mode)
+
+    def toggle_split_current(self) -> None:
+        tab = self._current_tab()
+        if tab:
+            tab.toggle_split()
+
+    def toggle_stats_current(self) -> None:
+        tab = self._current_tab()
+        if tab:
+            tab.set_stats_visible(not tab.stats_visible)
+
+    def rename_current(self) -> None:
+        tab = self._current_tab()
+        if tab:
+            self.rename_tab(tab)
+
+    def rename_tab(self, tab: TerminalTab) -> None:
+        from ssh_manager.gtkui.dialogs.prompt import prompt_text
+        from ssh_manager.gtkui.i18n import _
+
+        toplevel = self.get_toplevel()
+        title = prompt_text(
+            toplevel if isinstance(toplevel, Gtk.Window) else None,
+            _("Rename Session"),
+            _("Tab title for {alias} (leave the host alias to reset):").format(alias=tab.host.alias),
+            tab.title,
+            accept_label=_("_Rename"),
+        )
+        if title:
+            tab.title = title
+            self._set_tab_label_text(tab)
+
     # ----------------------------------------------------------------- helpers
     def _tab_label_text(self, tab: TerminalTab) -> str:
         connected = self._tab_status.get(tab, False)
         indicator = "●" if connected else "○"
-        return f"{indicator} {tab.host.alias}"
+        return f"{indicator} {tab.title}"
 
     def _set_tab_label_text(self, tab: TerminalTab) -> None:
         label = self._tab_labels.get(tab)

@@ -43,6 +43,8 @@ class ChipFlow(Gtk.FlowBox):
         """Replace all chips; labels in ``accent`` get the accent style."""
 
         accented = set(accent)
+        labels = list(labels)
+        self.set_min_children_per_line(max(1, min(len(labels), 6)))
         for child in list(self.get_children()):
             self.remove(child)
         for text in labels:
