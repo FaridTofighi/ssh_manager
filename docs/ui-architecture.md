@@ -145,6 +145,7 @@ history popover in the header bar.
 | Tree rows, filtering, empty states | `test_gtkui_tree.py` |
 | Workspace, broadcast, spawn path | `test_gtkui_workspace.py` |
 | Accessibility, accelerators, shortcuts window | `test_gtkui_accessibility.py` |
+| Surface colors: sidebar pixels per GTK theme, mode and focus state; sidebar CSS lint | `test_gtkui_surfaces.py` |
 | End-to-end flows on the real window (top bar, tree, host page, session strip, bulk bar) | `test_gtkui_window_flows.py` (fixture: `tests/gtk_window_fixture.py`) |
 
 GTK tests skip when `Gtk.init_check()` fails. Windows are never mapped and
@@ -157,3 +158,11 @@ and `relay-compact`. `tools/compare_to_reference.py
 docs/ui-after/relay-match.png --out docs/ui-after` writes `relay-diff.png`,
 `relay-side-by-side.png` and `relay-report.md` and exits non-zero when a
 region exceeds 3 % mean error or a landmark is more than 2 px off.
+
+`tools/debug_surfaces.py` walks every widget (internal children, popovers and
+TreeView's `.cell` nodes included) under each installed GTK theme and app
+mode, and flags opaque backgrounds that are not palette surface tokens.
+`--verbose` prints every node and `--interactive` opens the app with
+`GTK_DEBUG=interactive`. `tools/ui_snapshots.py docs/ui-after
+sidebar-surfaces` writes per-theme sidebar crops and
+`sidebar-surfaces-after.md`.

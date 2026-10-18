@@ -266,6 +266,125 @@ def capture_dialog(dialog: Gtk.Dialog, path: Path, width: int = 0, height: int =
     dialog.destroy()
 
 
+# ------------------------------------------------------------ sidebar probe
+def render_window_pixbuf(window: Gtk.Window, width: int, height: int, *, backdrop: bool = False):
+    """Render ``window`` offscreen like :func:`capture_window`, returning ``(pixbuf, holder)``.
+
+    The caller must call ``restore()`` on the returned holder's ``restore``
+    attribute once done, which moves the widgets back into ``window``.
+    """
+
+    titlebar = window.get_titlebar()
+    child = window.get_child()
+    holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    holder.get_style_context().add_class("background")
+    for css_class in window.get_style_context().list_classes():
+        holder.get_style_context().add_class(css_class)
+    if isinstance(window, Gtk.ApplicationWindow):
+        holder.insert_action_group("win", window)
+    if titlebar is not None:
+        window.set_titlebar(None)
+        holder.pack_start(titlebar, False, False, 0)
+    if child is not None:
+        window.remove(child)
+        holder.pack_start(child, True, True, 0)
+    offscreen = Gtk.OffscreenWindow()
+    offscreen.set_default_size(width, height)
+    offscreen.add(holder)
+    holder.set_size_request(width, height)
+    offscreen.show_all()
+    if backdrop:
+        offscreen.set_state_flags(Gtk.StateFlags.BACKDROP, False)
+    else:
+        offscreen.unset_state_flags(Gtk.StateFlags.BACKDROP)
+    _pump()
+    offscreen.queue_draw()
+    _pump()
+    pixbuf = offscreen.get_pixbuf()
+
+    def restore() -> None:
+        offscreen.remove(holder)
+        if child is not None:
+            holder.remove(child)
+            window.add(child)
+        if titlebar is not None:
+            holder.remove(titlebar)
+            window.set_titlebar(titlebar)
+        offscreen.destroy()
+
+    holder.restore = restore  # type: ignore[attr-defined]
+    return pixbuf, holder
+
+
+def tree_area(sidebar, holder) -> tuple[int, int, int, int]:
+    """``(x, y, width, height)`` of the sidebar's tree/empty-state stack in holder coordinates."""
+
+    stack = sidebar.stack
+    x, y = stack.translate_coordinates(holder, 0, 0)
+    alloc = stack.get_allocation()
+    return x, y, alloc.width, alloc.height
+
+
+def tree_sample_points(sidebar, holder) -> list[tuple[str, int, int]]:
+    """Background-only points of the tree area: padding, gaps and the empty space."""
+
+    x, y, width, height = tree_area(sidebar, holder)
+    points = [
+        ("top-left padding", x + 2, y + 2),
+        ("top-right padding", x + width - 3, y + 2),
+        ("middle-left padding", x + 2, y + height // 2),
+        ("middle-right padding", x + width - 3, y + height // 2),
+        ("bottom-left", x + 2, y + height - 3),
+        ("bottom-right", x + width - 3, y + height - 3),
+    ]
+    page = sidebar.stack.get_visible_child_name()
+    if page == "tree":
+        tree = sidebar.tree_view
+        rows_bottom = 0
+        visible = tree.get_visible_range()
+        if visible:
+            rect = tree.get_background_area(visible[1], None)
+            _wx, rows_bottom = tree.convert_bin_window_to_widget_coords(0, rect.y + rect.height)
+        _tx, ty = tree.translate_coordinates(holder, 0, 0)
+        empty_top = ty + rows_bottom
+        if empty_top < y + height - 12:
+            middle = (empty_top + y + height) // 2
+            points += [
+                ("empty space below rows (centre)", x + width // 2, middle),
+                ("empty space below rows (left)", x + width // 4, middle),
+            ]
+    else:
+        points += [("empty-state margin", x + width // 2, y + 4)]
+    return points
+
+
+def pixel(pixbuf, x: int, y: int) -> tuple[int, int, int]:
+    channels = pixbuf.get_n_channels()
+    data = pixbuf.get_pixels()
+    offset = y * pixbuf.get_rowstride() + x * channels
+    return data[offset], data[offset + 1], data[offset + 2]
+
+
+def hex_rgb(value: str) -> tuple[int, int, int]:
+    value = value.lstrip("#")
+    return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+
+def sidebar_samples(window, *, backdrop: bool = False, size: tuple[int, int] = (1100, 1000)):
+    """Render ``window`` and return ``(pixbuf, sidebar crop box, [(label, (x, y), rgb)])``."""
+
+    sidebar = window._sidebar
+    pixbuf, holder = render_window_pixbuf(window, *size, backdrop=backdrop)
+    try:
+        samples = [(label, (px, py), pixel(pixbuf, px, py)) for label, px, py in tree_sample_points(sidebar, holder)]
+        sx, sy = sidebar.translate_coordinates(holder, 0, 0)
+        alloc = sidebar.get_allocation()
+        box = (sx, sy, alloc.width, alloc.height)
+    finally:
+        holder.restore()
+    return pixbuf, box, samples
+
+
 # ------------------------------------------------------------------ scenarios
 def _first_host(window):
     for groups in window.manager.tree.values():
@@ -351,6 +470,35 @@ def _make_window(app, base: Path, prefer_dark: bool):
     return window
 
 
+def make_window_with_mode(app, base: Path, theme_mode: str):
+    """Main window for ``base`` with the app theme mode ``system`` / ``light`` / ``dark``."""
+
+    import json
+
+    from ssh_manager.gtk_app import SSHManagerWindow
+    from ssh_manager.settings import AppSettings
+
+    (base / ".ui_state.json").write_text(json.dumps({"theme_mode": theme_mode}), encoding="utf-8")
+    settings = AppSettings.load()
+    settings.master_password_disabled = True
+    window = SSHManagerWindow(app, base, settings)
+    window.host_page.latency.enabled = False
+    _pump()
+    return window
+
+
+def set_desktop_color_scheme(dark: bool) -> None:
+    """Change ``org.gnome.desktop.interface color-scheme`` (use with GSETTINGS_BACKEND=memory)."""
+
+    from ssh_manager.gtkui.theme.loader import _interface_settings
+
+    settings = _interface_settings()
+    if settings is not None:
+        settings.set_string("color-scheme", "prefer-dark" if dark else "default")
+        Gio.Settings.sync()
+    _pump()
+
+
 def _pin_resolution(dpi: float = 96.0) -> None:
     """Render at 96 dpi regardless of the desktop's text scaling (reproducible PNGs)."""
 
@@ -362,6 +510,100 @@ def _pin_resolution(dpi: float = 96.0) -> None:
     settings = Gtk.Settings.get_default()
     if settings is not None:
         settings.set_property("gtk-xft-dpi", int(dpi * 1024))
+
+
+SIDEBAR_THEMES = ("Adwaita", "Adwaita:dark", "HighContrast", "Yaru", "Arc-Dark")
+
+
+def _theme_slug(theme: str) -> str:
+    return theme.lower().replace(":", "-")
+
+
+def run_sidebar_surfaces(out_dir: Path) -> bool:
+    """Render the sidebar per GTK theme (one child process each) and write sidebar-surfaces.md.
+
+    Files are named ``sidebar-<label>-<theme>-<mode>.png``; the label comes
+    from ``SSHM_SNAPSHOT_LABEL`` (default ``after``) so a run against an older
+    checkout can produce the matching ``before`` set.
+    """
+
+    import json
+    import subprocess
+
+    sys.path.insert(0, str(ROOT / "tools"))
+    from debug_surfaces import theme_installed
+
+    label = os.environ.get("SSHM_SNAPSHOT_LABEL", "after")
+    rows = []
+    for theme in SIDEBAR_THEMES:
+        if not theme_installed(theme):
+            print(f"sidebar-surfaces: {theme} not installed, skipped")
+            continue
+        env = dict(os.environ, GTK_THEME=theme, GSETTINGS_BACKEND="memory", SSHM_SNAPSHOT_LABEL=label)
+        env.pop("GDK_SCALE", None)
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), str(out_dir), "--sidebar-child", theme],
+            env=env, capture_output=True, text=True, timeout=600,
+        )
+        found = [json.loads(line[8:]) for line in proc.stdout.splitlines() if line.startswith("SAMPLES ")]
+        if not found:
+            print(f"sidebar-surfaces: {theme} failed:\n{proc.stderr[-2000:]}")
+        rows += found
+    ok = bool(rows) and all(row["ok"] for row in rows)
+    lines = [
+        f"# Sidebar surface check ({label})",
+        "",
+        "Pixels sampled in the tree area (padding, gaps, empty space below the rows)",
+        "must equal the palette's `bg_surface` within ±1 per channel.",
+        "",
+        "| GTK theme | App mode | Expected | Worst sample | Max Δ | Image | OK |",
+        "|---|---|---|---|---:|---|:---:|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['theme']} | {row['mode']} | `{row['expected']}` | `{row['worst']}` ({row['worst_label']}) "
+            f"| {row['max_delta']} | `{row['image']}` | {'✓' if row['ok'] else '✗'} |"
+        )
+    report = out_dir / f"sidebar-surfaces-{label}.md"
+    report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+    print(f"saved {report}: {'all surfaces match the token' if ok else 'MISMATCH'}")
+    return ok
+
+
+def sidebar_surface_child(out_dir: Path, theme: str) -> None:
+    import json
+
+    label = os.environ.get("SSHM_SNAPSHOT_LABEL", "after")
+    _pin_resolution()
+    _patch_toplevel_mapping()
+    _stub_terminal_io()
+    from ssh_manager import gtk_app
+    from ssh_manager.gtkui.theme.loader import get_theme_manager
+
+    app = gtk_app.SSHManagerApplication(_SANDBOX / "inventory")
+    app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
+    app.register(None)
+    base = _SANDBOX / "Infrastructure"
+    _write_inventory(base, populated=True, inventory=RELAY_INVENTORY)
+    for mode in ("light", "dark"):
+        window = make_window_with_mode(app, base, mode)
+        prepare_relay_match(window)
+        _pump()
+        pixbuf, (x, y, width, height), samples = sidebar_samples(window, size=RELAY_SIZE)
+        expected = get_theme_manager().palette.bg_surface
+        want = hex_rgb(expected)
+        deltas = [(max(abs(a - b) for a, b in zip(rgb, want)), name, rgb) for name, _pt, rgb in samples]
+        worst = max(deltas)
+        name = f"sidebar-{label}-{_theme_slug(theme)}-{mode}.png"
+        pixbuf.new_subpixbuf(x, y, width, height).savev(str(out_dir / name), "png", [], [])
+        print("SAMPLES " + json.dumps({
+            "theme": theme, "mode": mode, "expected": expected, "image": name,
+            "max_delta": worst[0], "worst_label": worst[1],
+            "worst": "#%02X%02X%02X" % tuple(worst[2]), "ok": worst[0] <= 1,
+        }))
+        window.destroy()
+        _pump()
 
 
 def run(out_dir: Path) -> None:
@@ -473,6 +715,12 @@ def run(out_dir: Path) -> None:
         capture_window(window, out_dir / "relay-compact.png", 960, 720)
         window.destroy()
 
+    @scenario("sidebar-surfaces")
+    def _sidebar_surfaces() -> None:
+        """Sidebar crops under several GTK themes, checked against the surface token."""
+
+        run_sidebar_surfaces(out_dir)
+
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:
         @scenario(name)
         def _run() -> None:
@@ -537,4 +785,7 @@ def run(out_dir: Path) -> None:
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs" / "ui-snapshots"
-    run(target)
+    if len(sys.argv) == 4 and sys.argv[2] == "--sidebar-child":
+        sidebar_surface_child(target, sys.argv[3])
+    else:
+        run(target)

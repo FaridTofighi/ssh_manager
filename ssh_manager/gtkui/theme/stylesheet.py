@@ -80,6 +80,40 @@ $defines
 .level-warning { color: @sm_warning; }
 .level-error { color: @sm_danger; }
 
+/* ---------------------------------------------------- stock surfaces */
+/* GTK themes fill these containers with theme_base_color / theme_bg_color.
+   Each gets an explicit token and no background-image, in every state, so
+   neither the system theme nor :backdrop can show through. Never rely on
+   "transparent" over a stock container. Region rules further down are more
+   specific (or come later) and override these defaults. */
+.sm-window list, .sm-dialog list,
+.sm-window iconview, .sm-dialog iconview,
+.sm-window textview, .sm-dialog textview,
+.sm-window textview text, .sm-dialog textview text,
+.sm-window list:backdrop, .sm-dialog list:backdrop,
+.sm-window iconview:backdrop, .sm-dialog iconview:backdrop,
+.sm-window textview:backdrop, .sm-dialog textview:backdrop,
+.sm-window textview text:backdrop, .sm-dialog textview text:backdrop,
+.sm-window notebook > stack, .sm-dialog notebook > stack,
+.sm-window notebook > header, .sm-dialog notebook > header,
+.sm-window searchbar > revealer > box, .sm-dialog searchbar > revealer > box,
+.sm-window actionbar > revealer > box, .sm-dialog actionbar > revealer > box {
+    background-color: @sm_bg_surface;
+    background-image: none;
+}
+.sm-window textview text:disabled, .sm-dialog textview text:disabled { background-color: @sm_bg_canvas; }
+.sm-window popover list, .sm-dialog popover list,
+.sm-window popover viewport, .sm-dialog popover viewport,
+.sm-window popover list:backdrop, .sm-dialog popover list:backdrop,
+popover.sm-popover list, popover.sm-popover list:backdrop {
+    background-color: @sm_bg_surface_raised;
+    background-image: none;
+}
+.sm-window searchbar > revealer > box, .sm-dialog searchbar > revealer > box {
+    border-color: @sm_border_subtle;
+    box-shadow: none;
+}
+
 /* -------------------------------------------------------- focus ring */
 .sm-window *:focus, .sm-dialog *:focus {
     outline-color: alpha(@sm_focus_ring, 0.35);
@@ -387,7 +421,45 @@ headerbar.sm-topbar button.titlebutton {
 .badge.subtle { background-color: @sm_chip_bg; color: @sm_text_secondary; }
 
 /* ------------------------------------------------------------ sidebar */
-.sidebar-pane { background-color: @sm_bg_surface; }
+/* Every node between the pane and the rows gets the surface token explicitly.
+   GTK themes fill scrolledwindow, viewport and treeview.view with
+   theme_base_color, including the treeview.view.cell nodes TreeView pushes
+   (style_context.save()) to paint each row and the empty area below the last
+   row, so "transparent" on the widget's own node is not enough. */
+.sidebar-pane,
+.sidebar-pane stack,
+.sidebar-pane scrolledwindow,
+.sidebar-pane scrolledwindow viewport,
+.sidebar-pane .empty-state,
+.sidebar-pane treeview.view,
+.sidebar-pane treeview.view.cell,
+.sidebar-pane treeview.view:backdrop,
+.sidebar-pane treeview.view:disabled,
+.sidebar-pane treeview.view:focus,
+.sidebar-pane treeview.view:hover,
+.sidebar-pane treeview.view:selected,
+.sidebar-pane treeview.view:selected:focus,
+.sidebar-pane treeview.view:selected:backdrop,
+.sidebar-pane treeview.view:hover:backdrop,
+.sidebar-pane treeview.view.even,
+.sidebar-pane treeview.view.odd {
+    background-color: @sm_bg_surface;
+    background-image: none;
+    box-shadow: none;
+}
+.sidebar-pane scrolledwindow, .sidebar-pane scrolledwindow viewport { border: none; }
+.sidebar-pane scrolledwindow junction {
+    background-color: @sm_bg_surface;
+    background-image: none;
+    border: none;
+}
+/* Edge indicators are painted over the rows: no theme gradient, never opaque. */
+.sidebar-pane scrolledwindow undershoot, .sidebar-pane scrolledwindow overshoot {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
 paned.main-paned > separator, paned.main-paned > separator.wide {
     background-image: none;
     background-color: @sm_border_subtle;
@@ -436,14 +508,14 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
    TreeView pushes with style_context.save() while drawing would otherwise
    match again and apply the em scale twice. */
 .sidebar-pane scrolledwindow > treeview.view {
-    background-color: transparent;
     color: @sm_text_primary;
     font-size: ${fs_tree}em;
 }
+/* Selected and hovered rows keep the surface behind them: the row renderer
+   paints the inset rounded highlight and the accent bar itself. */
 .sidebar-pane treeview.view:selected,
 .sidebar-pane treeview.view:selected:focus,
 .sidebar-pane treeview.view:hover {
-    background-color: transparent;
     color: @sm_text_primary;
 }
 .sidebar-pane treeview.view.expander { color: transparent; }

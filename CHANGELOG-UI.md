@@ -6,6 +6,46 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 3 — fix: stock theme backgrounds showing through
+
+Bug: `docs/bugs/sidebar-background.png`. In the dark theme the sidebar's tree
+panel was gray `#2D2D2D` (Adwaita-dark's `theme_base_color`) instead of
+`bg_surface` `#17201C`. Under `GTK_THEME=Adwaita` with the app in dark mode it
+was white, and the light theme showed `#FCFCFC` in unfocused windows.
+
+- **Cause** (found with `tools/debug_surfaces.py`): TreeView paints every row,
+  and the empty area below the last row, with a transient
+  `treeview.view.cell` style node (`style_context.save()`). The stylesheet
+  only made the widget's own node transparent
+  (`scrolledwindow > treeview.view`). The `.cell` node kept the theme's
+  `treeview.view` background in every state.
+- **Same class elsewhere:**
+  - The config viewer and host dialog text views (`textview text`).
+  - The smart-group and message-history popover lists.
+  - The keyboard-shortcuts window, which did not carry the `sm-dialog` class
+    and so showed the stock header bar, search bar, popover and scrollbars.
+- **Fix:**
+  - Every node from `.sidebar-pane` down to the TreeView cells, and the
+    sidebar empty states, now gets `@sm_bg_surface` with
+    `background-image: none` in every state, including `:backdrop`.
+  - A "stock surfaces" block gives lists, icon views, text views, notebook
+    header and stack, search bar, action bar and popover lists explicit tokens.
+  - The shortcuts window gets `sm-dialog`.
+  - Selected and hovered rows are unchanged: the row renderer still paints
+    the inset highlight and accent bar.
+- **Verification:**
+  - `tools/debug_surfaces.py` reports zero opaque non-token backgrounds for
+    the main window (hosts, no results, first run) and 9 dialogs. This covers
+    Adwaita, Adwaita:dark and HighContrast, each in modes System (light and
+    dark desktop), Light and Dark, focused and backdrop. Yaru and Arc are
+    checked when installed.
+  - `tests/test_gtkui_surfaces.py` covers the pixels, including the runtime
+    mode switch, plus a CSS lint.
+  - `docs/ui-after/sidebar-{before,after}-*.png` and
+    `sidebar-surfaces-{before,after}.md` show the per-theme comparison.
+  - `relay-match.png` is pixel-identical to before. Only dark-theme tree areas
+    and the config viewer's text view changed in the other snapshots.
+
 ## Phase 2 — "Relay" redesign
 
 The GTK UI now reproduces `docs/ui-target/relay-reference.png` (light theme)

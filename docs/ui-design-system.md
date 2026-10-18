@@ -102,6 +102,23 @@ entries, spin buttons, combos, checks, radios, switches, level bars,
 progress bars, scales, links, text selection, popovers, menus, scrollbars,
 info bars — so no default theme accent appears anywhere.
 
+Stock containers that GTK themes fill with `theme_base_color` or
+`theme_bg_color` (`list`, `iconview`, `textview`/`text`, `notebook` header and
+stack, `searchbar`, `actionbar`, popover lists, the sidebar's `stack` →
+`scrolledwindow` → `viewport` → `treeview.view` chain and TreeView's
+`.cell` nodes) get an explicit surface token and `background-image: none` in
+every state, including `:backdrop`. The stylesheet never references the GTK
+theme's own colors, so the app looks the same under Adwaita, Adwaita-dark,
+HighContrast or any other `GTK_THEME`, whatever the app's theme mode.
+`Palette.surface_colors()` lists the roles a widget background may use.
+
+`tools/debug_surfaces.py` audits this. It builds the main window, its empty
+states and every dialog under each installed GTK theme and app mode, focused
+and unfocused, and flags any widget whose computed background is opaque and
+not a surface token. `tests/test_gtkui_surfaces.py` samples the sidebar's
+pixels, and the `sidebar-surfaces` snapshot scenario writes per-theme crops
+with a token report.
+
 ## CSS classes
 
 | Class | Where | Meaning |
@@ -167,5 +184,12 @@ info bars — so no default theme accent appears anywhere.
 - Don't put `em` font sizes on selectors that can match TreeView's saved
   style nodes (`treeview.view` without a parent combinator) — the scale is
   applied twice.
+- Never rely on `transparent` over stock GTK containers; always set an
+  explicit token background and `background-image: none`. GTK themes paint
+  nodes you don't see in the widget tree (TreeView draws rows and the empty
+  area below them with `treeview.view.cell` nodes), so a transparent widget
+  can still show the theme's base color. Transparent is only for overlays
+  drawn on top of content, such as the scrolled window's undershoot and
+  overshoot.
 - Don't bind global accelerators to keys terminals need. Ctrl+K is passed
   through to a focused terminal (readline kill-line).

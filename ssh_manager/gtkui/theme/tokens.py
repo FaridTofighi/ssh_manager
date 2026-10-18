@@ -273,6 +273,13 @@ class Palette:
                 continue
             yield field.name, getattr(self, field.name)
 
+    def surface_colors(self) -> Tuple[str, ...]:
+        """Colors a widget background may legitimately use (see :data:`SURFACE_ROLES`)."""
+
+        dark = self.name == "dark"
+        badges = tuple(background for background, _fg in ENV_BADGES["dark" if dark else "light"].values())
+        return tuple(getattr(self, role) for role in SURFACE_ROLES) + badges
+
     def status_color(self, status: object) -> str:
         """Return the color used for a connection status."""
 
@@ -424,6 +431,18 @@ def environment_badge_style(environment: str, dark: bool = False) -> Tuple[str, 
     """``(background, foreground)`` of the environment badge for ``environment``."""
 
     return ENV_BADGES["dark" if dark else "light"][environment_kind(environment)]
+
+
+# Roles that may fill a widget background. Text, icon and on-* roles are
+# foreground-only; a background matching one of them (e.g. #FFFFFF) is a leak
+# from the GTK theme, not a design choice.
+SURFACE_ROLES: Tuple[str, ...] = (
+    "bg_window", "bg_surface", "bg_surface_raised", "bg_canvas", "bg_input", "bg_page_bar",
+    "bg_hover", "bg_selected", "border_subtle", "border_input", "border_strong",
+    "accent", "accent_hover", "accent_pressed", "accent_tint", "accent_soft_border",
+    "success", "warning", "danger", "danger_strong", "chip_bg", "avatar_bg", "broadcast_bg",
+    "scrollbar",
+)
 
 
 PALETTES: Dict[str, Palette] = {"dark": DARK, "light": LIGHT}

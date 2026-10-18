@@ -178,6 +178,7 @@ def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
     """Build the ``Gtk.ShortcutsWindow`` from :data:`ACTIONS`."""
 
     window = Gtk.ShortcutsWindow(modal=True)
+    window.get_style_context().add_class("sm-dialog")
     if parent is not None:
         window.set_transient_for(parent)
     section = Gtk.ShortcutsSection(section_name="main", title=_("SSH Manager"), max_height=12)
