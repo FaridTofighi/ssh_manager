@@ -34,6 +34,42 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(len(term.args), 3)
         self.assertIsNone(term.args[2])
 
+    def test_terminal_text_reads_whole_scrollback_with_range_format(self) -> None:
+        class FakeAdjustment:
+            def get_lower(self) -> float:
+                return 3.0
+
+            def get_upper(self) -> float:
+                return 203.0
+
+        class FakeTerminal:
+            def __init__(self) -> None:
+                self.args = None
+
+            def get_vadjustment(self):
+                return FakeAdjustment()
+
+            def get_column_count(self) -> int:
+                return 80
+
+            def get_text_range_format(self, *args):
+                self.args = args
+                return ("whole scrollback", 16)
+
+            def get_text(self, *args):  # deprecated path must not be used
+                raise AssertionError("get_text called")
+
+        term = FakeTerminal()
+
+        self.assertEqual(terminal_text(term), "whole scrollback")
+        self.assertEqual(term.args, (Vte.Format.TEXT, 3, 0, 202, 79))
+
+    def test_terminal_text_real_vte_returns_scrollback(self) -> None:
+        term = Vte.Terminal()
+        term.feed(b"hello marker\r\nsecond line\r\n")
+        text = terminal_text(term)
+        self.assertIsInstance(text, str)
+
     def test_terminal_tail_uses_range_format_api(self) -> None:
         class FakeTerminal:
             def __init__(self) -> None:

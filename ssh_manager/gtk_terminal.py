@@ -231,9 +231,25 @@ def _select_all_terminal_text(*_args) -> bool:
 
 
 def terminal_text(term: Vte.Terminal) -> str:
-    """Return all visible/scrollback text from a VTE terminal."""
+    """Return all visible/scrollback text from a VTE terminal.
 
-    try:
+    VTE >= 0.76 asserts (``attributes == nullptr``) and returns nothing from the
+    deprecated ``get_text`` when called through PyGObject, so the range-format
+    API over the whole scrollback (the vertical adjustment's bounds) comes first.
+    """
+
+    if hasattr(term, "get_text_range_format"):
+        adjustment = term.get_vadjustment() if hasattr(term, "get_vadjustment") else None
+        if adjustment is not None:
+            lower, upper = int(adjustment.get_lower()), int(adjustment.get_upper())
+        else:
+            lower, upper = 0, int(term.get_row_count() or 1)
+        columns = max(1, int(term.get_column_count() or 1))
+        result = term.get_text_range_format(Vte.Format.TEXT, lower, 0, max(lower, upper - 1), columns - 1)
+        return _terminal_text_result(result)
+    if hasattr(term, "get_text_format"):
+        return _terminal_text_result(term.get_text_format(Vte.Format.TEXT))
+    try:  # legacy VTE (< 0.76)
         result = term.get_text(_select_all_terminal_text, None, None)
     except TypeError:
         result = term.get_text(_select_all_terminal_text, None)
