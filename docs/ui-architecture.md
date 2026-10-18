@@ -102,6 +102,30 @@ In Compact, `HostPageView.apply_density()` re-parents the same widgets:
 - **Status bar:** the info bar becomes one line, with the session stats on
   the left and the fields on the right.
 
+### Active pane
+
+Split panes and tiles share one activation path. The pure
+`gtkui/pane_activation.ActivePane` keeps the ordered panes and the one active
+pane: there is exactly one, a new split is active, closing the active pane
+activates its neighbour, a re-layout keeps it, and re-activating it is a no-op.
+- **Tab level:** `TerminalTab.activate_pane(term)` updates the `ActivePane`,
+  restyles the frames once, reports to the notebook (`on_activated`) and moves
+  keyboard focus.
+- **Workspace level:** `TerminalNotebook._on_tab_activated(tab)` makes the
+  tab current. Tile mode syncs the tile frames, toolbar and host/status bar;
+  tabs mode switches the page. `TerminalNotebook.activate_pane(tab, term)` is
+  the public entry point.
+- **Callers:** clicks, Alt+arrows, Ctrl+Tab, Alt+1…9, the session strip, new
+  and closed splits, and the terminals' own focus-in all go through it.
+
+`PaneFrame` is an input-only `Gtk.EventBox` around the styled box
+(`frame.style()` carries `pane-frame` and the state classes). Every GdkWindow
+inside the pane is then below it, including the terminal, scrollbar, header
+buttons, footer, padding and border. Its capture-phase `GestureMultiPress`
+(all buttons) activates the pane and never claims the sequence, so VTE still
+gets the press. A press inside a split pane of a tile is left to that pane's
+own frame. The divider, the tile gutters and the scroll wheel never activate.
+
 ### Density
 
 `theme/density.py` holds the presets and the active one. Views implement
@@ -196,6 +220,7 @@ history popover in the header bar.
 | Surface colors: sidebar pixels per GTK theme, mode and focus state; sidebar CSS lint | `test_gtkui_surfaces.py` |
 | Density: preset keys and floor, setting round-trip, CSS per theme × density, 11 px floor at 10/11/14/24 pt, runtime switch with a live session, real 1920 × 1041 layout (terminal share, bands, tree rows), host panel never resizes the terminal, tab overflow | `test_gtkui_density.py` |
 | Session tab labels (modes, ports, IPv6, duplicates, stable counters, rename), tab-label setting | `test_gtkui_tab_labels.py` |
+| Pane activation: state machine (pure); real button presses on every region of split panes, 2/4/6 tiles and duplicated sessions (offscreen, hit-tested like GDK), press still reaches VTE, drag selection, divider/gutter/wheel, no-op re-click, broadcast source | `test_pane_activation.py`, `test_gtkui_pane_clicks.py` |
 | End-to-end flows on the real window (top bar, tree, host page, session strip, bulk bar) | `test_gtkui_window_flows.py` (fixture: `tests/gtk_window_fixture.py`) |
 
 GTK tests skip when `Gtk.init_check()` fails. Windows are never mapped and

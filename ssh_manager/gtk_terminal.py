@@ -50,6 +50,7 @@ from ssh_manager.gtkui.views.workspace import (
     TileFrame,
     tab_menu_spec,
 )
+from ssh_manager.gtkui.pane_activation import ActivePane
 from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, pane_labels, session_tab_labels
 from ssh_manager.gtkui.widgets.pane_frame import PaneFooter, PaneFrame
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
@@ -337,7 +338,7 @@ class TerminalTab(Gtk.Box):
         self._terminal.connect("child-exited", self._on_child_exited)
         self._terminal.connect("focus-in-event", self._on_terminal_focus)
         self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
-        self._focused_terminal = self._terminal
+        self._panes.add(self._terminal)
         if autostart:
             self._spawn()
         else:
@@ -392,7 +393,9 @@ class TerminalTab(Gtk.Box):
         self._zoomed_pane: Optional[Vte.Terminal] = None
         self._pane_label = host.alias
         self.on_focus_neighbor: Optional[Callable[[str], bool]] = None  # Alt+arrow outside the split
-        self._focused_terminal: Optional[Vte.Terminal] = None
+        # The active pane (exactly one); every change goes through activate_pane().
+        self._panes: ActivePane = ActivePane()
+        self.on_activated: Optional[Callable[["TerminalTab"], None]] = None  # a pane of this tab became active
         self._input_observer: Optional[Callable[[TerminalTab, str], None]] = None
         self._profile = profile
         self._strip_ansi_on_copy = False
@@ -552,8 +555,18 @@ class TerminalTab(Gtk.Box):
             terms.append(self._secondary_terminal)
         return terms
 
+    @property
+    def _focused_terminal(self) -> Optional[Vte.Terminal]:
+        return self._panes.active
+
     def _active_terminal(self) -> Optional[Vte.Terminal]:
         return self._focused_terminal or self._terminal
+
+    @property
+    def active_terminal(self) -> Optional[Vte.Terminal]:
+        """The active pane's terminal (keyboard input, toolbar actions, broadcast source)."""
+
+        return self._active_terminal()
 
     def _create_terminal(self) -> Vte.Terminal:
         term = Vte.Terminal()
@@ -686,11 +699,31 @@ class TerminalTab(Gtk.Box):
             if footer is not None:
                 footer.set_status(self._status, int(term.get_column_count() or 0), int(term.get_row_count() or 0))
 
-    def focus_pane(self, term: Vte.Terminal) -> None:
-        if term in self._terminals():
-            self._focused_terminal = term
-            term.grab_focus()
+    def activate_pane(self, term: Optional[Vte.Terminal] = None, *, grab: bool = True) -> bool:
+        """The one activation path for this tab's panes.
+
+        A press anywhere in a pane, Alt+arrows, a new split, a closed pane and the
+        terminal's own focus-in all come here: the pane becomes the active one
+        (frames restyled once), the notebook hears about it (``on_activated``:
+        current tab, toolbar, host bar, status bar) and, with ``grab``, keyboard
+        focus moves to its terminal. Activating the active pane changes nothing.
+        Returns whether the active pane changed.
+        """
+
+        term = term or self._active_terminal()
+        if term not in self._terminals():
+            return False
+        changed = self._panes.activate(term)
+        if changed:
             self._sync_pane_frames()
+        if self.on_activated is not None:
+            self.on_activated(self)
+        if grab and not term.is_focus():  # is_focus: also right while the window is inactive
+            self.focus_terminal()
+        return changed
+
+    def focus_pane(self, term: Vte.Terminal) -> None:
+        self.activate_pane(term)
 
     def focus_neighbor(self, direction: str) -> bool:
         """Alt+←/→/↑/↓: the other pane of a split, else the notebook's next tile."""
@@ -795,10 +828,12 @@ class TerminalTab(Gtk.Box):
                 return False
             if not term.get_realized() or not term.get_mapped():
                 return True
-            term.grab_focus()
+            if term is self._active_terminal():  # not stale: another pane may be active by now
+                term.grab_focus()
             return False
 
-        GLib.idle_add(_attempt_focus)
+        if _attempt_focus():  # not shown yet (page switch, new tab): retry when idle
+            GLib.idle_add(_attempt_focus)
 
     def increase_font(self) -> None:
         self.set_font_scale(self._font_scale + 0.1)
@@ -1451,6 +1486,7 @@ class TerminalTab(Gtk.Box):
         self._secondary_terminal.connect("key-press-event", self._on_terminal_key_press)
         self._secondary_terminal.connect("focus-in-event", self._on_terminal_focus)
         self._secondary_terminal.connect("child-exited", self._on_secondary_child_exited)
+        self._panes.add(self._secondary_terminal, activate=False)  # activated once it is shown
         self._watch_activity(self._secondary_terminal)
         self._spawn_secondary(self._secondary_terminal)
 
@@ -1471,13 +1507,13 @@ class TerminalTab(Gtk.Box):
         self._pane_holder.pack_start(self._paned, True, True, 0)
         self._pane_holder.show_all()
         self._sync_pane_frames()
+        self.activate_pane(self._secondary_terminal)  # the new pane is the active one
         GLib.idle_add(self._center_divider)
 
     def _close_duplicate_pane(self) -> None:
         if self._secondary_terminal is None:
             return
-        if self._focused_terminal is self._secondary_terminal:
-            self._focused_terminal = self._terminal
+        self._panes.remove(self._secondary_terminal)  # its neighbor becomes active
         try:
             self._secondary_terminal.disconnect_by_func(self._on_secondary_child_exited)
         except Exception:
@@ -1509,13 +1545,12 @@ class TerminalTab(Gtk.Box):
         self._pane_holder.get_style_context().remove_class("split")
         self._pane_holder.pack_start(self._pane_container, True, True, 0)
         self._pane_holder.show_all()
-        self._focused_terminal = self._terminal
-        self._terminal.grab_focus()  # the remaining pane gets the space and the focus
-        self.focus_terminal()
+        self.activate_pane(self._terminal)  # the remaining pane gets the space and the focus
 
-    def _on_terminal_focus(self, term: Vte.Terminal, _event=None) -> None:
-        self._focused_terminal = term
-        self._sync_pane_frames()
+    def _on_terminal_focus(self, term: Vte.Terminal, _event=None) -> bool:
+        # Keyboard / programmatic focus: same path as a click, without re-grabbing.
+        self.activate_pane(term, grab=False)
+        return False
 
     def _center_divider(self) -> bool:
         if self._paned is not None:
@@ -1973,7 +2008,7 @@ class TerminalNotebook(Gtk.Box):
         tab.connect("status-changed", self._on_tab_status_changed)
         tab.connect("session-closed", self._on_tab_session_closed)
         tab.connect("close-requested", self._on_tab_close_requested)
-        tab.connect("focus-in-event", self._on_tab_focus, tab)
+        tab.on_activated = self._on_tab_activated
         tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
         tab.connect_activity(self._on_tab_activity)
@@ -2123,15 +2158,40 @@ class TerminalNotebook(Gtk.Box):
         if tab in self._tabs:
             self._focus_tab(tab)
 
+    def activate_pane(self, tab: TerminalTab, terminal: Optional[Vte.Terminal] = None) -> bool:
+        """Make ``tab`` (and ``terminal``, one of its panes) active and give it the keyboard.
+
+        The single activation path for the workspace: clicks on a pane or tile,
+        Alt+arrows, Ctrl+Tab, Alt+1…9, the session strip and the tab menu all end
+        up in :meth:`TerminalTab.activate_pane`, which reports back through
+        :meth:`_on_tab_activated`. Returns whether the active pane of ``tab`` changed.
+        """
+
+        if tab not in self._tabs:
+            return False
+        return tab.activate_pane(terminal)
+
     def _focus_tab(self, tab: TerminalTab) -> None:
+        self.activate_pane(tab)
+
+    def _on_tab_activated(self, tab: TerminalTab) -> None:
+        """A pane of ``tab`` became active: it is the current session (no-op if it already is)."""
+
+        if tab not in self._tabs:
+            return
+        if self._tile_mode:
+            if self._last_current_tab is tab:
+                return
+            self._last_current_tab = tab
+            self._sync_tile_frames()
+            self._sync_toolbar()
+            self._emit_sessions_changed()  # host bar, status bar, health
+            return
         self._last_current_tab = tab
-        if not self._tile_mode:
-            page = self._notebook.page_num(tab)
-            if page != -1:
-                self._notebook.set_current_page(page)
-        tab.focus_terminal()
-        self._sync_tile_frames()
-        self._sync_toolbar()
+        page = self._notebook.page_num(tab)
+        if page != -1 and page != self._notebook.get_current_page():
+            self._notebook.set_current_page(page)  # _on_switch_page: strip, host bar, status bar
+            self._sync_toolbar()
 
     def _ordered_tabs(self) -> List[TerminalTab]:
         if self._tile_mode:
@@ -2270,7 +2330,8 @@ class TerminalNotebook(Gtk.Box):
         self._update_broadcast_ui()
 
     def _on_tab_input(self, source: TerminalTab, data: str) -> None:
-        self._last_current_tab = source
+        if source is not self._current_tab():
+            self._on_tab_activated(source)  # typing into a pane makes it the broadcast source
         if not self._broadcast_mode or not data:
             return
         for target in broadcast_target_tabs(self._tabs, source, self._broadcast_included, self._tab_status):
@@ -2314,7 +2375,7 @@ class TerminalNotebook(Gtk.Box):
         for tab, frame in self._tile_wrappers.items():
             frame.set_focused(tab is current, dim_others=len(self._tile_wrappers) > 1)
             frame.set_broadcast(self._broadcast_mode and self._broadcast_included.get(tab, True))
-            ctx = frame.get_style_context()
+            ctx = frame.style()
             (ctx.add_class if self._broadcast_mode else ctx.remove_class)("broadcasting")
 
     def toggle_tile_zoom(self, tab: Optional[TerminalTab] = None) -> None:
@@ -2394,13 +2455,6 @@ class TerminalNotebook(Gtk.Box):
             self._tile_grid.remove(wrapper)
         self._tab_labels.pop(tab, None)
         self._sync_strip()
-
-    def _on_tab_focus(self, _widget, _event, tab: TerminalTab) -> bool:
-        if self._last_current_tab is not tab:
-            self._last_current_tab = tab
-            self._sync_tile_frames()
-            self._sync_toolbar()
-        return False
 
     def _current_tab(self) -> Optional[TerminalTab]:
         if self._tile_mode:

@@ -6,6 +6,81 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 8 — a press anywhere on a pane activates it
+
+### Bug
+
+With more than one terminal on screen, the active pane followed GTK keyboard
+focus only.
+- **Split pane:** a press on the header, footer, border or scrollbar of the
+  other pane did nothing.
+- **Tile mode:** clicks on a tile's footer, border or padding did nothing.
+  Activating a tile from its terminal never updated the host bar or the
+  status bar, because the tile's `focus-in-event` handler on the `TerminalTab`
+  box never fired.
+- **Cause, in code:** each path had its own bookkeeping
+  (`_on_terminal_focus`, `_on_tab_focus`, `focus_pane`, `_focus_tab`).
+
+### What changed
+
+- **One activation path.**
+  - The pure `ActivePane` (`gtkui/pane_activation.py`) holds the state.
+  - `TerminalTab.activate_pane()` handles the panes of a tab.
+  - `TerminalNotebook._on_tab_activated()` handles the current session. It
+    updates tile frames, toolbar, host bar, status bar and the broadcast
+    source.
+  - Clicks, Alt+arrows, Ctrl+Tab, Alt+1…9, the session strip, new and closed
+    splits, and focus-in all go through it. Re-activating the active pane is a
+    no-op: no restyle, no toolbar or host-bar refresh.
+- **`PaneFrame` is an input-only event box around the styled box.** A
+  capture-phase gesture activates the pane on a left, middle or right press
+  anywhere in it: terminal, scrollbar, header and its buttons, footer,
+  padding, border.
+  - The gesture never claims the press, so VTE still gets it: selection,
+    double/triple click, Ctrl+click links, mouse reporting and the middle-click
+    paste are unchanged.
+  - The divider, the tile gutters and the scroll wheel do not activate.
+- **A new split pane is the active pane.** Closing the active pane activates
+  its neighbour.
+- **Typing into a tile makes it the broadcast source** even if it was
+  activated some other way.
+- **API:** state CSS classes moved from the frame widget to `frame.style()`
+  (the inner box). The CSS selectors are unchanged.
+
+### Notes
+
+- **Inactive window:** a press into a window that isn't focused activates
+  the pane in the same press (keyboard focus is set on the window's focus
+  widget). Raising the window is up to the window manager.
+- **Offscreen test runs** log `gdk_window_move_resize_internal` criticals
+  while the window is first laid out. The same count shows on the commit
+  before this phase (Phase 7's pixel test logs 30 too), so it is a harness
+  artifact, not part of this change.
+
+### Verification
+
+- **`tests/test_pane_activation.py`:** A→B→A, no-op re-activation, unknown
+  panes, add → active, close active → neighbour, re-layout keeps the active
+  pane, exactly one active through a sequence.
+- **`tests/test_gtkui_pane_clicks.py`:** the window's content is rendered
+  offscreen, and real `GdkEventButton` / `GdkEventScroll` events go through
+  `Gtk.main_do_event`, hit-tested against the GdkWindow tree like GDK does.
+  - Every region (terminal, header, footer, top/bottom/right border) of both
+    split panes, and of 2, 4 and 6 tiles (6 = duplicated sessions), activates
+    its pane. The check covers the `focused` class, keyboard focus, current
+    tab and host bar.
+  - A terminal press still reaches VTE. Middle and right presses activate and
+    reach VTE. Drag selection still selects text.
+  - The wheel, the divider and the tile gutter change nothing. A second press
+    on the active pane changes nothing.
+  - Header zoom and close activate first. After close, the neighbour is
+    active.
+  - Also checked: a new split is active, Alt+→, a split pane inside a tile,
+    the tile ⇄ tabs toggle, and that a click sets the broadcast source.
+  - Mutation check: with the frame gesture disconnected, 91 subtests fail
+    across the split and tile region tests.
+- **Full suite:** `python3 -m unittest discover` passes 375 tests.
+
 ## Phase 7 — visible pane boundaries (split pane, tile mode, duplicates)
 
 Screenshots of the old layout: `docs/ui-before/pane-borders-tile-mode.png`

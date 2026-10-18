@@ -105,7 +105,7 @@ def _child(theme: str, density_name: str) -> None:
         for frame, (x, y, w, h) in zip(frames, boxes):
             panes.append({
                 "focused": frame.focused,
-                "broadcast": frame.get_style_context().has_class("broadcast"),
+                "broadcast": frame.style().has_class("broadcast"),
                 "left": pixel(pixbuf, x, y + h // 2),
                 "right": pixel(pixbuf, x + w - 1, y + h // 2),
                 "top": pixel(pixbuf, x + w // 2, y),
@@ -332,9 +332,9 @@ class PaneBehaviourTests(unittest.TestCase):
         self.assertTrue(notebook._focus_neighbor_tile(self.tab, "right"))
         self.assertTrue(frames[other].focused)
         notebook.set_broadcast_mode(True)
-        self.assertTrue(frames[other].get_style_context().has_class("broadcast"))
+        self.assertTrue(frames[other].style().has_class("broadcast"))
         frames[other].include.set_active(False)  # the chip, not a stock check box
-        self.assertFalse(frames[other].get_style_context().has_class("broadcast"))
+        self.assertFalse(frames[other].style().has_class("broadcast"))
         self.assertTrue(frames[other].include.get_style_context().has_class("broadcast-chip"))
         notebook.toggle_tile_zoom(other)
         self.assertFalse(frames[self.tab].get_visible())

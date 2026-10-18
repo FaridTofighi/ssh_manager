@@ -375,13 +375,11 @@ class TileFrame(PaneFrame):
         self.include = BroadcastChip(included, on_include_toggled)
         PaneFrame.__init__(self, title, on_focus=on_focus, on_zoom=on_zoom, on_close=on_close,
                            broadcast_chip=self.include)
-        self.get_style_context().add_class("tile-frame")
+        self.style().add_class("tile-frame")
         self.dot = self.header.dot
         self.label = self.header.title
         self.set_title(title, address)
         self.set_status(status)
-        # A click anywhere in the tile focuses it (the terminal also reports focus).
-        self.connect("button-press-event", lambda *_: on_focus() or False)
 
     def set_title(self, title: str, status: object = None, address: Optional[str] = None) -> None:  # type: ignore[override]
         PaneFrame.set_title(self, title, self.header.address.get_text() if address is None else address)
