@@ -17,14 +17,14 @@ from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..widgets.icons import make_icon  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Level, Space  # noqa: E402
+from ..theme.tokens import Level, Size, Space  # noqa: E402
 from ..widgets.toast import LEVEL_ICONS  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
 
 def _message_block(icon_name: str, title: str, message: str, *, icon_class: str = "") -> Gtk.Box:
     row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
-    icon = make_icon(icon_name, 32)
+    icon = make_icon(icon_name, Size.EMPTY_CARD_ICON)
     icon.set_valign(Gtk.Align.START)
     if icon_class:
         icon.get_style_context().add_class(icon_class)

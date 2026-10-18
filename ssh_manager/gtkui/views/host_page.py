@@ -142,7 +142,7 @@ class PageBar(Gtk.Box):
             self.crumbs.remove(child)
         for index, crumb in enumerate(crumbs):
             if index:
-                self.crumbs.pack_start(make_icon(Icons.CHEVRON_RIGHT, 14, css_class="breadcrumb-sep"), False, False, 0)
+                self.crumbs.pack_start(make_icon(Icons.CHEVRON_RIGHT, Size.ICON_SMALL, css_class="breadcrumb-sep"), False, False, 0)
             if crumb.current:
                 label = Gtk.Label(label=crumb.label)
                 label.get_style_context().add_class("breadcrumb-current")
@@ -186,7 +186,7 @@ class HostHeader(Gtk.Box):
         self.tile = Gtk.Box()
         self.tile.get_style_context().add_class("host-tile")
         self.tile.set_valign(Gtk.Align.CENTER)
-        self._tile_icon = make_icon(Icons.HOST, 24)
+        self._tile_icon = make_icon(Icons.HOST, Size.HOST_TILE_ICON)
         self._tile_icon.set_valign(Gtk.Align.CENTER)
         self.tile.set_center_widget(self._tile_icon)
         self.pack_start(self.tile, False, False, 0)
@@ -288,7 +288,7 @@ class HostHeader(Gtk.Box):
             column.pack_start(_caps(caption, "stat-label"), False, False, 0)
             line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
             if level:
-                dot = Dot(7, css_class=f"latency-dot {level}")
+                dot = Dot(Size.STATUS_DOT, css_class=f"latency-dot {level}")
                 line.pack_start(dot, False, False, 0)
             label = Gtk.Label(label=value)
             label.set_xalign(0.0)
@@ -307,7 +307,7 @@ class HostHeader(Gtk.Box):
         for caption, value, level in content.stats:
             line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
             if level:
-                line.pack_start(Dot(Layout.Tree.DOT, css_class=f"latency-dot {level}"), False, False, 0)
+                line.pack_start(Dot(Size.STATUS_DOT, css_class=f"latency-dot {level}"), False, False, 0)
                 text = value
             else:
                 text = f"{caption} {_sentence_case_tail(value)}"
@@ -340,7 +340,7 @@ class HostHeader(Gtk.Box):
             button.set_tooltip_text(_("Show {name}").format(name=crumb.label))
             button.connect("clicked", lambda _b, target=crumb.target: self.on_crumb(target))
             self.prefix.pack_start(button, False, False, 0)
-            self.prefix.pack_start(make_icon(Icons.CHEVRON_RIGHT, 12, css_class="breadcrumb-sep"), False, False, 0)
+            self.prefix.pack_start(make_icon(Icons.CHEVRON_RIGHT, Size.ICON_SMALL, css_class="breadcrumb-sep"), False, False, 0)
         for child in self.prefix.get_children():  # no_show_all: show_all() would skip them
             child.show_all()
         self.prefix.show()
@@ -482,7 +482,7 @@ class ActivityCard(Gtk.ScrolledWindow):
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
             box.set_margin_top(Space.XXL)
             box.set_margin_bottom(Space.XXL)
-            box.pack_start(make_icon(Icons.ACTIVITY, 28, css_class="empty-icon"), False, False, 0)
+            box.pack_start(make_icon(Icons.ACTIVITY, Size.EMPTY_CARD_ICON - 4, css_class="empty-icon"), False, False, 0)
             title = Gtk.Label(label=_("No activity yet"))
             title.get_style_context().add_class("section-title")
             box.pack_start(title, False, False, 0)

@@ -73,7 +73,7 @@ def _footer_link(icon: str, label: str, action: str, tooltip: str) -> Gtk.Button
     button.get_style_context().add_class("footer-link")
     button.set_relief(Gtk.ReliefStyle.NONE)
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-    button.icon = make_icon(icon, 18)  # type: ignore[attr-defined]
+    button.icon = make_icon(icon, Size.ICON_FOOTER)  # type: ignore[attr-defined]
     box.pack_start(button.icon, False, False, 0)  # type: ignore[attr-defined]
     box.pack_start(Gtk.Label(label=label), False, False, 0)
     button.add(box)
@@ -243,7 +243,7 @@ class SidebarView(Gtk.Box):
         self.add_host_button = Gtk.Button()
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._add_host_content = content
-        self._add_host_icon = make_icon(Icons.NEW, 20)
+        self._add_host_icon = make_icon(Icons.NEW, Size.ICON_BUTTON_GLYPH)
         content.pack_start(self._add_host_icon, False, False, 0)
         content.pack_start(Gtk.Label(label=_("Add host")), False, False, 0)
         self.add_host_button.add(content)
@@ -284,7 +284,7 @@ class SidebarView(Gtk.Box):
         # Visibility changes are ignored while GTK is allocating: re-check afterwards.
         self.search_entry.connect("size-allocate", lambda *_: GLib.idle_add(self._sync_keycap_idle))
         overlay.add(self.search_entry)
-        search_icon = make_icon(Icons.SEARCH, 16, css_class="search-icon")
+        search_icon = make_icon(Icons.SEARCH, Size.ICON, css_class="search-icon")
         search_icon.set_halign(Gtk.Align.START)
         search_icon.set_valign(Gtk.Align.CENTER)
         self._search_icon = search_icon
@@ -302,9 +302,9 @@ class SidebarView(Gtk.Box):
         self.filter_button = Gtk.MenuButton()
         self.filter_button.get_style_context().add_class("filter-button")
         filter_overlay = Gtk.Overlay()
-        self._filter_icon = make_icon(Icons.FILTER, 18)
+        self._filter_icon = make_icon(Icons.FILTER, Size.ICON_FOOTER)
         filter_overlay.add(self._filter_icon)
-        self._filter_badge = Dot(6, css_class="filter-dot")
+        self._filter_badge = Dot(Size.DOT_BADGE, css_class="filter-dot")
         self._filter_badge.set_halign(Gtk.Align.END)
         self._filter_badge.set_valign(Gtk.Align.START)
         self._filter_badge.set_no_show_all(True)
@@ -362,7 +362,7 @@ class SidebarView(Gtk.Box):
         popover = Gtk.Popover()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
         box.set_border_width(Space.M)
-        box.set_size_request(320, -1)
+        box.set_size_request(Size.POPOVER_WIDTH, -1)
 
         title = Gtk.Label(label=_("Advanced filter"))
         title.set_xalign(0.0)

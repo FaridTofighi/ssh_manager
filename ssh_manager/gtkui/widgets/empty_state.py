@@ -34,7 +34,7 @@ class EmptyState(Gtk.Box):
         self.set_valign(Gtk.Align.CENTER)
         self._compact = compact
 
-        self._icon = make_icon(icon_name, 28 if compact else 32)
+        self._icon = make_icon(icon_name, Size.EMPTY_CARD_ICON - (4 if compact else 0))
         self._icon.get_style_context().add_class("empty-icon")
         self.pack_start(self._icon, False, False, 0)
 

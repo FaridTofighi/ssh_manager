@@ -18,7 +18,7 @@ from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import ConnectionStatus, Space  # noqa: E402
+from ..theme.tokens import ConnectionStatus, Size, Space  # noqa: E402
 from ..view_models import status_text  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
@@ -56,7 +56,7 @@ def apply_stat_level(label: object, percent: Optional[float]) -> None:
 
 def _stat(icon_name: str, accessible: str) -> tuple:
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
-    image = make_icon(icon_name, 14, css_class="stat-icon")
+    image = make_icon(icon_name, Size.ICON_SMALL, css_class="stat-icon")
     label = Gtk.Label()
     label.set_ellipsize(Pango.EllipsizeMode.END)  # let tiles shrink below the text width
     set_accessible_name(label, accessible)
@@ -72,7 +72,7 @@ class SessionStatusBar(Gtk.Box):
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
         self.get_style_context().add_class("statusbar")
 
-        self.dot = StatusDot(size=9)
+        self.dot = StatusDot(size=Size.DOT_LARGE)
         self.pack_start(self.dot, False, False, 0)
         self.status_label = Gtk.Label(label=status_text(ConnectionStatus.UNKNOWN))
         self.status_label.set_ellipsize(Pango.EllipsizeMode.END)

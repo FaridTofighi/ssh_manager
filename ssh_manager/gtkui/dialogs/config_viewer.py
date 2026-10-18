@@ -22,7 +22,7 @@ from ...persistence import write_text_atomic  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
 from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
-from ..theme.tokens import Level, Space  # noqa: E402
+from ..theme.tokens import Level, Size, Space  # noqa: E402
 from ..widgets.icon_button import IconMenuButton, set_accessible_name  # noqa: E402
 from ..widgets.menus import build_menu  # noqa: E402
 from ..widgets.toast import LEVEL_ICONS  # noqa: E402
@@ -110,7 +110,7 @@ class ConfigViewerDialog(BaseDialog):
 
     def _build_issues(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
-        box.set_size_request(260, -1)
+        box.set_size_request(Size.SIDE_PANEL, -1)
         self._issues_title = Gtk.Label(label=_("Issues"))
         self._issues_title.set_xalign(0.0)
         self._issues_title.get_style_context().add_class("section-title")

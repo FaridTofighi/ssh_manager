@@ -14,7 +14,7 @@ from .icons import make_icon  # noqa: E402
 from ..controllers.notifications import Message, MessageHistory, ToastController  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
-from ..theme.tokens import Level, Motion, Space  # noqa: E402
+from ..theme.tokens import Level, Motion, Size, Space  # noqa: E402
 from .icon_button import IconButton, set_accessible_name  # noqa: E402
 
 LEVEL_ICONS: Dict[Level, str] = {
@@ -139,7 +139,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         set_accessible_name(self, _("Message history"))
 
         overlay = Gtk.Overlay()
-        overlay.add(make_icon("sshm-activity", 18))
+        overlay.add(make_icon("sshm-activity", Size.ICON_FOOTER))
         self._badge = Gtk.Label()
         self._badge.get_style_context().add_class("badge")
         self._badge.set_halign(Gtk.Align.END)
@@ -149,7 +149,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         self.add(overlay)
 
         self._popover = Gtk.Popover()
-        self._popover.set_size_request(380, -1)
+        self._popover.set_size_request(Size.POPOVER_WIDE, -1)
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
         body.set_border_width(Space.M)
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
@@ -168,7 +168,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         self._list.set_placeholder(self._placeholder())
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_max_content_height(360)
+        scroller.set_max_content_height(Size.POPOVER_MAX_HEIGHT)
         scroller.set_propagate_natural_height(True)
         scroller.add(self._list)
         body.pack_start(scroller, True, True, 0)

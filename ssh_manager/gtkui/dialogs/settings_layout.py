@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ..theme.loader import get_theme_manager  # noqa: E402
-from ..theme.tokens import Motion, Space  # noqa: E402
+from ..theme.tokens import Motion, Size, Space  # noqa: E402
 
 
 class SettingsPage(Gtk.ScrolledWindow):
@@ -54,7 +54,7 @@ class SettingsPageLayout(Gtk.Box):
         self._sidebar.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self._sidebar.get_style_context().add_class("settings-sidebar")
         self._sidebar.connect("row-selected", self._on_row_selected)
-        self._sidebar.set_size_request(190, -1)
+        self._sidebar.set_size_request(Size.SETTINGS_NAV, -1)
         nav_scroller = Gtk.ScrolledWindow()
         nav_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         nav_scroller.add(self._sidebar)

@@ -23,7 +23,7 @@ from ..i18n import _  # noqa: E402
 from ..theme.density import DEFAULT_DENSITY, Density  # noqa: E402
 from ..theme.loader import ThemeMode  # noqa: E402
 from ..theme.terminal_schemes import SCHEMES, resolve_terminal_colors  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.forms import FormSection, entry  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
 from .files import choose_folder, choose_save_file  # noqa: E402
@@ -231,7 +231,7 @@ class PreferencesDialog(BaseDialog):
         preview_title.get_style_context().add_class("section-title")
         page.append(preview_title)
         self._preview_term = Vte.Terminal()
-        self._preview_term.set_size_request(-1, 120)
+        self._preview_term.set_size_request(-1, Size.TERMINAL_PREVIEW)
         self._preview_term.set_scrollback_lines(100)
         self._preview_term.feed(b"ssh-manager terminal preview\r\n\x1b[1;32mdeploy@web-01\x1b[0m:\x1b[1;34m~\x1b[0m$ echo example\r\nexample\r\n")
         frame = Gtk.Frame()

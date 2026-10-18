@@ -126,7 +126,18 @@ class SizeTokens(_Group):
     ICON_TOPBAR: int
     ICON_BUTTON_GLYPH: int  # icon inside text buttons (Add host, hero)
     ICON_FOOTER: int
-    STATUS_DOT: int
+    STATUS_DOT: int  # tree status, latency
+    ICON_SMALL: int  # status-bar stat icons
+    DOT_BADGE: int  # filter-active badge
+    DOT_TAB: int  # session chips, tile headers
+    DOT_LARGE: int  # health indicator, status bar
+    POPOVER_WIDTH: int  # filter popover
+    POPOVER_WIDE: int  # message history
+    POPOVER_MAX_HEIGHT: int
+    WORKSPACE_POPOVER: int
+    SETTINGS_NAV: int  # settings / host dialog page list
+    SIDE_PANEL: int  # config viewer issues column
+    TERMINAL_PREVIEW: int  # preview terminal in Settings
     DIALOG_PADDING: int
     DIALOG_GAP: int
     TERMINAL_PAD_X: int
@@ -291,6 +302,9 @@ COMFORTABLE = DensityTokens(
         HERO_BUTTON=51, ENTRY=32, MENU_ROW=36,
         HOST_TILE=54, HOST_TILE_ICON=24, EMPTY_CARD=72, EMPTY_CARD_ICON=32, BADGE=22,
         ICON=16, ICON_TOPBAR=20, ICON_BUTTON_GLYPH=20, ICON_FOOTER=18, STATUS_DOT=7,
+        ICON_SMALL=14, DOT_BADGE=6, DOT_TAB=8, DOT_LARGE=9,
+        POPOVER_WIDTH=320, POPOVER_WIDE=380, POPOVER_MAX_HEIGHT=360, WORKSPACE_POPOVER=280,
+        SETTINGS_NAV=190, SIDE_PANEL=260, TERMINAL_PREVIEW=120,
         DIALOG_PADDING=16, DIALOG_GAP=12,
         TERMINAL_PAD_X=8, TERMINAL_PAD_Y=8, WORKSPACE_PAD=16,
     ),
@@ -343,6 +357,9 @@ COMPACT = DensityTokens(
         HERO_BUTTON=34, ENTRY=30, MENU_ROW=28,
         HOST_TILE=28, HOST_TILE_ICON=16, EMPTY_CARD=48, EMPTY_CARD_ICON=24, BADGE=18,
         ICON=16, ICON_TOPBAR=16, ICON_BUTTON_GLYPH=14, ICON_FOOTER=16, STATUS_DOT=6,
+        ICON_SMALL=12, DOT_BADGE=5, DOT_TAB=7, DOT_LARGE=8,
+        POPOVER_WIDTH=280, POPOVER_WIDE=340, POPOVER_MAX_HEIGHT=320, WORKSPACE_POPOVER=240,
+        SETTINGS_NAV=170, SIDE_PANEL=220, TERMINAL_PREVIEW=100,
         DIALOG_PADDING=16, DIALOG_GAP=8,
         TERMINAL_PAD_X=6, TERMINAL_PAD_Y=4, WORKSPACE_PAD=0,
     ),

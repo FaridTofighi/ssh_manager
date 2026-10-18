@@ -11,7 +11,7 @@ from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..widgets.icons import make_icon  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.forms import FormSection  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
@@ -19,7 +19,7 @@ from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
 def _intro(icon_name: str, title: str, text: str) -> Gtk.Widget:
     row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
-    icon = make_icon(icon_name, 32)
+    icon = make_icon(icon_name, Size.EMPTY_CARD_ICON)
     icon.set_valign(Gtk.Align.START)
     row.pack_start(icon, False, False, 0)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)

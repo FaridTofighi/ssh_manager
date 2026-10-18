@@ -12,7 +12,7 @@ from gi.repository import Gtk  # type: ignore  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
@@ -56,7 +56,7 @@ class ListManagerDialog(BaseDialog):
     def _build_toolbar(self, add_label: str) -> None:
         self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.add_button_widget = Gtk.Button.new_with_mnemonic(add_label or _("_Add…"))
-        self.add_button_widget.set_image(make_icon(Icons.NEW, 16))
+        self.add_button_widget.set_image(make_icon(Icons.NEW, Size.ICON))
         self.add_button_widget.set_always_show_image(True)
         self.add_button_widget.connect("clicked", lambda *_: self.on_add())
         self.edit_button = Gtk.Button.new_with_mnemonic(_("_Edit…"))

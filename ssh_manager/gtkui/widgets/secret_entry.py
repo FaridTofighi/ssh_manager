@@ -14,7 +14,7 @@ from gi.repository import Gdk, Gtk  # type: ignore  # noqa: E402
 
 from .icons import make_icon  # noqa: E402
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 
 _GENERATOR_ALPHABET = string.ascii_letters + string.digits + "-_.!@#%^*+="
 
@@ -87,7 +87,7 @@ class SecretEntry(Gtk.Box):
         row.pack_start(self.entry, True, True, 0)
 
         self._reveal = Gtk.ToggleButton()
-        self._reveal.set_image(make_icon("sshm-eye", 16))
+        self._reveal.set_image(make_icon("sshm-eye", Size.ICON))
         self._reveal.set_tooltip_text(_("Show password"))
         self._reveal.get_accessible().set_name(_("Show password"))
         self._reveal.set_can_focus(True)
@@ -96,7 +96,7 @@ class SecretEntry(Gtk.Box):
 
         if generate:
             gen = Gtk.Button()
-            gen.set_image(make_icon("sshm-refresh", 16))
+            gen.set_image(make_icon("sshm-refresh", Size.ICON))
             gen.set_tooltip_text(_("Generate a random password"))
             gen.get_accessible().set_name(_("Generate password"))
             gen.connect("clicked", lambda _b: self._generate())
@@ -149,7 +149,7 @@ class SecretEntry(Gtk.Box):
         self.entry.set_visibility(shown)
         icon = "view-conceal-symbolic" if shown else "sshm-eye"
         tip = _("Hide password") if shown else _("Show password")
-        button.set_image(make_icon(icon, 16))
+        button.set_image(make_icon(icon, Size.ICON))
         button.set_tooltip_text(tip)
         button.get_accessible().set_name(tip)
 

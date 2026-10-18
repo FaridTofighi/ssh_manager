@@ -18,7 +18,7 @@ from ..constants import Icons  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
 from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
-from ..theme.tokens import ConnectionStatus, Motion, Space  # noqa: E402
+from ..theme.tokens import ConnectionStatus, Motion, Size, Space  # noqa: E402
 from ..widgets.icon_button import (  # noqa: E402
     ActionBar,
     IconButton,
@@ -69,7 +69,7 @@ class BroadcastStrip(Gtk.Revealer):
         self.set_transition_duration(get_theme_manager().motion_ms(Motion.FAST))
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         box.get_style_context().add_class("broadcast-strip")
-        icon = make_icon(Icons.WARNING, 16)
+        icon = make_icon(Icons.WARNING, Size.ICON)
         box.pack_start(icon, False, False, 0)
         self._label = Gtk.Label()
         self._label.set_xalign(0.0)
@@ -109,7 +109,7 @@ class TabLabel(Gtk.EventBox):
         self._current = False
         self._hover = False
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
-        self.dot = StatusDot(size=8)
+        self.dot = StatusDot(size=Size.DOT_TAB)
         box.pack_start(self.dot, False, False, 0)
         self.label = Gtk.Label(label=title)
         self.label.set_ellipsize(Pango.EllipsizeMode.END)
@@ -187,7 +187,7 @@ class TileFrame(Gtk.Box):
         self.set_vexpand(True)
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         header.get_style_context().add_class("tile-header")
-        self.dot = StatusDot(status, size=8)
+        self.dot = StatusDot(status, size=Size.DOT_TAB)
         header.pack_start(self.dot, False, False, 0)
         self.label = Gtk.Label(label=title)
         self.label.set_xalign(0.0)

@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from .icons import make_icon  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 
 
 def set_accessible_name(widget: Gtk.Widget, name: str, description: str = "") -> None:
@@ -25,7 +25,7 @@ def set_accessible_name(widget: Gtk.Widget, name: str, description: str = "") ->
 
 
 def _decorate(button: Gtk.Button, icon_name: str, tooltip: str, accessible_name: Optional[str], css_classes: Iterable[str]) -> None:
-    button.set_image(make_icon(icon_name, 16))
+    button.set_image(make_icon(icon_name, Size.ICON))
     button.set_always_show_image(True)
     button.set_tooltip_text(tooltip)
     button.set_relief(Gtk.ReliefStyle.NONE)
@@ -59,7 +59,7 @@ class IconButton(Gtk.Button):
             self.connect("clicked", lambda _btn: on_clicked())
 
     def set_icon(self, icon_name: str) -> None:
-        self.set_image(make_icon(icon_name, 16))
+        self.set_image(make_icon(icon_name, Size.ICON))
 
 
 class IconToggleButton(Gtk.ToggleButton):
@@ -103,7 +103,7 @@ class IconMenuButton(Gtk.MenuButton):
         css_classes: Iterable[str] = (),
     ) -> None:
         Gtk.MenuButton.__init__(self)
-        self.add(make_icon(icon_name, 16))
+        self.add(make_icon(icon_name, Size.ICON))
         self.set_tooltip_text(tooltip)
         self.set_relief(Gtk.ReliefStyle.NONE)
         self.set_valign(Gtk.Align.CENTER)
