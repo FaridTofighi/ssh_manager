@@ -6,6 +6,118 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 4 — compact density
+
+Screenshot of the old layout: `docs/ui-before/density-current.png`.
+The Relay look is unchanged (palette, icons, language), but the interface is
+now **compact by default** so the terminal gets the window. The previous
+geometry is kept as the *Comfortable* density, which still passes the Relay
+reference comparison.
+
+### Chrome budget at 1920 × 1041, sidebar open, one live session
+
+Measured from real widget allocations
+(`tools/ui_snapshots.py docs/ui-after compact-session-dark comfortable-session-dark`).
+
+| Band | Before (Comfortable) | After (Compact) |
+|---|---:|---:|
+| Top bar | 77 | 44 |
+| Page bar | 74 | — (merged) |
+| Host header / host bar (row A) | 124 | 44 |
+| Tabs (row B) | 58 | shared with the session chips |
+| Session strip, borders, terminal padding | 74 | 37 |
+| Status bar | 70 | 28 |
+| **Chrome total** | **502** | **157** |
+| **Terminal** | 1462 × 539 = **51.8 % of the height, 76.1 % of the width** | 1624 × 884 = **84.9 %, 84.6 %** |
+| Sidebar width | 407 | 283 |
+| Tree rows fully visible (42-host inventory) | 17 (41 px rows) | **31** (28 px rows, 30 px groups) |
+
+Focus mode reaches 96.1 % of the height and 99.4 % of the width. At 960 ×
+720 (narrow variant, sessions on their own strip) the terminal gets 73.8 % ×
+75.7 %.
+
+### What changed
+
+- **Density presets** (`theme/density.py`): Compact (default) and
+  Comfortable share one set of keys. Views lay themselves out in
+  `apply_density()`.
+- **Interface density setting:** Settings → Appearance → *Interface density*,
+  saved in the UI state. Switching it at runtime regenerates the CSS and lays
+  the window out again, and sessions and scrollback are kept.
+- **Type:** body, tabs and tree text 13 px; captions 11.5; mono 12; caps 11
+  (tracking 0.08 em); wordmark 15; "Hosts" 15 semibold; host title 16
+  semibold; empty-state titles 17; dialog titles 15.
+  - Everything is `em`-relative to the app font × the density's base scale,
+    and floored at 11 px at any app font size.
+  - The terminal keeps the app font size.
+- **Top bar:** 44 px with a 28 px logo, avatar and icon buttons. The
+  workspace switcher shows the name and chevron only. The health indicator
+  keeps its dot and short text.
+- **Sidebar:**
+  - 284 px wide (220–480).
+  - One 40 px header row: "Hosts", a host count and a 28 px *Add host*. The
+    "CONNECTION MANAGER" eyebrow is hidden.
+  - 32 px search and filter.
+  - Tree rows 28 px (groups 30), indent 16, group gap 3, selection inset 6
+    with a 3 px bar and radius 6.
+  - 32 px footer.
+- **Host bar (row A):** the page bar and host header merge into one line:
+  tile, title, environment badge, `user@host`, then *Last connected …* and the
+  latency as inline text (captions in tooltips), *More*, and the primary
+  button. The breadcrumb only shows as a muted prefix for groups.
+- **Tabs (row B, 34 px):** while the Terminal tab shows sessions, the
+  session chips and toolbar share the row. Narrow windows and tile mode keep a
+  separate 32 px strip.
+- **Terminal:** edge to edge, with no card, margin or radius, and 4–6 px of
+  inner padding.
+- **Status bar:** one 28 px line. Session stats sit on the left (with the
+  same amber and red thresholds); `user@host:22 · Credential: … · Proxy: …`
+  sits on the right in muted text, with captions in tooltips.
+- **Dialogs:** they open at 0.85 × their old default size (Host 760 × 560)
+  and stay resizable, with 30 px controls, 16 px padding and an 8 px gap.
+  Popover and menu rows are 28 px; toasts, cards and the broadcast strip use
+  the same tokens.
+- **Focus mode** (F11, **Ctrl+Shift+M**, avatar menu, session overflow
+  menu) replaces "Maximize workspace". It hides the top bar, sidebar, host bar
+  and status bar and keeps row B, the broadcast strip and the terminal. Esc
+  outside a terminal leaves it. The state is saved per window.
+- **Narrow windows** (< 1100 px): secondary labels hide (health text,
+  address, search keycap) and sessions get their own strip.
+
+### Fixes found on the way
+
+- **Shortcuts-window crash:** GTK 3.24 leaves dangling CSS nodes behind a
+  destroyed `Gtk.ShortcutsWindow`, and the next theme or font change
+  segfaulted. This also happened before this phase and made the test suite
+  crash now and then. The window is now created once, hidden on close and
+  reused.
+- **Empty toolbar row:** the session toolbar's own row was re-shown by
+  `show_all()`, leaving an empty band (8 px in Comfortable) above the session
+  strip.
+- **Search keycap:** "Ctrl K" no longer covers the search placeholder in
+  narrow sidebars.
+
+### Verification
+
+- **Tests:** `tests/test_gtkui_density.py` checks:
+  - preset key parity, the accessibility floor and the setting's round-trip;
+  - CSS for every theme × density, and the 11 px floor at 10, 11, 14 and 24 pt;
+  - runtime density and theme switches with a live session (same terminal,
+    same cursor);
+  - the real 1920 × 1041 layout: terminal ≥ 78 % / 80 %, top bar ≤ 44,
+    status bar ≤ 28, ≥ 28 tree rows;
+  - that Comfortable keeps the reference geometry.
+- **Comfortable regression:** Comfortable renders are pixel-identical to
+  Phase 3, apart from the intended changes (the new setting row, the removed
+  empty toolbar band, the hidden keycap at 960 px). `relay-match` still passes
+  `tools/compare_to_reference.py`.
+- **Screenshots** in `docs/ui-after/`:
+  - `compact-session-{dark,light}`, `compact-empty-{dark,light}`,
+    `compact-narrow`, `compact-focus` and `comfortable-session-dark`, with
+    `*-budget.md` files;
+  - `main-*` and `dialog-*` are now Compact; `relay-*` stays Comfortable.
+  - HiDPI (`GDK_SCALE=2`) was checked.
+
 ## Phase 3 — fix: stock theme backgrounds showing through
 
 Bug: `docs/bugs/sidebar-background.png`. In the dark theme the sidebar's tree

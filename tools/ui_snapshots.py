@@ -741,7 +741,8 @@ def sidebar_surface_child(out_dir: Path, theme: str) -> None:
     base = _SANDBOX / "Infrastructure"
     _write_inventory(base, populated=True, inventory=RELAY_INVENTORY)
     for mode in ("light", "dark"):
-        window = make_window_with_mode(app, base, mode)
+        # Comfortable, so the crops stay comparable with the Phase 3 "before" set.
+        window = make_window_with_mode(app, base, mode, snapshot_density("comfortable"))
         prepare_relay_match(window)
         _pump()
         pixbuf, (x, y, width, height), samples = sidebar_samples(window, size=RELAY_SIZE)

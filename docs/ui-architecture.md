@@ -20,8 +20,9 @@ ssh_manager/
     latency.py          LatencyProbe: threaded, cached TCP connect timing
     host_history.py     HostHistory: last connected + activity (.host_history.json)
     assets/icons/       bundled sshm-*-symbolic.svg outline icons
-    theme/              tokens (palette, scales, Size, Layout), stylesheet generator, fonts,
-                        css_dark/css_light, loader, terminal_schemes
+    theme/              density (Compact/Comfortable presets), tokens (palette; live Space/Size/
+                        Layout/FontScale views), stylesheet generator, fonts, css_dark/css_light,
+                        loader, terminal_schemes
     widgets/            chips, status_dot, dot, toast, empty_state, ready_state, secret_entry,
                         icon_button, menus, forms, icons (SvgIcon)
     dialogs/            base, confirm, prompt, files, secrets, settings_layout, list_manager,
@@ -44,7 +45,7 @@ ssh_manager/
       group_actions.py      GroupActions: parent/child group CRUD
       inventory.py          reloads, shared inventory polling, Git watch
       app_dialogs.py        settings, credentials, vault, config file, about, shortcuts
-      layout.py             sidebar visibility, workspace maximize, compact header, brand alignment
+      layout.py             sidebar visibility and width, focus mode, narrow variant, brand alignment
       colors.py             per-item tree colors
       host_page.py          HostPageController: page content, ready state, tabs, latency, history
 ```
@@ -67,13 +68,45 @@ ssh_manager/
 ## Window layout
 
 ```
-HeaderView (top bar, 76 px)
+HeaderView (top bar: 44 px Compact, 76 px Comfortable)
 Paned ─┬─ SidebarView ─ header · search · SessionTreeView · bulk bar · footer
        └─ HostPageView ─ page bar · host header · tabs ·
                          Stack[ Terminal: TerminalPage(ReadyState | TerminalNotebook) ·
                                 Details: DetailsCard · Activity: ActivityCard ] ·
                          info bar (docks the current session's status bar)
 ```
+
+In Compact, `HostPageView.apply_density()` re-parents the same widgets:
+- **Row A:** the page bar is hidden; its *More* and primary buttons move into
+  the host header, which becomes the one-line host bar.
+- **Row B:** while the Terminal tab shows sessions, the standalone tabs row
+  hides. A copy of the tabs (`view.strip_tabs`) is shown at the start of the
+  notebook's tab row (`TerminalNotebook.set_strip_start` and
+  `set_strip_merged`), next to the session chips and the toolbar. Narrow
+  windows (`Layout.Page.NARROW_WIDTH`) and tile mode keep a separate strip.
+- **Status bar:** the info bar becomes one line, with the session stats on
+  the left and the fields on the right.
+
+### Density
+
+`theme/density.py` holds the presets and the active one. Views implement
+`apply_density()`, which sets every token-driven size, margin and icon size
+and runs at construction. `SSHManagerWindow.set_density()` activates a
+preset; `_on_density_changed()` then does the following in order:
+1. reloads the CSS and re-applies the base font;
+2. calls `apply_density()` on the top bar, sidebar, tree, notebook and host page;
+3. moves a default-width sidebar to the new default
+   (`LayoutController.on_density_changed`).
+
+Dialogs, menus and popovers read the tokens when they are built.
+
+### Focus mode
+
+The `toggle-maximize` action (F11, Ctrl+Shift+M, the avatar menu and the
+session toolbar's overflow menu) hides the top bar, sidebar, host bar and
+status bar. The tabs or session row, the broadcast strip and the terminal
+stay. Esc leaves focus mode unless a terminal has focus; if broadcast is on,
+the first Esc stops broadcasting. The state is saved as `terminal_maximized`.
 
 `HostPageController.refresh()` turns the tree selection into a
 `HostPageContent` (host, group, multi-selection or overview) and is called on
@@ -146,10 +179,17 @@ history popover in the header bar.
 | Workspace, broadcast, spawn path | `test_gtkui_workspace.py` |
 | Accessibility, accelerators, shortcuts window | `test_gtkui_accessibility.py` |
 | Surface colors: sidebar pixels per GTK theme, mode and focus state; sidebar CSS lint | `test_gtkui_surfaces.py` |
+| Density: preset keys and floor, setting round-trip, CSS per theme × density, 11 px floor at 10/11/14/24 pt, runtime switch with a live session, real 1920 × 1041 layout (terminal share, bands, tree rows) | `test_gtkui_density.py` |
 | End-to-end flows on the real window (top bar, tree, host page, session strip, bulk bar) | `test_gtkui_window_flows.py` (fixture: `tests/gtk_window_fixture.py`) |
 
 GTK tests skip when `Gtk.init_check()` fails. Windows are never mapped and
 latency probing is disabled, so tests never open sockets.
+
+Snapshots use the Compact density unless a scenario pins one: the `relay-*`
+scenarios use Comfortable, and `SSHM_DENSITY` overrides it for a whole run.
+The `compact-*` and `comfortable-session-dark` scenarios print and save a
+chrome budget (`<name>-budget.md`): band heights, plus the terminal's share of
+the window measured from real allocations.
 
 `tools/ui_snapshots.py <dir> [scenario …]` renders the screenshots in
 `docs/ui-after/` offscreen at 96 dpi (device pixels under `GDK_SCALE=2`),
