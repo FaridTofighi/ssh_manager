@@ -419,6 +419,8 @@ class TerminalTab(Gtk.Box):
         self._banner.connect("response", self._on_banner_response)
         self._banner.set_revealed(False)
         self._banner.set_no_show_all(True)
+        self._banner_alive = True
+        self._banner.connect("destroy", self._on_banner_destroy)
         self.pack_start(self._banner, False, False, 0)
 
     def _build_terminal_area(self) -> None:
@@ -837,6 +839,19 @@ class TerminalTab(Gtk.Box):
         elif response == _RESPONSE_CLOSE:
             self._request_close()
 
+    def _on_banner_destroy(self, _banner) -> None:
+        self._banner_alive = False
+
+    def _reveal_banner(self, reveal: bool) -> None:
+        # A destroyed GtkInfoBar has a NULL revealer: set_revealed() would log
+        # "gtk_revealer_get_reveal_child: assertion 'GTK_IS_REVEALER' failed"
+        # (the ssh child exits after its tab was closed).
+        if not self._banner_alive:
+            return
+        if reveal:
+            self._banner.show()
+        self._banner.set_revealed(reveal)
+
     def _on_terminal_size_allocate(self, term: Vte.Terminal, _allocation) -> None:
         self._statusbar.set_size(int(term.get_column_count() or 0), int(term.get_row_count() or 0))
 
@@ -846,9 +861,7 @@ class TerminalTab(Gtk.Box):
         self._status_label.set_text(message)
         reveal = not connected and state is not ConnectionStatus.CONNECTING
         self._banner.set_message_type(Gtk.MessageType.ERROR if state is ConnectionStatus.FAILED else Gtk.MessageType.WARNING)
-        if reveal:
-            self._banner.show()
-        self._banner.set_revealed(reveal)
+        self._reveal_banner(reveal)
         self._reconnect_button.set_sensitive(not connected)
         self._statusbar.set_status(state, message)
         self._session_active = connected
@@ -1256,7 +1269,7 @@ class TerminalTab(Gtk.Box):
             self._set_status("Connected", True)
             self.focus_terminal()
 
-        self._banner.set_revealed(False)
+        self._reveal_banner(False)
         self._reconnect_button.set_sensitive(False)
         term.spawn_async(
             Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.DEFAULT,

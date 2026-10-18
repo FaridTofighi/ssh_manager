@@ -64,6 +64,26 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(terminal_text(term), "whole scrollback")
         self.assertEqual(term.args, (Vte.Format.TEXT, 3, 0, 202, 79))
 
+    def test_banner_is_left_alone_after_destroy(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        calls = []
+
+        class RecordingBar(Gtk.InfoBar):
+            def set_revealed(self, revealed: bool) -> None:
+                calls.append(revealed)
+                Gtk.InfoBar.set_revealed(self, revealed)
+
+        dummy = type("DummyTab", (), {"_banner": RecordingBar(), "_banner_alive": True})()
+        dummy._banner.connect("destroy", lambda bar: TerminalTab._on_banner_destroy(dummy, bar))
+
+        TerminalTab._reveal_banner(dummy, True)
+        dummy._banner.destroy()
+        TerminalTab._reveal_banner(dummy, False)  # child exited after the tab closed
+
+        self.assertEqual(calls, [True])
+        self.assertFalse(dummy._banner_alive)
+
     def test_terminal_text_real_vte_returns_scrollback(self) -> None:
         term = Vte.Terminal()
         term.feed(b"hello marker\r\nsecond line\r\n")
