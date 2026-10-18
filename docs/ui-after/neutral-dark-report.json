@@ -1,0 +1,272 @@
+{
+  "render": "docs/ui-after/neutral-dark-match.png",
+  "mock": "/home/farid/Documents/ssh/docs/ui-target/neutral-dark-palette.png",
+  "target": 3.0,
+  "regions": {
+    "top bar": {
+      "mock_box": [
+        760,
+        6,
+        1400,
+        70
+      ],
+      "render_box": [
+        760,
+        6,
+        1400,
+        70
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "sidebar header": {
+      "mock_box": [
+        40,
+        82,
+        260,
+        104
+      ],
+      "render_box": [
+        40,
+        82,
+        260,
+        104
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "tree panel (padding)": {
+      "mock_box": [
+        0,
+        250,
+        9,
+        700
+      ],
+      "render_box": [
+        0,
+        250,
+        9,
+        700
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "selected row": {
+      "mock_box": [
+        330,
+        774,
+        400,
+        806
+      ],
+      "render_box": [
+        330,
+        718,
+        400,
+        754
+      ],
+      "token": "bg_selected",
+      "expected": "#202A25",
+      "render_sample": "#202A25",
+      "mock_mean": "#202A25",
+      "render_mean": "#202A25",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "sidebar footer": {
+      "mock_box": [
+        240,
+        985,
+        380,
+        1030
+      ],
+      "render_box": [
+        240,
+        985,
+        380,
+        1030
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "page bar": {
+      "mock_box": [
+        900,
+        82,
+        1600,
+        145
+      ],
+      "render_box": [
+        900,
+        82,
+        1600,
+        145
+      ],
+      "token": "bg_page_bar",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "host header": {
+      "mock_box": [
+        1000,
+        158,
+        1450,
+        268
+      ],
+      "render_box": [
+        1000,
+        158,
+        1450,
+        268
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.02,
+      "token_ok": true,
+      "ok": true
+    },
+    "tabs": {
+      "mock_box": [
+        900,
+        280,
+        1800,
+        326
+      ],
+      "render_box": [
+        900,
+        280,
+        1800,
+        326
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "canvas margin": {
+      "mock_box": [
+        447,
+        420,
+        458,
+        940
+      ],
+      "render_box": [
+        447,
+        420,
+        458,
+        940
+      ],
+      "token": "bg_canvas",
+      "expected": "#121315",
+      "render_sample": "#121315",
+      "mock_mean": "#121315",
+      "render_mean": "#121315",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "terminal": {
+      "mock_box": [
+        600,
+        520,
+        1800,
+        900
+      ],
+      "render_box": [
+        600,
+        520,
+        1800,
+        900
+      ],
+      "token": "terminal",
+      "expected": "#16171A",
+      "render_sample": "#16171A",
+      "mock_mean": "#16171A",
+      "render_mean": "#16171A",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "status bar": {
+      "mock_box": [
+        1800,
+        978,
+        1845,
+        1036
+      ],
+      "render_box": [
+        1800,
+        978,
+        1845,
+        1036
+      ],
+      "token": "bg_surface",
+      "expected": "#1A1B1E",
+      "render_sample": "#1A1B1E",
+      "mock_mean": "#1A1B1E",
+      "render_mean": "#1A1B1E",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    },
+    "primary button": {
+      "mock_box": [
+        283,
+        122,
+        297,
+        154
+      ],
+      "render_box": [
+        288,
+        122,
+        297,
+        154
+      ],
+      "token": "accent",
+      "expected": "#1F7A57",
+      "render_sample": "#1F7A57",
+      "mock_mean": "#1F7A57",
+      "render_mean": "#1F7A57",
+      "mean_error": 0.0,
+      "token_ok": true,
+      "ok": true
+    }
+  },
+  "ok": true
+}

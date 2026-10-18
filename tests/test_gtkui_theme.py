@@ -165,3 +165,186 @@ class TerminalSchemeTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+from ssh_manager.gtkui.theme.tokens import DARK  # noqa: E402
+
+
+class NeutralDarkPaletteTests(unittest.TestCase):
+    """Phase 5: the dark theme is neutral gray; green is only the accent."""
+
+    _DARK = DARK
+
+    EXPECTED = {
+        "bg_canvas": "#121315", "bg_window": "#151619", "bg_surface": "#1A1B1E",
+        "bg_surface_raised": "#212226", "bg_input": "#16171A", "bg_page_bar": "#1A1B1E",
+        "bg_hover": "#25272B", "bg_selected": "#202A25", "accent_tint": "#202A25",
+        "border_subtle": "#2A2C31", "border_input": "#35383E", "border_strong": "#454951",
+        "accent_soft_border": "#2F4A3E", "text_primary": "#E6E8EB", "text_secondary": "#A3A8B0",
+        "text_muted": "#8A9098", "text_faint": "#6B7079", "text_disabled": "#6B7079",
+        "tab_inactive": "#8F959E", "accent": "#1F7A57", "accent_hover": "#1A6E4E",
+        "accent_pressed": "#196A4B", "accent_text": "#5CCB9C", "focus_ring": "#5CCB9C",
+        "success": "#48C48D", "warning": "#E3A548", "danger": "#F07A6E", "info": "#7DB1E8",
+        "chip_bg": "#25272B", "avatar_bg": "#3F4A45", "icon_group": "#D9A84E",
+        "icon_subgroup": "#A3A8B0", "icon_host": "#A3A8B0", "scrollbar": "#454951",
+        "shadow": "rgba(0, 0, 0, 0.35)", "shadow_popover": "rgba(0, 0, 0, 0.45)",
+    }
+    # Chromatic on purpose: the accent family, semantic colors, folder amber, broadcast.
+    CHROMATIC = {
+        "accent", "accent_hover", "accent_pressed", "accent_text", "accent_soft_border", "focus_ring",
+        "on_accent", "success", "warning", "danger", "danger_strong", "on_danger", "info",
+        "icon_group", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
+    }
+    OLD_GREEN = ("#17201C", "#0F1613", "#131B18", "#1C2722", "#1B2521", "#202C27", "#18382B", "#27332E", "#33423B")
+    # text_faint is decorative: counts, separators, keyboard hints, timestamps, captions.
+    FAINT_ALLOWED = {
+        ".caption", "menuitem .accel-hint", "modelbutton .accel-hint", ".breadcrumb-sep",
+        ".empty-state .empty-caption", ".activity-time", ".status-sep",
+    }
+
+    @staticmethod
+    def _rgb(value):
+        value = value.lstrip("#")
+        return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+
+    def ratio(self, fg, bg):
+        from ssh_manager.gtkui.theme.tokens import contrast_ratio
+
+        return contrast_ratio(getattr(self._DARK, fg), getattr(self._DARK, bg))
+
+    def test_palette_matches_the_approved_table(self) -> None:
+        for role, value in self.EXPECTED.items():
+            with self.subTest(role=role):
+                self.assertEqual(getattr(self._DARK, role).upper(), value.upper())
+
+    # The approved text grays are cool (hue ≈ 220°) with a 13–15 channel spread.
+    TEXT_GRAYS = {"text_primary", "text_secondary", "text_muted", "text_faint", "text_disabled",
+                  "tab_inactive", "icon_subgroup", "icon_host"}
+    # Deliberate faint green hints from the approved table.
+    GREEN_HINTS = {"bg_selected", "accent_tint", "avatar_bg"}
+
+    def test_neutral_tokens_are_gray(self) -> None:
+        for role, value in self._DARK.items():
+            if role in self.CHROMATIC:
+                continue
+            r, g, b = self._rgb(value)
+            with self.subTest(role=role, value=value):
+                self.assertLessEqual(max(r, g, b) - min(r, g, b), 16 if role in self.TEXT_GRAYS else 12)
+                if role not in self.GREEN_HINTS:
+                    self.assertLessEqual(g, b, "green cast on a neutral token")
+
+    def test_elevation_steps_by_lightness(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import relative_luminance
+
+        layers = ["bg_canvas", "bg_window", "bg_surface", "bg_surface_raised", "bg_hover"]
+        lum = [relative_luminance(getattr(self._DARK, role)) for role in layers]
+        self.assertEqual(lum, sorted(lum))
+        self.assertEqual(len(set(lum)), len(lum))
+        # Visible steps (≥ 1.05:1) between the layers the eye compares directly; the
+        # window base sits between canvas and surface and is almost never on screen.
+        for upper, lower in (("bg_surface", "bg_window"), ("bg_surface_raised", "bg_surface"),
+                             ("bg_hover", "bg_surface_raised"), ("bg_surface", "bg_canvas")):
+            with self.subTest(pair=(upper, lower)):
+                self.assertGreaterEqual(self.ratio(upper, lower), 1.05)
+
+    def test_text_and_ui_contrast(self) -> None:
+        text = [(fg, bg) for fg in ("text_primary", "text_secondary", "text_muted")
+                for bg in ("bg_surface", "bg_surface_raised", "bg_canvas", "bg_input")]
+        text += [("tab_inactive", "bg_surface"), ("accent_text", "bg_surface"), ("accent_text", "bg_selected")]
+        text += [("on_accent", bg) for bg in ("accent", "accent_hover", "accent_pressed")]
+        text += [(fg, bg) for fg in ("success", "warning", "danger", "info")
+                 for bg in ("bg_surface", "bg_surface_raised")]
+        for fg, bg in text:
+            with self.subTest(fg=fg, bg=bg):
+                self.assertGreaterEqual(self.ratio(fg, bg), 4.5)
+        for fg in ("focus_ring", "success", "warning", "danger", "info"):
+            for bg in ("bg_surface", "bg_surface_raised", "bg_hover", "bg_selected"):
+                with self.subTest(ui=fg, bg=bg):
+                    self.assertGreaterEqual(self.ratio(fg, bg), 3.0)
+        # Decorative only (counts): below 4.5:1 by design, still readable.
+        self.assertGreaterEqual(self.ratio("text_faint", "bg_surface"), 3.0)
+
+    def test_environment_badges(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import ENV_BADGES, contrast_ratio
+
+        for kind, (background, foreground) in ENV_BADGES["dark"].items():
+            with self.subTest(kind=kind):
+                self.assertGreaterEqual(contrast_ratio(foreground, background), 4.5)
+        r, g, b = self._rgb(ENV_BADGES["dark"]["development"][0])
+        self.assertLessEqual(max(r, g, b) - min(r, g, b), 12)
+
+    def test_terminal_default_scheme(self) -> None:
+        from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
+        from ssh_manager.gtkui.theme.tokens import contrast_ratio
+        from ssh_manager.settings import TerminalAppearanceSettings
+
+        colors = resolve_terminal_colors(TerminalAppearanceSettings())
+        self.assertEqual((colors.background, colors.foreground), ("#16171a", "#d6d9de"))
+        self.assertGreaterEqual(contrast_ratio(colors.foreground, colors.background), 7.0)
+        self.assertGreaterEqual(contrast_ratio(colors.foreground, colors.highlight), 4.5)
+        r, g, b = self._rgb(colors.background)
+        self.assertLessEqual(max(r, g, b) - min(r, g, b), 12)
+        self.assertLess(contrast_ratio("#000000", colors.background),
+                        contrast_ratio("#000000", self._DARK.bg_surface))  # darker than the surface
+        # User colors and other schemes are untouched.
+        custom = TerminalAppearanceSettings(use_custom_colors=True, fg_color="#00ff00", bg_color="#101010")
+        user = resolve_terminal_colors(custom)
+        self.assertEqual((user.background, user.foreground, user.cursor, user.highlight),
+                         ("#101010", "#00ff00", "#b9c4cf", "#2f333a"))
+        light = resolve_terminal_colors(TerminalAppearanceSettings(color_scheme="light"))
+        self.assertEqual((light.background, light.highlight), ("#f8fafc", "#2f333a"))
+
+    def test_dark_css_has_no_green_neutrals_or_unresolved_names(self) -> None:
+        from ssh_manager.gtkui.theme import density
+
+        for preset in (density.COMPACT, density.COMFORTABLE):
+            css = css_dark.css(tokens=preset)
+            with self.subTest(density=preset.density.value):
+                self.assertEqual(unresolved_color_refs(css), set())
+                for literal in self.OLD_GREEN:
+                    self.assertNotIn(literal.lower(), css.lower())
+
+    def test_text_faint_is_decorative_only(self) -> None:
+        import re
+
+        from ssh_manager.gtkui.theme import density
+
+        for preset in (density.COMPACT, density.COMFORTABLE):
+            css = re.sub(r"/\*.*?\*/", "", css_dark.css(tokens=preset), flags=re.S)
+            for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+                if "@sm_text_faint" not in body:
+                    continue
+                for selector in selectors.split(","):
+                    with self.subTest(density=preset.density.value, selector=selector.strip()):
+                        self.assertIn(" ".join(selector.split()), self.FAINT_ALLOWED)
+
+    def test_no_literal_colors_outside_the_token_modules(self) -> None:
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent / "ssh_manager" / "gtkui"
+        allowed = {root / "theme" / "tokens.py", root / "theme" / "terminal_schemes.py"}
+        offenders = [
+            f"{path.relative_to(root)}:{number}"
+            for path in root.rglob("*.py") if path not in allowed
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+            if re.search(r"#[0-9A-Fa-f]{6}\b", line)
+        ]
+        self.assertEqual(offenders, [])
+
+
+class NeutralDarkStateTests(unittest.TestCase):
+    """Hover, selected and focus stay distinguishable on every gray layer."""
+
+    def test_states_on_gray_layers(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import DARK, contrast_ratio
+
+        for state in ("bg_hover", "bg_selected"):
+            for layer in ("bg_surface", "bg_canvas"):
+                with self.subTest(state=state, layer=layer):
+                    self.assertGreaterEqual(contrast_ratio(getattr(DARK, state), getattr(DARK, layer)), 1.05)
+        for layer in ("bg_canvas", "bg_window", "bg_surface", "bg_surface_raised", "bg_input", "bg_hover", "bg_selected"):
+            with self.subTest(focus_on=layer):
+                self.assertGreaterEqual(contrast_ratio(DARK.focus_ring, getattr(DARK, layer)), 3.0)
+        # Disabled text stays visible (decorative contrast) on surfaces.
+        self.assertGreaterEqual(contrast_ratio(DARK.text_disabled, DARK.bg_surface), 3.0)

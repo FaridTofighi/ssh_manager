@@ -206,3 +206,12 @@ mode, and flags opaque backgrounds that are not palette surface tokens.
 `GTK_DEBUG=interactive`. `tools/ui_snapshots.py docs/ui-after
 sidebar-surfaces` writes per-theme sidebar crops and
 `sidebar-surfaces-after.md`.
+
+`tools/ui_snapshots.py docs/ui-after neutral-dark-match` renders the
+neutral-gray dark mock's scene (Comfortable layout, 115 dpi, 444 px sidebar).
+`tools/compare_neutral_dark.py docs/ui-after/neutral-dark-match.png` compares
+its flat color areas with `docs/ui-target/neutral-dark-palette.png` and checks
+the sampled pixels against the palette tokens. It writes
+`neutral-dark-report.md` and exits non-zero on a mismatch. The `popovers-dark`
+and `toasts-dark` scenarios render the header popovers and one toast of each
+level.

@@ -6,8 +6,8 @@ must equal the palette's `bg_surface` within ±1 per channel.
 | GTK theme | App mode | Expected | Worst sample | Max Δ | Image | OK |
 |---|---|---|---|---:|---|:---:|
 | Adwaita | light | `#FFFFFF` | `#FFFFFF` (top-right padding) | 0 | `sidebar-after-adwaita-light.png` | ✓ |
-| Adwaita | dark | `#17201C` | `#17201C` (top-right padding) | 0 | `sidebar-after-adwaita-dark.png` | ✓ |
+| Adwaita | dark | `#1A1B1E` | `#1A1B1E` (top-right padding) | 0 | `sidebar-after-adwaita-dark.png` | ✓ |
 | Adwaita:dark | light | `#FFFFFF` | `#FFFFFF` (top-right padding) | 0 | `sidebar-after-adwaita-dark-light.png` | ✓ |
-| Adwaita:dark | dark | `#17201C` | `#17201C` (top-right padding) | 0 | `sidebar-after-adwaita-dark-dark.png` | ✓ |
+| Adwaita:dark | dark | `#1A1B1E` | `#1A1B1E` (top-right padding) | 0 | `sidebar-after-adwaita-dark-dark.png` | ✓ |
 | HighContrast | light | `#FFFFFF` | `#FFFFFF` (top-right padding) | 0 | `sidebar-after-highcontrast-light.png` | ✓ |
-| HighContrast | dark | `#17201C` | `#17201C` (top-right padding) | 0 | `sidebar-after-highcontrast-dark.png` | ✓ |
+| HighContrast | dark | `#1A1B1E` | `#1A1B1E` (top-right padding) | 0 | `sidebar-after-highcontrast-dark.png` | ✓ |

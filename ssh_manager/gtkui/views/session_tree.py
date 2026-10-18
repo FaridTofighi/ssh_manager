@@ -138,7 +138,7 @@ def row_geometry(kind: object, depth: int) -> Dict[str, int]:
 def _rgba(hex_color: str) -> Gdk.RGBA:
     rgba = Gdk.RGBA()
     if not hex_color or not rgba.parse(hex_color):
-        rgba.parse("#888888")
+        rgba.parse(current_palette().text_disabled)
     return rgba
 
 

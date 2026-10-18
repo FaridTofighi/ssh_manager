@@ -35,8 +35,9 @@ for _sub in ("home", "config", "data"):
 import gi  # noqa: E402
 
 gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
-from gi.repository import Gio, GLib, Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk  # type: ignore  # noqa: E402
 
 SAMPLE_INVENTORY = {
     "production/web.conf": """Host web-01
@@ -304,6 +305,90 @@ def capture_dialog(dialog: Gtk.Dialog, path: Path, width: int = 0, height: int =
         height or (default_h if default_h > 0 else 420),
     )
     dialog.destroy()
+
+
+# --------------------------------------------------------------- popovers
+def render_widget_alone(widget: Gtk.Widget, background: str):
+    """Draw ``widget`` at its preferred size onto ``background`` (for popovers)."""
+
+    import cairo
+    from gi.repository import Gdk
+
+    _min, natural = widget.get_preferred_size()
+    rect = Gdk.Rectangle()
+    rect.x = rect.y = 0
+    rect.width, rect.height = natural.width, natural.height
+    widget.size_allocate(rect)
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, natural.width), max(1, natural.height))
+    cr = cairo.Context(surface)
+    rgba = Gdk.RGBA()
+    rgba.parse(background)
+    cr.set_source_rgb(rgba.red, rgba.green, rgba.blue)
+    cr.paint()
+    widget.draw(cr)
+    return surface
+
+
+def capture_popovers(window, path: Path) -> None:
+    """Avatar, help, workspace and message-history popovers side by side.
+
+    Popovers draw in a child window of the toplevel, so each one is popped up
+    on an offscreen anchor and drawn with ``Gtk.Widget.draw``. ``Gtk.Menu``
+    context menus only draw inside their own mapped popup window, which the
+    snapshots never map; their colors are covered by the stylesheet tests and
+    ``tools/debug_surfaces.py``.
+    """
+
+    import cairo
+
+    from ssh_manager.gtkui.theme.loader import current_palette
+
+    header = window._header
+    offscreen = Gtk.OffscreenWindow()
+    offscreen.get_style_context().add_class("sm-window")  # popovers take their CSS parent from the toplevel
+    holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    for css in ("sm-window", "background"):
+        holder.get_style_context().add_class(css)
+    holder.insert_action_group("win", window)
+    anchor = Gtk.Button(label="anchor")
+    holder.pack_start(anchor, False, False, 0)
+    offscreen.add(holder)
+    holder.set_size_request(400, 600)
+    offscreen.show_all()
+    _pump()
+    popovers = [
+        header._avatar_popover,
+        header.help_button.get_popover(),
+        header._workspace_popover,
+        header.history_button.get_popover(),
+    ]
+    surfaces = []
+    for popover in popovers:
+        if popover is None:
+            continue
+        popover.set_relative_to(anchor)
+        popover.set_transitions_enabled(False)
+        popover.popup()
+        _pump()
+        surfaces.append(render_widget_alone(popover, current_palette().bg_canvas))
+        popover.popdown()
+    gap = 24
+    width = sum(s.get_width() for s in surfaces) + gap * (len(surfaces) + 1)
+    height = max(s.get_height() for s in surfaces) + 2 * gap
+    sheet = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    cr = cairo.Context(sheet)
+    rgba = Gdk.RGBA()
+    rgba.parse(current_palette().bg_canvas)
+    cr.set_source_rgb(rgba.red, rgba.green, rgba.blue)
+    cr.paint()
+    x = gap
+    for surface in surfaces:
+        cr.set_source_surface(surface, x, gap)
+        cr.paint()
+        x += surface.get_width() + gap
+    sheet.write_to_png(str(path))
+    print(f"saved {path}")
+    offscreen.destroy()
 
 
 # ------------------------------------------------------------ chrome budget
@@ -936,6 +1021,46 @@ def run(out_dir: Path) -> None:
                        on_rendered=report_budget(window, out_dir, "compact-focus"))
         window.destroy()
 
+    @scenario("popovers-dark")
+    def _popovers_dark() -> None:
+        window = _make_window(app, base, True)
+        window._notify("Host key changed for web-02.", Level.WARNING)
+        capture_popovers(window, out_dir / "popovers-dark.png")
+        window.destroy()
+
+    @scenario("toasts-dark")
+    def _toasts_dark() -> None:
+        """One toast of each level."""
+
+        window = _make_window(app, base, True)
+        window._toasts.MAX_VISIBLE = 4
+        window._notify("Reconnecting to web-01…", Level.INFO)
+        window._notify("Copied “ssh deploy@web-01”.", Level.SUCCESS)
+        window._notify("Host key for web-02 changed.", Level.WARNING)
+        window._notify("Connection to db-primary failed.", Level.ERROR, action_label="_Retry", action=lambda: None)
+        _pump()
+        capture_window(window, out_dir / "toasts-dark.png")
+        window.destroy()
+
+    @scenario("neutral-dark-match")
+    def _neutral_dark_match() -> None:
+        """Reproduce docs/ui-target/neutral-dark-palette.png (the full-window mock).
+
+        The mock is the Comfortable layout captured on a 115 dpi desktop with a
+        444 px sidebar, so this scene renders the same way; compare it with
+        tools/compare_neutral_dark.py.
+        """
+
+        _pin_resolution(115.0)
+        try:
+            window = _make_window(app, density_base, True, "comfortable")
+            window._paned.set_position(444)
+            _density_scene(window, True)
+            capture_window(window, out_dir / "neutral-dark-match.png", *DENSITY_SIZE)
+            window.destroy()
+        finally:
+            _pin_resolution()
+
     @scenario("comfortable-session-dark")
     def _comfortable_scene() -> None:
         """The same scene in the Comfortable preset: the "before" chrome budget."""
@@ -958,6 +1083,7 @@ def run(out_dir: Path) -> None:
             capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in size))
             window.destroy()
 
+    from ssh_manager.gtkui.theme.tokens import Level  # noqa: E402
     from ssh_manager.gtk_app import (  # noqa: E402
         CredentialManagerDialog,
         HostDialog,

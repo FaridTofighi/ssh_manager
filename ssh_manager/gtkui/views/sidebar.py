@@ -360,6 +360,7 @@ class SidebarView(Gtk.Box):
 
     def _build_filter_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
+        popover.get_style_context().add_class("sm-popover")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
         box.set_border_width(Space.M)
         box.set_size_request(Size.POPOVER_WIDTH, -1)

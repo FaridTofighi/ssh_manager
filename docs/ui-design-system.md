@@ -17,32 +17,34 @@ every color role becomes `@define-color sm_<role>`.
 
 | Role | Light | Dark | Used for |
 |---|---|---|---|
-| `bg_window` / `bg_surface` | `#FFFFFF` / `#FFFFFF` | `#131B18` / `#17201C` | Window, top bar, sidebar, host header, tabs, info bar |
-| `bg_surface_raised` | `#FFFFFF` | `#1C2722` | Popovers, menus, toasts |
-| `bg_canvas` | `#F5F7F6` | `#0F1613` | Content canvas (Terminal / Details / Activity) |
-| `bg_page_bar` | `#FCFDFC` | `#18221E` | Page bar (breadcrumb row) |
-| `bg_input` | `#FAFBFA` | `#1B2521` | Entries, search |
-| `bg_hover` / `bg_selected` | `#F3F6F4` / `#EAF5EF` | `#202C27` / `#18382B` | Hovered / selected rows |
-| `border_subtle` / `border_input` / `border_strong` | `#DFE5E1` / `#D9E0DC` / `#C9D2CD` | `#27332E` / `#33423B` / `#45564E` | Dividers / controls / checks |
-| `text_primary` / `text_secondary` | `#18231F` / `#5B6B64` | `#E6EDE9` / `#A9B8B0` | Text |
-| `text_muted` / `text_faint` / `tab_inactive` | `#8C9791` / `#9BA59F` / `#7C8882` | `#8D9C95` / `#6F7E77` / `#93A29B` | Caps labels / counts, captions / inactive tabs |
+| `bg_window` / `bg_surface` | `#FFFFFF` / `#FFFFFF` | `#151619` / `#1A1B1E` | Window, top bar, sidebar, host header, tabs, info bar |
+| `bg_surface_raised` | `#FFFFFF` | `#212226` | Popovers, menus, toasts |
+| `bg_canvas` | `#F5F7F6` | `#121315` | Content canvas (Terminal / Details / Activity) |
+| `bg_page_bar` | `#FCFDFC` | `#1A1B1E` (same as surface) | Page bar (breadcrumb row) |
+| `bg_input` | `#FAFBFA` | `#16171A` | Entries, search |
+| `bg_hover` / `bg_selected` | `#F3F6F4` / `#EAF5EF` | `#25272B` / `#202A25` (faint green hint) | Hovered / selected rows |
+| `border_subtle` / `border_input` / `border_strong` | `#DFE5E1` / `#D9E0DC` / `#C9D2CD` | `#2A2C31` / `#35383E` / `#454951` | Dividers / controls / checks |
+| `text_primary` / `text_secondary` | `#18231F` / `#5B6B64` | `#E6E8EB` / `#A3A8B0` | Text |
+| `text_muted` / `text_faint` / `tab_inactive` | `#8C9791` / `#9BA59F` / `#7C8882` | `#8A9098` / `#6B7079` / `#8F959E` | Caps labels / counts, captions / inactive tabs |
 | `accent` / `accent_hover` / `accent_pressed` | `#176B4D` / `#12593F` / `#0E4A34` | `#1F7A57` / `#1A6E4E` / `#196A4B` | Primary buttons, selection bar, tab underline |
-| `accent_text` / `accent_tint` / `accent_soft_border` | `#176B4D` / `#EAF5EF` / `#CFE6DB` | `#5CCB9C` / `#18382B` / `#2B5A47` | Accent text and icons, tinted surfaces |
+| `accent_text` / `accent_tint` / `accent_soft_border` | `#176B4D` / `#EAF5EF` / `#CFE6DB` | `#5CCB9C` / `#202A25` / `#2F4A3E` | Accent text and icons, tinted surfaces |
 | `on_accent` | `#FFFFFF` | `#FFFFFF` | Text on accent |
 | `success` / `warning` / `danger` / `info` | `#2DA771` / `#B45309` / `#B42318` / `#2563A8` | `#48C48D` / `#E3A548` / `#F07A6E` / `#7DB1E8` | Status dots, latency, feedback levels |
 | `danger_strong` / `on_danger` | `#B42318` / `#FFFFFF` | same | Destructive buttons |
 | `focus_ring` | `#176B4D` | `#5CCB9C` | 2 px focus ring |
-| `chip_bg` | `#F1F4F2` | `#202C27` | Chips |
-| `avatar_bg` | `#233B32` | `#3E5A4E` | User avatar |
+| `chip_bg` | `#F1F4F2` | `#25272B` | Chips |
+| `avatar_bg` | `#233B32` | `#3F4A45` | User avatar |
 | `broadcast_bg` / `broadcast_fg` | `#FDECEA` / `#8F1D14` | `#4A1A16` / `#FFDAD5` | Broadcast warning strip |
-| `icon_group` / `icon_subgroup` / `icon_host` | `#A57828` / `#5B6B64` / `#5B6B64` | `#D9A84E` / `#A9B8B0` / `#A9B8B0` | Default tree icon tints |
-| `scrollbar` | `#C9D2CD` | `#45564E` | Overlay scrollbar thumb |
+| `icon_group` / `icon_subgroup` / `icon_host` | `#A57828` / `#5B6B64` / `#5B6B64` | `#D9A84E` / `#A3A8B0` / `#A3A8B0` | Default tree icon tints |
+| `scrollbar` | `#C9D2CD` | `#454951` | Overlay scrollbar thumb |
 | `shadow` / `shadow_popover` | 6 % / 12 % of `#18231F` | 35 % / 45 % black | Soft elevation |
 
 Environment badges (`ENV_BADGES`, `environment_badge_style(env, dark)`,
 `environment_kind(env)`): production `#FFF1E5 / #8A4B1F`, staging
 `#E8F1FB / #1D4F86`, development `#EEF1EF / #46534D`, anything else neutral
-`#F1F3F2 / #4F5C56` (dark variants in `tokens.py`). Aliases such as
+`#F1F3F2 / #4F5C56`. Dark variants sit on the neutral surface: production
+`#2E2620 / #F0B27A`, staging `#1F2733 / #8DB7E8`, development and neutral
+`#25272B / #A3A8B0` (all ≥ 6:1). Aliases such as
 `prod`, `stage`, `uat`, `dev` and `qa` map to these kinds.
 
 `Palette.status_color(state)` (connecting is amber) and
@@ -118,6 +120,47 @@ The stylesheet floors every size at 11 px for the current app font size
 (`stylesheet.font_floor_em`). GTK's
 `min-height` excludes borders, so the stylesheet subtracts 2 px from the
 outer token sizes of bordered controls.
+
+### Dark theme rules (neutral gray, Phase 5)
+
+The dark theme is neutral cool gray (hue ≈ 220°); green is only the accent.
+
+1. **Elevation by lightness, not hue:** canvas `#121315` < window
+   `#151619` < surface `#1A1B1E` < raised `#212226` < hover `#25272B`. Each
+   visible step is at least 1.05:1. The terminal background (`#16171A`) is
+   darker than the surface, so it sinks into the window. The window base is
+   only 1.03:1 above the canvas, but it is almost never on screen.
+2. **Single accent:** green (`accent`, `accent_text`, `focus_ring`) is the
+   only chromatic brand color. Hover is neutral; selection is neutral with a
+   faint green hint (`bg_selected`). The accent bar, dot and text carry the
+   selection.
+3. **No green-tinted neutrals:** borders, chips, scrollbars, popovers,
+   dialogs, toasts, tile frames and disabled states are gray. In every neutral
+   token green ≤ blue. The exceptions are the deliberate hints `bg_selected`,
+   `accent_tint` and `avatar_bg`.
+4. **Buttons:**
+   - Primary: `accent` with white text (5.3:1).
+   - Outlined: `border_input` with a `bg_hover` hover.
+   - Destructive: red.
+   - Icon buttons: neutral until hovered.
+5. **Semantic colors** (success, warning, danger, info) are unchanged and at
+   least 5.8:1 on the surface and on raised layers.
+6. **Explicit surfaces:** every surface sets an explicit token background,
+   never `transparent` over a stock container (see Phase 3).
+7. **No literal colors:** colors live only in `tokens.py` and
+   `terminal_schemes.py`, and a test fails on any `#rrggbb` elsewhere in
+   `ssh_manager/gtkui`.
+
+`text_faint` (3.5:1) is decorative: counts, separators, keyboard hints,
+timestamps and captions. A test fails if any other style uses it.
+`border_input` (1.5:1 on the surface) is below the 3:1 non-text target. That
+is accepted as in the approved table: inputs are also identified by their
+`bg_input` fill, their label and the 2 px focus ring (≥ 7:1 on every layer).
+
+The built-in dark terminal scheme is `#16171A` / `#D6D9DE` (12.7:1), with the
+cursor `#B8BCC2` and the selection `#28443A` (25 % `accent_text` over the
+background; selected text 7.5:1). Other schemes and user colors are
+unchanged.
 
 ### Contrast
 

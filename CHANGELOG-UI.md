@@ -6,6 +6,87 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 5 — neutral-gray dark theme
+
+Approved design: `docs/ui-target/neutral-dark-palette.png` (full-window mock)
+and `docs/ui-target/neutral-dark-mock.png` (token table). Only colors change;
+the layout, densities and behavior are the same.
+
+- **Dark palette:** the surfaces move from green-tinted to neutral cool gray.
+
+  | Token | Before | After |
+  |---|---|---|
+  | `bg_canvas` | `#0F1613` | `#121315` |
+  | `bg_window` | `#131B18` | `#151619` |
+  | `bg_surface` | `#17201C` | `#1A1B1E` |
+  | `bg_surface_raised` | `#1C2722` | `#212226` |
+  | `bg_input` | `#1B2521` | `#16171A` |
+  | `bg_hover` | `#202C27` | `#25272B` |
+  | `bg_selected` / `accent_tint` | `#18382B` | `#202A25` |
+
+  Borders, text, chips, avatar, scrollbar and tree icons follow the approved
+  table. The accent family, the semantic colors, folder amber, broadcast and
+  shadows are unchanged.
+- **Selected tree row:** a neutral fill with a faint green hint plus the
+  accent bar, instead of a green panel.
+- **Environment badges (dark):** re-derived from the neutral surface:
+  production `#2E2620 / #F0B27A`, staging `#1F2733 / #8DB7E8`, development
+  and neutral `#25272B / #A3A8B0`.
+- **Built-in dark terminal scheme:** `#16171A` / `#D6D9DE` (was the bluish
+  `#1F2329` / `#F5F6F8`), with a neutral cursor `#B8BCC2` and an accent-tinted
+  selection `#28443A`. The ANSI palette, the Light and Solarized schemes and
+  user colors are unchanged.
+- **Popovers:** the filter and message-history popovers carry `sm-popover`,
+  so they are styled wherever they are attached.
+- **No literal colors:** the tree's fallback color comes from the palette.
+  A test now fails on any `#rrggbb` outside `tokens.py` and
+  `terminal_schemes.py`.
+
+### Verification
+
+- **Mock comparison:** `tools/ui_snapshots.py docs/ui-after neutral-dark-match`
+  then `tools/compare_neutral_dark.py`. All 12 regions match: top bar, sidebar
+  header, tree panel, selected row, footer, page bar, host header, tabs,
+  canvas, terminal, status bar and primary button. The error is 0.0–0.02 %,
+  and every sampled pixel equals its token exactly
+  (`docs/ui-after/neutral-dark-report.md`).
+- **Tests** (`tests/test_gtkui_theme.py`):
+  - the exact palette;
+  - neutrality (surfaces and borders spread ≤ 12, no green cast);
+  - elevation steps ≥ 1.05:1;
+  - text 4.5:1 on surface, raised, canvas and input;
+  - accent, semantic and badge contrast;
+  - focus ring 3:1 on every layer;
+  - terminal 12.7:1, with selected text 7.5:1;
+  - user schemes untouched;
+  - no old green literals in the dark CSS;
+  - `text_faint` used only decoratively;
+  - no literal colors outside the token modules.
+- **Surfaces:** `tests/test_gtkui_surfaces.py` and `tools/debug_surfaces.py`
+  are clean (Adwaita, Adwaita:dark, HighContrast; System/Light/Dark; focused
+  and backdrop).
+- **Light theme:** every light screenshot is pixel-identical to before,
+  except the terminal area in the two light scenes with a live session (the
+  built-in Default terminal scheme is dark in both themes).
+- **New screenshots:** `toasts-dark` (one toast per level) and
+  `popovers-dark` (avatar, help, workspace and message history).
+  Context menus are `Gtk.Menu` popups, which only draw in a mapped window; the
+  snapshots never map windows, so their colors are checked through the
+  stylesheet tests and the surface audit.
+
+### Deviations from the brief, kept on purpose
+
+- **Elevation:** the approved values put the window base only 1.03:1 above the
+  canvas, against the ≥ 1.05 rule. The other steps meet it, and the window
+  base is almost never visible.
+- **Neutrality:** the approved text grays (`#A3A8B0`, `#8A9098`, `#6B7079`,
+  `#8F959E`) are cool grays with a 13–15 channel spread, so the test allows
+  ≤ 16 for text and ≤ 12 for surfaces and borders. It also asserts that no
+  neutral has a green cast.
+- **`border_input`:** 1.5:1 on the surface, below the 3:1 UI target, as in the
+  approved table. Inputs are still identified by their fill, label and focus
+  ring.
+
 ## Phase 4 — compact density
 
 Screenshot of the old layout: `docs/ui-before/density-current.png`.

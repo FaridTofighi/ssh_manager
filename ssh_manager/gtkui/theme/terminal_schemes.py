@@ -21,11 +21,15 @@ SOLARIZED_PALETTE: List[str] = [
     "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
 ]
 
-DARK_COLORS: Tuple[str, str] = ("#1f2329", "#f5f6f8")  # background, foreground
+# Built-in dark scheme: neutral gray, darker than the UI surface so the terminal
+# sinks into the window (was the bluish #1f2329 / #f5f6f8).
+DARK_COLORS: Tuple[str, str] = ("#16171a", "#d6d9de")  # background, foreground
+DARK_CURSOR = "#b8bcc2"
+DARK_HIGHLIGHT = "#28443a"  # rgba(92, 203, 156, 0.25) — accent_text — over the background
 LIGHT_COLORS: Tuple[str, str] = ("#f8fafc", "#0f172a")
 SOLARIZED_DARK_COLORS: Tuple[str, str] = ("#002b36", "#93a1a1")
 SOLARIZED_LIGHT_COLORS: Tuple[str, str] = ("#fdf6e3", "#586e75")
-CURSOR_COLOR = "#b9c4cf"
+CURSOR_COLOR = "#b9c4cf"  # every other built-in scheme and user colors
 HIGHLIGHT_COLOR = "#2f333a"
 
 # (key, label) pairs shown in Preferences.
@@ -83,10 +87,11 @@ def resolve_terminal_colors(appearance: Optional[object], profile_theme: str = "
         if custom_palette:
             palette = list(custom_palette)
 
+    dark_default = (background, foreground) == DARK_COLORS
     return TerminalColors(
         foreground=foreground,
         background=background,
-        cursor=CURSOR_COLOR,
-        highlight=HIGHLIGHT_COLOR,
+        cursor=DARK_CURSOR if dark_default else CURSOR_COLOR,
+        highlight=DARK_HIGHLIGHT if dark_default else HIGHLIGHT_COLOR,
         palette=palette,
     )

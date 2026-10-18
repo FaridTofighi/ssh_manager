@@ -149,6 +149,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         self.add(overlay)
 
         self._popover = Gtk.Popover()
+        self._popover.get_style_context().add_class("sm-popover")  # styled wherever it is attached
         self._popover.set_size_request(Size.POPOVER_WIDE, -1)
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
         body.set_border_width(Space.M)
