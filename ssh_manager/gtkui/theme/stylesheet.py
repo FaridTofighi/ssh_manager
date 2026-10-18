@@ -890,9 +890,10 @@ notebook.session-tabs > header > tabs > tab button.toolbar-icon {
 button.toolbar-icon { padding: ${xs}px; }
 .info-bar button.toolbar-icon { min-width: 20px; min-height: 20px; padding: 1px; }
 
-/* The terminal keeps the app font size: undo the density's smaller base font
-   (a custom terminal font from Settings sets its own size anyway). */
-vte-terminal { font-size: ${terminal_font}em; }
+/* The terminal keeps the app font size, not the density's smaller base font
+   (a custom terminal font from Settings sets its own size anyway). Absolute,
+   so nested terminals (split panes, tiles) cannot compound it. */
+vte-terminal { font-size: ${terminal_font}pt; }
 
 /* Terminal edge to edge: no card, no canvas margin. */
 notebook.session-tabs > stack { padding: 0; }
@@ -911,7 +912,8 @@ notebook.session-tabs > stack { padding: 0; }
 .info-live .statusbar { font-size: ${fs_caption}em; }
 
 .card { padding: ${l}px; }
-.broadcast-strip { padding: ${xs}px ${m}px; min-height: 24px; }
+.broadcast-strip { padding: ${xs}px ${m}px; }
+.broadcast-strip button { min-height: 20px; padding: 0 ${m}px; }
 .sm-window button.workspace-switcher { padding: ${xs}px ${xs}px; }
 """)
 
@@ -926,7 +928,7 @@ def _density_rules(tokens: DensityTokens, values: Dict[str, object]) -> str:
     extra.update(
         sidebar_header=size.SIDEBAR_HEADER, session_strip=size.SESSION_STRIP - 1, tabs=size.TABS - 1,
         tab_chip=size.SESSION_STRIP - 8, terminal_pad_x=size.TERMINAL_PAD_X, terminal_pad_y=size.TERMINAL_PAD_Y,
-        terminal_font=round(1 / tokens.base_font_scale, 4),
+        terminal_font=values["font_pt"],
     )
     return _COMPACT_RULES.substitute(extra)
 
@@ -954,6 +956,7 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "env_badges": _env_badges(palette),
         "name": palette.name,
         "density": tokens.density.value,
+        "font_pt": font_pt,
         "defines": _defines(palette),
         "motion": motion,
         "ui_fonts": _families(UI_FONT_FAMILIES) + ", sans-serif",

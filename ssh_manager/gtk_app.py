@@ -298,6 +298,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         density_tokens.add_listener(self._on_density_changed)
         self.terminal_tabs.on_toggle_focus_mode = self.layout.toggle_maximized
         self.show_all()
+        # Sidebar and top bar visibility belong to LayoutController (sidebar
+        # toggle, focus mode); a later show_all() must not bring them back.
+        for part in (self._sidebar, self._header):
+            part.show_all()
+            part.set_no_show_all(True)
         self.connect("size-allocate", self.layout.on_size_allocate)
         self.connect("key-press-event", self._on_window_key_press)
 

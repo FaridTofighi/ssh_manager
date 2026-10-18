@@ -104,7 +104,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("toggle-sidebar", _("Toggle sidebar"), G_VIEW, ("<Primary>b",)),
     ActionSpec("toggle-details", _("Switch between Terminal and Details"), G_VIEW, ("F9",)),
     ActionSpec("page-tab", _("Terminal / Details / Activity tab"), G_VIEW, (), ("<Primary>1", "<Primary>2", "<Primary>3"), parameter="i"),
-    ActionSpec("toggle-maximize", _("Maximize workspace"), G_VIEW, ("F11",)),
+    ActionSpec("toggle-maximize", _("Focus mode (terminal only)"), G_VIEW, ("F11", "<Primary><Shift>m")),
 ]
 
 GOTO_TAB_ACCELS = tuple((f"<Alt>{n}", n) for n in range(1, 10))

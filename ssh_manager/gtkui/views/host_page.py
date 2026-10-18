@@ -232,6 +232,13 @@ class HostHeader(Gtk.Box):
         self.pack_end(self.stats, False, False, 0)
         self._badge_class = ""
         self._content = HostPageContent()
+        self._narrow = False
+
+    def set_narrow(self, narrow: bool) -> None:
+        """Narrow window: the host bar drops the address (the Details tab has it)."""
+
+        self._narrow = narrow
+        self.set_content(self._content)
 
     def apply_density(self) -> None:
         compact = _compact()
@@ -259,7 +266,7 @@ class HostHeader(Gtk.Box):
         self.title.set_text(content.title)
         self._tile_icon.set_icon(content.icon)
         self.address.set_text(content.address)
-        self.address.set_visible(bool(content.address))
+        self.address.set_visible(bool(content.address) and not (self._narrow and _compact()))
         if self._badge_class:
             self.badge.get_style_context().remove_class(self._badge_class)
         if content.environment:
@@ -686,6 +693,7 @@ class HostPageView(Gtk.Box):
 
         if narrow != self._narrow:
             self._narrow = narrow
+            self.header.set_narrow(narrow)
             self._sync_bands()
 
     def set_sessions_strip(self, visible: bool) -> None:

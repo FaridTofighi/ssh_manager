@@ -244,6 +244,10 @@ def _render(widget: Gtk.Widget, path: Path, width: int, height: int, on_rendered
     widget.set_size_request(width, height)
     offscreen.show_all()
     _pump()
+    # Lay out once and run what that queued (idle callbacks reacting to the final
+    # allocation, e.g. the search keycap), then capture.
+    offscreen.get_surface()
+    _pump()
     surface = offscreen.get_surface() if offscreen.get_scale_factor() > 1 else None
     pixbuf = None if surface is not None else offscreen.get_pixbuf()
     if surface is not None:
@@ -892,6 +896,7 @@ def run(out_dir: Path) -> None:
             tab._set_status("Connected", True)
             tab._apply_stats_result({"cpu": 0.0, "mem_used": 1600.0, "mem_total": 3800.0,
                                      "disk_used": 10.4, "disk_total": 15.2})
+        page.refresh()
         _pump()
 
     for theme, dark in (("dark", True), ("light", False)):
@@ -906,6 +911,30 @@ def run(out_dir: Path) -> None:
                                on_rendered=report_budget(window, out_dir, name))
                 window.destroy()
 
+    @scenario("compact-narrow")
+    def _compact_narrow() -> None:
+        """960 px wide: narrow variant (session chips get their own strip, short labels)."""
+
+        window = _make_window(app, density_base, True, snapshot_density("compact"))
+        _density_scene(window, True)
+        window.layout.set_narrow(True)
+        _pump()
+        capture_window(window, out_dir / "compact-narrow.png", 960, 720,
+                       on_rendered=report_budget(window, out_dir, "compact-narrow"))
+        window.destroy()
+
+    @scenario("compact-focus")
+    def _compact_focus() -> None:
+        """Focus mode: only the tabs / session row and the terminal."""
+
+        window = _make_window(app, density_base, True, snapshot_density("compact"))
+        _density_scene(window, True)
+        window.layout.set_maximized(True)
+        _pump()
+        capture_window(window, out_dir / "compact-focus.png", *DENSITY_SIZE,
+                       on_rendered=report_budget(window, out_dir, "compact-focus"))
+        window.destroy()
+
     @scenario("comfortable-session-dark")
     def _comfortable_scene() -> None:
         """The same scene in the Comfortable preset: the "before" chrome budget."""
@@ -919,10 +948,13 @@ def run(out_dir: Path) -> None:
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:
         @scenario(name)
         def _run() -> None:
+            from ssh_manager.gtkui.theme import density
+
             window = _make_window(app, base, True)
             dialog = factory(window)
             _pump()
-            capture_dialog(dialog, out_dir / f"{name}.png", *size)
+            scale = density.active().dialog_scale  # Compact dialogs open smaller
+            capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in size))
             window.destroy()
 
     from ssh_manager.gtk_app import (  # noqa: E402

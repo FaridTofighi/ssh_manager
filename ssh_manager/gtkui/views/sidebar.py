@@ -28,7 +28,7 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gdk, Gio, Gtk, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
@@ -281,6 +281,8 @@ class SidebarView(Gtk.Box):
         self.search_entry.connect("key-press-event", self._on_search_key)
         for signal in ("changed", "focus-in-event", "focus-out-event"):
             self.search_entry.connect(signal, lambda *_: self._sync_keycap() or False)
+        # Visibility changes are ignored while GTK is allocating: re-check afterwards.
+        self.search_entry.connect("size-allocate", lambda *_: GLib.idle_add(self._sync_keycap_idle))
         overlay.add(self.search_entry)
         search_icon = make_icon(Icons.SEARCH, 16, css_class="search-icon")
         search_icon.set_halign(Gtk.Align.START)
@@ -520,7 +522,24 @@ class SidebarView(Gtk.Box):
         return False
 
     def _sync_keycap(self) -> None:
-        self.keycap.set_visible(not self.search_entry.get_text() and not self.search_entry.has_focus())
+        idle = not self.search_entry.get_text() and not self.search_entry.has_focus()
+        self.keycap.set_visible(idle and self._keycap_fits())
+
+    def _sync_keycap_idle(self) -> bool:
+        self._sync_keycap()
+        return GLib.SOURCE_REMOVE
+
+    def _keycap_fits(self) -> bool:
+        """The keycap hint only shows when it does not cover the placeholder (narrow sidebars)."""
+
+        width = self.search_entry.get_allocated_width()
+        if width <= 1:  # not allocated yet
+            return True
+        placeholder = self.search_entry.create_pango_layout(self.search_entry.get_placeholder_text() or "")
+        # Measure the keycap's text, not the widget: a hidden widget reports width 0.
+        keycap = self.keycap.create_pango_layout(self.keycap.get_text()).get_pixel_size()[0] + 2 * Space.XS + 2
+        needed = Layout.Sidebar.SEARCH_TEXT_INSET + placeholder.get_pixel_size()[0] + Space.M + keycap + Space.M
+        return width >= needed
 
     def focus_search(self) -> None:
         self.search_entry.grab_focus()
