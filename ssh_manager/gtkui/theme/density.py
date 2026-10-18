@@ -107,7 +107,7 @@ class SizeTokens(_Group):
     LOGO_GLYPH: int
     AVATAR: int
     ICON_BUTTON: int
-    TOOLBAR_BUTTON: int
+    TOOLBAR_BUTTON: int  # CSS min-height; + 2 × Space.XS padding + 2px border outside
     SEARCH: int
     FILTER_BUTTON: int
     BUTTON: int
@@ -460,10 +460,14 @@ def floor_violations(tokens: DensityTokens) -> List[str]:
         if not name.endswith("_WEIGHT") and float(value) < MIN_FONT_PX:
             problems.append(f"font.{name}={value} < {MIN_FONT_PX}px")
     size = tokens.size
-    for name in ("ICON_BUTTON", "TOOLBAR_BUTTON", "AVATAR", "BUTTON", "BUTTON_LARGE", "BUTTON_MIN",
-                 "HERO_BUTTON", "ENTRY", "SEARCH", "FILTER_BUTTON", "MENU_ROW"):
-        if getattr(size, name) < MIN_TARGET_PX:
-            problems.append(f"size.{name}={getattr(size, name)} < {MIN_TARGET_PX}px target")
+    targets = {name: getattr(size, name) for name in (
+        "ICON_BUTTON", "AVATAR", "BUTTON", "BUTTON_LARGE", "BUTTON_MIN", "HERO_BUTTON", "ENTRY", "SEARCH",
+        "FILTER_BUTTON", "MENU_ROW",
+    )}
+    targets["TOOLBAR_BUTTON"] = size.TOOLBAR_BUTTON + 2 * tokens.space.XS + 2  # outer size
+    for name, value in targets.items():
+        if value < MIN_TARGET_PX:
+            problems.append(f"size.{name}={value} < {MIN_TARGET_PX}px target")
     for name in ("TREE_ROW", "TREE_GROUP_ROW"):
         if getattr(size, name) < MIN_TREE_ROW_PX:
             problems.append(f"size.{name}={getattr(size, name)} < {MIN_TREE_ROW_PX}px row")
