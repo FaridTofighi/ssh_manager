@@ -208,5 +208,8 @@ def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
 
 _EXTRA_SHORTCUTS: Dict[str, List[Tuple[str, str]]] = {
     G_GENERAL: [(_("Clear search / leave a field"), "Escape")],
-    G_SESSIONS: [(_("Stop broadcasting (outside the terminal)"), "Escape")],
+    G_SESSIONS: [
+        (_("Stop broadcasting (outside the terminal)"), "Escape"),
+        (_("Focus the pane or tile to the left / right / above / below"), "<Alt>Left <Alt>Right <Alt>Up <Alt>Down"),
+    ],
 }

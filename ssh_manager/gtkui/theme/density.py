@@ -140,6 +140,11 @@ class SizeTokens(_Group):
     TAB_LABEL_MIN: int  # session tab label width (ellipsized)
     TAB_LABEL_MAX: int
     PANEL_WIDTH: int  # host details / activity slide-over
+    PANE_GUTTER: int  # canvas between panes and around the pane group
+    PANE_RADIUS: int
+    PANE_HEADER: int  # pane header height (content)
+    PANE_FOOTER: int
+    PANE_MIN: int  # smallest pane in a split
     DIALOG_PADDING: int
     DIALOG_GAP: int
     TERMINAL_PAD_X: int
@@ -308,6 +313,7 @@ COMFORTABLE = DensityTokens(
         POPOVER_WIDTH=320, POPOVER_WIDE=380, POPOVER_MAX_HEIGHT=360, WORKSPACE_POPOVER=280,
         SETTINGS_NAV=190, SIDE_PANEL=260, TERMINAL_PREVIEW=120,
         TAB_LABEL_MIN=96, TAB_LABEL_MAX=220, PANEL_WIDTH=360,
+        PANE_GUTTER=8, PANE_RADIUS=8, PANE_HEADER=34, PANE_FOOTER=24, PANE_MIN=120,
         DIALOG_PADDING=16, DIALOG_GAP=12,
         TERMINAL_PAD_X=8, TERMINAL_PAD_Y=8, WORKSPACE_PAD=16,
     ),
@@ -364,6 +370,7 @@ COMPACT = DensityTokens(
         POPOVER_WIDTH=280, POPOVER_WIDE=340, POPOVER_MAX_HEIGHT=320, WORKSPACE_POPOVER=240,
         SETTINGS_NAV=170, SIDE_PANEL=220, TERMINAL_PREVIEW=100,
         TAB_LABEL_MIN=96, TAB_LABEL_MAX=220, PANEL_WIDTH=360,
+        PANE_GUTTER=6, PANE_RADIUS=6, PANE_HEADER=28, PANE_FOOTER=24, PANE_MIN=120,
         DIALOG_PADDING=16, DIALOG_GAP=8,
         TERMINAL_PAD_X=6, TERMINAL_PAD_Y=4, WORKSPACE_PAD=0,
     ),

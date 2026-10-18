@@ -37,6 +37,9 @@ every color role becomes `@define-color sm_<role>`.
 | `broadcast_bg` / `broadcast_fg` | `#FDECEA` / `#8F1D14` | `#4A1A16` / `#FFDAD5` | Broadcast warning strip |
 | `icon_group` / `icon_subgroup` / `icon_host` | `#A57828` / `#5B6B64` / `#5B6B64` | `#D9A84E` / `#A3A8B0` / `#A3A8B0` | Default tree icon tints |
 | `scrollbar` | `#C9D2CD` | `#454951` | Overlay scrollbar thumb |
+| `pane_border` / `pane_border_focus` / `pane_border_broadcast` | `#868F8A` / `#176B4D` / `#B42318` | `#5E6269` / `#1F7A57` / `#F07A6E` | Pane outlines in split and tile mode (all ≥ 3:1 against the gutter) |
+| `pane_header_bg` / `pane_header_bg_focus` | `#FFFFFF` / `#EAF5EF` | `#212226` / `#202A25` | Pane header and footer; focused pane header |
+| `pane_gutter` / `pane_dim` | `#F5F7F6` / 12 % black | `#121315` / 12 % black | Gutter between panes (= `bg_canvas`); veil over unfocused panes |
 | `shadow` / `shadow_popover` | 6 % / 12 % of `#18231F` | 35 % / 45 % black | Soft elevation |
 
 Environment badges (`ENV_BADGES`, `environment_badge_style(env, dark)`,
@@ -162,6 +165,35 @@ cursor `#B8BCC2` and the selection `#28443A` (25 % `accent_text` over the
 background; selected text 7.5:1). Other schemes and user colors are
 unchanged.
 
+### Panes (split pane, tile mode)
+
+When several terminals are on screen together, each one sits in a
+`PaneFrame` (`widgets/pane_frame.py`). Tiles (`TileFrame`) and split panes
+share it.
+- **Frame:** a full border on all four sides, radius 6 (Compact) or 8
+  (Comfortable).
+- **Gutter:** `pane_gutter` (the canvas), 6 or 8 px between panes and around
+  the group. In a split it is the `Gtk.Paned` handle, which has a centred
+  2 × 24 grip that turns accent on hover or drag.
+- **Header** (28 or 34 px): a status dot, the label (the tab label policy,
+  plus `· pane 1` / `· pane 2` in a split), the muted `user@host:port`, and on
+  the right the Broadcast chip (tiles), zoom (maximize / restore one pane) and
+  close.
+- **Footer:** `● Connected · 59×35` inside the border.
+- **States:**
+  - plain: 1 px `pane_border` with 1 px padding;
+  - focused: 2 px `pane_border_focus` with an accent-tinted header;
+  - broadcast (while on): 2 px `pane_border_broadcast` and a `BROADCAST` badge;
+  - focused and broadcast: 1 px danger border with a 1 px accent inner ring;
+  - failed / disconnected: 1 px danger / warning border, with the status text
+    in the footer.
+
+  Focused and broadcast frames use 2 px of border where a plain frame uses
+  1 px of border plus 1 px of padding, so the terminal never moves.
+- **Unfocused panes** get a `pane_dim` veil through a pass-through overlay,
+  never widget opacity on the terminal.
+- **Single session:** a lone session stays edge to edge with no frame.
+
 ### Contrast
 
 `tokens.CONTRAST_PAIRS` lists every text/background and UI-component pair;
@@ -237,7 +269,8 @@ with a token report.
 | `.empty-state`, `.ready-state`, `.empty-card`, `.empty-title`, `.empty-description`, `.empty-caption`, `button.hero` | Empty states | Ready to connect and other placeholders |
 | `notebook.session-tabs`, `.session-strip-actions`, `.session-toolbar-row`, `.terminal-card` | Terminal tab | Session strip, toolbar, terminal card |
 | `.statusbar`, `.stat-warn`, `.stat-critical`, `.stat-icon` | Live stats | Warn at 80 %, critical at 90 % |
-| `.broadcast-strip`, `.broadcast-active`, `.tile-frame`, `.tile-header` | Workspace | Broadcast warning, tiles |
+| `.broadcast-strip`, `.broadcast-active` | Workspace | Broadcast warning; a single session's outline while broadcasting in tabs mode |
+| `.pane-frame` (`.focused`, `.broadcast`, `.broadcasting`, `.failed`, `.disconnected`), `.pane-header`, `.pane-footer`, `.pane-dim`, `.pane-gutter`, `paned.pane-split`, `button.broadcast-chip` | Panes | Split panes and tiles (see "Panes" below) |
 | `button.primary` / `.suggested-action`, `button.outlined`, `.destructive-action` | Buttons | Primary, secondary, destructive |
 | `popover.sm-popover`, `.popover-menu-item`, `menuitem .menu-icon`, `.accel-hint`, `menuitem.destructive` | Menus | Popovers and menus |
 | `.chip`, `.chip.accent`, `.badge`, `.status-dot.*`, `.toast*`, `.level-*`, `.caps`, `.mono` | Shared | Chips, counters, status, toasts, type helpers |

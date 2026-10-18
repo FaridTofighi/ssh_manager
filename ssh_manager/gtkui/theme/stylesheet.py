@@ -747,12 +747,106 @@ notebook.session-tabs > stack {
     border-bottom: 1px solid alpha(@sm_danger, 0.3);
 }
 .broadcast-active { border: 2px solid @sm_danger; border-radius: ${r_md}px; }
-.tile-frame {
-    border: 1px solid @sm_border_subtle;
-    border-radius: ${r_lg}px;
-    background-color: @sm_bg_surface;
+
+/* Panes shown together (split pane, tile mode): border on every side, a canvas
+   gutter between panes, a header and a footer per pane. A plain pane has a 1px
+   border + 1px padding over the gutter color; focused/broadcast panes use a 2px
+   border and no padding, so the content never moves. */
+.pane-gutter, .pane-gutter viewport, .terminal-card.split {
+    background-color: @sm_pane_gutter;
+    background-image: none;
 }
-.tile-header { padding: ${xs}px ${s}px; border-bottom: 1px solid @sm_border_subtle; }
+.terminal-card.split { padding: ${pane_gutter}px; border: none; border-radius: 0; }
+.pane-frame {
+    background-color: @sm_pane_gutter;
+    background-image: none;
+    border: 1px solid @sm_pane_border;
+    border-radius: ${pane_radius}px;
+    padding: 1px;
+}
+.pane-frame.disconnected { border-color: @sm_warning; }
+.pane-frame.failed { border-color: @sm_danger; }
+.pane-frame.focused { border: 2px solid @sm_pane_border_focus; padding: 0; }
+.pane-frame.broadcast { border: 2px solid @sm_pane_border_broadcast; padding: 0; }
+/* Focused and broadcasting: danger border with an accent inner ring (the padding). */
+.pane-frame.broadcast.focused {
+    border: 1px solid @sm_pane_border_broadcast;
+    padding: 1px;
+    background-color: @sm_pane_border_focus;
+}
+.pane-frame .terminal-card { border: none; border-radius: 0; }
+.pane-body vte-terminal { padding: ${terminal_pad_y}px ${terminal_pad_x}px; }
+.pane-header {
+    background-color: @sm_pane_header_bg;
+    background-image: none;
+    min-height: ${pane_header}px;
+    padding: 0 ${xs}px 0 ${s}px;
+    border-bottom: 1px solid @sm_border_subtle;
+    border-radius: ${pane_inner_radius}px ${pane_inner_radius}px 0 0;
+    color: @sm_text_primary;
+}
+.pane-header.hover { background-color: @sm_bg_hover; }
+.pane-header.focused { background-color: @sm_pane_header_bg_focus; }
+.pane-header.focused .pane-title { color: @sm_accent_text; }
+.pane-title { font-weight: 600; font-size: ${fs_body}em; }
+.pane-address { font-family: $mono_fonts; font-size: ${fs_caption}em; color: @sm_text_muted; }
+.pane-badge {
+    background-color: @sm_danger_strong;
+    color: @sm_on_danger;
+    border-radius: ${r_pill}px;
+    padding: 0 ${s}px;
+    font-size: ${fs_badge}em;
+    font-weight: 700;
+    letter-spacing: $badge_tracking;
+}
+.pane-header button.toolbar-icon { min-width: 18px; min-height: 18px; padding: 2px; }
+.sm-window button.broadcast-chip {
+    min-height: 0;
+    padding: 0 ${s}px;
+    border-radius: ${r_pill}px;
+    background-color: @sm_pane_header_bg;
+    border-color: @sm_border_input;
+    color: @sm_text_secondary;
+    font-size: ${fs_caption}em;
+    font-weight: 500;
+}
+.sm-window button.broadcast-chip:hover { background-color: @sm_bg_hover; }
+/* Checked = included in broadcast; it turns red only while broadcast is on. */
+.sm-window button.broadcast-chip:checked { background-color: @sm_bg_hover; color: @sm_text_primary; }
+.sm-window .pane-frame.broadcasting button.broadcast-chip:checked {
+    background-color: alpha(@sm_danger, 0.15);
+    border-color: alpha(@sm_danger, 0.55);
+    color: @sm_danger;
+}
+.pane-footer {
+    background-color: @sm_pane_header_bg;
+    min-height: ${pane_footer}px;
+    padding: 0 ${s}px;
+    border-top: 1px solid @sm_border_subtle;
+    border-radius: 0 0 ${pane_inner_radius}px ${pane_inner_radius}px;
+    color: @sm_text_secondary;
+    font-size: ${fs_caption}em;
+}
+.pane-dim { background-color: @sm_pane_dim; }
+/* Split divider: a gutter-wide handle with a centred 2 x 24 grip (the only
+   background-image on a surface: it draws the grip). */
+paned.pane-split > separator, paned.pane-split > separator.wide {
+    min-width: ${pane_gutter}px;
+    min-height: ${pane_gutter}px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    -gtk-icon-source: none;
+    background-color: @sm_pane_gutter;
+    background-image: linear-gradient(@sm_border_strong, @sm_border_strong);
+    background-size: 2px 24px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+paned.pane-split.vertical > separator { background-size: 24px 2px; }
+paned.pane-split > separator:hover, paned.pane-split > separator:active {
+    background-image: linear-gradient(@sm_accent, @sm_accent);
+}
 
 /* ------------------------------------------------------------- toasts */
 .toast {
@@ -880,7 +974,6 @@ notebook.session-tabs > stack { padding: 0; }
     border-radius: 0;
     padding: ${terminal_pad_y}px ${terminal_pad_x}px;
 }
-.tile-frame { border-radius: ${r_md}px; }
 
 /* Single-line status bar. */
 .info-bar { padding: 0 ${gutter}px; }
@@ -955,6 +1048,10 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "add_host_pad_start": tokens.sidebar.ADD_HOST_PAD_START, "add_host_pad_end": tokens.sidebar.ADD_HOST_PAD_END,
         "search_text_inset": tokens.sidebar.SEARCH_TEXT_INSET,
         "session_strip_inner": size.SESSION_STRIP - 1,  # + 1px bottom border
+        "pane_gutter": size.PANE_GUTTER, "pane_radius": size.PANE_RADIUS,
+        "pane_inner_radius": max(0, size.PANE_RADIUS - 2),
+        "pane_header": size.PANE_HEADER - 1, "pane_footer": size.PANE_FOOTER - 1,  # + 1px border
+        "terminal_pad_x": size.TERMINAL_PAD_X, "terminal_pad_y": size.TERMINAL_PAD_Y,
         # GTK's min-height excludes the 1px borders: tokens are outer sizes.
         "button_inner": size.BUTTON - 2, "button_large_inner": size.BUTTON_LARGE - 2,
         "search_inner": size.SEARCH - 2, "hero_inner": size.HERO_BUTTON - 2,

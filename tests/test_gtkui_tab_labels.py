@@ -110,3 +110,12 @@ class TabLabelSettingTests(unittest.TestCase):
                 state = UiState.from_dict({"page_tab": old, "active_tab": old})
                 self.assertNotIn("page_tab", state.to_dict())
         self.assertEqual(UiState.from_dict(UiState(tab_label_mode="ip").to_dict()).tab_label_mode, "ip")
+
+
+class PaneLabelTests(unittest.TestCase):
+    def test_pane_suffixes_only_when_split(self) -> None:
+        from ssh_manager.gtkui.tab_labels import pane_labels
+
+        self.assertEqual(pane_labels("web-01", 1), ["web-01"])
+        self.assertEqual(pane_labels("web-01 (2)", 2), ["web-01 (2) · pane 1", "web-01 (2) · pane 2"])
+        self.assertEqual(pane_labels("x", 0), ["x"])

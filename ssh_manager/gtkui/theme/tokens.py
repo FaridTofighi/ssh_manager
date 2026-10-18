@@ -183,6 +183,15 @@ class Palette:
     scrollbar: str
     shadow: str
     shadow_popover: str
+    # Terminal panes shown together (split pane, tile mode): a visible border on
+    # every side, a darker gutter between panes, a header per pane.
+    pane_border: str  # ≥ 3:1 against pane_gutter, ≥ 1.8:1 against the terminal
+    pane_border_focus: str
+    pane_border_broadcast: str
+    pane_header_bg: str
+    pane_header_bg_focus: str
+    pane_gutter: str
+    pane_dim: str  # veil over unfocused panes (overlay, never widget opacity)
 
     def items(self) -> Iterator[Tuple[str, str]]:
         """Yield ``(role, value)`` for every color role."""
@@ -268,6 +277,13 @@ LIGHT = Palette(
     scrollbar="#C9D2CD",
     shadow="rgba(24, 35, 31, 0.06)",
     shadow_popover="rgba(24, 35, 31, 0.12)",
+    pane_border="#868F8A",
+    pane_border_focus="#176B4D",
+    pane_border_broadcast="#B42318",
+    pane_header_bg="#FFFFFF",
+    pane_header_bg_focus="#EAF5EF",
+    pane_gutter="#F5F7F6",
+    pane_dim="rgba(0, 0, 0, 0.12)",
 )
 
 DARK = Palette(
@@ -313,6 +329,13 @@ DARK = Palette(
     scrollbar="#454951",
     shadow="rgba(0, 0, 0, 0.35)",
     shadow_popover="rgba(0, 0, 0, 0.45)",
+    pane_border="#5E6269",
+    pane_border_focus="#1F7A57",
+    pane_border_broadcast="#F07A6E",
+    pane_header_bg="#212226",
+    pane_header_bg_focus="#202A25",
+    pane_gutter="#121315",
+    pane_dim="rgba(0, 0, 0, 0.12)",
 )
 
 
@@ -360,7 +383,8 @@ SURFACE_ROLES: Tuple[str, ...] = (
     "bg_hover", "bg_selected", "border_subtle", "border_input", "border_strong",
     "accent", "accent_hover", "accent_pressed", "accent_tint", "accent_soft_border",
     "success", "warning", "danger", "danger_strong", "chip_bg", "avatar_bg", "broadcast_bg",
-    "scrollbar",
+    "scrollbar", "pane_border", "pane_border_focus", "pane_border_broadcast", "pane_header_bg",
+    "pane_header_bg_focus", "pane_gutter",
 )
 
 

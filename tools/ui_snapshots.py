@@ -210,6 +210,10 @@ def _stub_terminal_io() -> None:
         GLib.idle_add(tab._apply_stats_result, dict(FAKE_STATS))
 
     gtk_terminal.TerminalTab._fetch_stats_thread = fake_fetch  # type: ignore[assignment]
+    # Split panes: never spawn ssh for the second terminal.
+    gtk_terminal.TerminalTab._spawn_secondary = (  # type: ignore[assignment]
+        lambda tab, term: term.feed(DENSITY_PROMPT.encode("utf-8"))
+    )
     gtk_terminal.TerminalTab._update_stats = (  # type: ignore[assignment]
         lambda tab: (tab._apply_stats_result(dict(FAKE_STATS)), True)[1]
     )
@@ -1022,6 +1026,48 @@ def run(out_dir: Path) -> None:
             capture_window(window, out_dir / f"compact-host-{page}.png", *DENSITY_SIZE,
                            on_rendered=report_budget(window, out_dir, f"compact-host-{page}"))
             window.destroy()
+
+    def _pane_scene(window, kind: str) -> None:
+        """Sessions shown together: split panes, tiles, broadcast, a duplicated split."""
+
+        notebook = window.terminal_tabs
+        host = window.tree.find_host_by_alias("apzkrfpspst0103.fns")
+        other = window.tree.find_host_by_alias("10.60.110.74")
+        window.tree.select_host(host.parent_group, host.child_group, host.alias)
+        hosts = {
+            "split-two-panes": [host],
+            "tile-two": [host, host],
+            "tile-four": [host, host, other, other],
+            "tile-broadcast": [host, host, other],
+            "duplicate-session": [host, host],
+        }[kind]
+        tabs = []
+        for target in hosts:
+            tab = notebook.new_terminal(target, autostart=False)
+            tab._terminal.feed(DENSITY_PROMPT.encode("utf-8"))
+            tab._set_status("Connected", True)
+            tab._apply_stats_result(dict(FAKE_STATS))
+            tabs.append(tab)
+        if kind in ("split-two-panes", "duplicate-session"):
+            tabs[-1].toggle_split()
+        if kind.startswith("tile") or kind == "duplicate-session":
+            notebook.set_tile_mode(True)
+        if kind == "tile-broadcast":
+            notebook.set_broadcast_mode(True)
+            notebook._tile_wrappers[tabs[2]].include.set_active(False)  # one session left out
+        notebook.focus_tab(tabs[0])
+        _pump()
+
+    for kind in ("split-two-panes", "tile-two", "tile-four", "tile-broadcast", "duplicate-session"):
+        for theme, dark in (("dark", True), ("light", False)):
+            for dens in ("compact", "comfortable"):
+
+                @scenario(f"{kind}-{theme}-{dens}")
+                def _panes(kind=kind, theme=theme, dark=dark, dens=dens) -> None:
+                    window = _make_window(app, density_base, dark, dens)
+                    _pane_scene(window, kind)
+                    capture_window(window, out_dir / f"{kind}-{theme}-{dens}.png", 1280, 800)
+                    window.destroy()
 
     @scenario("compact-narrow")
     def _compact_narrow() -> None:

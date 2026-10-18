@@ -132,3 +132,11 @@ def is_duplicate(counter: int) -> bool:
     """Whether a session with this counter duplicates an already open one."""
 
     return counter > 1
+
+
+def pane_labels(label: str, count: int) -> List[str]:
+    """Labels for the panes of one tab: ``web-01 · pane 1``, ``web-01 · pane 2`` (one pane: the label)."""
+
+    if count <= 1:
+        return [label]
+    return [f"{label}{NAME_IP_SEPARATOR}pane {index}" for index in range(1, count + 1)]

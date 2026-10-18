@@ -29,6 +29,7 @@ from ..widgets.icon_button import (  # noqa: E402
 )
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.menus import build_menu  # noqa: E402
+from ..widgets.pane_frame import BroadcastChip, PaneFrame  # noqa: E402
 from ..widgets.status_dot import StatusDot  # noqa: E402
 
 
@@ -356,8 +357,8 @@ class SessionStrip(Gtk.Box):
         self.on_reorder(dragged, index)
 
 
-class TileFrame(Gtk.Box):
-    """Wrapper for one session in tile mode, with a header matching tab labels."""
+class TileFrame(PaneFrame):
+    """One session in tile mode: a PaneFrame with the Broadcast chip, zoom and close."""
 
     def __init__(
         self,
@@ -368,38 +369,24 @@ class TileFrame(Gtk.Box):
         on_include_toggled: Callable[[bool], None],
         on_close: Callable[[], None],
         on_focus: Callable[[], None],
+        on_zoom: Callable[[], None] = lambda: None,
+        address: str = "",
     ) -> None:
-        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.include = BroadcastChip(included, on_include_toggled)
+        PaneFrame.__init__(self, title, on_focus=on_focus, on_zoom=on_zoom, on_close=on_close,
+                           broadcast_chip=self.include)
         self.get_style_context().add_class("tile-frame")
-        self.set_hexpand(True)
-        self.set_vexpand(True)
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
-        header.get_style_context().add_class("tile-header")
-        self.dot = StatusDot(status, size=Size.DOT_TAB)
-        header.pack_start(self.dot, False, False, 0)
-        self.label = Gtk.Label(label=title)
-        self.label.set_xalign(0.0)
-        self.label.set_ellipsize(Pango.EllipsizeMode.END)
-        header.pack_start(self.label, True, True, 0)
-        self.include = Gtk.CheckButton.new_with_mnemonic(_("_Broadcast"))
-        self.include.set_tooltip_text(_("Include this session when broadcasting input"))
-        self.include.set_active(included)
-        self.include.connect("toggled", lambda btn: on_include_toggled(btn.get_active()))
-        header.pack_start(self.include, False, False, 0)
-        header.pack_start(IconButton(Icons.CLOSE, _("Close session"), on_close), False, False, 0)
-        events = Gtk.EventBox()
-        events.add(header)
-        events.connect("button-press-event", lambda *_: on_focus() or False)
-        self.pack_start(events, False, False, 0)
-        self.body: Optional[Gtk.Widget] = None
+        self.dot = self.header.dot
+        self.label = self.header.title
+        self.set_title(title, address)
+        self.set_status(status)
+        # A click anywhere in the tile focuses it (the terminal also reports focus).
+        self.connect("button-press-event", lambda *_: on_focus() or False)
 
-    def set_body(self, widget: Gtk.Widget) -> None:
-        self.body = widget
-        self.pack_start(widget, True, True, 0)
-
-    def set_title(self, title: str, status: object) -> None:
-        self.label.set_text(title)
-        self.dot.set_status(status)
+    def set_title(self, title: str, status: object = None, address: Optional[str] = None) -> None:  # type: ignore[override]
+        PaneFrame.set_title(self, title, self.header.address.get_text() if address is None else address)
+        if status is not None:
+            self.set_status(status)
 
 
 def tab_menu_spec(

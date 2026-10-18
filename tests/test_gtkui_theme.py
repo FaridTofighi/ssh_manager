@@ -194,6 +194,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         "accent", "accent_hover", "accent_pressed", "accent_text", "accent_soft_border", "focus_ring",
         "on_accent", "success", "warning", "danger", "danger_strong", "on_danger", "info",
         "icon_group", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
+        "pane_border_focus", "pane_border_broadcast", "pane_dim",
     }
     OLD_GREEN = ("#17201C", "#0F1613", "#131B18", "#1C2722", "#1B2521", "#202C27", "#18382B", "#27332E", "#33423B")
     # text_faint is decorative: counts, separators, keyboard hints, timestamps, captions.
@@ -221,7 +222,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
     TEXT_GRAYS = {"text_primary", "text_secondary", "text_muted", "text_faint", "text_disabled",
                   "tab_inactive", "icon_subgroup", "icon_host"}
     # Deliberate faint green hints from the approved table.
-    GREEN_HINTS = {"bg_selected", "accent_tint", "avatar_bg"}
+    GREEN_HINTS = {"bg_selected", "accent_tint", "avatar_bg", "pane_header_bg_focus"}
 
     def test_neutral_tokens_are_gray(self) -> None:
         for role, value in self._DARK.items():

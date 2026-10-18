@@ -40,7 +40,7 @@ from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
 from ssh_manager.gtkui.view_models import status_text
 from ssh_manager.gtkui.theme.loader import get_theme_manager
-from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Space
+from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Size, Space
 from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level
 from ssh_manager.gtkui.views.workspace import (
     BroadcastStrip,
@@ -50,7 +50,8 @@ from ssh_manager.gtkui.views.workspace import (
     TileFrame,
     tab_menu_spec,
 )
-from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, session_tab_labels
+from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, pane_labels, session_tab_labels
+from ssh_manager.gtkui.widgets.pane_frame import PaneFooter, PaneFrame
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
 from ssh_manager.gtkui.widgets.icon_button import IconMenuButton
 from ssh_manager.gtkui.widgets.menus import build_context_menu, build_menu, popup_menu
@@ -269,6 +270,12 @@ def _set_stat_tooltip(label: object, text: str) -> None:
         setter(text)
 
 
+_PANE_KEYS = {
+    Gdk.KEY_Left: "left", Gdk.KEY_Right: "right", Gdk.KEY_Up: "up", Gdk.KEY_Down: "down",
+    Gdk.KEY_KP_Left: "left", Gdk.KEY_KP_Right: "right", Gdk.KEY_KP_Up: "up", Gdk.KEY_KP_Down: "down",
+}
+
+
 class TerminalPaneContainer(Gtk.Box):
     """Wrapper for a single terminal pane (prep for future splits)."""
 
@@ -363,6 +370,12 @@ class TerminalTab(Gtk.Box):
         self._retry_timeout_id = 0
         self._secondary_terminal: Optional[Vte.Terminal] = None
         self._paned: Optional[Gtk.Paned] = None
+        # Split pane: one PaneFrame (+ footer) per terminal; None while there is one pane.
+        self._pane_frames: Dict[Vte.Terminal, PaneFrame] = {}
+        self._pane_footers: Dict[Vte.Terminal, PaneFooter] = {}
+        self._zoomed_pane: Optional[Vte.Terminal] = None
+        self._pane_label = host.alias
+        self.on_focus_neighbor: Optional[Callable[[str], bool]] = None  # Alt+arrow outside the split
         self._focused_terminal: Optional[Vte.Terminal] = None
         self._input_observer: Optional[Callable[[TerminalTab, str], None]] = None
         self._profile = profile
@@ -504,7 +517,8 @@ class TerminalTab(Gtk.Box):
         provider = getattr(self, "_card_css", None)
         if provider is None:
             return
-        css = ".terminal-card { background-color: %s; }" % background.to_string()
+        # Split panes sit on the canvas gutter; only a single pane takes the terminal color.
+        css = ".terminal-card:not(.split) { background-color: %s; }" % background.to_string()
         try:
             provider.load_from_data(css.encode("utf-8"))
         except GLib.Error:
@@ -615,6 +629,107 @@ class TerminalTab(Gtk.Box):
     def set_broadcast_highlight(self, active: bool) -> None:
         ctx = self._pane_holder.get_style_context()
         (ctx.add_class if active else ctx.remove_class)("broadcast-active")
+        for frame in self._pane_frames.values():
+            frame.set_broadcast(active)
+
+    # ------------------------------------------------------------ panes
+    @property
+    def pane_frames(self) -> list:
+        """The PaneFrames of a split tab, in order (empty with one pane)."""
+
+        return [self._pane_frames[t] for t in self._terminals() if t in self._pane_frames]
+
+    def set_pane_label(self, label: str) -> None:
+        """The tab label (Phase 6 policy); split panes add ``· pane 1`` / ``· pane 2``."""
+
+        self._pane_label = label
+        self._sync_pane_frames()
+
+    def _pane_address(self) -> str:
+        try:
+            hostname, port, user = host_connection_params(self._host)
+        except Exception:
+            return ""
+        return f"{user}@{hostname}:{port}"
+
+    def _sync_pane_frames(self) -> None:
+        terms = [t for t in self._terminals() if t in self._pane_frames]
+        if not terms:
+            return
+        labels = pane_labels(self._pane_label, len(terms))
+        address = self._pane_address()
+        focused = self._focused_terminal if self._focused_terminal in terms else terms[0]
+        for term, label in zip(terms, labels):
+            frame = self._pane_frames[term]
+            frame.set_title(label, address)
+            frame.set_status(self._status)
+            frame.set_focused(term is focused)
+            footer = self._pane_footers.get(term)
+            if footer is not None:
+                footer.set_status(self._status, int(term.get_column_count() or 0), int(term.get_row_count() or 0))
+
+    def focus_pane(self, term: Vte.Terminal) -> None:
+        if term in self._terminals():
+            self._focused_terminal = term
+            term.grab_focus()
+            self._sync_pane_frames()
+
+    def focus_neighbor(self, direction: str) -> bool:
+        """Alt+←/→/↑/↓: the other pane of a split, else the notebook's next tile."""
+
+        terms = self._terminals()
+        if len(terms) > 1 and self._paned is not None:
+            horizontal = self._paned.get_orientation() == Gtk.Orientation.HORIZONTAL
+            if (direction in ("left", "right")) == horizontal:
+                index = terms.index(self._active_terminal()) if self._active_terminal() in terms else 0
+                target = index + (1 if direction in ("right", "down") else -1)
+                if 0 <= target < len(terms):
+                    self.focus_pane(terms[target])
+                    return True
+        return bool(self.on_focus_neighbor and self.on_focus_neighbor(direction))
+
+    def toggle_pane_zoom(self, term: Optional[Vte.Terminal] = None) -> None:
+        """Show one pane alone (the layout stays; restore brings the other back)."""
+
+        if self._paned is None:
+            return
+        term = term or self._active_terminal()
+        zoom = self._zoomed_pane is None
+        self._zoomed_pane = term if zoom else None
+        for other, frame in self._pane_frames.items():
+            frame.set_visible(not zoom or other is term)
+            frame.set_zoomed(zoom)
+        if term is not None:
+            self.focus_pane(term)
+
+    @property
+    def zoomed_pane(self) -> Optional[Vte.Terminal]:
+        return self._zoomed_pane
+
+    def _frame_for(self, term: Vte.Terminal, container: Gtk.Widget, *, closable: bool) -> PaneFrame:
+        frame = PaneFrame(
+            self._pane_label,
+            on_focus=lambda t=term: self.focus_pane(t),
+            on_zoom=lambda t=term: self.toggle_pane_zoom(t),
+            on_close=self._close_duplicate_pane if closable else None,
+        )
+        frame.set_body(container)
+        footer = PaneFooter()
+        frame.set_footer(footer)
+        self._pane_frames[term] = frame
+        self._pane_footers[term] = footer
+        term.connect("size-allocate", lambda *_: self._sync_pane_frames())
+        return frame
+
+    def _on_paned_press(self, paned: Gtk.Paned, event: Gdk.EventButton) -> bool:
+        """Double-click on the divider: back to 50/50."""
+
+        if event.type == Gdk.EventType._2BUTTON_PRESS and event.window == paned.get_handle_window():
+            alloc = paned.get_allocation()
+            size = alloc.width if paned.get_orientation() == Gtk.Orientation.HORIZONTAL else alloc.height
+            paned.set_position(size // 2)
+            return True
+        return False
 
     def copy_clipboard(self) -> None:
         term = self._active_terminal()
@@ -731,6 +846,7 @@ class TerminalTab(Gtk.Box):
             if self._password_to_save and not self._password_save_source_id:
                 self._persist_password()
             self._start_password_prompt_poll()
+        self._sync_pane_frames()
         self.emit("status-changed", self._host.alias, connected)
         if connected:
             self._start_stats_updates()
@@ -1247,6 +1363,10 @@ class TerminalTab(Gtk.Box):
         modifiers = event.state & default_mask
         lower = Gdk.keyval_to_lower(keyval)
 
+        direction = _PANE_KEYS.get(keyval) if modifiers == Gdk.ModifierType.MOD1_MASK else None
+        if direction is not None and self.focus_neighbor(direction):
+            return True  # Alt+arrow moved focus to another pane (otherwise the terminal gets it)
+
         if lower == Gdk.KEY_r and modifiers == 0:
             if not self._session_active:
                 self.reconnect()
@@ -1306,15 +1426,23 @@ class TerminalTab(Gtk.Box):
         self._spawn_secondary(self._secondary_terminal)
 
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._paned.get_style_context().add_class("pane-split")
+        self._paned.set_wide_handle(True)
         self._paned.set_hexpand(True)
         self._paned.set_vexpand(True)
+        self._paned.connect("button-press-event", self._on_paned_press)
         self._pane_holder.remove(self._pane_container)
-        self._paned.pack1(self._pane_container, resize=True, shrink=True)
-
+        first = self._frame_for(self._terminal, self._pane_container, closable=False)
         second_container = TerminalPaneContainer(self._secondary_terminal)
-        self._paned.pack2(second_container, resize=True, shrink=True)
+        second = self._frame_for(self._secondary_terminal, second_container, closable=True)
+        # shrink=False: the frames' minimum size (Size.PANE_MIN) keeps both panes visible.
+        self._paned.pack1(first, resize=True, shrink=False)
+        self._paned.pack2(second, resize=True, shrink=False)
+        self._pane_holder.get_style_context().add_class("split")
         self._pane_holder.pack_start(self._paned, True, True, 0)
         self._pane_holder.show_all()
+        self._sync_pane_frames()
+        GLib.idle_add(self._center_divider)
 
     def _close_duplicate_pane(self) -> None:
         if self._secondary_terminal is None:
@@ -1340,15 +1468,32 @@ class TerminalTab(Gtk.Box):
             pass
         self._secondary_terminal = None
         if self._paned:
+            first = self._pane_frames.get(self._terminal)
+            if first is not None:
+                first.release_body()  # the main terminal's container goes back to the holder
             self._pane_holder.remove(self._paned)
+            self._paned.destroy()
             self._paned = None
+        self._pane_frames.clear()
+        self._pane_footers.clear()
+        self._zoomed_pane = None
+        self._pane_holder.get_style_context().remove_class("split")
         self._pane_holder.pack_start(self._pane_container, True, True, 0)
         self._pane_holder.show_all()
         self._focused_terminal = self._terminal
+        self._terminal.grab_focus()  # the remaining pane gets the space and the focus
         self.focus_terminal()
 
     def _on_terminal_focus(self, term: Vte.Terminal, _event=None) -> None:
         self._focused_terminal = term
+        self._sync_pane_frames()
+
+    def _center_divider(self) -> bool:
+        if self._paned is not None:
+            alloc = self._paned.get_allocation()
+            if alloc.width > 1:
+                self._paned.set_position(alloc.width // 2)
+        return GLib.SOURCE_REMOVE
 
     def _on_secondary_child_exited(self, term: Vte.Terminal, _status: int) -> None:
         self._log(_("{alias}: Secondary session ended.").format(alias=self._host.alias), Level.INFO)
@@ -1559,6 +1704,7 @@ class TerminalNotebook(Gtk.Box):
         self._tabs: List[TerminalTab] = []
         self._tile_wrappers: Dict[TerminalTab, TileFrame] = {}
         self._tile_mode = False
+        self._zoomed_tile: Optional[TerminalTab] = None
         self._broadcast_mode = False
         self._broadcast_included: Dict[TerminalTab, bool] = {}
         self._last_current_tab: Optional[TerminalTab] = None
@@ -1638,7 +1784,9 @@ class TerminalNotebook(Gtk.Box):
         self._tile_grid.set_column_homogeneous(True)
         self._tile_grid.set_hexpand(True)
         self._tile_grid.set_vexpand(True)
+        self._tile_grid.get_style_context().add_class("pane-gutter")
         self._tile_scroller = Gtk.ScrolledWindow()
+        self._tile_scroller.get_style_context().add_class("pane-gutter")
         # Tiles shrink to the workspace width; only scroll vertically when there are many.
         self._tile_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self._tile_scroller.add(self._tile_grid)
@@ -1675,9 +1823,9 @@ class TerminalNotebook(Gtk.Box):
         self._strip_separator.set_margin_bottom(Space.S)
         self._strip_separator.set_margin_start(Space.XS)
         self._strip_separator.set_margin_end(Space.XS)
-        self._tile_grid.set_row_spacing(Space.S)
-        self._tile_grid.set_column_spacing(Space.S)
-        self._tile_grid.set_border_width(Space.S)
+        self._tile_grid.set_row_spacing(Size.PANE_GUTTER)
+        self._tile_grid.set_column_spacing(Size.PANE_GUTTER)
+        self._tile_grid.set_border_width(Size.PANE_GUTTER)
         self._placeholder.apply_density()
 
     @property
@@ -1797,6 +1945,7 @@ class TerminalNotebook(Gtk.Box):
         tab.connect("session-closed", self._on_tab_session_closed)
         tab.connect("close-requested", self._on_tab_close_requested)
         tab.connect("focus-in-event", self._on_tab_focus, tab)
+        tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
         tab.connect_activity(self._on_tab_activity)
 
@@ -1952,6 +2101,7 @@ class TerminalNotebook(Gtk.Box):
             if page != -1:
                 self._notebook.set_current_page(page)
         tab.focus_terminal()
+        self._sync_tile_frames()
         self._sync_toolbar()
 
     def _ordered_tabs(self) -> List[TerminalTab]:
@@ -2082,7 +2232,9 @@ class TerminalNotebook(Gtk.Box):
         self._broadcast_strip.set_target_count(len(targets))
         self._broadcast_strip.set_reveal_child(self._broadcast_mode)
         for tab in self._tabs:
+            # In tile mode the tile frame shows it; the tab's own outline is for tabs mode.
             tab.set_broadcast_highlight(self._broadcast_mode and self._broadcast_included.get(tab, True))
+        self._sync_tile_frames()
 
     def _on_broadcast_include_toggled(self, tab: TerminalTab, active: bool) -> None:
         self._broadcast_included[tab] = active
@@ -2104,6 +2256,8 @@ class TerminalNotebook(Gtk.Box):
             on_include_toggled=lambda active, t=tab: self._on_broadcast_include_toggled(t, active),
             on_close=lambda t=tab: self.close_tab(t),
             on_focus=lambda t=tab: self._focus_tab(t),
+            on_zoom=lambda t=tab: self.toggle_tile_zoom(t),
+            address=tab._pane_address(),
         )
         frame.set_body(tab)
         frame.show_all()
@@ -2116,11 +2270,52 @@ class TerminalNotebook(Gtk.Box):
         for child in list(self._tile_grid.get_children()):
             self._tile_grid.remove(child)
         self._tile_wrappers.clear()
+        self._zoomed_tile = None
         count = len(self._tabs)
         for index, tab in enumerate(self._tabs):
             row, column = session_tile_position(index, count)
             self._tile_grid.attach(self._create_tile_wrapper(tab), column, row, 1, 1)
         self._tile_grid.show_all()
+        self._sync_tile_frames()
+
+    def _sync_tile_frames(self) -> None:
+        """Focused tile, broadcast borders and titles of the tile frames."""
+
+        current = self._current_tab()
+        for tab, frame in self._tile_wrappers.items():
+            frame.set_focused(tab is current, dim_others=len(self._tile_wrappers) > 1)
+            frame.set_broadcast(self._broadcast_mode and self._broadcast_included.get(tab, True))
+            ctx = frame.get_style_context()
+            (ctx.add_class if self._broadcast_mode else ctx.remove_class)("broadcasting")
+
+    def toggle_tile_zoom(self, tab: Optional[TerminalTab] = None) -> None:
+        """Show one tile alone without leaving tile mode; again to restore the grid."""
+
+        if not self._tile_mode:
+            return
+        tab = tab or self._current_tab()
+        zoom = self._zoomed_tile is None and tab is not None
+        self._zoomed_tile = tab if zoom else None
+        for other, frame in self._tile_wrappers.items():
+            frame.set_visible(not zoom or other is tab)
+            frame.set_zoomed(zoom)
+        if tab is not None:
+            self._focus_tab(tab)
+
+    def _focus_neighbor_tile(self, tab: TerminalTab, direction: str) -> bool:
+        """Alt+arrows in tile mode: the tile next to ``tab`` in the grid."""
+
+        if not self._tile_mode or tab not in self._tabs or len(self._tabs) < 2:
+            return False
+        count = len(self._tabs)
+        positions = {t: session_tile_position(i, count) for i, t in enumerate(self._tabs)}
+        row, column = positions[tab]
+        d_row, d_col = {"left": (0, -1), "right": (0, 1), "up": (-1, 0), "down": (1, 0)}[direction]
+        target = next((t for t, pos in positions.items() if pos == (row + d_row, column + d_col)), None)
+        if target is None:
+            return False
+        self._focus_tab(target)
+        return True
 
     def _set_tile_mode(self, active: bool) -> None:
         if active == self._tile_mode:
@@ -2156,6 +2351,7 @@ class TerminalNotebook(Gtk.Box):
         frame = self._tile_wrappers.get(tab)
         if frame:
             frame.set_title(self.label_for(tab), tab.status)
+        tab.set_pane_label(self.label_for(tab))
 
     def _detach_tab(self, tab: TerminalTab) -> None:
         page_num = self._notebook.page_num(tab)
@@ -2173,6 +2369,7 @@ class TerminalNotebook(Gtk.Box):
     def _on_tab_focus(self, _widget, _event, tab: TerminalTab) -> bool:
         if self._last_current_tab is not tab:
             self._last_current_tab = tab
+            self._sync_tile_frames()
             self._sync_toolbar()
         return False
 

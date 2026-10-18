@@ -6,6 +6,87 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 7 — visible pane boundaries (split pane, tile mode, duplicates)
+
+Screenshots of the old layout: `docs/ui-before/pane-borders-tile-mode.png`
+and `docs/ui-before/pane-borders-split-pane.png`. Tiles had a near-invisible
+outline, and split panes had no border, gutter or label at all.
+
+### What changed
+
+- **`PaneFrame`** (`gtkui/widgets/pane_frame.py`) is shared by tiles and
+  split panes.
+  - It has a full border on all four sides and a canvas gutter between panes
+    and around the group (6 px Compact, 8 px Comfortable).
+  - **Header:** status dot, label, muted `user@host:port`, and on the right
+    the Broadcast chip (tiles), zoom and close.
+  - **Footer:** `● Connected · 59×35` per pane, inside the border.
+- **Focused pane:** a 2 px accent border and an accent-tinted header; the
+  other panes get a light veil.
+  - Broadcast panes get a 2 px danger border and a `BROADCAST` badge.
+  - A pane that is focused and broadcasting gets a danger border with an
+    accent inner ring.
+  - A failed or disconnected pane has a danger or warning border, with the
+    status text in its footer.
+- **Split pane:** both terminals sit in frames inside a styled `Gtk.Paned`.
+  - The divider handle is gutter-wide with a centred grip that turns accent on
+    hover or drag. Double-click resets it to 50/50, and no pane gets smaller
+    than 120 px.
+  - Panes are labelled `web-01 · pane 1` / `· pane 2`.
+  - Closing the second pane gives its space and the focus back to the first.
+    The first pane is the session itself, so it has no close button; close the
+    tab instead.
+- **Zoom:** maximize one pane or tile (button, or double-click its header)
+  without leaving split or tile mode; again to restore.
+- **Alt+←/→/↑/↓:** move focus between the panes of a split and between grid
+  neighbours in tile mode. With nowhere to go, the keys reach the terminal.
+  They are listed in the shortcuts window.
+- **Broadcast chip:** the stock *Broadcast* check box in tile headers is now
+  a compact chip. It is neutral when included and turns red only while
+  broadcast is on.
+- **New tokens:**
+  - colors in both palettes: `pane_border`, `pane_border_focus`,
+    `pane_border_broadcast`, `pane_header_bg`, `pane_header_bg_focus`,
+    `pane_gutter`, `pane_dim`;
+  - sizes in both densities: `PANE_GUTTER`, `PANE_RADIUS`, `PANE_HEADER`,
+    `PANE_FOOTER`, `PANE_MIN`.
+
+### Deviations from the brief
+
+- **Border colors:** the brief's `#454951` (dark) and `#B9C2BD` (light) reach
+  only 2.06:1 and 1.70:1 against the gutter, against its own ≥ 3:1 target. I
+  used the nearest grays that meet it: dark `#5E6269` (3.03:1 on the gutter,
+  2.93:1 on the terminal) and light `#868F8A` (3.09:1).
+- **No three-pane split:** a tab can hold at most two panes. A third one
+  would be a new feature, so there is no `split-three-panes` screenshot;
+  `tile-four` shows four framed panes instead.
+- **Footer contents:** the per-pane footer shows status and size. CPU,
+  memory and disk belong to the session and stay in the session's status bar,
+  which tile mode shows inside each tile.
+
+### Verification
+
+- **`tests/test_gtkui_panes.py`, tokens:** pane tokens in both palettes and
+  densities; border, focus and broadcast contrast against the gutter;
+  terminal contrast; pane CSS uses tokens.
+- **`tests/test_gtkui_panes.py`, pixels:** offscreen renders of a split, three
+  tiles and broadcast tiles in dark/light × Compact/Comfortable.
+  - Every pane's border pixel on all four sides equals the expected token.
+  - Focused and broadcast panes differ from the others.
+  - The gutter between neighbours is ≥ 6 px, and every pixel in it equals
+    `pane_gutter`.
+  - The divider's minimum and its double-click reset are checked on real
+    allocations.
+- **`tests/test_gtkui_panes.py`, behaviour:** a single pane has no frame;
+  labels; Alt+arrow focus in splits and tiles; zoom and restore; closing a
+  pane gives back its space and focus; the terminal is kept across split and
+  tile toggles; the Broadcast chip.
+- **Label helper:** `tests/test_gtkui_tab_labels.py` covers the
+  pane-label suffixes.
+- **Screenshots:** `split-two-panes`, `tile-two`, `tile-four`,
+  `tile-broadcast` and `duplicate-session`, each in dark and light, Compact
+  and Comfortable.
+
 ## Phase 6 — session tabs only
 
 Screenshot of the old layout: `docs/ui-before/session-tabs-current.png`. The
