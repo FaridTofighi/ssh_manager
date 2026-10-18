@@ -6,6 +6,154 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 9 — bigger, distinguishable tree icons with the status on the host icon
+
+Target: `docs/ui-target/tree-icons-sheet.png`. After:
+`docs/ui-after/tree-icons-{dark,light}-{compact,comfortable}.png`
+(`tools/ui_snapshots.py docs/ui-after tree-icons-dark-compact …`).
+
+### What changed
+
+- **One icon per role,** from the brief's drafts:
+
+  | Row | Icon | Color |
+  |---|---|---|
+  | Group, collapsed | folder | amber `icon_group` |
+  | Group, expanded | open folder | amber `icon_group` |
+  | `*.conf` group | file | `icon_file` |
+  | Host | server | `icon_host` |
+  | Host on the selected row | server | accent `icon_host_selected` |
+
+  - **Before:** nested groups had no icon at all, and hosts used a small
+    monitor.
+  - **User colors:** an item color the user picked still tints the icon.
+  - **Read-only hosts:** shared hosts, or hosts without edit permission, get a
+    lock overlay.
+- **Sizes:**
+  - **Compact:** 20 px icon, 30 px rows (hosts were 28), 14 px chevron, 8 px
+    gap.
+  - **Comfortable:** 24 px icon, 41 px rows, 16 px chevron, 10 px gap.
+  - **Columns:** every level has one icon column (chevron, icon, label). Hosts
+    keep the chevron slot empty, so the labels of a level line up.
+- **Status on the host icon:** a badge at 42 % of the icon, bottom-right.
+  - Connected is a green dot.
+  - Connecting is an amber ring with a half fill. It pulses at 0.8 Hz while
+    on screen, unless `gtk-enable-animations` is off.
+  - Failed is a red dot, with a cut-out × at 24 px.
+  - Unknown is a gray dot.
+  - Each badge sits in a 2 px transparent cut-out, so the ring is the real
+    row background on normal, hover and selected rows.
+  - The right-edge status dot is gone; the right edge shows only group
+    counts.
+  - The row tooltip now updates on every status change. It used to keep the
+    status from the last tree rebuild.
+- **Rendering:** the icons are SVGs, and `widgets/icons.py` keeps rendering
+  them with librsvg, tinted, at device pixels and cached.
+  - **Strokes converted to fills:** the drafts' 1.75 strokes were converted to
+  filled outlines with picosvg. The duotone is a second path at
+  `opacity="0.2"`. With no strokes left, GTK's own symbolic loader draws them
+  correctly too; a test renders them through it.
+  - **Compositing:** `render_tree_icon()` composites the badge and lock
+    (each a small SVG) with a `DEST_OUT` cut-out and caches by every input.
+    The tree never parses SVG while drawing.
+- **Tokens:** `icon_subgroup` became `icon_file`, and four tokens are new:
+  `icon_host_selected`, `badge_connected` and `badge_unknown`, plus the
+  brief's values for `icon_group`, `icon_file` and `icon_host`. Every icon
+  and badge color is checked at ≥ 3:1 on `bg_surface`, `bg_hover` and
+  `bg_selected` in both themes (`CONTRAST_PAIRS`).
+- **Same family elsewhere:**
+  - the group picker (used by Move and bulk move): folder icons on parents,
+    file icons on child groups;
+  - the host page: file icon for `*.conf` groups;
+  - the host-bar tile: 24 px Compact, 28 px Comfortable (was 16 / 24);
+  - the config-file icon: now `file-conf`;
+  - the tree's drag icon (it is the rendered row);
+  - context menus at 16 px.
+- **Removed:** the unused `render_icon` / `render_status` / `render_count`
+  helpers and `default_icon_color`, the per-kind tree offsets (`FOLDER`,
+  `HOST_ICON`, `GROUP_ICON_X`, …, `DOT_RIGHT`, `DOT`) and the draft
+  non-symbolic SVGs. The monitor icon stays: the status bar's CPU stat uses
+  it.
+- **Busy-loop fix found while testing:** `TerminalTab.focus_terminal()`
+  retried with an idle callback for as long as the terminal was not shown.
+  For a terminal that never gets shown (a closed tab, a hidden tile) that
+  meant 100 % CPU forever. It now retries every 50 ms and gives up after 2 s.
+
+### Deviations from the brief
+
+- **Config-file group kind:** the brief's table calls it the "child-folder"
+  kind. In the inventory, `RowKind.CHILD` is the `*.conf` file and
+  `RowKind.CHILD_FOLDER` is a directory, so `CHILD` gets the file icon and
+  directories get folders.
+- **Light badge colors:** `success` and `text_muted` reach only 2.73:1 and
+  2.71:1 on the light selected row, below the brief's own 3:1 target. The
+  badge uses `badge_connected` `#2A9D6A` and `badge_unknown` `#848E88`, the
+  nearest shades that reach 3:1. Dark keeps `success` and `text_muted`.
+- **Icon height test:** the glyphs keep the sheet's 24-grid margins (the
+  folder's ink is about 17/24 of its box). So the tests check that the
+  rendered icon surface is exactly 20 / 24 px, and that the ink is 65–100 %
+  of that height and centred on the row within 2 px, rather than "ink height
+  = icon size ± 1".
+- **Badge ring:** the ring is 2 px from 20 px up, not the 1.5 px first tried.
+  At 1× a 1.5 px ring cannot hold a single clean pixel, and 2 px keeps the
+  cut-out on whole pixels.
+- **Read-only with a status:** a read-only host with an unknown status shows
+  only the lock, bottom-right, as on the sheet. With a known status the badge
+  takes the bottom-right and the lock moves to the top-right.
+- **Not done:**
+  - Group aggregate badges (optional in the brief).
+  - Icons in the Host dialog's Group field: that field does not exist, and
+    group choice happens in the group picker.
+  - The breadcrumb stays text-only.
+- **Reference comparison:** the tree region of
+  `docs/ui-after/relay-report.md` now differs from the old Relay reference by
+  3.0 % mean error (was 2.36 %). That is exactly at the 3 % target: the bigger
+  icons are the intended change, and the old reference predates them.
+- **Licensing:** the draft folder and folder-open outlines appear to be
+  Lucide's (ISC). `assets/icons/LICENSE` says so; keep them with Lucide's
+  notice, or redraw.
+
+### Verification
+
+- **`tests/test_tree_icons.py`** (pure): icon per row kind, expanded or
+  empty groups, file-backed groups, hosts, selected host, lock; user tint;
+  sizes per density; brief token values; ≥ 3:1 for every icon and badge color
+  on surface, hover and selected in both themes; status → badge
+  (shape and color, × only at ≥ 24 px, pulse); badge, lock and ring
+  geometry; pulse ≤ 1 Hz and quantised. Also an SVG lint (no `stroke`, no
+  `<style>`, `currentColor`, duotone path), the read-only rule in the row
+  builder, and that the draft files are gone.
+- **`tests/test_gtkui_tree_icons.py`** (rows rendered through the tree's
+  painter onto cairo surfaces):
+  - **Names:** icon per row (open folder, folder, file, server).
+  - **Size and shape:** the icon surface is 20 / 24 px. The ink is centred,
+    and its outline-strength ratio is between 8 % and 55 % (not empty, not a
+    blob).
+  - **Colors:** selected host = accent, selected group stays amber, the user
+    tint is applied.
+  - **Badges:** the badge colors match at 2×, and the ring pixel equals the
+    row background on normal, hover and selected rows in both densities. The
+    cut-out removes icon ink.
+  - **Other rows:** lock alone, or with a badge; the right edge is empty on
+    host rows and shows the count on groups.
+  - **HiDPI:** at 2× the ink box doubles, and there is a ≥ 80 % contrast step
+    between neighbouring pixels (crisp).
+  - **Animation:** the pulse runs only with animations on, and the timer
+    stops when nothing is connecting.
+  - **Also checked:** a theme switch recolors without a restart, and the
+    drag icon is drawn with the new painter.
+  - **GTK's own loader:** the four icons come out at 20 and 24 px, neither a
+    blob nor empty.
+  - **Performance:** 2,040 rows paint from the cache with SVG parsing
+    disabled. Fewer than 80 cached surfaces, under 2 ms per row.
+  - **Real window:** tooltips follow status changes, and the group picker
+    rows carry icons.
+- **`tests/test_gtk_terminal_helpers.py`:** the focus retry is a timer and
+  gives up.
+- **Screenshots:** all of `docs/ui-after/` regenerated; the four
+  `tree-icons-*` scenarios are new.
+- **Full suite:** `python3 -m unittest discover` passes.
+
 ## Phase 8 — a press anywhere on a pane activates it
 
 ### Bug

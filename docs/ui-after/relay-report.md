@@ -1,6 +1,6 @@
 # Relay reference comparison
 
-Overall mean error **2.09 %**, visibly different pixels 3.44 %.
+Overall mean error **2.19 %**, visibly different pixels 3.66 %.
 
 Masked error ignores pixels on the reference's glyph edges (antialiased text),
 which differ wherever a substitute font is used.
@@ -14,10 +14,10 @@ position and size, the empty-state region at the measured shift (shown in the ta
 | top-bar | 2.38 % | 0.81 % | 4.13 % | ✓ |
 | sidebar-header | 2.74 % | 0.21 % | 5.45 % | ✓ |
 | search-row | 1.26 % | 0.04 % | 3.32 % | ✓ |
-| tree | 2.36 % | 0.06 % | 4.8 % | ✓ |
+| tree | 3.0 % | 0.56 % | 6.17 % | ✓ |
 | sidebar-footer | 1.45 % | 0.13 % | 3.11 % | ✓ |
 | page-bar | 1.02 % | 0.17 % | 1.69 % | ✓ |
-| host-header | 1.35 % | 0.13 % | 2.77 % | ✓ |
+| host-header | 1.43 % | 0.15 % | 2.95 % | ✓ |
 | empty-state (shifted -50 px) | 1.74 % | 0.15 % | 3.76 % | ✓ |
 | canvas | 2.16 % | 1.42 % | 3.5 % | ✓ |
 | info-bar | 1.39 % | 0.0 % | 2.79 % | ✓ |

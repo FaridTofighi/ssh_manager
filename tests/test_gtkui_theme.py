@@ -185,15 +185,16 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         "tab_inactive": "#8F959E", "accent": "#1F7A57", "accent_hover": "#1A6E4E",
         "accent_pressed": "#196A4B", "accent_text": "#5CCB9C", "focus_ring": "#5CCB9C",
         "success": "#48C48D", "warning": "#E3A548", "danger": "#F07A6E", "info": "#7DB1E8",
-        "chip_bg": "#25272B", "avatar_bg": "#3F4A45", "icon_group": "#D9A84E",
-        "icon_subgroup": "#A3A8B0", "icon_host": "#A3A8B0", "scrollbar": "#454951",
+        "chip_bg": "#25272B", "avatar_bg": "#3F4A45", "icon_group": "#E2B04F",
+        "icon_file": "#A3A8B0", "icon_host": "#A3A8B0", "icon_host_selected": "#5CCB9C",
+        "badge_connected": "#48C48D", "badge_unknown": "#8A9098", "scrollbar": "#454951",
         "shadow": "rgba(0, 0, 0, 0.35)", "shadow_popover": "rgba(0, 0, 0, 0.45)",
     }
     # Chromatic on purpose: the accent family, semantic colors, folder amber, broadcast.
     CHROMATIC = {
         "accent", "accent_hover", "accent_pressed", "accent_text", "accent_soft_border", "focus_ring",
         "on_accent", "success", "warning", "danger", "danger_strong", "on_danger", "info",
-        "icon_group", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
+        "icon_group", "icon_host_selected", "badge_connected", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
         "pane_border_focus", "pane_border_broadcast", "pane_dim",
     }
     OLD_GREEN = ("#17201C", "#0F1613", "#131B18", "#1C2722", "#1B2521", "#202C27", "#18382B", "#27332E", "#33423B")
@@ -220,7 +221,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
 
     # The approved text grays are cool (hue ≈ 220°) with a 13–15 channel spread.
     TEXT_GRAYS = {"text_primary", "text_secondary", "text_muted", "text_faint", "text_disabled",
-                  "tab_inactive", "icon_subgroup", "icon_host"}
+                  "tab_inactive", "icon_file", "icon_host", "badge_unknown"}
     # Deliberate faint green hints from the approved table.
     GREEN_HINTS = {"bg_selected", "accent_tint", "avatar_bg", "pane_header_bg_focus"}
 

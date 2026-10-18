@@ -263,6 +263,9 @@ def auth_failure_output_detected(output: str) -> bool:
     return bool(output and AUTH_FAILURE_RE.search(strip_ansi(output)))
 
 
+FOCUS_RETRY_MS = 50  # focus_terminal(): retry interval while the terminal is not shown
+FOCUS_RETRY_LIMIT = 40  # … and give up after ~2 s
+
 _RESPONSE_RECONNECT = 1
 _RESPONSE_CLOSE = 2
 _FAILURE_WORDS = ("failed", "denied", "terminated", "error")
@@ -823,17 +826,22 @@ class TerminalTab(Gtk.Box):
         if term is None:
             return
 
+        attempts = [0]
+
         def _attempt_focus() -> bool:
             if term is None:
                 return False
             if not term.get_realized() or not term.get_mapped():
-                return True
+                # Not shown yet (page switch, new tab): retry for a while, then give up
+                # (a terminal that is never shown, e.g. a closed tab, must not spin the loop).
+                attempts[0] += 1
+                return attempts[0] < FOCUS_RETRY_LIMIT
             if term is self._active_terminal():  # not stale: another pane may be active by now
                 term.grab_focus()
             return False
 
-        if _attempt_focus():  # not shown yet (page switch, new tab): retry when idle
-            GLib.idle_add(_attempt_focus)
+        if _attempt_focus():
+            GLib.timeout_add(FOCUS_RETRY_MS, _attempt_focus)
 
     def increase_font(self) -> None:
         self.set_font_scale(self._font_scale + 0.1)

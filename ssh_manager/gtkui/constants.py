@@ -44,17 +44,28 @@ class TreeColumn(IntEnum):
     STATUS = 9
     COUNT = 10
     TOOLTIP = 11
+    READ_ONLY = 12  # host is read-only / shared / permission-restricted (lock overlay)
 
 
 class Icons:
     """Icon names. ``sshm-*`` names come from the bundled outline set
     (``gtkui/assets/icons``); others fall back to the system icon theme."""
 
+    # Session-tree family (see gtkui/tree_icons.py): folder / open folder for
+    # directory groups, file-conf for *.conf groups, server for hosts.
     GROUP = "sshm-folder"
-    SUBGROUP = "sshm-folder"
     FOLDER = "sshm-folder"
-    HOST = "sshm-monitor"
+    FOLDER_OPEN = "sshm-folder-open"
+    FILE_CONF = "sshm-file-conf"
+    SUBGROUP = "sshm-file-conf"
+    HOST = "sshm-server"
     SERVER = "sshm-server"
+    # Overlays composited onto tree icons.
+    BADGE_DOT = "sshm-badge-dot"
+    BADGE_RING = "sshm-badge-ring"
+    BADGE_FAILED = "sshm-badge-failed"
+    BADGE_CUTOUT = "sshm-badge-cutout"
+    BADGE_LOCK = "sshm-badge-lock"
     TERMINAL = "sshm-terminal"
     APP_MENU = "sshm-more"
     NEW = "sshm-plus"
@@ -71,7 +82,7 @@ class Icons:
     CREDENTIALS = "sshm-key"
     KEY = "sshm-key"
     VAULT = "sshm-lock"
-    CONFIG_FILE = "sshm-clipboard"
+    CONFIG_FILE = "sshm-file-conf"
     SHARED = "sshm-globe"
     GIT_UPDATE = "sshm-download"
     SHORTCUTS = "sshm-help"
@@ -104,7 +115,7 @@ class Icons:
     DISK = "sshm-server"
     INTERRUPT = "sshm-interrupt"
     DETAILS = "sshm-info"
-    OPEN_FOLDER = "sshm-folder-open"
+    OPEN_FOLDER = "sshm-folder-open"  # file chooser actions (Import…)
     TAG = "sshm-tag"
     CHECK = "sshm-check"
     INFO = "sshm-info"

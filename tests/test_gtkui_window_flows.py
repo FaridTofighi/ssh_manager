@@ -226,14 +226,17 @@ class RelayTreeTests(unittest.TestCase):
         from ssh_manager.gtkui.theme import density
         from ssh_manager.gtkui.views.session_tree import row_geometry
 
-        with density.using("comfortable"):  # the Relay reference
-            self.assertEqual(row_geometry("parent", 0), {"chevron": 26, "icon": 52, "text": 79})
-            self.assertEqual(row_geometry("child", 1), {"chevron": 51, "icon": -1, "text": 77})
-            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 81, "text": 108})
+        # One icon column per level: chevron, CHEVRON_GAP, icon, ICON_GAP, label (Phase 9).
+        with density.using("comfortable"):
+            self.assertEqual(row_geometry("parent", 0), {"chevron": 26, "icon": 48, "text": 82})
+            self.assertEqual(row_geometry("child", 1), {"chevron": 51, "icon": 73, "text": 107})
+            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 98, "text": 132})
         with density.using("compact"):
-            self.assertEqual(row_geometry("parent", 0), {"chevron": 12, "icon": 30, "text": 52})
-            self.assertEqual(row_geometry("child", 1), {"chevron": 28, "icon": -1, "text": 46})
-            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 46, "text": 66})
+            self.assertEqual(row_geometry("parent", 0), {"chevron": 12, "icon": 30, "text": 58})
+            self.assertEqual(row_geometry("child", 1), {"chevron": 30, "icon": 48, "text": 76})
+            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 66, "text": 94})
+            # Labels of one level line up whatever the row kind.
+            self.assertEqual(row_geometry("host", 1)["text"], row_geometry("child", 1)["text"])
 
     def test_collapse_state_survives_rebuild_and_keyboard_expands(self) -> None:
         from gi.repository import Gdk, Gtk

@@ -7,8 +7,6 @@ from unittest import mock
 
 from ssh_manager.config import HostEntry
 from ssh_manager.gtkui.constants import Icons, TreeColumn
-from ssh_manager.gtkui.theme.loader import current_palette
-from ssh_manager.gtkui.views.session_tree import render_count, render_icon, render_status
 from ssh_manager.gtkui.widgets.icons import tinted_icon_surface
 
 
@@ -29,12 +27,6 @@ def _color_window(*, current_item=("", {}), group_colors=None, host_colors=None,
     return win
 
 
-class _FakeCell:
-    def __init__(self) -> None:
-        self.props = {}
-
-    def set_property(self, name, value) -> None:
-        self.props[name] = value
 from ssh_manager.gtk_app import (
     Gdk,
     GdkPixbuf,
@@ -175,63 +167,19 @@ class GtkAppHelperTests(unittest.TestCase):
         tree.set_host_status_for_key("prod::web::app", "bogus")
         self.assertEqual(tree.host_status["prod::web::app"], "unknown")
 
-    # The hand-painted pixbuf icons were replaced by tinted themed icons and the
-    # status is no longer shown by coloring the row text; these tests cover the
-    # replacements (see views/session_tree.py).
-    def _fake_model(self, **values):
-        class FakeModel:
-            def get_value(self, _iter, column):
-                return values.get(TreeColumn(column).name, "")
-
-        return FakeModel()
-
-    def test_render_icon_uses_tinted_theme_icon_with_row_color(self) -> None:
-        cell = _FakeCell()
-        model = self._fake_model(ICON=Icons.HOST, COLOR="#112233", KIND="host")
-        render_icon(None, cell, model, object(), {})
-        self.assertIsNotNone(cell.props["surface"])
-
-    def test_render_icon_falls_back_to_token_color_without_row_color(self) -> None:
-        cache = {}
-        cell = _FakeCell()
-        model = self._fake_model(ICON=Icons.GROUP, COLOR="", KIND="parent")
-        render_icon(None, cell, model, object(), cache)
-        self.assertIsNotNone(cell.props["surface"])
-        self.assertEqual({key[1] for key in cache}, {current_palette().icon_group})
-
     def test_tinted_icon_surface_rejects_invalid_color(self) -> None:
         self.assertIsNone(tinted_icon_surface(Icons.HOST, "not-a-color"))
         self.assertIsNotNone(tinted_icon_surface(Icons.HOST, "#445566"))
 
-    def test_status_glyph_shape_and_color_per_state(self) -> None:
-        palette = current_palette()
-        cell = _FakeCell()
-        render_status(cell, self._fake_model(KIND="host", STATUS="connected"), object())
-        self.assertEqual((cell.props["text"], cell.props["foreground"]), ("●", palette.success))
-        cell = _FakeCell()
-        render_status(cell, self._fake_model(KIND="host", STATUS="failed"), object())
-        self.assertEqual((cell.props["text"], cell.props["foreground"]), ("✖", palette.danger))
-        cell = _FakeCell()
-        render_status(cell, self._fake_model(KIND="host", STATUS="unknown"), object())
-        self.assertFalse(cell.props["visible"])
-        cell = _FakeCell()
-        render_status(cell, self._fake_model(KIND="parent", STATUS="connected"), object())
-        self.assertFalse(cell.props["visible"])
+    def test_tree_row_icons_follow_the_row_kind(self) -> None:
+        from ssh_manager.gtkui.controllers.tree_controller import TreeRow
+        from ssh_manager.gtkui.constants import RowKind
 
-    def test_count_badge_only_on_groups(self) -> None:
-        class CountModel:
-            def __init__(self, kind):
-                self.kind = kind
-
-            def get_value(self, _iter, column):
-                return {TreeColumn.KIND: self.kind, TreeColumn.COUNT: 3}.get(column, "")
-
-        cell = _FakeCell()
-        render_count(cell, CountModel("child"), object())
-        self.assertEqual((cell.props["visible"], cell.props["text"]), (True, "3"))
-        cell = _FakeCell()
-        render_count(cell, CountModel("host"), object())
-        self.assertFalse(cell.props["visible"])
+        host = TreeRow(RowKind.HOST, "web-01", "prod")
+        self.assertEqual(host.icon, Icons.HOST)
+        self.assertEqual(TreeRow(RowKind.PARENT, "prod", "prod", children=[host]).icon, Icons.FOLDER)
+        self.assertEqual(TreeRow(RowKind.CHILD_FOLDER, "db", "prod", children=[host]).icon, Icons.FOLDER)
+        self.assertEqual(TreeRow(RowKind.CHILD, "web.conf", "prod", children=[host]).icon, Icons.FILE_CONF)
 
     def test_save_ui_state_persists_host_colors(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -63,7 +63,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual((size.TOPBAR + 1, size.HOST_HEADER + 1, size.INFO_BAR + 1), (44, 44, 28))
         self.assertEqual(size.SESSION_STRIP, 33)
         self.assertEqual((size.SIDEBAR, size.SIDEBAR_MIN, size.SIDEBAR_MAX), (284, 220, 480))
-        self.assertEqual((size.TREE_ROW, size.TREE_GROUP_ROW, size.SEARCH), (28, 30, 32))
+        self.assertEqual((size.TREE_ROW, size.TREE_GROUP_ROW, size.SEARCH), (30, 30, 32))
         self.assertTrue(COMPACT.variant.MERGED_PAGE_HEADER and COMPACT.variant.SINGLE_LINE_STATUS)
         self.assertFalse(COMPACT.variant.TERMINAL_CARD)
         self.assertEqual(COMPACT.space.values()[:5], (2, 4, 8, 12, 16))

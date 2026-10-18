@@ -24,7 +24,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from ...config import GroupConfig, HostEntry
-from ..constants import Icons, RowKind
+from ..constants import RowKind
+from ..tree_icons import tree_icon_for
 from ..i18n import _, ngettext
 from ..theme.tokens import ConnectionStatus
 from ..view_models import status_text
@@ -107,15 +108,14 @@ class TreeRow:
     count: int = 0
     tooltip: str = ""
     shared: bool = False
+    read_only: bool = False  # hosts: shared inventory or no edit permission (lock overlay)
     children: List["TreeRow"] = field(default_factory=list)
 
     @property
     def icon(self) -> str:
-        if self.kind is RowKind.HOST:
-            return Icons.HOST
-        if self.kind is RowKind.PARENT:
-            return Icons.GROUP
-        return Icons.SUBGROUP if self.kind is RowKind.CHILD else Icons.FOLDER
+        """The row's icon at rest (collapsed); the tree swaps in the open folder when expanded."""
+
+        return tree_icon_for(self.kind, read_only=self.read_only, has_children=bool(self.children)).name
 
     @property
     def key(self) -> str:
@@ -134,9 +134,10 @@ class TreeCallbacks:
     display_user: Callable[[HostEntry], str] = lambda _h: ""
     status: Callable[[str], str] = lambda _key: ConnectionStatus.UNKNOWN.value
     color: Callable[..., str] = lambda _parent, _child, _alias="": ""
+    read_only: Callable[[HostEntry], bool] = lambda _host: False  # besides shared inventories
 
 
-def _host_tooltip(host: HostEntry, user: str, status: str) -> str:
+def host_tooltip(host: HostEntry, user: str, status: str) -> str:
     target = _option(host, "hostname", "host") or host.alias
     port = _option(host, "port")
     address = f"{user}@{target}" if user else target
@@ -241,8 +242,9 @@ def _host_rows(
                 search=search,
                 color=callbacks.color(label_parent, child_name, host.alias),
                 status=status,
-                tooltip=_host_tooltip(host, user, status),
+                tooltip=host_tooltip(host, user, status),
                 shared=shared,
+                read_only=shared or bool(callbacks.read_only(host)),
             )
         )
     return rows

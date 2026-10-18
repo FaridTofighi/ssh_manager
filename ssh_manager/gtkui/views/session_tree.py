@@ -3,10 +3,14 @@
 Rows are painted by :class:`RelayRowRenderer` (a ``Gtk.CellRendererText``
 subclass, so accessibility still reads the row text):
 
-* top-level groups: chevron, folder icon (user color or token amber), bold
-  label, host count;
-* nested groups: chevron, label, count;
-* hosts: monitor icon, label and a status dot at the right edge.
+* groups: chevron, folder / open-folder icon (``*.conf`` groups: file icon),
+  label (semibold at the top level) and the host count at the right edge;
+* hosts: server icon with the connection-status badge (and a lock when the
+  host is read-only) composited on, then the label.
+
+Icons, colors and overlays come from :mod:`gtkui.tree_icons`; every level has
+one icon column (hosts leave the chevron slot empty), so labels of one level
+line up. A connecting badge pulses (0.8 Hz) unless animations are off.
 
 The selected row gets an inset, rounded ``accent_tint`` background with an
 accent bar on its left (4px Comfortable, 3px Compact); hover gets ``bg_hover``.
@@ -19,6 +23,7 @@ color is never the only cue.
 from __future__ import annotations
 
 import math
+import time
 from typing import Callable, Dict, Optional, Sequence, Set, Tuple
 
 import gi
@@ -26,7 +31,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gdk, GObject, Gtk, Pango, PangoCairo  # type: ignore  # noqa: E402
+from gi.repository import Gdk, GLib, GObject, Gtk, Pango, PangoCairo  # type: ignore  # noqa: E402
 
 from ..constants import RowKind, TreeColumn  # noqa: E402
 from ..controllers.tree_controller import TreeRow  # noqa: E402
@@ -34,71 +39,17 @@ from ..i18n import _  # noqa: E402
 from ..theme.loader import current_palette  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
-from ..theme.tokens import STATUS_GLYPHS, ConnectionStatus, Layout, Size  # noqa: E402
+from ..theme.tokens import ConnectionStatus, Layout, Size  # noqa: E402
+from ..tree_icons import icon_color, pulse_alpha, quantize_alpha, show_status_badge, status_badge, tree_icon_for  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
-from ..widgets.icons import render_svg_surface, tinted_icon_surface  # noqa: E402
+from ..widgets.icons import render_svg_surface, render_tree_icon  # noqa: E402
 
-COLUMN_TYPES = (str, str, str, str, str, str, GObject.TYPE_PYOBJECT, str, str, str, int, str)
+COLUMN_TYPES = (str, str, str, str, str, str, GObject.TYPE_PYOBJECT, str, str, str, int, str, bool)
+PULSE_INTERVAL_MS = 100
 
 
 def new_tree_store() -> Gtk.TreeStore:
     return Gtk.TreeStore(*COLUMN_TYPES)
-
-
-def default_icon_color(kind: object) -> str:
-    """Token color for a row kind when the user picked no color."""
-
-    palette = current_palette()
-    row_kind = RowKind.coerce(kind)
-    if row_kind is RowKind.PARENT:
-        return palette.icon_group
-    if row_kind in (RowKind.CHILD, RowKind.CHILD_FOLDER):
-        return palette.icon_subgroup
-    if row_kind is RowKind.HOST:
-        return palette.icon_host
-    return palette.text_disabled
-
-
-def render_icon(widget: Optional[Gtk.Widget], cell, model, tree_iter, cache: dict) -> None:
-    """Cell-data function body for the icon renderer."""
-
-    icon_name = model.get_value(tree_iter, TreeColumn.ICON)
-    color = model.get_value(tree_iter, TreeColumn.COLOR) or default_icon_color(model.get_value(tree_iter, TreeColumn.KIND))
-    surface = tinted_icon_surface(icon_name, color, widget=widget, cache=cache) if icon_name else None
-    if surface is not None:
-        cell.set_property("surface", surface)
-    else:
-        cell.set_property("surface", None)
-        cell.set_property("icon-name", icon_name)
-
-
-def render_status(cell, model, tree_iter) -> None:
-    """Cell-data function body for the status glyph renderer."""
-
-    kind = model.get_value(tree_iter, TreeColumn.KIND)
-    if kind != RowKind.HOST.value:
-        cell.set_property("text", "")
-        cell.set_property("visible", False)
-        return
-    status = ConnectionStatus.coerce(model.get_value(tree_iter, TreeColumn.STATUS))
-    glyph = STATUS_GLYPHS[status]
-    cell.set_property("visible", bool(glyph))
-    cell.set_property("text", glyph)
-    if glyph:
-        cell.set_property("foreground", current_palette().status_color(status))
-        cell.set_property("foreground-set", True)
-    else:
-        cell.set_property("foreground-set", False)
-
-
-def render_count(cell, model, tree_iter) -> None:
-    kind = model.get_value(tree_iter, TreeColumn.KIND)
-    count = model.get_value(tree_iter, TreeColumn.COUNT)
-    show = kind != RowKind.HOST.value
-    cell.set_property("visible", show)
-    cell.set_property("text", str(count) if show else "")
-    cell.set_property("foreground", current_palette().text_secondary)
-    cell.set_property("foreground-set", True)
 
 
 def _font_tokens():
@@ -116,23 +67,26 @@ def font_pixel_size(widget: Gtk.Widget) -> float:
 
 
 def row_height_for(widget: Gtk.Widget, *, group: bool = False) -> int:
-    """Row pitch at the default font (41px Comfortable, 28/30px Compact); taller for larger fonts."""
+    """Row pitch at the default font (41px Comfortable, 30px Compact); taller for larger fonts."""
 
     base = Size.TREE_GROUP_ROW if group else Size.TREE_ROW
     return max(base, int(round(base * font_pixel_size(widget) / _font_tokens().TREE)))
 
 
 def row_geometry(kind: object, depth: int) -> Dict[str, int]:
-    """x positions (widget coordinates) of the chevron, icon and label for a row."""
+    """x positions (widget coordinates) of the chevron, icon and label for a row.
+
+    One icon column per level: chevron box, ``CHEVRON_GAP``, icon, ``ICON_GAP``,
+    label. Hosts have no chevron but keep its slot, so their icon and label line
+    up with a group's at the same depth.
+    """
 
     tree = Layout.Tree
     base = tree.LEAD + Size.TREE_INDENT * max(0, depth)
-    row_kind = RowKind.coerce(kind)
-    if row_kind is RowKind.HOST:
-        return {"chevron": -1, "icon": base + tree.HOST_ICON_X, "text": base + tree.HOST_TEXT_X}
-    if depth == 0:
-        return {"chevron": base, "icon": base + tree.GROUP_ICON_X, "text": base + tree.GROUP_TEXT_X}
-    return {"chevron": base, "icon": -1, "text": base + tree.CHILD_TEXT_X}
+    icon = base + tree.CHEVRON + tree.CHEVRON_GAP
+    text = icon + tree.ICON + tree.ICON_GAP
+    chevron = -1 if RowKind.coerce(kind) is RowKind.HOST else base
+    return {"chevron": chevron, "icon": icon, "text": text}
 
 
 def _rgba(hex_color: str) -> Gdk.RGBA:
@@ -162,11 +116,14 @@ class RelayRowRenderer(Gtk.CellRendererText):
     color = GObject.Property(type=str, default="")
     expandable = GObject.Property(type=bool, default=False)
     expanded = GObject.Property(type=bool, default=False)
+    read_only = GObject.Property(type=bool, default=False)
     gap = GObject.Property(type=int, default=0)
 
     def __init__(self, icon_cache: dict) -> None:
         Gtk.CellRendererText.__init__(self)
         self._icon_cache = icon_cache
+        self.pulse_phase = 0.0  # seconds; the view advances it while a host is connecting
+        self.saw_connecting = False  # set while painting a connecting badge
 
     # ------------------------------------------------------------- sizing
     def do_get_request_mode(self) -> Gtk.SizeRequestMode:
@@ -199,8 +156,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
         palette = current_palette()
         tree, size = Layout.Tree, Size
         INSET, RADIUS, BAR_WIDTH, BAR_HEIGHT = size.TREE_INSET, tree.RADIUS, tree.BAR_WIDTH, tree.BAR_HEIGHT
-        CHEVRON, FOLDER, HOST_ICON = tree.CHEVRON, tree.FOLDER, tree.HOST_ICON
-        COUNT_RIGHT, DOT_RIGHT, DOT = tree.COUNT_RIGHT, tree.DOT_RIGHT, tree.DOT
+        CHEVRON, ICON, COUNT_RIGHT = tree.CHEVRON, tree.ICON, tree.COUNT_RIGHT
         COUNT_SCALE = _font_tokens().TREE_COUNT / _font_tokens().TREE
         width = widget.get_allocated_width()
         top = background_area.y + self.props.gap
@@ -242,20 +198,11 @@ class RelayRowRenderer(Gtk.CellRendererText):
             name = Icons.CHEVRON_DOWN if self.props.expanded else Icons.CHEVRON_RIGHT
             self._paint_icon(cr, name, palette.text_secondary, CHEVRON, geometry["chevron"], mid, scale)
         if geometry["icon"] >= 0:
-            if kind is RowKind.HOST:
-                color = palette.accent_text if selected else (self.props.color or palette.text_secondary)
-                self._paint_icon(cr, Icons.HOST, color, HOST_ICON, geometry["icon"], mid, scale)
-            else:
-                self._paint_icon(cr, Icons.GROUP, self.props.color or palette.icon_group, FOLDER, geometry["icon"], mid, scale)
+            self._paint_tree_icon(cr, widget, kind, selected, ICON, geometry["icon"], mid, scale)
 
         right_reserved = 0
         if kind is RowKind.HOST:
-            status = ConnectionStatus.coerce(self.props.status)
-            if status is not ConnectionStatus.UNKNOWN:
-                cr.set_source_rgba(*self._channels(palette.status_color(status)))
-                cr.arc(width - DOT_RIGHT, mid, DOT / 2.0, 0, 2 * math.pi)
-                cr.fill()
-            right_reserved = DOT_RIGHT + DOT
+            right_reserved = COUNT_RIGHT  # the status lives on the icon; the right edge is for counts
         else:
             count_layout = widget.create_pango_layout(str(self.props.count))
             font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
@@ -280,6 +227,26 @@ class RelayRowRenderer(Gtk.CellRendererText):
         cr.move_to(geometry["text"], mid - logical.height / 2.0)
         PangoCairo.show_layout(cr, layout)
 
+    def _paint_tree_icon(self, cr, widget, kind, selected: bool, size: int, x: float, mid: float, scale: int) -> None:
+        palette = current_palette()
+        icon = tree_icon_for(kind, self.props.expanded, self.props.read_only,
+                             selected=selected, has_children=self.props.expandable)
+        color = icon_color(palette, icon, self.props.color)
+        badge_name = badge_color = ""
+        alpha = 1.0
+        if show_status_badge(kind, self.props.status, self.props.read_only):
+            badge = status_badge(self.props.status, size)
+            badge_name, badge_color = badge.name, getattr(palette, badge.color_role)
+            if badge.pulse:
+                self.saw_connecting = True
+                if animations_enabled(widget):
+                    alpha = quantize_alpha(pulse_alpha(self.pulse_phase))
+        surface = render_tree_icon(icon.name, color, size, scale, badge=badge_name, badge_color=badge_color,
+                                   badge_alpha=alpha, lock=icon.lock, cache=self._icon_cache)
+        if surface is not None:
+            cr.set_source_surface(surface, x, round(mid - size / 2.0))
+            cr.paint()
+
     def _paint_icon(self, cr, name: str, color: str, size: int, x: float, mid: float, scale: int) -> None:
         surface = render_svg_surface(name, color, size, scale, self._icon_cache)
         if surface is None:
@@ -291,6 +258,14 @@ class RelayRowRenderer(Gtk.CellRendererText):
     def _channels(hex_color: str, alpha: float = 1.0) -> Tuple[float, float, float, float]:
         rgba = _rgba(hex_color)
         return rgba.red, rgba.green, rgba.blue, rgba.alpha * alpha
+
+
+def animations_enabled(widget: Optional[Gtk.Widget] = None) -> bool:
+    settings = widget.get_settings() if widget is not None else Gtk.Settings.get_default()
+    try:
+        return bool(settings.get_property("gtk-enable-animations")) if settings is not None else True
+    except TypeError:
+        return True
 
 
 class SessionTreeView(Gtk.TreeView):
@@ -319,7 +294,13 @@ class SessionTreeView(Gtk.TreeView):
         self.connect("key-press-event", self._on_key_press)
         self.connect("row-collapsed", lambda _v, it, _p: self.collapsed_keys.add(self._row_key(it)))
         self.connect("row-expanded", lambda _v, it, _p: self.collapsed_keys.discard(self._row_key(it)))
+        self._pulse_source = 0
+        self._pulse_start = time.monotonic()
         self._build_column()
+        # A connecting badge pulses: a timer redraws the tree while one was painted.
+        self.connect("draw", self._before_draw)
+        self.connect_after("draw", self._after_draw)
+        self.connect("destroy", lambda *_: self._stop_pulse())
 
     @property
     def store(self) -> Gtk.TreeStore:
@@ -345,6 +326,7 @@ class SessionTreeView(Gtk.TreeView):
         cell.set_property("count", int(model.get_value(tree_iter, TreeColumn.COUNT) or 0))
         cell.set_property("status", model.get_value(tree_iter, TreeColumn.STATUS) or "")
         cell.set_property("color", model.get_value(tree_iter, TreeColumn.COLOR) or "")
+        cell.set_property("read_only", bool(model.get_value(tree_iter, TreeColumn.READ_ONLY)))
         cell.set_property("expandable", model.iter_has_child(tree_iter))
         cell.set_property("expanded", self.row_expanded(path))
         cell.set_property("gap", Layout.Tree.GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
@@ -374,6 +356,7 @@ class SessionTreeView(Gtk.TreeView):
                     row.status,
                     row.count,
                     row.tooltip,
+                    row.read_only,
                 ],
             )
             if row.kind is RowKind.HOST:
@@ -418,6 +401,36 @@ class SessionTreeView(Gtk.TreeView):
                 self.collapse_row(path)
             else:
                 self.expand_row(path, False)
+
+    # ------------------------------------------------------------ pulse
+    def _before_draw(self, *_args) -> bool:
+        self.row_renderer.saw_connecting = False
+        self.row_renderer.pulse_phase = time.monotonic() - self._pulse_start
+        return False
+
+    def _after_draw(self, *_args) -> bool:
+        if self.row_renderer.saw_connecting and animations_enabled(self):
+            if not self._pulse_source:
+                self._pulse_source = GLib.timeout_add(PULSE_INTERVAL_MS, self._on_pulse)
+        else:
+            self._stop_pulse()
+        return False
+
+    def _on_pulse(self) -> bool:
+        if not self.get_mapped():
+            self._pulse_source = 0
+            return GLib.SOURCE_REMOVE
+        self.queue_draw()
+        return GLib.SOURCE_CONTINUE
+
+    def _stop_pulse(self) -> None:
+        if self._pulse_source:
+            GLib.source_remove(self._pulse_source)
+            self._pulse_source = 0
+
+    @property
+    def pulsing(self) -> bool:
+        return bool(self._pulse_source)
 
     def clear_icon_cache(self) -> None:
         self.icon_cache.clear()

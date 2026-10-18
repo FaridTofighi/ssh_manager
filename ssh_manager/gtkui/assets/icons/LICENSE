@@ -1,6 +1,15 @@
 SSH Manager outline icons
 
-These icons were drawn for SSH Manager (24x24 grid, 1.5px rounded stroke,
-currentColor) in the style of popular outline icon sets. They are part of
-SSH Manager and are distributed under the same terms as the project.
-No third-party icon artwork is included.
+* The outline set (24x24 grid, 1.5px rounded stroke, currentColor) was drawn
+  for SSH Manager in the style of popular outline icon sets. It is part of
+  SSH Manager and is distributed under the same terms as the project.
+
+* The session-tree family (sshm-folder, sshm-folder-open, sshm-file-conf,
+  sshm-server and the sshm-badge-* overlays; 24x24 grid, badges 12x12) comes
+  from the drafts supplied with the Phase 9 brief: a 1.75px outline converted
+  to filled paths plus a 20% duotone fill, currentColor. The badge overlays
+  were drawn for SSH Manager.
+
+  NOTE: the folder and folder-open outlines appear to match the Lucide icon
+  set (ISC license, https://lucide.dev). If they are kept, Lucide's ISC
+  license notice must be included here; otherwise redraw them.

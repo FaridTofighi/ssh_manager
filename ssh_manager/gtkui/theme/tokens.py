@@ -177,9 +177,14 @@ class Palette:
     avatar_bg: str
     broadcast_bg: str
     broadcast_fg: str
-    icon_group: str
-    icon_subgroup: str
+    # Session-tree icons (gtkui/tree_icons.py): ≥ 3:1 on bg_surface, bg_hover and bg_selected.
+    icon_group: str  # folders (amber)
+    icon_file: str  # *.conf groups
     icon_host: str
+    icon_host_selected: str  # host icon on the selected row (the row's accent text)
+    # Status badge on the host icon (warning/danger for connecting/failed).
+    badge_connected: str
+    badge_unknown: str
     scrollbar: str
     shadow: str
     shadow_popover: str
@@ -271,9 +276,13 @@ LIGHT = Palette(
     avatar_bg="#233B32",
     broadcast_bg="#FDECEA",
     broadcast_fg="#8F1D14",
-    icon_group="#A57828",
-    icon_subgroup="#5B6B64",
+    icon_group="#B07A1E",
+    icon_file="#5B6B64",
     icon_host="#5B6B64",
+    icon_host_selected="#176B4D",
+    # success / text_muted reach only 2.7:1 on the selected row; nearest shades that reach 3:1.
+    badge_connected="#2A9D6A",
+    badge_unknown="#848E88",
     scrollbar="#C9D2CD",
     shadow="rgba(24, 35, 31, 0.06)",
     shadow_popover="rgba(24, 35, 31, 0.12)",
@@ -323,9 +332,12 @@ DARK = Palette(
     avatar_bg="#3F4A45",
     broadcast_bg="#4A1A16",
     broadcast_fg="#FFDAD5",
-    icon_group="#D9A84E",
-    icon_subgroup="#A3A8B0",
+    icon_group="#E2B04F",
+    icon_file="#A3A8B0",
     icon_host="#A3A8B0",
+    icon_host_selected="#5CCB9C",
+    badge_connected="#48C48D",
+    badge_unknown="#8A9098",
     scrollbar="#454951",
     shadow="rgba(0, 0, 0, 0.35)",
     shadow_popover="rgba(0, 0, 0, 0.45)",
@@ -459,8 +471,12 @@ CONTRAST_PAIRS: List[Tuple[str, str, float]] = [
     ("warning", "bg_surface", AA_UI),
     ("danger", "bg_surface", AA_UI),
     ("info", "bg_surface", AA_UI),
-    ("icon_group", "bg_surface", AA_UI),
-    ("icon_host", "bg_surface", AA_UI),
+] + [
+    # Tree icons and the host status badge, on every row background they sit on.
+    (fg, bg, AA_UI)
+    for fg in ("icon_group", "icon_file", "icon_host", "icon_host_selected",
+               "badge_connected", "warning", "danger", "badge_unknown")
+    for bg in ("bg_surface", "bg_hover", "bg_selected")
 ]
 
 

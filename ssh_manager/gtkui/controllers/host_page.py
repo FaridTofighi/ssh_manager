@@ -19,6 +19,7 @@ from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...host_utils import host_connection_params  # noqa: E402
 from ..constants import Icons, RowKind  # noqa: E402
+from ..tree_icons import tree_icon_for  # noqa: E402
 from ..host_facts import (  # noqa: E402
     address_text,
     auth_summary,
@@ -320,7 +321,7 @@ class HostPageController:
             crumbs=breadcrumb_for(kind, parent, child),
             title=title,
             address=ngettext("{n} host", "{n} hosts", count).format(n=count),
-            icon=Icons.GROUP,
+            icon=tree_icon_for(kind).name,  # folder, or file-conf for a *.conf group
             stats=[
                 (_("Hosts"), str(count), ""),
                 (_("Connected"), str(connected), "good" if connected else ""),

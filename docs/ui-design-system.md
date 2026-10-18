@@ -35,7 +35,8 @@ every color role becomes `@define-color sm_<role>`.
 | `chip_bg` | `#F1F4F2` | `#25272B` | Chips |
 | `avatar_bg` | `#233B32` | `#3F4A45` | User avatar |
 | `broadcast_bg` / `broadcast_fg` | `#FDECEA` / `#8F1D14` | `#4A1A16` / `#FFDAD5` | Broadcast warning strip |
-| `icon_group` / `icon_subgroup` / `icon_host` | `#A57828` / `#5B6B64` / `#5B6B64` | `#D9A84E` / `#A3A8B0` / `#A3A8B0` | Default tree icon tints |
+| `icon_group` / `icon_file` / `icon_host` / `icon_host_selected` | `#B07A1E` / `#5B6B64` / `#5B6B64` / `#176B4D` | `#E2B04F` / `#A3A8B0` / `#A3A8B0` / `#5CCB9C` | Tree icons: folders, `*.conf` groups, hosts, host on the selected row (all ≥ 3:1 on surface, hover and selected rows) |
+| `badge_connected` / `badge_unknown` | `#2A9D6A` / `#848E88` | `#48C48D` / `#8A9098` | Host status badge (connecting and failed use `warning` / `danger`); light values are the nearest shades of `success` / `text_muted` that reach 3:1 on the selected row |
 | `scrollbar` | `#C9D2CD` | `#454951` | Overlay scrollbar thumb |
 | `pane_border` / `pane_border_focus` / `pane_border_broadcast` | `#868F8A` / `#176B4D` / `#B42318` | `#5E6269` / `#1F7A57` / `#F07A6E` | Pane outlines in split and tile mode (all ≥ 3:1 against the gutter) |
 | `pane_header_bg` / `pane_header_bg_focus` | `#FFFFFF` / `#EAF5EF` | `#212226` / `#202A25` | Pane header and footer; focused pane header |
@@ -101,10 +102,11 @@ app font size: the Compact stylesheet sets `vte-terminal` back to it in `pt`.
 | Bands, total height incl. 1 px border (top bar · page bar · host header · tabs · status bar) | 44 · — · 44 (host bar) · 34 · 28 | 77 · 74 · 124 · 58 · 70 |
 | Sidebar (default / min / max) | 284 / 220 / 480 | 408 / 300 / 520 |
 | Sidebar header · search · footer | 40 · 32 · 32 | 52 · 46 · 66 |
-| Tree row (host / top-level group) · indent · inset · bar | 28 / 30 · 16 · 6 · 3 px | 41 · 25 · 12 · 4 px |
+| Tree row (host / top-level group) · indent · inset · bar | 30 / 30 · 18 · 6 · 3 px | 41 · 25 · 12 · 4 px |
+| Tree icon · chevron · chevron → icon · icon → label | 20 · 14 · 4 · 8 px | 24 · 16 · 6 · 10 px |
 | Logo tile · avatar · icon button · toolbar button | 28 · 28 · 28 · 28 | 42 · 40 · 40 · 38 |
 | Button · large · hero · entry | 28 · 28 · 34 · 30 | 40 · 44 · 51 · 32 |
-| Empty-state card · host tile · badge | 48 · 28 · 18 | 72 · 54 · 22 |
+| Empty-state card · host tile (icon) · badge | 48 · 28 (24) · 18 | 72 · 54 (28) · 22 |
 | Dialogs | 0.85 × default size, padding 16, gap 8 | default size, padding 16, gap 12 |
 | Type in px at 11 pt (caps · badge · caption · mono · body · tree · wordmark · hero · host title · page title · dialog title) | 11 · 11 · 11.5 · 12 · 13 · 13 · 15 · 17 · 16/600 · 15/600 · 15 | 12 · 11 · 13 · 14 · 15 · 16 · 20 · 22 · 26 · 28 · 18 |
 | Caps tracking | 0.08 em | 0.12 em |
@@ -203,12 +205,59 @@ themes, plus environment badges, the selected tree row and accent buttons.
 
 ## Icons (`assets/icons/`, `widgets/icons.py`)
 
-43 outline icons drawn on a 24 px grid with a 1.5 px round stroke, named
-`sshm-<name>-symbolic.svg` (terminal, monitor, folder, chevrons, plus,
-search, filter, settings, key, copy, more, activity, help, close, refresh,
-split, grid, broadcast, download, clipboard, edit, trash, lock, user,
-server, globe, check, warning, error, info, sidebar, stats, maximize,
-restore, move, palette, tag, logout, folder-open, interrupt, eye). GTK 3's
+### Session-tree family (`gtkui/tree_icons.py`, Phase 9)
+
+Drawn on the 24-grid with a 1.75 outline **converted to filled paths**, plus
+a second path at `opacity="0.2"` (the duotone fill), so the icons read as
+shapes, not hairlines. They contain no strokes, so GTK's own symbolic
+recoloring (which rewrites `fill` and ignores `stroke`) cannot turn them into
+blobs. Reference: `docs/ui-target/tree-icons-sheet.png`.
+
+| Row | Icon | Color |
+|---|---|---|
+| Group (top-level or nested directory), collapsed / empty | `sshm-folder` | `icon_group` |
+| Group, expanded | `sshm-folder-open` | `icon_group` |
+| Config-file group (`*.conf`, `RowKind.CHILD`) | `sshm-file-conf` | `icon_file` |
+| Host | `sshm-server` | `icon_host` |
+| Host on the selected row | `sshm-server` | `icon_host_selected` |
+| Read-only / shared / no edit permission | `sshm-server` + `sshm-badge-lock` (50 %) | as the host |
+| Any row with a user-picked color | same icon | the user color (a selected host stays accent) |
+
+Status badge on the host icon (≈ 42 % of it, bottom-right):
+
+| Status | Badge | Color | Shape |
+|---|---|---|---|
+| Connected | `sshm-badge-dot` | `badge_connected` | dot |
+| Connecting | `sshm-badge-ring` | `warning` | ring with a half fill; pulses at 0.8 Hz unless `gtk-enable-animations` is off |
+| Failed | `sshm-badge-failed` (24 px) / `sshm-badge-dot` (20 px) | `danger` | dot with a cut-out × where it fits |
+| Unknown | `sshm-badge-dot` | `badge_unknown` | dot |
+
+- **Lock with a status:** a read-only host with an unknown status shows only
+  the lock, in the badge's corner. With a known status, the badge takes the
+  bottom-right and the lock moves to the top-right.
+- **Tooltip:** the row tooltip spells the status out ("Connected",
+  "Connection failed") and is refreshed on every status change. The right
+  edge of a row shows only group counts.
+- **Compositing:** `render_tree_icon()` renders the icon, erases a circle 2 px
+  wider than each overlay (`sshm-badge-cutout`, `DEST_OUT`) and draws the
+  overlay SVG. The ring is therefore the row's real background on normal,
+  hover and selected rows, with no halo.
+- **Cache:** every layer is rendered at device pixels and the composite is
+  cached by (icon, color, size, scale, badge, badge color, pulse step, lock).
+  Nothing parses SVG while the tree draws.
+- **Other places:** the same icons are used in the group picker's parent
+  (folder) and child (file-conf) lists, the host-bar tile (24/28 px), the drag
+  icon (it is the rendered row) and context menus (16 px).
+
+### Outline set
+
+40 outline icons drawn on a 24 px grid with a 1.5 px round stroke, named
+`sshm-<name>-symbolic.svg` (terminal, monitor, chevrons, plus, search,
+filter, settings, key, copy, more, activity, help, close, refresh, split,
+grid, broadcast, download, clipboard, edit, trash, lock, user, globe, check,
+warning, error, info, sidebar, stats, maximize, restore, move, palette, tag,
+logout, interrupt, eye); folder, folder-open and server belong to the tree
+family above. GTK 3's
 symbolic recoloring only replaces fills, so stroke icons are rendered with
 Rsvg: `SvgIcon` draws in its CSS `color` (states and theme follow
 automatically), `render_svg_surface()` / `tinted_icon_surface()` give

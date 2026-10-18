@@ -64,6 +64,39 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(terminal_text(term), "whole scrollback")
         self.assertEqual(term.args, (Vte.Format.TEXT, 3, 0, 202, 79))
 
+    def test_focus_retry_gives_up_on_a_terminal_that_is_never_shown(self) -> None:
+        from unittest import mock
+
+        from ssh_manager import gtk_terminal
+
+        class HiddenTerminal:
+            grabbed = False
+
+            def get_realized(self):
+                return False
+
+            def get_mapped(self):
+                return False
+
+            def grab_focus(self):
+                self.grabbed = True
+
+        term = HiddenTerminal()
+        dummy = type("DummyTab", (), {"_active_terminal": lambda self: term})()
+        scheduled = []
+        with mock.patch.object(gtk_terminal.GLib, "timeout_add", side_effect=lambda ms, cb: scheduled.append((ms, cb))), \
+                mock.patch.object(gtk_terminal.GLib, "idle_add", side_effect=AssertionError("busy idle retry")):
+            TerminalTab.focus_terminal(dummy)
+        self.assertEqual(len(scheduled), 1)
+        interval, retry = scheduled[0]
+        self.assertGreaterEqual(interval, 20)  # a timer, not a busy idle loop
+        calls = 1
+        while retry():
+            calls += 1
+            self.assertLess(calls, 1000, "the retry never gives up")
+        self.assertEqual(calls, gtk_terminal.FOCUS_RETRY_LIMIT - 1)
+        self.assertFalse(term.grabbed)
+
     def test_banner_is_left_alone_after_destroy(self) -> None:
         from gi.repository import Gtk  # type: ignore
 

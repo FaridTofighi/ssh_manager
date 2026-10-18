@@ -220,6 +220,7 @@ history popover in the header bar.
 | Surface colors: sidebar pixels per GTK theme, mode and focus state; sidebar CSS lint | `test_gtkui_surfaces.py` |
 | Density: preset keys and floor, setting round-trip, CSS per theme × density, 11 px floor at 10/11/14/24 pt, runtime switch with a live session, real 1920 × 1041 layout (terminal share, bands, tree rows), host panel never resizes the terminal, tab overflow | `test_gtkui_density.py` |
 | Session tab labels (modes, ports, IPv6, duplicates, stable counters, rename), tab-label setting | `test_gtkui_tab_labels.py` |
+| Tree icons: icon choice, sizes per density, token contrast, status → badge (pure), SVG fill-only lint; rows rendered to cairo (ink size and centring, not a blob / not empty, colors, user tint, badge and cut-out ring on normal / hover / selected, lock, counts-only right edge, HiDPI, pulse, drag icon), GTK symbolic loader, 2,040-row cache and timing | `test_tree_icons.py`, `test_gtkui_tree_icons.py` |
 | Pane activation: state machine (pure); real button presses on every region of split panes, 2/4/6 tiles and duplicated sessions (offscreen, hit-tested like GDK), press still reaches VTE, drag selection, divider/gutter/wheel, no-op re-click, broadcast source | `test_pane_activation.py`, `test_gtkui_pane_clicks.py` |
 | End-to-end flows on the real window (top bar, tree, host page, session strip, bulk bar) | `test_gtkui_window_flows.py` (fixture: `tests/gtk_window_fixture.py`) |
 

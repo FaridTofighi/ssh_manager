@@ -2,8 +2,8 @@
   "render": "docs/ui-after/relay-match.png",
   "reference": "/home/farid/Documents/ssh/docs/ui-target/relay-reference.png",
   "overall": {
-    "mean_error": 2.09,
-    "visible_diff": 3.44
+    "mean_error": 2.19,
+    "visible_diff": 3.66
   },
   "targets": {
     "region_mean_error": 3.0,
@@ -61,9 +61,9 @@
         407,
         868
       ],
-      "mean_error": 2.36,
-      "masked_error": 0.06,
-      "visible_diff": 4.8,
+      "mean_error": 3.0,
+      "masked_error": 0.56,
+      "visible_diff": 6.17,
       "vertical_shift": 0,
       "ok": true
     },
@@ -100,9 +100,9 @@
         1852,
         275
       ],
-      "mean_error": 1.35,
-      "masked_error": 0.13,
-      "visible_diff": 2.77,
+      "mean_error": 1.43,
+      "masked_error": 0.15,
+      "visible_diff": 2.95,
       "vertical_shift": 0,
       "ok": true
     },

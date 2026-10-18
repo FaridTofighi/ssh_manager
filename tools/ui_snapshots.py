@@ -132,6 +132,21 @@ Host dev-box-02
 }
 RELAY_SIZE = (1852, 934)
 
+# Phase 9 tree icons: the mini tree of docs/ui-target/tree-icons-sheet.png plus
+# every host state, a read-only host, a nested folder and a collapsed colored group.
+TREE_ICONS_INVENTORY = {
+    "pardis/zookeeper.conf": "".join(f"Host {alias}\n    hostname {alias}\n\n" for alias in (
+        "10.60.110.74", "apzkrfpspst0103.fns", "apzkrfpspst0107.fns", "zk-connecting", "zk-shared")),
+    "pardis/kafka/brokers.conf": "Host broker-01\n    hostname 10.60.112.4\n",
+    "staging/hosts.conf": "Host web-stage-01\n    hostname 10.70.10.11\n\nHost web-stage-02\n    hostname 10.70.10.12\n",
+    "legacy/old.conf": "Host old-box\n    hostname 10.90.0.2\n",
+}
+TREE_ICONS_STATES = {
+    "apzkrfpspst0103.fns": "connected", "apzkrfpspst0107.fns": "failed", "zk-connecting": "connecting",
+    "web-stage-01": "connected",
+}
+TREE_ICONS_USER_COLOR = "#7DB1E8"  # a user-picked group color (legacy)
+
 # The state of docs/ui-before/density-current.png (Phase 4 brief).
 DENSITY_INVENTORY = {
     "da/.keep": "",
@@ -688,6 +703,31 @@ def prepare_relay_match(window) -> None:
         window.tree.select_host(host.parent_group, host.child_group, host.alias)
 
 
+def prepare_tree_icons(window) -> None:
+    """Statuses, a read-only host, a user color, a collapsed group and a selected host."""
+
+    creds = window.creds
+    original = creds.permissions_for_host
+
+    def permissions(host, original=original):
+        perms = dict(original(host))
+        if host.alias == "zk-shared":
+            perms["can_edit"] = False
+        return perms
+
+    creds.permissions_for_host = permissions
+    window.colors.set_group_color("legacy", "", TREE_ICONS_USER_COLOR)
+    window.tree.rebuild()
+    for alias, state in TREE_ICONS_STATES.items():
+        host = window.tree.find_host_by_alias(alias)
+        if host is not None:
+            window.tree.set_host_status(host, state)
+    window.tree_view.set_row_collapsed("parent", "legacy", "", True)
+    host = window.tree.find_host_by_alias("apzkrfpspst0103.fns")
+    window.tree.select_host(host.parent_group, host.child_group, host.alias)
+    _pump()
+
+
 def snapshot_density(default: str = "compact") -> str:
     """Density for a scenario; ``SSHM_DENSITY`` overrides it (regression runs)."""
 
@@ -959,6 +999,33 @@ def run(out_dir: Path) -> None:
         _pump()
         capture_window(window, out_dir / "relay-compact.png", 960, 720)
         window.destroy()
+
+    tree_icons_base = _SANDBOX / "tree-icons"
+    _write_inventory(tree_icons_base, populated=True, inventory=TREE_ICONS_INVENTORY)
+
+    for theme, dark in (("dark", True), ("light", False)):
+        for density_name in ("compact", "comfortable"):
+
+            @scenario(f"tree-icons-{theme}-{density_name}")
+            def _tree_icons(dark=dark, theme=theme, density_name=density_name) -> None:
+                """Sidebar crop: every tree icon, badge and overlay (compare with tree-icons-sheet.png)."""
+
+                window = _make_window(app, tree_icons_base, dark, density_name)
+                prepare_tree_icons(window)
+                pixbuf, holder = render_window_pixbuf(window, 1280, 1000)
+                x, y, width, height = tree_area(window._sidebar, holder)
+                tree = window.tree_view
+                visible = tree.get_visible_range()
+                rows = height
+                if visible:
+                    last = tree.get_background_area(visible[1], tree.get_column(0))
+                    _bx, last_y = tree.convert_bin_window_to_widget_coords(last.x, last.y)
+                    _tx, ty = tree.translate_coordinates(window._sidebar.stack, 0, 0)
+                    rows = ty + last_y + last.height + 8
+                pixbuf.new_subpixbuf(x, y, width, min(height, rows)).savev(
+                    str(out_dir / f"tree-icons-{theme}-{density_name}.png"), "png", [], [])
+                holder.restore()
+                window.destroy()
 
     @scenario("sidebar-surfaces")
     def _sidebar_surfaces() -> None:

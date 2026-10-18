@@ -19,7 +19,9 @@ from . import context_menus, details_presenter  # noqa: E402
 from ..views.sidebar import TreePage  # noqa: E402
 from ..widgets.menus import build_context_menu, popup_menu  # noqa: E402
 from .shortcuts import accel_label  # noqa: E402
-from .tree_controller import TreeCallbacks, build_tree_rows, parse_filter, search_text_for_host, sidebar_page_for  # noqa: E402
+from .tree_controller import (  # noqa: E402
+    TreeCallbacks, build_tree_rows, host_tooltip, parse_filter, search_text_for_host, sidebar_page_for,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -63,6 +65,7 @@ class TreeController:
                 display_user=self.win.creds.display_username_for_host,
                 status=lambda key: self.host_status.get(key, "unknown"),
                 color=self.win.colors.item_color_for,
+                read_only=lambda host: not self.win.creds.permissions_for_host(host).get("can_edit", True),
             ),
         )
         selected = self.current_item()
@@ -227,6 +230,10 @@ class TreeController:
         if tree_iter:
             try:
                 self.win.tree_store.set_value(tree_iter, TreeColumn.STATUS, state)
+                host = self.host_lookup.get(key)
+                if host is not None:  # the tooltip spells the status out (color is not the only cue)
+                    user = self.win.creds.display_username_for_host(host)
+                    self.win.tree_store.set_value(tree_iter, TreeColumn.TOOLTIP, host_tooltip(host, user, state))
             except Exception:
                 pass
         if getattr(self.win, "closing", False):

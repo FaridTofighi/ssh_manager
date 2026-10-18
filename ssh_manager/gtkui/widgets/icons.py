@@ -11,6 +11,14 @@ the device scale into a Cairo surface (crisp on HiDPI, no pixel painting).
 * :func:`make_icon` – ``SvgIcon`` for bundled names, themed ``Gtk.Image``
   otherwise (fallback when a file is missing).
 * :func:`tinted_icon_surface` – a Cairo surface for cell renderers.
+* :func:`render_tree_icon` – a session-tree icon with its status badge and lock
+  overlay composited on (each a bundled SVG; the overlays sit in a transparent
+  cut-out ring, so the row's real background shows around them).
+
+The session-tree family (folder, folder-open, file-conf, server, badges) is
+drawn on the 24-grid with a 1.75 outline converted to filled paths plus a 20 %
+duotone fill (``opacity`` on a second path). Filled paths survive GTK's own
+symbolic recoloring too, should a name ever reach ``Gtk.IconTheme`` directly.
 """
 
 from __future__ import annotations
@@ -127,6 +135,90 @@ def tinted_icon_surface(
     if cache is not None:
         cache[key] = surface
     return surface
+
+
+def render_tree_icon(
+    name: str,
+    color: str,
+    size: int,
+    scale: int = 1,
+    *,
+    badge: str = "",
+    badge_color: str = "",
+    badge_alpha: float = 1.0,
+    lock: bool = False,
+    cache: Optional[IconCache] = None,
+):
+    """``name`` in ``color`` at ``size`` px with an optional status ``badge`` and lock.
+
+    Every layer is a bundled SVG rendered at device pixels; overlays are placed by
+    :mod:`gtkui.tree_icons` (badge bottom-right, lock bottom-right or top-right).
+    Before an overlay is drawn, a circle ``cutout_ring`` px wider is erased from
+    the icon (``DEST_OUT``), so the ring is the row's own background on normal,
+    hover and selected rows alike. Results are cached by every input.
+    """
+
+    from ..constants import Icons
+    from ..tree_icons import badge_box, cutout_ring, lock_box
+
+    store = _SURFACES if cache is None else cache
+    alpha = round(float(badge_alpha), 3)
+    key = ("tree", name, color, size, scale, badge, badge_color, alpha, bool(lock))
+    if key in store:
+        return store[key]
+    pixels = size * scale
+    base = render_svg_surface(name, color, pixels, 1, store)
+    if base is None:
+        return None
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, pixels, pixels)
+    cr = cairo.Context(surface)
+    cr.set_source_surface(base, 0, 0)
+    cr.paint()
+    overlays = []
+    if lock:
+        overlays.append((Icons.BADGE_LOCK, color, lock_box(size, with_badge=bool(badge)), 1.0))
+    if badge and badge_color:
+        overlays.append((badge, badge_color, badge_box(size), alpha))
+    ring = cutout_ring(size)
+    for glyph, glyph_color, box, glyph_alpha in overlays:
+        cx, cy = (v * scale for v in box.center)
+        cut = int(round((box.size + 2 * ring) * scale))
+        mask = render_svg_surface(Icons.BADGE_CUTOUT, glyph_color, cut, 1, store)  # only its alpha is used
+        if mask is not None:
+            cr.set_operator(cairo.OPERATOR_DEST_OUT)
+            cr.mask_surface(mask, cx - cut / 2.0, cy - cut / 2.0)
+            cr.set_operator(cairo.OPERATOR_OVER)
+        glyph_px = int(round(box.size * scale))
+        layer = render_svg_surface(glyph, glyph_color, glyph_px, 1, store)
+        if layer is not None:
+            cr.set_source_surface(layer, cx - glyph_px / 2.0, cy - glyph_px / 2.0)
+            cr.paint_with_alpha(glyph_alpha)
+    surface.flush()
+    surface.set_device_scale(scale, scale)
+    store[key] = surface
+    return surface
+
+
+def add_combo_icon(combo: Gtk.ComboBox, icon_name: str, color_role: str, size: int = 16) -> Gtk.CellRendererPixbuf:
+    """Put ``icon_name`` (in palette color ``color_role``) in front of every combo row.
+
+    Used by pickers that list groups (folder / file-conf, as in the tree). The
+    color is read from the active palette at draw time, so theme switches apply.
+    """
+
+    from ..theme.loader import current_palette
+
+    cell = Gtk.CellRendererPixbuf()
+    cell.set_padding(0, 0)
+    combo.pack_start(cell, False)
+    combo.reorder(cell, 0)
+
+    def data(_layout, renderer, _model, _iter, _user=None) -> None:
+        color = getattr(current_palette(), color_role)
+        renderer.set_property("surface", render_svg_surface(icon_name, color, size, combo.get_scale_factor()))
+
+    combo.set_cell_data_func(cell, data)
+    return cell
 
 
 class SvgIcon(Gtk.DrawingArea):

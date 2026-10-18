@@ -11,7 +11,10 @@ from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ...config import ConfigManager  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..constants import Icons  # noqa: E402
+from ..theme.tokens import Size  # noqa: E402
 from ..validation import validate_child_path  # noqa: E402
+from ..widgets.icons import add_combo_icon  # noqa: E402
 from ..widgets.forms import FormSection  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
@@ -36,6 +39,7 @@ class GroupPickerDialog(BaseDialog):
 
         section = FormSection()
         self._parent_combo = Gtk.ComboBoxText()
+        add_combo_icon(self._parent_combo, Icons.FOLDER, "icon_group", Size.ICON)  # as in the tree
         parents = sorted(manager.tree.keys(), key=str.lower)
         for name in parents:
             self._parent_combo.append_text(name)
@@ -46,6 +50,7 @@ class GroupPickerDialog(BaseDialog):
         section.add(_("_Parent group"), self._parent_combo)
 
         self._child_combo = Gtk.ComboBoxText()
+        add_combo_icon(self._child_combo, Icons.FILE_CONF, "icon_file", Size.ICON)
         section.add(_("_Child group"), self._child_combo)
 
         self._new_child_entry = Gtk.Entry()
