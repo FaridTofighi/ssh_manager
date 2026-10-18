@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Dict
+from typing import Callable, Dict, Optional, Sequence, Tuple
 
 import gi
 
@@ -158,11 +158,23 @@ class MessageHistoryButton(Gtk.MenuButton):
         title.get_style_context().add_class("section-title")
         title.set_xalign(0.0)
         header.pack_start(title, True, True, 0)
-        clear = Gtk.Button.new_with_mnemonic(_("_Clear"))
+        self._clear = clear = Gtk.Button.new_with_mnemonic(_("_Clear"))
         clear.get_style_context().add_class("flat")
         clear.connect("clicked", lambda _b: self._history.clear())
         header.pack_end(clear, False, False, 0)
         body.pack_start(header, False, False, 0)
+
+        # All messages, or the activity of the host the host bar shows.
+        self.host_activity_provider: Callable[[], Optional[Tuple[str, Sequence, float]]] = lambda: None
+        filters = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        self.filter_all = Gtk.RadioButton.new_with_mnemonic_from_widget(None, _("_All"))
+        self.filter_host = Gtk.RadioButton.new_with_mnemonic_from_widget(self.filter_all, _("_This host"))
+        for button in (self.filter_all, self.filter_host):
+            button.set_mode(False)
+            button.get_style_context().add_class("panel-tab")
+            button.connect("toggled", lambda b: b.get_active() and self._refresh())
+            filters.pack_start(button, False, False, 0)
+        body.pack_start(filters, False, False, 0)
 
         self._list = Gtk.ListBox()
         self._list.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -182,7 +194,7 @@ class MessageHistoryButton(Gtk.MenuButton):
         self._refresh()
 
     def _placeholder(self) -> Gtk.Widget:
-        label = Gtk.Label(label=_("No messages yet."))
+        self._placeholder_label = label = Gtk.Label(label=_("No messages yet."))
         label.get_style_context().add_class("dim-label")
         label.set_margin_top(Space.M)
         label.set_margin_bottom(Space.M)
@@ -191,18 +203,60 @@ class MessageHistoryButton(Gtk.MenuButton):
 
     def _on_popover_shown(self) -> None:
         self._history.mark_all_read()
+        self._refresh()  # the host the host bar shows may have changed
+
+    def show_host_activity(self) -> None:
+        """Open the popover filtered to the current host."""
+
+        self.filter_host.set_active(True)
+        self.set_active(True)
 
     def _refresh(self) -> None:
         for row in list(self._list.get_children()):
             self._list.remove(row)
-        for message in self._history.items()[:100]:
-            self._list.add(self._row(message))
+        host = self.filter_host.get_active()
+        self._clear.set_visible(not host)
+        if host:
+            activity = self.host_activity_provider()
+            if activity is None:
+                self._placeholder_label.set_text(_("Select a host or open a session to see its activity."))
+            else:
+                name, events, now = activity
+                self._placeholder_label.set_text(_("No activity yet"))
+                for event in list(events)[:100]:
+                    self._list.add(self._event_row(event, now))
+                self.filter_host.set_tooltip_text(_("Activity of {host}").format(host=name))
+        else:
+            self._placeholder_label.set_text(_("No messages yet."))
+            for message in self._history.items()[:100]:
+                self._list.add(self._row(message))
         self._list.show_all()
         unread = self._history.unread_count(levels=self.ATTENTION_LEVELS)
         self._badge.set_text(str(unread) if unread < 100 else "99+")
         self._badge.set_visible(unread > 0)
         tip = _("Message history") if not unread else _("Message history ({count} unread)").format(count=unread)
         self.set_tooltip_text(tip)
+
+    def _event_row(self, event, now: float) -> Gtk.Widget:
+        from ..host_facts import format_relative_time
+
+        try:
+            level = Level(event.level)
+        except ValueError:
+            level = Level.INFO
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        row.set_border_width(Space.XS)
+        row.pack_start(level_icon(level), False, False, 0)
+        text = Gtk.Label(label=event.text)
+        text.set_xalign(0.0)
+        text.set_line_wrap(True)
+        text.set_selectable(True)
+        row.pack_start(text, True, True, 0)
+        stamp = Gtk.Label(label=format_relative_time(event.timestamp, now))
+        stamp.get_style_context().add_class("caption")
+        stamp.set_valign(Gtk.Align.START)
+        row.pack_end(stamp, False, False, 0)
+        return row
 
     def _row(self, message: Message) -> Gtk.Widget:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)

@@ -4,9 +4,9 @@ Chrome budget — compact-session-light (1920 × 1041)
 |---|---:|
 | top bar | 44 |
 | page bar | 0 |
-| host header / row A | 44 |
-| tabs (row B) | 0 |
-| session strip + borders | 37 |
+| host header / host bar | 44 |
+| session strip | 33 |
+| terminal padding / margins | 4 |
 | status bar | 28 |
 | **chrome total** | **157** |
 

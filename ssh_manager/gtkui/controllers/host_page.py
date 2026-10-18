@@ -36,7 +36,7 @@ from ..i18n import _, ngettext  # noqa: E402
 from ..latency import REFRESH_SECONDS, LatencyProbe, LatencyResult  # noqa: E402
 from ..theme.loader import current_palette  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
-from ..views.host_page import HostPageContent, HostPageView, PageTab, latency_css  # noqa: E402
+from ..views.host_page import HostPageContent, HostPageView, PanelPage, latency_css  # noqa: E402
 from ..widgets.menus import build_menu, popup_menu  # noqa: E402
 from ..widgets.ready_state import ReadyState  # noqa: E402
 
@@ -91,13 +91,13 @@ class HostPageController:
         view.page_bar.on_crumb = self.on_crumb
         view.page_bar.on_primary = self.on_primary
         view.page_bar.on_more = self.on_more
+        view.page_bar.on_info = self.toggle_details
         view.info_bar.on_copy = self.copy_command
-        view.on_tab_changed = self._on_tab_changed
-        view.on_strip_merged = self._on_strip_merged
-        if hasattr(notebook, "set_strip_start"):
-            notebook.set_strip_start(view.strip_tabs)
-        if hasattr(notebook, "on_strip_changed"):
-            notebook.on_strip_changed = self._sync_sessions_strip
+        view.panel.on_edit = self._edit_subject
+        view.panel.on_duplicate = self._duplicate_subject
+        view.panel.on_copy = self.copy_command
+        self.terminal_page.ready.on_details = self.show_details
+        view.panel_top = self._strip_height
         self.view = view
         self.history.add_listener(lambda _key: self.refresh())
         self._timers.append(GLib.timeout_add_seconds(REFRESH_SECONDS, self._refresh_latency_tick))
@@ -110,36 +110,66 @@ class HostPageController:
         self._timers.clear()
         self.latency.shutdown()
 
-    # ---------------------------------------------------------------- tabs
-    def _on_tab_changed(self, tab: PageTab) -> None:
-        if self.view is not None:
-            self.view._show_tab(tab)
-
-    def select_tab(self, tab: PageTab) -> None:
-        if self.view is not None:
-            self.view.select_tab(PageTab(tab))
-
-    def goto_page_tab(self, index: int) -> None:
-        tabs = [PageTab.TERMINAL, PageTab.DETAILS, PageTab.ACTIVITY]
-        if 1 <= index <= len(tabs):
-            self.select_tab(tabs[index - 1])
+    # --------------------------------------------------------------- panel
+    def _strip_height(self) -> int:
+        strip = getattr(self.win.terminal_tabs, "_strip", None) if hasattr(self.win, "terminal_tabs") else None
+        if strip is None or not strip.get_visible():
+            return 0
+        return strip.get_allocated_height() if strip.get_mapped() else strip.get_preferred_height()[1]
 
     def toggle_details(self) -> None:
-        """F9: switch between the Terminal and Details tabs."""
+        """Ctrl+I / F9 / the ⓘ button: open or close the host details panel."""
 
-        if self.view is None:
-            return
-        self.select_tab(PageTab.TERMINAL if self.view.current_tab is PageTab.DETAILS else PageTab.DETAILS)
+        if self.view is not None:
+            self.view.toggle_panel(PanelPage.DETAILS)
+
+    def show_details(self) -> None:
+        if self.view is not None:
+            self.view.open_panel(PanelPage.DETAILS)
+
+    def show_activity(self) -> None:
+        if self.view is not None:
+            self.view.open_panel(PanelPage.ACTIVITY)
+
+    def close_panel(self) -> bool:
+        """Esc: close the host panel. Returns whether it was open."""
+
+        if self.view is not None and self.view.panel.is_open:
+            self.view.close_panel()
+            return True
+        return False
+
+    def _select_subject_in_tree(self) -> bool:
+        _kind, host, _data, _hosts = self.selection()
+        if host is None:
+            return False
+        tree = self.win.tree
+        if tree.selected_host() is not host:
+            tree.select_host(host.parent_group, host.child_group, host.alias)
+        return True
+
+    def _edit_subject(self) -> None:
+        if self._select_subject_in_tree():
+            self.win.hosts.edit_selected()
+
+    def _duplicate_subject(self) -> None:
+        if self._select_subject_in_tree():
+            self.win.hosts.duplicate_selected()
+
+    def host_activity(self):
+        """``(title, events, now)`` of the host the host bar shows, or ``None`` (top-bar filter)."""
+
+        _kind, host, _data, _hosts = self.selection()
+        if host is None:
+            return None
+        return host.alias, self.history.events(self.win.creds.host_key(host)), time.time()
 
     def set_chrome_visible(self, visible: bool) -> None:
-        """Focus mode: only the tabs / session row and the terminal stay visible."""
+        """Focus mode: only the session strip and the terminal stay visible."""
 
         self._chrome_visible = visible
-        if self.view is None:
-            return
-        self.view.set_chrome_visible(visible)
-        if not visible:
-            self.select_tab(PageTab.TERMINAL)
+        if self.view is not None:
+            self.view.set_chrome_visible(visible)
 
     def apply_density(self) -> None:
         if self.view is None:
@@ -147,25 +177,36 @@ class HostPageController:
         if self.terminal_page is not None:
             self.terminal_page.ready.apply_density()
         self.view.apply_density()
-        self._sync_sessions_strip()
         self.refresh()
 
     def set_narrow(self, narrow: bool) -> None:
         if self.view is not None:
             self.view.set_narrow(narrow)
 
-    def _sync_sessions_strip(self) -> None:
-        notebook = self.win.terminal_tabs if hasattr(self.win, "terminal_tabs") else None
-        if self.view is not None and notebook is not None and hasattr(notebook, "strip_visible"):
-            self.view.set_sessions_strip(notebook.strip_visible)
-
-    def _on_strip_merged(self, merged: bool) -> None:
-        notebook = self.win.terminal_tabs if hasattr(self.win, "terminal_tabs") else None
-        if notebook is not None and hasattr(notebook, "set_strip_merged"):
-            notebook.set_strip_merged(merged)
-
     # ----------------------------------------------------------- selection
+    def active_session(self):
+        """The session tab in front, or ``None`` (no sessions)."""
+
+        notebook = getattr(self.win, "terminal_tabs", None)
+        if notebook is None or not hasattr(notebook, "current_tab"):
+            return None
+        return notebook.current_tab() if notebook.tabs() else None
+
     def selection(self):
+        """What the host bar shows: the active session's host, else the tree selection.
+
+        Selecting another host in the tree while sessions are open does not
+        switch tabs; the host bar keeps following the session in front.
+        """
+
+        tab = self.active_session()
+        if tab is not None:
+            host = tab.host
+            data = {"parent": host.parent_group, "child": host.child_group, "alias": host.alias}
+            return RowKind.HOST, host, data, [host]
+        return self.tree_selection()
+
+    def tree_selection(self):
         tree = self.win.tree
         hosts = tree.selected_hosts()
         if len(hosts) > 1:
@@ -179,6 +220,8 @@ class HostPageController:
             return
         content = self.build_content()
         self.view.set_content(content)
+        if self.view.panel.is_open:  # sessions opened/closed: keep it below the strip
+            self.view.panel.set_margin_top(self._strip_height())
         self._refresh_ready_state()
 
     def build_content(self) -> HostPageContent:
@@ -416,6 +459,7 @@ class HostPageController:
                 _("Connect to host"),
                 self.win.sessions.connect_current_item,
                 caption=self.auth_for(host).caption,
+                details_link=True,
             )
         elif not self.win.tree.host_lookup and not self.win.manager.tree:
             page.ready.set_content(
@@ -457,6 +501,8 @@ class HostPageController:
         kind, host, _data, _hosts = self.selection()
         if kind == "multi":
             self.win.actions.bulk_connect_selected()
+        elif kind is RowKind.HOST and host is not None and self.active_session() is not None:
+            self.win.terminal_tabs.reconnect_current()  # the host bar shows the session in front
         elif kind is RowKind.HOST and host is not None and self.win.terminal_tabs.has_session_for(host):
             self.win.terminal_tabs.focus_session_for(host)
             self.win.terminal_tabs.reconnect_current()
@@ -468,10 +514,16 @@ class HostPageController:
     def on_more(self, widget: Gtk.Widget) -> None:
         spec = self.win.tree.context_menu_spec()
         kind, host, _data, _hosts = self.selection()
-        if kind is RowKind.HOST and host is not None and self.win.terminal_tabs.has_session_for(host):
-            from ..menu_spec import MenuItemSpec, MenuSection
+        from ..menu_spec import MenuItemSpec, MenuSection
 
-            spec = [MenuSection([MenuItemSpec(_("New _Session"), lambda h=host: self.win.sessions.open_hosts([h]), icon=Icons.NEW)])] + list(spec)
+        if kind is RowKind.HOST and host is not None:
+            panel = [
+                MenuItemSpec(_("Host _Details…"), self.show_details, icon=Icons.INFO, accel="Ctrl+I"),
+                MenuItemSpec(_("Host _Activity…"), self.show_activity, icon=Icons.ACTIVITY),
+            ]
+            if self.win.terminal_tabs.has_session_for(host):
+                panel.insert(0, MenuItemSpec(_("New _Session"), lambda h=host: self.win.sessions.open_hosts([h]), icon=Icons.NEW))
+            spec = [MenuSection("host", panel)] + list(spec)
         menu = build_menu(spec)
         menu.attach_to_widget(widget, None)
         popup_menu(menu, None, widget=widget)

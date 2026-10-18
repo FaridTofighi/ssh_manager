@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...persistence import write_json_atomic
+from ..tab_labels import TabLabelMode
 from ..theme.density import COMFORTABLE, DEFAULT_DENSITY, Density
 
 # Stored when the user never resized the sidebar (the Comfortable default; with
@@ -101,6 +102,9 @@ class UiState:
     recent_inventories: List[str] = field(default_factory=list)
     latency_probe: bool = True
     density: str = DEFAULT_DENSITY.value  # "compact" | "comfortable"
+    tab_label_mode: str = TabLabelMode.NAME.value  # "name" | "ip" | "name_ip"
+    # Older files may carry an active content tab ("page_tab", Terminal/Details/
+    # Activity); those tabs are gone, so the key is ignored and not written back.
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "UiState":
@@ -133,6 +137,7 @@ class UiState:
             recent_inventories=_str_list(data.get("recent_inventories")),
             latency_probe=_bool(data.get("latency_probe"), True),
             density=Density.coerce(data.get("density")).value,
+            tab_label_mode=TabLabelMode.coerce(data.get("tab_label_mode")).value,
         )
 
     def to_dict(self) -> Dict[str, object]:
@@ -154,5 +159,6 @@ class UiState:
             "recent_inventories": list(self.recent_inventories),
             "latency_probe": self.latency_probe,
             "density": Density.coerce(self.density).value,
+            "tab_label_mode": TabLabelMode.coerce(self.tab_label_mode).value,
             "host_colors": dict(self.host_colors),
         }

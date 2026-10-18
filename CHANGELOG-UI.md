@@ -6,6 +6,108 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 6 — session tabs only
+
+Screenshot of the old layout: `docs/ui-before/session-tabs-current.png`. The
+row under the host bar used to mix three content tabs (Terminal · Details ·
+Activity) with the session tabs, and two sessions of one host had the same
+label.
+
+### What changed
+
+- **Content tabs removed:** the Terminal · Details · Activity bar is gone,
+  together with Ctrl+1/2/3. The workspace is the session area: the ready state
+  when no session is open, otherwise the session strip and the terminal.
+- **Session strip:** one row (33 px in Compact):
+  - one tab per session, then `+` (Quick Connect) right after the last tab;
+  - the all-sessions list and the session toolbar right-aligned;
+  - overflow chevrons when the tabs do not fit;
+  - drag a tab onto another to reorder.
+- **Tab contents:**
+  - a status dot; the status is also spelled out in the tooltip;
+  - the label, ellipsized between 96 and 220 px;
+  - a close button shown on hover and on the active tab, plus middle-click to
+    close;
+  - the activity marker on background tabs.
+- **Tab states:** the active tab has accent text and a 2 px accent underline;
+  hover is neutral, and keyboard focus shows a ring. Enter or Space activates
+  a tab, Delete closes it, and the Menu key opens its menu, which is
+  unchanged.
+- **Tab labels:** *Settings → Appearance → Tab label* offers *Name* (default;
+  the IP or host name when there is no alias), *IP address* (`ip:port` when
+  the port is not 22, `[v6]:port`) and *Name and IP*
+  (`alias · 10.60.110.98`).
+  - Duplicates get stable counters: `web-01`, `web-01 (2)`, `(3)`. Closing a
+    tab never renames another, and freed counters are reused.
+  - A name given with Rename (F2) always wins.
+  - The setting is saved as `tab_label_mode`; an old `page_tab` key is
+    ignored.
+  - The pure `gtkui/tab_labels.session_tab_labels()` implements all of this.
+- **Tab tooltip:** the alias, `user@host:port`, the status and size
+  (`Connected · 121×38`), and "Duplicate session" when it applies.
+- **Tile mode:** tile headers use the same labels.
+- **Host bar follows the active session:** name, badge, address, last
+  connected, latency, Reconnect and `···` describe the session in front, or
+  the tree selection when no session is open. Selecting another host in the
+  tree does not switch tabs; double-click, Enter or Connect still open a
+  session.
+
+### Where Details and Activity went
+
+- **Details:** the host bar's new ⓘ button (Ctrl+I, F9, `···` → *Host
+  details…*, or the ready state's *Host details* link) opens a 360 px panel
+  over the right edge of the session area, below the strip.
+  - It holds the fact rows, the tag chips and Edit… / Duplicate / Copy SSH
+    command.
+  - Esc, a click elsewhere in the workspace, its close button or ⓘ close it.
+  - It is an overlay, so the terminal keeps its size; a test measures this.
+  - In a focused terminal, Ctrl+I stays Tab (0x09) and Esc stays Esc; use F9
+    or the button there.
+- **Activity:** `···` → *Host activity…* opens the panel's second page. The
+  top bar's activity popover gains *All* / *This host* filters, and its empty
+  state reads "No activity yet".
+
+### Fixes found on the way
+
+- The `···` menu's *New Session* entry never appeared: the section was built
+  with its item list in the name argument.
+
+### Effect on space
+
+- **Comfortable at 1920 × 1041 with a session open:** the terminal grows from
+  539 to 610 px (51.8 % → 58.6 %), as the 58 px tab band is gone.
+- **Compact, one row of sessions:** unchanged at 84.9 %; the strip already
+  shared its row with the content tabs.
+- **Compact without a session:** the canvas is taller (85.6 % → 88.9 %).
+- **At 960 px wide:** 73.8 % → 78.2 %.
+
+### Verification
+
+- **Unit tests** (`tests/test_gtkui_tab_labels.py`): the three modes, a
+  missing alias, ports other than 22, IPv6, very long names, duplicates
+  (2)/(3), stable counters after closing, counter reuse, the rename override,
+  and the setting's round-trip including old keys.
+- **GTK tests:**
+  - no Terminal/Details/Activity widget in the strip or the host bar;
+  - two sessions of one host get distinct labels, and the second keeps its
+    label after the first closes;
+  - tooltips contain `user@host:port`;
+  - the panel opens from ⓘ, Ctrl+I and `···`, and Esc closes it;
+  - the panel does not change the terminal's allocation (real offscreen
+    render);
+  - 16 tabs show the overflow chevrons and the all-sessions list;
+  - reordering works;
+  - the host bar follows the active session and ignores tree clicks;
+  - the activity popover's *This host* filter works.
+- **Screenshots:** `compact-session-{dark,light}` show
+  `apzkrfpspst0103.fns` and `apzkrfpspst0103.fns (2)`, and `main-two-tabs-*`
+  show a duplicate pair. New: `compact-host-details` and
+  `compact-host-activity`.
+- **Relay reference comparison:** the reference still shows the removed band.
+  `tools/compare_to_reference.py` now lists it as removed. It compares the
+  ready state, which moved 50 px up, on its horizontal position and size, and
+  the empty-state region at that shift. Everything passes.
+
 ## Phase 5 — neutral-gray dark theme
 
 Approved design: `docs/ui-target/neutral-dark-palette.png` (full-window mock)

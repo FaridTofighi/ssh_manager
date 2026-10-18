@@ -411,14 +411,15 @@ def chrome_budget(window, holder) -> dict:
         terminal = box(window.host_page.terminal_page)
     header = box(window._header)
     sidebar = box(window._sidebar) if window.layout.sidebar_visible else None
-    page_bar, row_a, tabs, info = (box(w) for w in (view.page_bar, view.header, view.tabs, view.info_bar))
-    above = max((b[1] + b[3] for b in (header, page_bar, row_a, tabs) if b), default=0)
+    strip = box(getattr(window.terminal_tabs, "_strip", None))
+    page_bar, row_a, info = (box(w) for w in (view.page_bar, view.header, view.info_bar))
+    above = max((b[1] + b[3] for b in (header, page_bar, row_a, strip) if b), default=0)
     rows = {
         "top bar": header[3] if header else 0,
         "page bar": page_bar[3] if page_bar else 0,
-        "host header / row A": row_a[3] if row_a else 0,
-        "tabs (row B)": tabs[3] if tabs else 0,
-        "session strip + borders": max(0, terminal[1] - above) if terminal else 0,
+        "host header / host bar": row_a[3] if row_a else 0,
+        "session strip": strip[3] if strip else 0,
+        "terminal padding / margins": max(0, terminal[1] - above) if terminal else 0,
         "status bar": info[3] if info else 0,
     }
     tree = window.tree_view
@@ -894,7 +895,7 @@ def run(out_dir: Path) -> None:
             window = _make_window(app, base, dark)
             hosts = _all_hosts(window)
             _select_first_host(window)
-            for host in hosts[:2]:
+            for host in (hosts[0], hosts[0], hosts[1]):  # a duplicate gets "(2)"
                 _fake_session(window, host)
             _pump()
             capture_window(window, out_dir / f"main-two-tabs-{theme}.png")
@@ -977,11 +978,15 @@ def run(out_dir: Path) -> None:
         page.inject_latency(host, 2.0)
         page.latency.enabled = True
         if session:
-            tab = window.terminal_tabs.new_terminal(host, autostart=False)
-            tab._terminal.feed(DENSITY_PROMPT.encode("utf-8"))
-            tab._set_status("Connected", True)
-            tab._apply_stats_result({"cpu": 0.0, "mem_used": 1600.0, "mem_total": 3800.0,
-                                     "disk_used": 10.4, "disk_total": 15.2})
+            # Two sessions of the same host, as in docs/ui-before/session-tabs-current.png:
+            # the tabs read "apzkrfpspst0103.fns" and "apzkrfpspst0103.fns (2)".
+            for _number in range(2):
+                tab = window.terminal_tabs.new_terminal(host, autostart=False)
+                tab._terminal.feed(DENSITY_PROMPT.encode("utf-8"))
+                tab._set_status("Connected", True)
+                tab._apply_stats_result({"cpu": 0.0, "mem_used": 1600.0, "mem_total": 3800.0,
+                                         "disk_used": 10.4, "disk_total": 15.2})
+            window.terminal_tabs.focus_tab(window.terminal_tabs.tabs()[0])
         page.refresh()
         _pump()
 
@@ -996,6 +1001,27 @@ def run(out_dir: Path) -> None:
                 capture_window(window, out_dir / f"{name}.png", *DENSITY_SIZE,
                                on_rendered=report_budget(window, out_dir, name))
                 window.destroy()
+
+    for page in ("details", "activity"):
+
+        @scenario(f"compact-host-{page}")
+        def _host_panel(page=page) -> None:
+            """The host panel (slide-over) over a live session."""
+
+            from ssh_manager.gtkui.views.host_page import PanelPage
+
+            window = _make_window(app, density_base, True, snapshot_density("compact"))
+            _density_scene(window, True)
+            host = window.tree.find_host_by_alias("apzkrfpspst0103.fns")
+            key = window.creds.host_key(host)
+            window.host_page.history.record_event(key, "error", "Connection failed")
+            window.host_page.history.record_connected(key, text="Connected")
+            window.host_page.view.panel.set_transition_duration(0)
+            window.host_page.view.open_panel(PanelPage(page))
+            _pump()
+            capture_window(window, out_dir / f"compact-host-{page}.png", *DENSITY_SIZE,
+                           on_rendered=report_budget(window, out_dir, f"compact-host-{page}"))
+            window.destroy()
 
     @scenario("compact-narrow")
     def _compact_narrow() -> None:

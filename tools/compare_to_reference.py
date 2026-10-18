@@ -19,6 +19,12 @@ of the reference), ``relay-side-by-side.png`` and ``relay-report.json`` /
 
 Targets from the spec: ≤ 3 % mean error per region, ≤ 2 px per landmark.
 Exit status is 0 when every target is met, 1 otherwise.
+
+Phase 6 removed the Terminal / Details / Activity band that the reference
+still shows (``REMOVED``), so the canvas below the host header is taller and
+the ready state sits lower. The ready-state landmarks are compared on their
+horizontal position and size (``vertical=False``) and the empty-state region
+at the measured vertical shift; the shift itself is reported.
 """
 
 from __future__ import annotations
@@ -49,11 +55,13 @@ REGIONS: Dict[str, Box] = {
     "sidebar-footer": (0, 868, 407, 934),
     "page-bar": (408, 77, 1852, 151),
     "host-header": (408, 151, 1852, 275),
-    "tabs": (408, 275, 1852, 333),
     "empty-state": (820, 430, 1440, 760),
     "canvas": (408, 333, 1852, 864),
     "info-bar": (408, 864, 1852, 934),
 }
+# In the reference, gone since Phase 6 (session tabs only; Details/Activity in the host panel).
+REMOVED = ["tabs band (408, 275)-(1852, 333)", "tabs bottom border", "tab underline"]
+
 TEXT = (24, 35, 31)  # #18231F
 MUTED = (140, 151, 145)  # caps labels
 
@@ -68,6 +76,8 @@ class Landmark:
     probe: Box  # search window
     color: Tuple[int, int, int]
     tolerance: int = 18
+    vertical: bool = True  # False: compare x position and size only (moved by Phase 6)
+    render_probe: Optional[Box] = None  # where to look in the render when it moved
 
 
 LANDMARKS: Sequence[Landmark] = (
@@ -76,20 +86,21 @@ LANDMARKS: Sequence[Landmark] = (
     Landmark("top-bar brand divider", "vline", (395, 38, 420, 39), BORDER),
     Landmark("page-bar bottom border", "hline", (1000, 135, 1001, 165), BORDER),
     Landmark("host-header bottom border", "hline", (1000, 260, 1001, 290), BORDER),
-    Landmark("tabs bottom border", "hline", (1000, 320, 1001, 345), BORDER),
     Landmark("info-bar top border", "hline", (1000, 850, 1001, 880), BORDER),
     Landmark("sidebar footer border", "hline", (200, 850, 201, 885), BORDER),
     Landmark("logo tile", "blob", (10, 5, 90, 72), ACCENT),
     Landmark("add host button", "blob", (240, 100, 400, 175), ACCENT),
     Landmark("selected-row bar", "blob", (0, 300, 20, 400), ACCENT),
     Landmark("connect button", "blob", (1650, 80, 1840, 145), ACCENT),
-    Landmark("tab underline", "blob", (420, 325, 540, 334), ACCENT),
-    Landmark("hero button", "blob", (980, 640, 1280, 730), ACCENT),
+    # The ready state moved up ~50 px: the 58 px band is gone (centred: -29) and
+    # the "Host details" link below the caption makes the block taller.
+    Landmark("hero button", "blob", (980, 640, 1280, 730), ACCENT, vertical=False, render_probe=(980, 580, 1280, 690)),
     Landmark("sidebar title text", "text", (24, 125, 120, 165), TEXT, 60),
     Landmark("tree row text (Production)", "text", (79, 250, 200, 282), TEXT, 60),
     Landmark("host title text", "text", (515, 180, 650, 220), TEXT, 60),
     Landmark("breadcrumb current text", "text", (515, 100, 640, 128), TEXT, 60),
-    Landmark("empty-state title text", "text", (1000, 540, 1260, 590), TEXT, 60),
+    Landmark("empty-state title text", "text", (1000, 540, 1260, 590), TEXT, 60, vertical=False,
+             render_probe=(1000, 485, 1260, 540)),
     Landmark("stat caption text", "text", (1560, 188, 1700, 206), MUTED, 30),
     Landmark("info caption text", "text", (440, 878, 540, 896), MUTED, 30),
 )
@@ -99,8 +110,8 @@ def _close(pixel: Tuple[int, ...], color: Tuple[int, int, int], tolerance: int) 
     return all(abs(int(a) - int(b)) <= tolerance for a, b in zip(pixel[:3], color))
 
 
-def locate(image: Image.Image, landmark: Landmark) -> Optional[Box]:
-    left, top, right, bottom = landmark.probe
+def locate(image: Image.Image, landmark: Landmark, probe: Optional[Box] = None) -> Optional[Box]:
+    left, top, right, bottom = probe or landmark.probe
     width, height = image.size
     right, bottom = min(right, width), min(bottom, height)
     pixels = image.load()
@@ -143,10 +154,10 @@ def text_mask(reference: Image.Image) -> Image.Image:
 
 
 def region_error(
-    reference: Image.Image, render: Image.Image, box: Box, mask: Optional[Image.Image] = None
+    reference: Image.Image, render: Image.Image, box: Box, mask: Optional[Image.Image] = None, shift: int = 0
 ) -> Tuple[float, float]:
     ref = reference.crop(box)
-    out = render.crop(box)
+    out = render.crop((box[0], box[1] + shift, box[2], box[3] + shift))
     if mask is not None:
         keep = ImageOps.invert(mask.crop(box))
         ref = Image.composite(ref, Image.new("RGB", ref.size), keep)
@@ -177,25 +188,41 @@ def compare(render_path: Path, reference_path: Path, out_dir: Path) -> Dict[str,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     mask = text_mask(reference)
+    hero = locate(reference, next(item for item in LANDMARKS if item.name == "hero button"))
+    hero_landmark = next(item for item in LANDMARKS if item.name == "hero button")
+    hero_render = locate(render, hero_landmark, hero_landmark.render_probe)
+    empty_shift = (hero_render[1] - hero[1]) if hero and hero_render else 0
     regions = {}
     for name, box in REGIONS.items():
-        mean, visible = region_error(reference, render, box)
-        masked, _ = region_error(reference, render, box, mask)
+        shift = empty_shift if name == "empty-state" else 0
+        mean, visible = region_error(reference, render, box, shift=shift)
+        masked, _ = region_error(reference, render, box, mask, shift=shift)
         regions[name] = {
             "box": box,
             "mean_error": mean,
             "masked_error": masked,
             "visible_diff": visible,
+            "vertical_shift": shift,
             "ok": mean <= ERROR_TARGET,
         }
 
     landmarks: List[Dict[str, object]] = []
+    shifts: Dict[str, int] = {}
     for landmark in LANDMARKS:
         expected = locate(reference, landmark)
-        actual = locate(render, landmark)
+        actual = locate(render, landmark, landmark.render_probe)
         entry: Dict[str, object] = {"name": landmark.name, "reference": expected, "render": actual}
         if expected and actual:
-            offset = max(abs(a - b) for a, b in zip(expected, actual))
+            if landmark.vertical:
+                offset = max(abs(a - b) for a, b in zip(expected, actual))
+            else:
+                # x edges and height; the vertical shift is reported, not counted.
+                shifts[landmark.name] = actual[1] - expected[1]
+                entry["vertical_shift"] = shifts[landmark.name]
+                offset = max(
+                    abs(expected[0] - actual[0]), abs(expected[2] - actual[2]),
+                    abs((expected[3] - expected[1]) - (actual[3] - actual[1])),
+                )
             entry["offset"] = offset
             entry["ok"] = offset <= POSITION_TARGET
         else:
@@ -209,6 +236,7 @@ def compare(render_path: Path, reference_path: Path, out_dir: Path) -> Dict[str,
         "reference": str(reference_path),
         "overall": {"mean_error": overall_mean, "visible_diff": overall_visible},
         "targets": {"region_mean_error": ERROR_TARGET, "position_px": POSITION_TARGET},
+        "removed": REMOVED,
         "regions": regions,
         "landmarks": landmarks,
         "ok": all(r["ok"] for r in regions.values()) and all(entry["ok"] for entry in landmarks),
@@ -234,17 +262,23 @@ def markdown(report: Dict[str, object]) -> str:
         "Masked error ignores pixels on the reference's glyph edges (antialiased text),",
         "which differ wherever a substitute font is used.",
         "",
+        "Removed since Phase 6 (still in the reference): " + ", ".join(report["removed"]) + ".",
+        "The ready state moved down with the taller canvas: its landmarks are compared on x",
+        "position and size, the empty-state region at the measured shift (shown in the tables).",
+        "",
         "| Region | Mean error | Masked error | Visible diff | Target ≤ 3 % |",
         "|---|---:|---:|---:|:---:|",
     ]
     for name, data in report["regions"].items():
+        label = f"{name} (shifted {data['vertical_shift']:+d} px)" if data.get("vertical_shift") else name
         lines.append(
-            f"| {name} | {data['mean_error']} % | {data['masked_error']} % | {data['visible_diff']} % | {'✓' if data['ok'] else '✗'} |"
+            f"| {label} | {data['mean_error']} % | {data['masked_error']} % | {data['visible_diff']} % | {'✓' if data['ok'] else '✗'} |"
         )
     lines += ["", "| Landmark | Reference box | Render box | Offset | ≤ 2 px |", "|---|---|---|---:|:---:|"]
     for entry in report["landmarks"]:
         offset = "—" if entry["offset"] is None else f"{entry['offset']} px"
-        lines.append(f"| {entry['name']} | {entry['reference']} | {entry['render']} | {offset} | {'✓' if entry['ok'] else '✗'} |")
+        name = entry["name"] + (f" (x/size; shifted {entry['vertical_shift']:+d} px)" if "vertical_shift" in entry else "")
+        lines.append(f"| {name} | {entry['reference']} | {entry['render']} | {offset} | {'✓' if entry['ok'] else '✗'} |")
     return "\n".join(lines) + "\n"
 
 

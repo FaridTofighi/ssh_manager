@@ -310,6 +310,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._header = HeaderView(self._toasts.history)
         self._header.set_user_initials(local_user_initials())
         self._header.on_workspace_selected = self.inventory.switch_workspace
+        self._header.history_button.host_activity_provider = self.host_page.host_activity
         self.set_titlebar(self._header)
         self.refresh_workspaces()
         self._toasts.history.add_listener(self._update_health)
@@ -386,6 +387,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         tabs.on_new_host = self.hosts.prompt_new_host
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
         tabs.on_sessions_changed = self._on_sessions_changed
+        tabs.set_label_mode(self._ui.tab_label_mode)
         return tabs
 
     def _register_actions(self) -> None:
@@ -437,8 +439,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "font-decrease": tabs.decrease_font,
             "font-reset": tabs.reset_font,
             "toggle-sidebar": self.layout.toggle_sidebar,
-            "toggle-details": self.host_page.toggle_details,
-            "page-tab": self.host_page.goto_page_tab,
+            "toggle-details": self.toggle_host_details,
+            "host-activity": self.host_page.show_activity,
             "toggle-maximize": self.layout.toggle_maximized,
         }
         self._actions = register_actions(self, callbacks)
@@ -483,15 +485,27 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def _pass_ctrl_k_to_terminal(self) -> bool:
         """Ctrl+K inside a terminal stays readline's kill-line instead of searching."""
 
+        return self._pass_ctrl_key_to_terminal(Gdk.KEY_k, b"\x0b")
+
+    def _pass_ctrl_key_to_terminal(self, key: int, data: bytes) -> bool:
+        """Send Ctrl+<key> to a focused terminal instead of running the app shortcut."""
+
         event = Gtk.get_current_event()
         focus = self.get_focus()
         if event is None or not isinstance(focus, Vte.Terminal):
             return False
         ok, keyval = event.get_keyval()
-        if not ok or Gdk.keyval_to_lower(keyval) != Gdk.KEY_k:
+        if not ok or Gdk.keyval_to_lower(keyval) != key:
             return False
-        focus.feed_child(b"\x0b")
+        focus.feed_child(data)
         return True
+
+    def toggle_host_details(self) -> None:
+        """Ctrl+I / F9 / ⓘ: the host details panel. Inside a terminal Ctrl+I stays Tab (0x09)."""
+
+        if self._pass_ctrl_key_to_terminal(Gdk.KEY_i, b"\x09"):
+            return
+        self.host_page.toggle_details()
 
     def open_selected_host(self) -> None:
         self.sessions.open_selected_host()
@@ -566,13 +580,15 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._density = density_tokens.active().density
 
     def _on_window_key_press(self, _widget, event: Gdk.EventKey) -> bool:
-        """Esc leaves focus mode unless a terminal has focus (it needs Esc); broadcast stops first."""
+        """Esc closes the host panel; else leaves focus mode unless a terminal has focus."""
 
-        if not self.layout.maximized or event.keyval != Gdk.KEY_Escape:
-            return False
-        if event.state & Gtk.accelerator_get_default_mod_mask():
+        if event.keyval != Gdk.KEY_Escape or event.state & Gtk.accelerator_get_default_mod_mask():
             return False
         if isinstance(self.get_focus(), Vte.Terminal):
+            return False  # the terminal needs Esc
+        if self.host_page.close_panel():
+            return True
+        if not self.layout.maximized:
             return False
         if self.terminal_tabs.broadcast_active:
             self.terminal_tabs.set_broadcast_mode(False)

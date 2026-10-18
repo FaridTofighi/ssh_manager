@@ -2,13 +2,18 @@
   "render": "docs/ui-after/relay-match.png",
   "reference": "/home/farid/Documents/ssh/docs/ui-target/relay-reference.png",
   "overall": {
-    "mean_error": 1.17,
-    "visible_diff": 2.34
+    "mean_error": 2.09,
+    "visible_diff": 3.44
   },
   "targets": {
     "region_mean_error": 3.0,
     "position_px": 2
   },
+  "removed": [
+    "tabs band (408, 275)-(1852, 333)",
+    "tabs bottom border",
+    "tab underline"
+  ],
   "regions": {
     "top-bar": {
       "box": [
@@ -20,6 +25,7 @@
       "mean_error": 2.38,
       "masked_error": 0.81,
       "visible_diff": 4.13,
+      "vertical_shift": 0,
       "ok": true
     },
     "sidebar-header": {
@@ -32,6 +38,7 @@
       "mean_error": 2.74,
       "masked_error": 0.21,
       "visible_diff": 5.45,
+      "vertical_shift": 0,
       "ok": true
     },
     "search-row": {
@@ -44,6 +51,7 @@
       "mean_error": 1.26,
       "masked_error": 0.04,
       "visible_diff": 3.32,
+      "vertical_shift": 0,
       "ok": true
     },
     "tree": {
@@ -56,6 +64,7 @@
       "mean_error": 2.36,
       "masked_error": 0.06,
       "visible_diff": 4.8,
+      "vertical_shift": 0,
       "ok": true
     },
     "sidebar-footer": {
@@ -68,6 +77,7 @@
       "mean_error": 1.45,
       "masked_error": 0.13,
       "visible_diff": 3.11,
+      "vertical_shift": 0,
       "ok": true
     },
     "page-bar": {
@@ -77,9 +87,10 @@
         1852,
         151
       ],
-      "mean_error": 1.01,
-      "masked_error": 0.15,
-      "visible_diff": 1.65,
+      "mean_error": 1.02,
+      "masked_error": 0.17,
+      "visible_diff": 1.69,
+      "vertical_shift": 0,
       "ok": true
     },
     "host-header": {
@@ -92,18 +103,7 @@
       "mean_error": 1.35,
       "masked_error": 0.13,
       "visible_diff": 2.77,
-      "ok": true
-    },
-    "tabs": {
-      "box": [
-        408,
-        275,
-        1852,
-        333
-      ],
-      "mean_error": 0.62,
-      "masked_error": 0.07,
-      "visible_diff": 1.54,
+      "vertical_shift": 0,
       "ok": true
     },
     "empty-state": {
@@ -116,6 +116,7 @@
       "mean_error": 1.74,
       "masked_error": 0.15,
       "visible_diff": 3.76,
+      "vertical_shift": -50,
       "ok": true
     },
     "canvas": {
@@ -125,9 +126,10 @@
         1852,
         864
       ],
-      "mean_error": 0.46,
-      "masked_error": 0.04,
-      "visible_diff": 1.0,
+      "mean_error": 2.16,
+      "masked_error": 1.42,
+      "visible_diff": 3.5,
+      "vertical_shift": 0,
       "ok": true
     },
     "info-bar": {
@@ -140,6 +142,7 @@
       "mean_error": 1.39,
       "masked_error": 0.0,
       "visible_diff": 2.79,
+      "vertical_shift": 0,
       "ok": true
     }
   },
@@ -225,23 +228,6 @@
         274,
         1001,
         275
-      ],
-      "offset": 0,
-      "ok": true
-    },
-    {
-      "name": "tabs bottom border",
-      "reference": [
-        1000,
-        332,
-        1001,
-        333
-      ],
-      "render": [
-        1000,
-        332,
-        1001,
-        333
       ],
       "offset": 0,
       "ok": true
@@ -349,23 +335,6 @@
       "ok": true
     },
     {
-      "name": "tab underline",
-      "reference": [
-        445,
-        331,
-        503,
-        333
-      ],
-      "render": [
-        444,
-        330,
-        505,
-        332
-      ],
-      "offset": 2,
-      "ok": true
-    },
-    {
       "name": "hero button",
       "reference": [
         1032,
@@ -375,10 +344,11 @@
       ],
       "render": [
         1033,
-        662,
+        612,
         1226,
-        713
+        663
       ],
+      "vertical_shift": -50,
       "offset": 2,
       "ok": true
     },
@@ -460,10 +430,11 @@
       ],
       "render": [
         1000,
-        555,
+        505,
         1000,
-        571
+        521
       ],
+      "vertical_shift": -50,
       "offset": 0,
       "ok": true
     },

@@ -49,9 +49,9 @@ class PresetTests(unittest.TestCase):
         self.assertIs(density.DEFAULT_DENSITY, Density.COMPACT)
         size, sidebar = COMFORTABLE.size, COMFORTABLE.sidebar
         self.assertEqual(
-            (size.TOPBAR, size.SIDEBAR, size.PAGE_BAR, size.HOST_HEADER, size.TABS, size.INFO_BAR,
+            (size.TOPBAR, size.SIDEBAR, size.PAGE_BAR, size.HOST_HEADER, size.INFO_BAR,
              size.SIDEBAR_FOOTER, size.TREE_ROW, size.SEARCH),
-            (76, 408, 73, 123, 57, 69, 66, 41, 46),
+            (76, 408, 73, 123, 69, 66, 41, 46),
         )
         self.assertEqual((sidebar.HEADER_TOP, sidebar.SEARCH_TOP, sidebar.TREE_TOP_GAP), (29, 22, 20))
         self.assertEqual(COMFORTABLE.space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
@@ -59,8 +59,9 @@ class PresetTests(unittest.TestCase):
 
     def test_compact_targets(self) -> None:
         size = COMPACT.size
-        # Band tokens are content heights: + 1px border = 44 / 44 / 34 / 28.
-        self.assertEqual((size.TOPBAR + 1, size.HOST_HEADER + 1, size.TABS + 1, size.INFO_BAR + 1), (44, 44, 34, 28))
+        # Band tokens are content heights: + 1px border = 44 / 44 / 28; the session strip is 33 in total.
+        self.assertEqual((size.TOPBAR + 1, size.HOST_HEADER + 1, size.INFO_BAR + 1), (44, 44, 28))
+        self.assertEqual(size.SESSION_STRIP, 33)
         self.assertEqual((size.SIDEBAR, size.SIDEBAR_MIN, size.SIDEBAR_MAX), (284, 220, 480))
         self.assertEqual((size.TREE_ROW, size.TREE_GROUP_ROW, size.SEARCH), (28, 30, 32))
         self.assertTrue(COMPACT.variant.MERGED_PAGE_HEADER and COMPACT.variant.SINGLE_LINE_STATUS)
@@ -196,7 +197,6 @@ class RuntimeSwitchTests(unittest.TestCase):
         self.assertEqual(win._header.get_size_request()[1], Size.TOPBAR)
         self.assertEqual(Size.TOPBAR, 76)
         self.assertTrue(win.host_page.view.page_bar.get_visible())
-        self.assertFalse(win.host_page.view.merged)
 
         win._apply_theme_mode(ThemeMode.LIGHT)  # theme switch with a session running
         win.set_density("compact")
@@ -280,6 +280,57 @@ def _child(density_name: str) -> None:
     print("RESULT " + json.dumps(result))
 
 
+def _child_workspace() -> None:
+    """Terminal allocation with the host panel closed/open, overflow chevrons with many tabs."""
+
+    os.environ["GSETTINGS_BACKEND"] = "memory"
+    sys.path.insert(0, str(ROOT / "tools"))
+    import ui_snapshots as snap
+
+    from gi.repository import Gio, Gtk  # type: ignore
+
+    if not Gtk.init_check(None)[0]:
+        print(json.dumps({"skip": "no display"}))
+        return
+    snap._pin_resolution()
+    snap._patch_toplevel_mapping()
+    snap._stub_terminal_io()
+    from ssh_manager import gtk_app
+    from ssh_manager.gtkui.views.host_page import PanelPage
+
+    app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
+    app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
+    app.register(None)
+    base = snap._SANDBOX / "ws"
+    snap._write_inventory(base, True)
+    window = snap._make_window(app, base, True, "compact")
+    host = snap._first_host(window)
+    window.tree.select_host(host.parent_group, host.child_group, host.alias)
+    for _ in range(16):
+        window.terminal_tabs.new_terminal(host, autostart=False)
+    snap._pump()
+    result = {}
+
+    def measure(key):
+        def hook(holder):
+            tab = window.terminal_tabs.current_tab()
+            alloc = tab._terminal.get_allocation()
+            strip = window.terminal_tabs._strip
+            result[key] = {
+                "terminal": [alloc.width, alloc.height],
+                "chevrons": strip.scroll_left.get_visible() and strip.scroll_right.get_visible(),
+                "panel": window.host_page.view.panel.is_open,
+            }
+        return hook
+
+    snap.capture_window(window, snap._SANDBOX / "a.png", 1280, 800, on_rendered=measure("closed"))
+    window.host_page.view.panel.set_transition_duration(0)
+    window.host_page.view.open_panel(PanelPage.DETAILS)
+    snap._pump()
+    snap.capture_window(window, snap._SANDBOX / "b.png", 1280, 800, on_rendered=measure("open"))
+    print("RESULT " + json.dumps(result))
+
+
 def _run_child(density_name: str) -> dict:
     env = dict(os.environ, PYTHONPATH=str(ROOT))
     env.pop("GDK_SCALE", None)
@@ -305,6 +356,7 @@ class RealLayoutTests(unittest.TestCase):
         self.assertGreaterEqual(budget["height_share"], 0.78, budget)
         self.assertGreaterEqual(budget["width_share"], 0.80, budget)
         self.assertLessEqual(budget["rows"]["top bar"], 44)
+        self.assertLessEqual(budget["rows"]["session strip"], 34)
         self.assertLessEqual(budget["rows"]["status bar"], 28)
         self.assertGreaterEqual(budget["sidebar"], 220)
         self.assertLessEqual(budget["sidebar"], 480)
@@ -313,19 +365,29 @@ class RealLayoutTests(unittest.TestCase):
         self.assertGreaterEqual(budget["row_heights"]["host"], 28)
         self.assertGreaterEqual(budget["tree_rows"], 28)
 
+    def test_host_panel_never_resizes_the_terminal_and_tabs_overflow(self) -> None:
+        result = _run_child("workspace")
+        self.assertFalse(result["closed"]["panel"])
+        self.assertTrue(result["open"]["panel"])
+        self.assertEqual(result["closed"]["terminal"], result["open"]["terminal"])
+        self.assertTrue(result["closed"]["chevrons"])  # 16 tabs do not fit in 1280 px
+
     def test_comfortable_keeps_the_reference_geometry(self) -> None:
         budget = _run_child("comfortable")
         rows = budget["rows"]
-        # Content heights from the reference + their 1px borders.
-        self.assertEqual((rows["top bar"], rows["page bar"], rows["host header / row A"], rows["tabs (row B)"]),
-                         (77, 74, 124, 58))
+        # Content heights from the reference + their 1px borders (the reference's
+        # Terminal/Details/Activity band is gone since Phase 6).
+        self.assertEqual((rows["top bar"], rows["page bar"], rows["host header / host bar"]), (77, 74, 124))
+        self.assertEqual(rows["session strip"], COMFORTABLE.size.SESSION_STRIP)
         self.assertEqual(rows["status bar"], 70)
         self.assertEqual(budget["sidebar"], 407)
         self.assertEqual(budget["row_heights"]["host"], 41)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--child":
+    if len(sys.argv) == 3 and sys.argv[1] == "--child" and sys.argv[2] == "workspace":
+        _child_workspace()
+    elif len(sys.argv) == 3 and sys.argv[1] == "--child":
         _child(sys.argv[2])
     else:
         unittest.main()

@@ -94,8 +94,7 @@ class SizeTokens(_Group):
     SIDEBAR_MAX: int
     PAGE_BAR: int
     HOST_HEADER: int  # compact: the merged host bar (row A)
-    TABS: int  # compact: row B (tabs, and the session chips while merged)
-    SESSION_STRIP: int  # session chips + toolbar when they get a row of their own
+    SESSION_STRIP: int  # session tabs + toolbar row, total height incl. its 1px border
     INFO_BAR: int
     SIDEBAR_HEADER: int
     SIDEBAR_FOOTER: int
@@ -138,6 +137,9 @@ class SizeTokens(_Group):
     SETTINGS_NAV: int  # settings / host dialog page list
     SIDE_PANEL: int  # config viewer issues column
     TERMINAL_PREVIEW: int  # preview terminal in Settings
+    TAB_LABEL_MIN: int  # session tab label width (ellipsized)
+    TAB_LABEL_MAX: int
+    PANEL_WIDTH: int  # host details / activity slide-over
     DIALOG_PADDING: int
     DIALOG_GAP: int
     TERMINAL_PAD_X: int
@@ -294,7 +296,7 @@ COMFORTABLE = DensityTokens(
     radius=RadiusTokens(SMALL=4, KEYCAP=6, MEDIUM=8, INPUT=10, LARGE=12, CARD=18, PILL=999),
     size=SizeTokens(
         TOPBAR=76, SIDEBAR=408, SIDEBAR_MIN=300, SIDEBAR_MAX=520,
-        PAGE_BAR=73, HOST_HEADER=123, TABS=57, SESSION_STRIP=48, INFO_BAR=69,
+        PAGE_BAR=73, HOST_HEADER=123, SESSION_STRIP=48, INFO_BAR=69,
         SIDEBAR_HEADER=52, SIDEBAR_FOOTER=66,
         TREE_ROW=41, TREE_GROUP_ROW=41, TREE_INSET=12, TREE_INDENT=25,
         LOGO_TILE=42, LOGO_GLYPH=22, AVATAR=40, ICON_BUTTON=40, TOOLBAR_BUTTON=28,
@@ -305,6 +307,7 @@ COMFORTABLE = DensityTokens(
         ICON_SMALL=14, DOT_BADGE=6, DOT_TAB=8, DOT_LARGE=9,
         POPOVER_WIDTH=320, POPOVER_WIDE=380, POPOVER_MAX_HEIGHT=360, WORKSPACE_POPOVER=280,
         SETTINGS_NAV=190, SIDE_PANEL=260, TERMINAL_PREVIEW=120,
+        TAB_LABEL_MIN=96, TAB_LABEL_MAX=220, PANEL_WIDTH=360,
         DIALOG_PADDING=16, DIALOG_GAP=12,
         TERMINAL_PAD_X=8, TERMINAL_PAD_Y=8, WORKSPACE_PAD=16,
     ),
@@ -347,9 +350,9 @@ COMPACT = DensityTokens(
     space=SpaceTokens(XS=2, S=4, M=8, L=12, XL=16, XXL=16, XXXL=24, GUTTER=12),
     radius=RadiusTokens(SMALL=3, KEYCAP=4, MEDIUM=6, INPUT=8, LARGE=8, CARD=12, PILL=999),
     size=SizeTokens(
-        # Band heights are content heights (+1px border): 44, 44, 34, 32 and 28 in total.
+        # Band heights are content heights (+1px border): 44, 44 and 28 in total; the strip is 33.
         TOPBAR=43, SIDEBAR=284, SIDEBAR_MIN=220, SIDEBAR_MAX=480,
-        PAGE_BAR=43, HOST_HEADER=43, TABS=33, SESSION_STRIP=31, INFO_BAR=27,
+        PAGE_BAR=43, HOST_HEADER=43, SESSION_STRIP=33, INFO_BAR=27,
         SIDEBAR_HEADER=40, SIDEBAR_FOOTER=31,
         TREE_ROW=28, TREE_GROUP_ROW=30, TREE_INSET=6, TREE_INDENT=16,
         LOGO_TILE=28, LOGO_GLYPH=16, AVATAR=28, ICON_BUTTON=28, TOOLBAR_BUTTON=22,
@@ -360,6 +363,7 @@ COMPACT = DensityTokens(
         ICON_SMALL=12, DOT_BADGE=5, DOT_TAB=7, DOT_LARGE=8,
         POPOVER_WIDTH=280, POPOVER_WIDE=340, POPOVER_MAX_HEIGHT=320, WORKSPACE_POPOVER=240,
         SETTINGS_NAV=170, SIDE_PANEL=220, TERMINAL_PREVIEW=100,
+        TAB_LABEL_MIN=96, TAB_LABEL_MAX=220, PANEL_WIDTH=360,
         DIALOG_PADDING=16, DIALOG_GAP=8,
         TERMINAL_PAD_X=6, TERMINAL_PAD_Y=4, WORKSPACE_PAD=0,
     ),

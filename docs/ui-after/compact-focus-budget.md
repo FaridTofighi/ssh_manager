@@ -4,9 +4,9 @@ Chrome budget — compact-focus (1920 × 1041)
 |---|---:|
 | top bar | 0 |
 | page bar | 0 |
-| host header / row A | 0 |
-| tabs (row B) | 0 |
-| session strip + borders | 37 |
+| host header / host bar | 0 |
+| session strip | 33 |
+| terminal padding / margins | 4 |
 | status bar | 0 |
 | **chrome total** | **41** |
 

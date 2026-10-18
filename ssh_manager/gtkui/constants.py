@@ -77,6 +77,7 @@ class Icons:
     SHORTCUTS = "sshm-help"
     HELP = "sshm-help"
     ABOUT = "sshm-info"
+    INFO = "sshm-info"
     ACTIVITY = "sshm-activity"
     USER = "sshm-user"
     QUIT = "sshm-logout"

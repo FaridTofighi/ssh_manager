@@ -20,6 +20,7 @@ from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
 from ...settings import AppSettings, TerminalAppearanceSettings  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..tab_labels import TabLabelMode  # noqa: E402
 from ..theme.density import DEFAULT_DENSITY, Density  # noqa: E402
 from ..theme.loader import ThemeMode  # noqa: E402
 from ..theme.terminal_schemes import SCHEMES, resolve_terminal_colors  # noqa: E402
@@ -29,6 +30,11 @@ from .base import BaseDialog, DialogSize  # noqa: E402
 from .files import choose_folder, choose_save_file  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
 
+TAB_LABEL_CHOICES = [
+    (TabLabelMode.NAME.value, _("Name")),
+    (TabLabelMode.IP.value, _("IP address")),
+    (TabLabelMode.NAME_IP.value, _("Name and IP")),
+]
 DENSITY_CHOICES = [
     (Density.COMPACT.value, _("Compact")),
     (Density.COMFORTABLE.value, _("Comfortable")),
@@ -66,6 +72,7 @@ class PreferencesValues:
     latency_probe: bool = True
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
     density: Density = DEFAULT_DENSITY
+    tab_label_mode: TabLabelMode = TabLabelMode.NAME
 
     @property
     def prefer_dark(self) -> bool:
@@ -125,10 +132,12 @@ class PreferencesDialog(BaseDialog):
         on_export: Optional[Callable[[], None]] = None,
         latency_probe: bool = True,
         density: object = DEFAULT_DENSITY,
+        tab_label_mode: object = TabLabelMode.NAME,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
         self._density = Density.coerce(density)
+        self._tab_label_mode = TabLabelMode.coerce(tab_label_mode)
         content = self.get_content_area()
         for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top):
             setter(0)
@@ -173,6 +182,9 @@ class PreferencesDialog(BaseDialog):
         self._density_combo = _combo(DENSITY_CHOICES, self._density.value)
         sec.add(_("Interface _density"), self._density_combo, label_group=self._labels,
                 help_text=_("Compact gives the terminal more room; Comfortable uses larger text and spacing."))
+        self._tab_label_combo = _combo(TAB_LABEL_CHOICES, self._tab_label_mode.value)
+        sec.add(_("Tab _label"), self._tab_label_combo, label_group=self._labels,
+                help_text=_("What session tabs show. A name given with Rename (F2) always wins."))
         self._ui_font_spin = _spin(10, 48, 1, max(10, min(48, ui_font_size)))
         sec.add(_("Application _font size"), self._ui_font_spin, label_group=self._labels,
                 help_text=_("Scales all text in the interface (points)."))
@@ -377,6 +389,7 @@ class PreferencesDialog(BaseDialog):
             latency_probe=self._latency_check.get_active(),
             terminal_appearance=self._appearance_from_controls(),
             density=Density.coerce(self._density_combo.get_active_id()),
+            tab_label_mode=TabLabelMode.coerce(self._tab_label_combo.get_active_id()),
         )
 
     def _appearance_from_controls(self) -> TerminalAppearanceSettings:

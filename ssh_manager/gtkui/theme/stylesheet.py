@@ -599,30 +599,36 @@ $env_badges
 .stat-warn { color: @sm_warning; font-weight: 600; }
 .stat-critical, .stat-bad { color: @sm_danger; font-weight: 600; }
 
-.page-tabs {
-    background-color: @sm_bg_surface;
-    border-bottom: 1px solid @sm_border_subtle;
-    min-height: ${tabs}px;
-    padding: 0 ${gutter}px;
-}
-.sm-window button.page-tab {
+.sm-window button.link-button {
     background: transparent;
-    border: none;
-    border-radius: 0;
-    border-bottom: 2px solid transparent;
-    padding: 0 0;
-    margin: 0 ${m}px 0 0;
-    color: @sm_tab_inactive;
-    font-weight: 500;
-    font-size: ${fs_body}em;
-    box-shadow: none;
-}
-.sm-window button.page-tab:hover { color: @sm_text_primary; background: transparent; }
-.sm-window button.page-tab:checked {
+    border-color: transparent;
     color: @sm_accent_text;
-    border-bottom-color: @sm_accent;
-    background: transparent;
+    font-weight: 500;
 }
+.sm-window button.link-button:hover { background-color: @sm_bg_hover; }
+
+/* Host details / activity slide-over (an overlay: never resizes the terminal). */
+.host-panel {
+    background-color: @sm_bg_surface_raised;
+    border-left: 1px solid @sm_border_subtle;
+    box-shadow: -8px 0 24px @sm_shadow_popover;
+}
+.host-panel stack, .host-panel scrolledwindow, .host-panel scrolledwindow viewport, .host-panel .panel-body {
+    background-color: @sm_bg_surface_raised;
+    background-image: none;
+    border: none;
+}
+.host-panel-header { padding: ${s}px ${s}px ${s}px ${l}px; border-bottom: 1px solid @sm_border_subtle; }
+.host-panel-switcher { padding: ${s}px ${l}px 0 ${l}px; }
+.sm-window button.panel-tab {
+    background-color: @sm_bg_surface_raised;
+    border-color: transparent;
+    color: @sm_tab_inactive;
+    padding: ${xs}px ${m}px;
+}
+.sm-window button.panel-tab:hover { background-color: @sm_bg_hover; color: @sm_text_primary; }
+.sm-window button.panel-tab:checked { background-color: @sm_accent_tint; color: @sm_accent_text; border-color: @sm_accent_soft_border; }
+.host-panel-actions { padding: ${s}px ${l}px; border-top: 1px solid @sm_border_subtle; }
 
 .info-bar {
     background-color: @sm_bg_surface;
@@ -681,35 +687,32 @@ $env_badges
 .status-dot.unknown { color: @sm_text_disabled; }
 
 /* ---------------------------------------------------------- workspace */
+/* Session strip: session tabs, + after the last one, the toolbar at the end. */
 .session-strip {
-    background-color: @sm_bg_canvas;
-    padding: ${s}px ${l}px 0 ${l}px;
-}
-.session-toolbar { background-color: transparent; }
-notebook.session-tabs { background-color: transparent; }
-notebook.session-tabs > header {
-    background-color: @sm_bg_canvas;
-    border: none;
-    box-shadow: none;
-    padding: ${s}px ${l}px 0 ${l}px;
-}
-notebook.session-tabs > header > tabs > tab {
-    background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: ${r_md}px;
-    padding: ${xs}px ${m}px;
-    margin-right: ${xs}px;
-    color: @sm_text_secondary;
-    box-shadow: none;
-    min-height: 0;
-}
-notebook.session-tabs > header > tabs > tab:hover { background-color: @sm_bg_hover; color: @sm_text_primary; }
-notebook.session-tabs > header > tabs > tab:checked {
     background-color: @sm_bg_surface;
-    border-color: @sm_border_subtle;
-    color: @sm_text_primary;
-    box-shadow: none;
+    border-bottom: 1px solid @sm_border_subtle;
+    min-height: ${session_strip_inner}px;
+    padding: 0 ${s}px 0 ${gutter}px;
 }
+.session-strip scrolledwindow, .session-strip scrolledwindow viewport, .session-tabs-row {
+    background-color: @sm_bg_surface;
+    background-image: none;
+    border: none;
+}
+.session-tab-box {
+    padding: 0 ${s}px;
+    margin-right: ${xs}px;
+    border-bottom: 2px solid @sm_bg_surface;
+    color: @sm_tab_inactive;
+    font-weight: 500;
+    font-size: ${fs_body}em;
+}
+.session-tab-box.hover { background-color: @sm_bg_hover; color: @sm_text_primary; border-bottom-color: @sm_bg_hover; }
+.session-tab-box.current { color: @sm_accent_text; border-bottom-color: @sm_accent; }
+.session-tab:focus > .session-tab-box { box-shadow: inset 0 0 0 2px alpha(@sm_focus_ring, 0.8); }
+.session-tab-box button.toolbar-icon { margin: 0; min-width: 16px; min-height: 16px; padding: 2px; }
+.session-toolbar { background-color: @sm_bg_surface; }
+notebook.session-tabs { background-color: @sm_bg_canvas; }
 notebook.session-tabs > stack {
     background-color: @sm_bg_canvas;
     padding: ${xs}px ${l}px ${l}px ${l}px;
@@ -720,7 +723,11 @@ notebook.session-tabs > stack {
     background-color: @sm_bg_surface;
     padding: ${s}px;
 }
-.session-toolbar-row { background-color: @sm_bg_canvas; padding: ${s}px ${l}px 0 ${l}px; }
+.session-toolbar-row {
+    background-color: @sm_bg_surface;
+    border-bottom: 1px solid @sm_border_subtle;
+    padding: 0 ${s}px 0 ${gutter}px;
+}
 .session-strip-actions { padding-right: ${xs}px; }
 .info-live .statusbar { padding: 0; font-size: ${fs_mono}em; }
 .tab-activity { font-weight: bold; color: @sm_accent_text; }
@@ -807,7 +814,7 @@ $motion
 
 _MOTION_ENABLED = Template("""
 /* ------------------------------------------------------------ motion */
-button, .chip, .toast, notebook.session-tabs > header > tabs > tab {
+button, .chip, .toast, .session-tab-box {
     transition: background-color ${fast}ms $easing, color ${fast}ms $easing, border-color ${fast}ms $easing;
 }
 """)
@@ -857,36 +864,7 @@ _COMPACT_RULES = Template("""
 .host-stat-inline { font-size: ${fs_caption}em; color: @sm_text_secondary; }
 .crumb-prefix, .sm-window button.breadcrumb-link.crumb-prefix { font-size: ${fs_caption}em; color: @sm_text_muted; }
 .sm-window button.breadcrumb-link { padding: 0 ${xs}px; min-height: 0; }
-.page-tabs { padding: 0 ${gutter}px; }
-.sm-window button.page-tab { margin: 0; }
-
-/* Row B shared with the session chips; or the chips' own 32px strip. */
-notebook.session-tabs > header {
-    padding: 0 ${s}px 0 ${gutter}px;
-    min-height: ${session_strip}px;
-    background-color: @sm_bg_surface;
-    border-bottom: 1px solid @sm_border_subtle;
-}
-notebook.session-tabs.merged-strip > header { min-height: ${tabs}px; }
-notebook.session-tabs > header > tabs > tab {
-    padding: 0 ${s}px;
-    margin: ${xs}px ${xs}px ${xs}px 0;
-    min-height: ${tab_chip}px;
-}
-notebook.session-tabs > header > tabs > tab:checked { background-color: @sm_bg_canvas; }
-notebook.session-tabs > header > tabs > tab button.toolbar-icon {
-    margin: 0;
-    min-width: 16px;
-    min-height: 16px;
-    padding: 2px;
-}
-.strip-tabs { margin-right: ${l}px; }
-.session-toolbar-row {
-    padding: 0 ${s}px 0 ${gutter}px;
-    background-color: @sm_bg_surface;
-    border-bottom: 1px solid @sm_border_subtle;
-    min-height: ${session_strip}px;
-}
+.session-toolbar-row { min-height: ${session_strip}px; }
 button.toolbar-icon { padding: ${xs}px; }
 .info-bar button.toolbar-icon { min-width: 20px; min-height: 20px; padding: 1px; }
 
@@ -926,8 +904,7 @@ def _density_rules(tokens: DensityTokens, values: Dict[str, object]) -> str:
     extra = dict(values)
     size = tokens.size
     extra.update(
-        sidebar_header=size.SIDEBAR_HEADER, session_strip=size.SESSION_STRIP - 1, tabs=size.TABS - 1,
-        tab_chip=size.SESSION_STRIP - 8, terminal_pad_x=size.TERMINAL_PAD_X, terminal_pad_y=size.TERMINAL_PAD_Y,
+        sidebar_header=size.SIDEBAR_HEADER, session_strip=size.SESSION_STRIP - 1, terminal_pad_x=size.TERMINAL_PAD_X, terminal_pad_y=size.TERMINAL_PAD_Y,
         terminal_font=values["font_pt"],
     )
     return _COMPACT_RULES.substitute(extra)
@@ -967,7 +944,7 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "xxl": space.XXL, "xxxl": space.XXXL, "gutter": space.GUTTER,
         "r_sm": radius.SMALL, "r_keycap": radius.KEYCAP, "r_md": radius.MEDIUM, "r_input": radius.INPUT,
         "r_lg": radius.LARGE, "r_card": radius.CARD, "r_pill": radius.PILL,
-        "topbar": size.TOPBAR, "page_bar": size.PAGE_BAR, "host_header": size.HOST_HEADER, "tabs": size.TABS,
+        "topbar": size.TOPBAR, "page_bar": size.PAGE_BAR, "host_header": size.HOST_HEADER,
         "info_bar": size.INFO_BAR, "sidebar_footer": size.SIDEBAR_FOOTER, "logo": size.LOGO_TILE,
         "avatar": size.AVATAR, "icon_button": size.ICON_BUTTON, "search": size.SEARCH, "button": size.BUTTON,
         "button_large": size.BUTTON_LARGE, "hero": size.HERO_BUTTON, "host_tile": size.HOST_TILE,
@@ -977,6 +954,7 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "primary_min_width": size.PRIMARY_MIN_WIDTH,
         "add_host_pad_start": tokens.sidebar.ADD_HOST_PAD_START, "add_host_pad_end": tokens.sidebar.ADD_HOST_PAD_END,
         "search_text_inset": tokens.sidebar.SEARCH_TEXT_INSET,
+        "session_strip_inner": size.SESSION_STRIP - 1,  # + 1px bottom border
         # GTK's min-height excludes the 1px borders: tokens are outer sizes.
         "button_inner": size.BUTTON - 2, "button_large_inner": size.BUTTON_LARGE - 2,
         "search_inner": size.SEARCH - 2, "hero_inner": size.HERO_BUTTON - 2,

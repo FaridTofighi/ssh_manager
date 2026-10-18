@@ -174,8 +174,8 @@
       "expected": "#1A1B1E",
       "render_sample": "#1A1B1E",
       "mock_mean": "#1A1B1E",
-      "render_mean": "#1A1B1E",
-      "mean_error": 0.0,
+      "render_mean": "#1B1C1F",
+      "mean_error": 0.86,
       "token_ok": true,
       "ok": true
     },

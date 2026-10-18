@@ -38,12 +38,21 @@ from ssh_manager.gtkui.dialogs.files import choose_save_file
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
+from ssh_manager.gtkui.view_models import status_text
 from ssh_manager.gtkui.theme.loader import get_theme_manager
 from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Space
 from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level
-from ssh_manager.gtkui.views.workspace import BroadcastStrip, SessionToolbar, TabLabel, TileFrame, tab_menu_spec
+from ssh_manager.gtkui.views.workspace import (
+    BroadcastStrip,
+    SessionStrip,
+    SessionTab,
+    SessionToolbar,
+    TileFrame,
+    tab_menu_spec,
+)
+from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, session_tab_labels
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
-from ssh_manager.gtkui.widgets.icon_button import IconButton, IconMenuButton
+from ssh_manager.gtkui.widgets.icon_button import IconMenuButton
 from ssh_manager.gtkui.widgets.menus import build_context_menu, build_menu, popup_menu
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -545,6 +554,18 @@ class TerminalTab(Gtk.Box):
     def title(self, value: str) -> None:
         text = (value or "").strip()
         self._custom_title = "" if text == self._host.alias else text
+
+    @property
+    def terminal_size(self) -> Tuple[int, int]:
+        """``(columns, rows)`` of the main terminal (0, 0 before it is allocated)."""
+
+        return int(self._terminal.get_column_count() or 0), int(self._terminal.get_row_count() or 0)
+
+    @property
+    def custom_title(self) -> str:
+        """The name the user gave this tab (Rename), or ``""``."""
+
+        return getattr(self, "_custom_title", "")
 
     @property
     def is_split(self) -> bool:
@@ -1529,7 +1550,11 @@ class TerminalNotebook(Gtk.Box):
 
         self._log = log
         self._default_font_scale = default_font_scale
-        self._tab_labels: Dict[TerminalTab, TabLabel] = {}
+        self._tab_labels: Dict[TerminalTab, SessionTab] = {}
+        self._label_mode = TabLabelMode.NAME
+        self._open_order: List[TerminalTab] = []  # label counters follow opening order
+        self._label_counters: Dict[TerminalTab, int] = {}
+        self._labels: Dict[TerminalTab, str] = {}
         self._tab_status: Dict[TerminalTab, bool] = {}
         self._tabs: List[TerminalTab] = []
         self._tile_wrappers: Dict[TerminalTab, TileFrame] = {}
@@ -1549,6 +1574,7 @@ class TerminalNotebook(Gtk.Box):
         self._status_dock: Optional[Gtk.Box] = None
 
         self._build_toolbar()
+        self._build_strip()
         self._broadcast_strip = BroadcastStrip(lambda: self.set_broadcast_mode(False))
         self.pack_start(self._broadcast_strip, False, False, 0)
         self._build_stack()
@@ -1577,6 +1603,25 @@ class TerminalNotebook(Gtk.Box):
         self._toolbar_row.set_no_show_all(True)  # _place_toolbar() owns its visibility
         self.pack_start(self._toolbar_row, False, False, 0)
 
+    def _build_strip(self) -> None:
+        """One row: session tabs, ``+`` after the last tab, the all-sessions menu and the toolbar."""
+
+        strip = SessionStrip(self._request_quick_connect)
+        strip.on_reorder = self._on_strip_reorder
+        self._tabs_menu_button = IconMenuButton(Icons.CHEVRON_DOWN, _("All sessions"))
+        self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
+        strip.actions.pack_start(self._tabs_menu_button, False, False, 0)
+        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        self._strip_separator = separator
+        strip.actions.pack_start(separator, False, False, 0)
+        self._toolbar_slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        strip.actions.pack_start(self._toolbar_slot, False, False, 0)
+        strip.show_all()
+        strip.set_no_show_all(True)  # _update_placeholder() owns its visibility
+        strip.hide()
+        self._strip = strip
+        self.pack_start(strip, False, False, 0)
+
     def _build_stack(self) -> None:
         self._notebook = Gtk.Notebook()
         self._notebook.set_scrollable(True)
@@ -1586,29 +1631,7 @@ class TerminalNotebook(Gtk.Box):
         self._notebook.get_style_context().add_class("session-tabs")
         self._notebook.connect("switch-page", self._on_switch_page)
         self._notebook.connect("page-reordered", lambda *_: self._sync_tab_order())
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        actions.get_style_context().add_class("session-strip-actions")
-        actions.pack_start(
-            IconButton(Icons.NEW, _("Quick connect (Ctrl+Shift+T)"), self._request_quick_connect),
-            False,
-            False,
-            0,
-        )
-        self._tabs_menu_button = IconMenuButton(Icons.CHEVRON_DOWN, _("All sessions"))
-        self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
-        actions.pack_start(self._tabs_menu_button, False, False, 0)
-        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        self._strip_separator = separator
-        actions.pack_start(separator, False, False, 0)
-        self._toolbar_slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        actions.pack_start(self._toolbar_slot, False, False, 0)
-        actions.show_all()
-        self._notebook.set_action_widget(actions, Gtk.PackType.END)
-        # Start of the tab row: the host page's tabs sit here while the
-        # Compact layout merges them with the session chips (see set_strip_start()).
-        self._strip_start = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self._strip_start.set_no_show_all(True)  # shown only while merged (an empty slot still takes room)
-        self._notebook.set_action_widget(self._strip_start, Gtk.PackType.START)
+        self._notebook.set_show_tabs(False)  # SessionStrip shows the tabs
 
         self._tile_grid = Gtk.Grid()
         self._tile_grid.set_row_homogeneous(True)
@@ -1657,25 +1680,74 @@ class TerminalNotebook(Gtk.Box):
         self._tile_grid.set_border_width(Space.S)
         self._placeholder.apply_density()
 
-    def set_strip_start(self, widget: Gtk.Widget) -> None:
-        """Put ``widget`` at the start of the session tab row (the merged row B)."""
-
-        for child in list(self._strip_start.get_children()):
-            self._strip_start.remove(child)
-        self._strip_start.pack_start(widget, False, False, 0)
-
-    def set_strip_merged(self, merged: bool) -> None:
-        """Compact: the tab row doubles as the host page's tabs row."""
-
-        ctx = self._notebook.get_style_context()
-        (ctx.add_class if merged else ctx.remove_class)("merged-strip")
-        self._strip_start.set_visible(merged)
-
     @property
     def strip_visible(self) -> bool:
-        """The session chips are on screen (tabs mode with at least one session)."""
+        """The session tabs are on screen (tabs mode with at least one session)."""
 
         return self._stack.get_visible_child_name() == "tabs"
+
+    # ---------------------------------------------------------- tab labels
+    @property
+    def label_mode(self) -> TabLabelMode:
+        return self._label_mode
+
+    def set_label_mode(self, mode: object) -> None:
+        """Settings → Appearance → Tab label: name, IP address, or both."""
+
+        self._label_mode = TabLabelMode.coerce(mode)
+        self._refresh_labels()
+
+    def label_for(self, tab: TerminalTab) -> str:
+        return self._labels.get(tab) or tab.title
+
+    def labels(self) -> List[str]:
+        """Labels of the open sessions in tab order."""
+
+        return [self.label_for(tab) for tab in self._ordered_tabs()]
+
+    def _label_info(self, tab: TerminalTab) -> SessionLabelInfo:
+        try:
+            hostname, port, _user = host_connection_params(tab.host)
+        except Exception:  # malformed host entry: fall back to the alias
+            hostname, port = tab.host.alias, 22
+        return SessionLabelInfo(key=tab, alias=tab.host.alias, hostname=hostname, port=port,
+                                custom_name=tab.custom_title)
+
+    def _refresh_labels(self) -> None:
+        order = [tab for tab in self._open_order if tab in self._tabs]
+        labels, self._label_counters = session_tab_labels(
+            [self._label_info(tab) for tab in order], self._label_mode, self._label_counters
+        )
+        self._labels = dict(zip(order, labels))
+        for tab in order:
+            self._set_tab_label_text(tab)
+
+    def tab_tooltip(self, tab: TerminalTab) -> str:
+        """``alias`` / ``user@host:port`` / ``Connected · 121×38`` (+ duplicate hint)."""
+
+        lines = [tab.custom_title or tab.host.alias]
+        if tab.custom_title:
+            lines.append(tab.host.alias)
+        try:
+            hostname, port, user = host_connection_params(tab.host)
+            lines.append(f"{user}@{hostname}:{port}")
+        except Exception:
+            pass
+        status = status_text(tab.status)
+        columns, rows = tab.terminal_size
+        lines.append(f"{status} · {columns}×{rows}" if columns and rows else status)
+        if is_duplicate(self._label_counters.get(tab, 1)):
+            lines.append(_("Duplicate session"))
+        return "\n".join(lines)
+
+    def _on_strip_reorder(self, widget: SessionTab, index: int) -> None:
+        tab = next((t for t, label in self._tab_labels.items() if label is widget), None)
+        if tab is not None and not self._tile_mode:
+            self._notebook.reorder_child(tab, index)  # emits page-reordered → _sync_tab_order
+            self._sync_strip()
+
+    def _sync_strip(self) -> None:
+        self._strip.set_tabs([self._tab_labels[t] for t in self._ordered_tabs() if t in self._tab_labels])
 
     def _overflow_menu_spec(self):
         return [
@@ -1729,6 +1801,7 @@ class TerminalNotebook(Gtk.Box):
         tab.connect_activity(self._on_tab_activity)
 
         self._tabs.append(tab)
+        self._open_order.append(tab)
         self._tab_status[tab] = False
         self._broadcast_included[tab] = True
         self._last_current_tab = tab
@@ -1737,6 +1810,7 @@ class TerminalNotebook(Gtk.Box):
             self._rebuild_tile_grid()
         else:
             self._append_tab_to_notebook(tab)
+        self._refresh_labels()
         self._update_placeholder()
         self._update_broadcast_ui()
         self._emit_sessions_changed()
@@ -1745,17 +1819,19 @@ class TerminalNotebook(Gtk.Box):
 
     def _append_tab_to_notebook(self, tab: TerminalTab) -> int:
         self._detach_tab(tab)
-        label = TabLabel(
-            tab.title,
+        label = SessionTab(
+            self.label_for(tab),
+            on_activate=lambda t=tab: self._focus_tab(t),
             on_close=lambda t=tab: self.close_tab(t),
             on_context_menu=lambda event, t=tab: self._show_tab_menu(t, event),
+            tooltip_text=lambda t=tab: self.tab_tooltip(t),
         )
-        label.set_title(tab.title, tab.status)
-        page_num = self._notebook.append_page(tab, label)
-        tab.show_all()
-        self._notebook.set_tab_reorderable(tab, True)
-        self._notebook.set_current_page(page_num)
+        label.set_title(self.label_for(tab), tab.status)
         self._tab_labels[tab] = label
+        page_num = self._notebook.append_page(tab, None)
+        tab.show_all()
+        self._sync_strip()
+        self._notebook.set_current_page(page_num)
         return page_num
 
     def set_appearance(self, appearance: TerminalAppearanceSettings) -> None:
@@ -1769,8 +1845,11 @@ class TerminalNotebook(Gtk.Box):
             return
         self._detach_tab(target)
         self._tabs.remove(target)
+        if target in self._open_order:
+            self._open_order.remove(target)
         self._tab_status.pop(target, None)
         self._tab_labels.pop(target, None)
+        self._refresh_labels()
         self._tile_wrappers.pop(target, None)
         self._broadcast_included.pop(target, None)
         target.set_input_observer(None)
@@ -1885,6 +1964,8 @@ class TerminalNotebook(Gtk.Box):
         ordered = self._ordered_tabs()
         if len(ordered) == len(self._tabs):
             self._tabs = ordered
+        if not self._tile_mode:
+            self._sync_strip()
 
     def _step_tab(self, delta: int) -> None:
         ordered = self._ordered_tabs()
@@ -1951,7 +2032,7 @@ class TerminalNotebook(Gtk.Box):
         )
         if title:
             tab.title = title
-            self._set_tab_label_text(tab)
+            self._refresh_labels()
 
     # ------------------------------------------------------- tiles/broadcast
     @property
@@ -2017,7 +2098,7 @@ class TerminalNotebook(Gtk.Box):
     def _create_tile_wrapper(self, tab: TerminalTab) -> TileFrame:
         self._detach_tab(tab)
         frame = TileFrame(
-            tab.title,
+            self.label_for(tab),
             tab.status,
             included=self._broadcast_included.get(tab, True),
             on_include_toggled=lambda active, t=tab: self._on_broadcast_include_toggled(t, active),
@@ -2066,15 +2147,15 @@ class TerminalNotebook(Gtk.Box):
     def _tab_label_text(self, tab: TerminalTab) -> str:
         connected = self._tab_status.get(tab, False)
         indicator = "●" if connected else "○"
-        return f"{indicator} {tab.title}"
+        return f"{indicator} {self.label_for(tab)}"
 
     def _set_tab_label_text(self, tab: TerminalTab) -> None:
         label = self._tab_labels.get(tab)
         if label:
-            label.set_title(tab.title, tab.status)
+            label.set_title(self.label_for(tab), tab.status)
         frame = self._tile_wrappers.get(tab)
         if frame:
-            frame.set_title(tab.title, tab.status)
+            frame.set_title(self.label_for(tab), tab.status)
 
     def _detach_tab(self, tab: TerminalTab) -> None:
         page_num = self._notebook.page_num(tab)
@@ -2087,6 +2168,7 @@ class TerminalNotebook(Gtk.Box):
         if wrapper and wrapper.get_parent() is self._tile_grid:
             self._tile_grid.remove(wrapper)
         self._tab_labels.pop(tab, None)
+        self._sync_strip()
 
     def _on_tab_focus(self, _widget, _event, tab: TerminalTab) -> bool:
         if self._last_current_tab is not tab:
@@ -2116,6 +2198,9 @@ class TerminalNotebook(Gtk.Box):
             self._last_current_tab = page
         for tab, label in self._tab_labels.items():
             label.set_current(tab is page)
+        current = self._tab_labels.get(page)
+        if current is not None:
+            self._strip.scroll_to(current)
         GLib.idle_add(self._sync_toolbar_idle)
         GLib.idle_add(self._emit_sessions_changed_idle)
 
@@ -2237,7 +2322,7 @@ class TerminalNotebook(Gtk.Box):
         if not button.get_active():
             return
         items = [
-            MenuItemSpec(f"{number}. {tab.title}", lambda t=tab: self._focus_tab(t), accel=f"Alt+{number}" if number < 10 else "")
+            MenuItemSpec(f"{number}. {self.label_for(tab)}", lambda t=tab: self._focus_tab(t), accel=f"Alt+{number}" if number < 10 else "")
             for number, tab in enumerate(self._ordered_tabs(), start=1)
         ]
         sections = [MenuSection("tabs", items)] if items else [
@@ -2254,6 +2339,7 @@ class TerminalNotebook(Gtk.Box):
             visible = "tabs"
         changed = self._stack.get_visible_child_name() != visible
         self._stack.set_visible_child_name(visible)
+        self._strip.set_visible(visible == "tabs")
         self._place_toolbar(in_strip=visible == "tabs")
         if changed and self.on_strip_changed is not None:
             self.on_strip_changed()

@@ -19,7 +19,7 @@ every color role becomes `@define-color sm_<role>`.
 |---|---|---|---|
 | `bg_window` / `bg_surface` | `#FFFFFF` / `#FFFFFF` | `#151619` / `#1A1B1E` | Window, top bar, sidebar, host header, tabs, info bar |
 | `bg_surface_raised` | `#FFFFFF` | `#212226` | Popovers, menus, toasts |
-| `bg_canvas` | `#F5F7F6` | `#121315` | Content canvas (Terminal / Details / Activity) |
+| `bg_canvas` | `#F5F7F6` | `#121315` | Content canvas (session area, ready state) |
 | `bg_page_bar` | `#FCFDFC` | `#1A1B1E` (same as surface) | Page bar (breadcrumb row) |
 | `bg_input` | `#FAFBFA` | `#16171A` | Entries, search |
 | `bg_hover` / `bg_selected` | `#F3F6F4` / `#EAF5EF` | `#25272B` / `#202A25` (faint green hint) | Hovered / selected rows |
@@ -111,7 +111,7 @@ The brief asked for 10.5 px caps and 10 px badges in Compact. The 11 px floor
 wins: no preset value and no rendered size goes below it.
 | Fonts | UI: Inter → Cantarell → Noto Sans → DejaVu Sans; mono: JetBrains Mono → Fira Code → DejaVu Sans Mono (`theme/fonts.py` picks the first installed family) |
 | Motion (`Motion`) | `FAST 120`, `NORMAL 160`, `SLOW 200` ms, ease-out |
-| Elevation | `sm_shadow` on primary buttons, the logo tile and the empty-state card; `sm_shadow_popover` on popovers, menus and toasts. Nothing else casts a shadow. |
+| Elevation | `sm_shadow` on primary buttons, the logo tile and the empty-state card; `sm_shadow_popover` on popovers, menus, toasts and the host panel. Nothing else casts a shadow. |
 
 `BASE_FONT_PX` is 11 pt at 96 dpi (14.67 px). `em(px)` converts a pixel size
 to an `em` value of the density's base font, so the *Application font size*
@@ -230,7 +230,8 @@ with a token report.
 | `.page-bar`, `.breadcrumb-*`, `button.page-more`, `button.page-primary` | Page bar | Breadcrumb, ··· menu, Connect |
 | `.host-header`, `.host-tile`, `.host-title`, `.host-address`, `.env-badge.env-<kind>` | Host header | Tile, title, environment badge, mono address |
 | `.stat-label`, `.stat-value`, `.latency-dot`/`.latency-{good,warn,bad}` | Host header | LAST CONNECTED / LATENCY |
-| `.page-tabs`, `button.page-tab` | Tab bar | Terminal / Details / Activity, 2 px accent underline |
+| `.session-strip`, `.session-tab`, `.session-tab-box` (`.current`, `.hover`) | Session strip | One tab per session: status dot, label (96–220 px, ellipsized), close on hover/active; the active tab has accent text and a 2 px accent underline |
+| `.host-panel`, `button.panel-tab`, `.host-panel-actions` | Host panel | Slide-over (360 px) with Details / Activity, raised surface and a left shadow |
 | `.page-canvas`, `.card`, `.detail-key`, `.detail-value`, `.activity-row`, `.activity-time` | Content | Canvas, Details and Activity cards |
 | `.info-bar`, `.info-label`, `.info-value`, `.info-live`, `button.info-copy` | Info bar | Connection facts, docked live stats |
 | `.empty-state`, `.ready-state`, `.empty-card`, `.empty-title`, `.empty-description`, `.empty-caption`, `button.hero` | Empty states | Ready to connect and other placeholders |

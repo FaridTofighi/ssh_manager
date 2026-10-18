@@ -1,22 +1,25 @@
 """Host page: the right-hand side of the main window (Relay layout).
 
-Comfortable density — four bands stacked in one column::
+Comfortable density::
 
-    page bar     Hosts › api-prod-01                              [···] [Connect]
+    page bar     Hosts › api-prod-01                          [ⓘ] [···] [Connect]
     host header  [▣] api-prod-01 PRODUCTION          LAST CONNECTED   LATENCY
                      deploy@10.60.110.98             2 hours ago      ● 24 ms
-    tabs         Terminal   Details   Activity
-    content      (stack: terminal workspace / details card / activity card)
+    sessions     ● api-prod-01 ×  ● api-prod-01 (2) ×  [+]           [▾ │ toolbar]
+    content      terminal (or the ready state); the host panel slides over its right edge
     info bar     CONNECTION  AUTH  PROXY   ·live session stats·             [⧉]
 
-Compact density — the page bar and host header merge into one host bar (row
-A); the tabs (row B) share their row with the session chips and toolbar while
-the Terminal tab shows sessions; the info bar is a single line::
+Compact density — the page bar and host header merge into one host bar; the
+info bar is a single line::
 
-    row A        [▣] api-prod-01 PROD deploy@10.60.110.98   Last connected 2 h ago  ● 24 ms  [···] [Reconnect]
-    row B        Terminal  Details  Activity │ ● api-prod-01 ×                     [+ ▾ │ toolbar]
+    host bar     [▣] api-prod-01 PROD deploy@10.60.110.98   Last connected 2 h ago  ● 24 ms  [ⓘ] [···] [Reconnect]
+    sessions     ● api-prod-01 ×  ● api-prod-01 (2) ×  [+]           [▾ │ toolbar]
     content      terminal, edge to edge
     status       ● Connected · 118×23 · CPU 3 % …            deploy@10.60.110.98:22 · Credential: x  [⧉]
+
+The session row belongs to ``TerminalNotebook``; it only exists while sessions
+are open. Host details and activity live in :class:`HostPanel`, an overlay
+that never resizes the terminal.
 
 The same widgets serve both layouts: :meth:`HostPageView.apply_density`
 re-parents them, so a density switch at runtime keeps every session alive.
@@ -40,7 +43,8 @@ from ..constants import Icons  # noqa: E402
 from ..host_facts import ActivityEvent, Crumb, LatencyLevel, format_relative_time  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
-from ..theme.tokens import Layout, Level, Size, Space, environment_kind  # noqa: E402
+from ..theme.loader import get_theme_manager  # noqa: E402
+from ..theme.tokens import Layout, Level, Motion, Size, Space, environment_kind  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
@@ -68,12 +72,6 @@ def _move(widget: Gtk.Widget, target: Gtk.Box, *, end: bool = False, expand: boo
     if parent is not None:
         parent.remove(widget)
     (target.pack_end if end else target.pack_start)(widget, expand, expand, 0)
-
-
-class PageTab(str, Enum):
-    TERMINAL = "terminal"
-    DETAILS = "details"
-    ACTIVITY = "activity"
 
 
 @dataclass
@@ -131,6 +129,11 @@ class PageBar(Gtk.Box):
         self.more.set_relief(Gtk.ReliefStyle.NORMAL)
         self.more.connect("clicked", lambda button: self.on_more(button))
         self.pack_end(self.more, False, False, 0)
+
+        self.on_info: Callable[[], None] = lambda: None
+        self.info = IconButton(Icons.INFO, _("Host details (Ctrl+I)"), css_classes=("page-more",))
+        self.info.connect("clicked", lambda *_: self.on_info())
+        self.pack_end(self.info, False, False, 0)
 
     def apply_density(self) -> None:
         self.set_size_request(-1, Size.PAGE_BAR)
@@ -346,76 +349,24 @@ class HostHeader(Gtk.Box):
         self.prefix.show()
 
 
-class PageTabs(Gtk.Box):
-    """Terminal / Details / Activity. ``band=False`` builds the copy shown in the session strip."""
-
-    def __init__(self, *, band: bool = True) -> None:
-        Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self._band = band
-        self.get_style_context().add_class("page-tabs" if band else "strip-tabs")
-        self.on_changed: Callable[[PageTab], None] = lambda _t: None
-        self.buttons = {}
-        self._syncing = False
-        for tab, label, accel in (
-            (PageTab.TERMINAL, _("Terminal"), "Ctrl+1"),
-            (PageTab.DETAILS, _("Details"), "Ctrl+2"),
-            (PageTab.ACTIVITY, _("Activity"), "Ctrl+3"),
-        ):
-            button = Gtk.ToggleButton(label=label)
-            button.get_style_context().add_class("page-tab")
-            button.set_relief(Gtk.ReliefStyle.NONE)
-            button.set_tooltip_text(f"{label} ({accel})")
-            button.connect("toggled", self._on_toggled, tab)
-            self.buttons[tab] = button
-            self.pack_start(button, False, False, 0)
-        self.current = PageTab.TERMINAL
-        self.buttons[PageTab.TERMINAL].set_active(True)
-
-    def apply_density(self) -> None:
-        self.set_spacing(Layout.Page.TAB_GAP)
-        if self._band:
-            self.set_size_request(-1, Size.TABS)
-
-    def _on_toggled(self, button: Gtk.ToggleButton, tab: PageTab) -> None:
-        if self._syncing:
-            return
-        if not button.get_active():
-            if tab is self.current:  # the active tab cannot be switched off
-                self._set_active(tab)
-            return
-        self.select(tab)
-        self.on_changed(tab)
-
-    def _set_active(self, tab: PageTab) -> None:
-        self._syncing = True
-        try:
-            for other, button in self.buttons.items():
-                button.set_active(other is tab)
-        finally:
-            self._syncing = False
-
-    def select(self, tab: PageTab) -> None:
-        self.current = PageTab(tab)
-        self._set_active(self.current)
-
-
 class DetailsCard(Gtk.ScrolledWindow):
-    """Definition list of host facts inside a white card on the canvas."""
+    """Definition list of host facts (one column inside the host panel)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, columns: int = 1) -> None:
         Gtk.ScrolledWindow.__init__(self)
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.get_style_context().add_class("page-canvas")
+        self.get_style_context().add_class("panel-scroller")
+        self._columns = columns
         self._outer = outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.card.get_style_context().add_class("card")
+        self.card.get_style_context().add_class("panel-body")
         self.card.set_valign(Gtk.Align.START)
         outer.pack_start(self.card, False, False, 0)
         self.add(outer)
         self._content = HostPageContent()
 
     def apply_density(self) -> None:
-        self._outer.set_border_width(Space.GUTTER)
+        self._outer.set_border_width(Space.L)
         self.card.set_spacing(Space.L)
         self.set_content(self._content)
 
@@ -423,8 +374,8 @@ class DetailsCard(Gtk.ScrolledWindow):
         self._content = content
         for child in list(self.card.get_children()):
             self.card.remove(child)
-        grid = Gtk.Grid(column_spacing=Space.XXXL, row_spacing=Space.L)
-        columns = 2
+        grid = Gtk.Grid(column_spacing=Space.XXXL, row_spacing=Space.M)
+        columns = self._columns
         for index, (label, value, mono) in enumerate(content.facts):
             cell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
             cell.pack_start(_caps(label, "detail-key"), False, False, 0)
@@ -458,20 +409,22 @@ class DetailsCard(Gtk.ScrolledWindow):
 
 
 class ActivityCard(Gtk.ScrolledWindow):
+    """The host's connection history (inside the host panel)."""
+
     def __init__(self) -> None:
         Gtk.ScrolledWindow.__init__(self)
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.get_style_context().add_class("page-canvas")
+        self.get_style_context().add_class("panel-scroller")
         self._outer = outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.card.get_style_context().add_class("card")
+        self.card.get_style_context().add_class("panel-body")
         self.card.set_valign(Gtk.Align.START)
         outer.pack_start(self.card, False, False, 0)
         self.add(outer)
         self._events: Tuple[Sequence[ActivityEvent], float] = ((), 0.0)
 
     def apply_density(self) -> None:
-        self._outer.set_border_width(Space.GUTTER)
+        self._outer.set_border_width(Space.L)
         self.set_events(*self._events)
 
     def set_events(self, events: Sequence[ActivityEvent], now: float) -> None:
@@ -510,6 +463,131 @@ class ActivityCard(Gtk.ScrolledWindow):
             row.pack_end(stamp, False, False, 0)
             self.card.pack_start(row, False, False, 0)
         self.card.show_all()
+
+
+class PanelPage(str, Enum):
+    DETAILS = "details"
+    ACTIVITY = "activity"
+
+
+class HostPanel(Gtk.Revealer):
+    """Slide-over on the right edge of the workspace: host details and activity.
+
+    It is an overlay, so opening it never changes the terminal's size. Esc,
+    a click outside it, its close button or the host bar's ⓘ button close it.
+    """
+
+    def __init__(self) -> None:
+        Gtk.Revealer.__init__(self)
+        self.set_transition_type(Gtk.RevealerTransitionType.SLIDE_LEFT)
+        self.set_transition_duration(get_theme_manager().motion_ms(Motion.NORMAL))
+        self.set_halign(Gtk.Align.END)
+        self.set_valign(Gtk.Align.FILL)
+        self.set_reveal_child(False)
+        self.on_close: Callable[[], None] = lambda: None
+        self.on_edit: Callable[[], None] = lambda: None
+        self.on_duplicate: Callable[[], None] = lambda: None
+        self.on_copy: Callable[[], None] = lambda: None
+
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.box.get_style_context().add_class("host-panel")
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        header.get_style_context().add_class("host-panel-header")
+        self._header = header
+        self.title = Gtk.Label()
+        self.title.get_style_context().add_class("section-title")
+        self.title.set_xalign(0.0)
+        self.title.set_ellipsize(Pango.EllipsizeMode.END)
+        header.pack_start(self.title, True, True, 0)
+        self.close_button = IconButton(Icons.CLOSE, _("Close (Esc)"), lambda: self.on_close())
+        header.pack_end(self.close_button, False, False, 0)
+        self.box.pack_start(header, False, False, 0)
+
+        switcher = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        switcher.get_style_context().add_class("host-panel-switcher")
+        self._switcher = switcher
+        self.page_buttons = {}
+        group = None
+        for page, label in ((PanelPage.DETAILS, _("_Details")), (PanelPage.ACTIVITY, _("_Activity"))):
+            button = Gtk.RadioButton.new_with_mnemonic_from_widget(group, label)
+            button.set_mode(False)  # draw as a toggle button
+            button.get_style_context().add_class("panel-tab")
+            button.connect("toggled", self._on_page_toggled, page)
+            group = group or button
+            self.page_buttons[page] = button
+            switcher.pack_start(button, False, False, 0)
+        self.box.pack_start(switcher, False, False, 0)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_vhomogeneous(False)
+        self.details = DetailsCard(columns=1)
+        self.activity = ActivityCard()
+        details_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        details_page.pack_start(self.details, True, True, 0)
+        self.actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self.actions.get_style_context().add_class("host-panel-actions")
+        for label, tip, callback in (
+            (_("_Edit…"), _("Edit this host (Ctrl+E)"), lambda: self.on_edit()),
+            (_("D_uplicate"), _("Duplicate this host"), lambda: self.on_duplicate()),
+            (_("_Copy SSH command"), _("Copy the ssh command line"), lambda: self.on_copy()),
+        ):
+            button = Gtk.Button.new_with_mnemonic(label)
+            button.get_style_context().add_class("outlined")
+            button.set_tooltip_text(tip)
+            button.connect("clicked", lambda _b, cb=callback: cb())
+            self.actions.pack_start(button, False, False, 0)
+        details_page.pack_end(self.actions, False, False, 0)
+        self.stack.add_named(details_page, PanelPage.DETAILS.value)
+        self.stack.add_named(self.activity, PanelPage.ACTIVITY.value)
+        self.box.pack_start(self.stack, True, True, 0)
+        self.add(self.box)
+        self.box.show_all()
+        set_accessible_name(self, _("Host details"))
+        self.apply_density()
+
+    def apply_density(self) -> None:
+        self.box.set_size_request(Size.PANEL_WIDTH, -1)
+        self._header.set_spacing(Space.S)
+        self._switcher.set_spacing(Space.XS)
+        self.actions.set_spacing(Space.S)
+        self.details.apply_density()
+        self.activity.apply_density()
+
+    @property
+    def is_open(self) -> bool:
+        return self.get_reveal_child()
+
+    @property
+    def page(self) -> PanelPage:
+        return PanelPage(self.stack.get_visible_child_name() or PanelPage.DETAILS.value)
+
+    def open(self, page: PanelPage = PanelPage.DETAILS) -> None:
+        self.show_page(page)
+        self.set_visible(True)
+        self.set_reveal_child(True)
+        self.page_buttons[PanelPage(page)].grab_focus()
+
+    def close(self) -> None:
+        self.set_reveal_child(False)
+
+    def show_page(self, page: PanelPage) -> None:
+        page = PanelPage(page)
+        self.stack.set_visible_child_name(page.value)
+        self.actions.set_visible(page is PanelPage.DETAILS)
+        button = self.page_buttons[page]
+        if not button.get_active():
+            button.set_active(True)
+
+    def set_content(self, content: "HostPageContent") -> None:
+        self.title.set_text(content.title)
+        self.details.set_content(content)
+        self.activity.set_events(content.activity, content.now)
+        self.actions.set_sensitive(content.kind == "host")
+
+    def _on_page_toggled(self, button: Gtk.RadioButton, page: PanelPage) -> None:
+        if button.get_active():
+            self.stack.set_visible_child_name(page.value)
+            self.actions.set_visible(page is PanelPage.DETAILS)
 
 
 class InfoBar(Gtk.Box):
@@ -626,7 +704,7 @@ class InfoBar(Gtk.Box):
 
 
 class HostPageView(Gtk.Box):
-    """Page bar, host header, tabs, content stack and info bar."""
+    """Page bar, host header, the session area (with the host panel overlay) and the info bar."""
 
     def __init__(self, terminal_page: Gtk.Widget) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -634,38 +712,35 @@ class HostPageView(Gtk.Box):
         self.page_bar = PageBar()
         self.header = HostHeader()
         self.header.on_crumb = lambda target: self.page_bar.on_crumb(target)
-        self.tabs = PageTabs()
-        # Copy of the tabs that sits in the session strip while row B is merged.
-        self.strip_tabs = PageTabs(band=False)
-        self.on_strip_merged: Callable[[bool], None] = lambda _merged: None
-        self._sessions_strip = False
         self._narrow = False
         self._chrome_visible = True
-        self.merged = False
         self.pack_start(self.page_bar, False, False, 0)
         self.pack_start(self.header, False, False, 0)
-        self.pack_start(self.tabs, False, False, 0)
 
-        self.stack = Gtk.Stack()
-        self.stack.set_hhomogeneous(False)
-        self.stack.set_vhomogeneous(False)
-        self.stack.get_style_context().add_class("page-canvas")
-        self.details = DetailsCard()
-        self.activity = ActivityCard()
-        self.stack.add_named(terminal_page, PageTab.TERMINAL.value)
-        self.stack.add_named(self.details, PageTab.DETAILS.value)
-        self.stack.add_named(self.activity, PageTab.ACTIVITY.value)
-        self.pack_start(self.stack, True, True, 0)
+        # The session area fills the rest; the host panel slides over its right edge.
+        self.terminal_page = terminal_page
+        self.overlay = Gtk.Overlay()
+        self.overlay.get_style_context().add_class("page-canvas")
+        self.overlay.add(terminal_page)
+        self.panel = HostPanel()
+        self.panel.on_close = self.close_panel
+        # Height of the session strip at the top of the session area: the panel
+        # starts below it so the session toolbar stays reachable.
+        self.panel_top: Callable[[], int] = lambda: 0
+        self.overlay.add_overlay(self.panel)
+        self.pack_start(self.overlay, True, True, 0)
+        # A click anywhere else in the workspace closes the panel (not consumed).
+        self._click_away = Gtk.GestureMultiPress.new(self)
+        self._click_away.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self._click_away.set_button(0)
+        self._click_away.connect("pressed", self._on_press)
 
         self.info_bar = InfoBar()
         self.pack_start(self.info_bar, False, False, 0)
-        self.tabs.on_changed = self._on_tab_clicked
-        self.strip_tabs.on_changed = self._on_tab_clicked
-        self.on_tab_changed: Callable[[PageTab], None] = self._show_tab
         self.content = HostPageContent()
         # _sync_bands() owns the bands' visibility: show their contents once,
         # then keep a window-level show_all() from re-showing hidden bands.
-        for band in (self.page_bar, self.header, self.tabs, self.strip_tabs, self.info_bar):
+        for band in (self.page_bar, self.header, self.info_bar):
             band.show_all()
             band.set_no_show_all(True)
         self.apply_density()
@@ -678,76 +753,74 @@ class HostPageView(Gtk.Box):
         bar, header = self.page_bar, self.header
         if compact:
             _move(bar.crumbs, bar)  # stays in the (hidden) page bar; groups use header.prefix
+            _move(bar.info, header.actions)
             _move(bar.more, header.actions)
             _move(bar.primary, header.actions)
         else:
             _move(bar.crumbs, bar, expand=True)
             _move(bar.primary, bar, end=True)
             _move(bar.more, bar, end=True)
-        for band in (bar, header, self.tabs, self.strip_tabs, self.details, self.activity, self.info_bar):
+            _move(bar.info, bar, end=True)
+        for band in (bar, header, self.panel, self.info_bar):
             band.apply_density()
         self._sync_bands()
 
     def set_narrow(self, narrow: bool) -> None:
-        """Window narrower than ``Layout.Page.NARROW_WIDTH``: sessions get their own strip."""
+        """Window narrower than ``Layout.Page.NARROW_WIDTH``: the host bar drops secondary text."""
 
         if narrow != self._narrow:
             self._narrow = narrow
             self.header.set_narrow(narrow)
-            self._sync_bands()
-
-    def set_sessions_strip(self, visible: bool) -> None:
-        """Whether the Terminal tab currently shows the session chips (tabs mode with sessions)."""
-
-        if visible != self._sessions_strip:
-            self._sessions_strip = visible
-            self._sync_bands()
 
     def set_chrome_visible(self, visible: bool) -> None:
-        """Focus mode: only row B (tabs / sessions) and the terminal stay."""
+        """Focus mode: only the session strip and the terminal stay."""
 
         self._chrome_visible = visible
+        if not visible:
+            self.close_panel()
         self._sync_bands()
 
     def _sync_bands(self) -> None:
-        compact = _compact()
         chrome = self._chrome_visible
-        self.page_bar.set_visible(chrome and not compact)
+        self.page_bar.set_visible(chrome and not _compact())
         self.header.set_visible(chrome)
         self.info_bar.set_visible(chrome)
-        merged = (
-            compact
-            and not self._narrow
-            and self._sessions_strip
-            and self.tabs.current is PageTab.TERMINAL
-        )
-        self.tabs.set_visible(not merged)
-        self.strip_tabs.set_visible(merged)
-        if merged != self.merged:
-            self.merged = merged
-            self.on_strip_merged(merged)
 
-    # ---------------------------------------------------------------- tabs
-    def _on_tab_clicked(self, tab: PageTab) -> None:
-        self.tabs.select(tab)
-        self.strip_tabs.select(tab)
-        self.on_tab_changed(tab)
+    # --------------------------------------------------------------- panel
+    def open_panel(self, page: PanelPage = PanelPage.DETAILS) -> None:
+        self.panel.set_content(self.content)
+        self.panel.set_margin_top(max(0, int(self.panel_top())))
+        self.panel.open(page)
 
-    def _show_tab(self, tab: PageTab) -> None:
-        child = self.stack.get_child_by_name(tab.value)
-        if child is not None:
-            child.show()
-        self.stack.set_visible_child_name(tab.value)
-        self._sync_bands()
+    def close_panel(self) -> None:
+        self.panel.close()
 
-    @property
-    def current_tab(self) -> PageTab:
-        return self.tabs.current
+    def toggle_panel(self, page: PanelPage = PanelPage.DETAILS) -> None:
+        if self.panel.is_open and self.panel.page is PanelPage(page):
+            self.close_panel()
+        else:
+            self.open_panel(page)
 
-    def select_tab(self, tab: PageTab) -> None:
-        self.tabs.select(tab)
-        self.strip_tabs.select(tab)
-        self._show_tab(PageTab(tab))
+    def _on_press(self, gesture: Gtk.GestureMultiPress, _n_press: int, x: float, y: float) -> None:
+        if not self.panel.is_open:
+            return
+        panel = self.panel.get_allocation()
+        origin = self.panel.translate_coordinates(self, 0, 0)
+        if origin is None:
+            return
+        px, py = origin
+        inside_panel = px <= x <= px + panel.width and py <= y <= py + panel.height
+        widget = gesture.get_widget()
+        hit_info = self._inside(self.page_bar.info, widget, x, y)
+        if not inside_panel and not hit_info:
+            self.close_panel()
+
+    def _inside(self, child: Gtk.Widget, widget: Gtk.Widget, x: float, y: float) -> bool:
+        origin = child.translate_coordinates(widget, 0, 0) if child.get_mapped() else None
+        if origin is None:
+            return False
+        alloc = child.get_allocation()
+        return origin[0] <= x <= origin[0] + alloc.width and origin[1] <= y <= origin[1] + alloc.height
 
     def set_content(self, content: HostPageContent) -> None:
         self.content = content
@@ -758,10 +831,10 @@ class HostPageView(Gtk.Box):
             sensitive=content.primary_sensitive,
             tooltip=content.primary_tooltip,
         )
+        self.page_bar.info.set_sensitive(content.kind in ("host", "group"))
         self.header.set_content(content)
         self.info_bar.set_content(content)
-        self.details.set_content(content)
-        self.activity.set_events(content.activity, content.now)
+        self.panel.set_content(content)
 
 
 def latency_css(level: LatencyLevel) -> str:

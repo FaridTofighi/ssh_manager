@@ -110,7 +110,7 @@ class StylesheetTests(unittest.TestCase):
         import re
 
         # Only primary buttons and floating surfaces are elevated.
-        ELEVATED = (".toast", "popover", ".primary", ".suggested-action", ".logo-tile", ".empty-card")
+        ELEVATED = (".toast", "popover", ".primary", ".suggested-action", ".logo-tile", ".empty-card", ".host-panel")
 
         css = css_dark.css()
         for block in re.findall(r"([^{}]+)\{([^}]*)\}", css):

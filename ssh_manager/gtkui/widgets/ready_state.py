@@ -24,6 +24,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
+from ..i18n import _  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from .icons import make_icon  # noqa: E402
 
@@ -92,6 +93,16 @@ class ReadyState(Gtk.Box):
         self.caption.pack_start(self._caption_label, False, False, 0)
         self.caption.set_no_show_all(True)
         self.pack_start(self.caption, False, False, 0)
+
+        self.on_details: Callable[[], None] = lambda: None
+        self.details_link = Gtk.Button.new_with_mnemonic(_("Host _details"))
+        self.details_link.get_style_context().add_class("flat")
+        self.details_link.get_style_context().add_class("link-button")
+        self.details_link.set_halign(Gtk.Align.CENTER)
+        self.details_link.set_tooltip_text(_("Show the host's details and activity (Ctrl+I)"))
+        self.details_link.connect("clicked", lambda *_: self.on_details())
+        self.details_link.set_no_show_all(True)
+        self.pack_start(self.details_link, False, False, 0)
         self.apply_density()
 
     def apply_density(self) -> None:
@@ -109,6 +120,7 @@ class ReadyState(Gtk.Box):
         self._primary_icon.set_pixel_size(Size.ICON_BUTTON_GLYPH - 2)
         self.caption.set_spacing(Space.S + 1)
         self.caption.set_margin_top(ready.CAPTION_TOP)
+        self.details_link.set_margin_top(Space.S)
 
     def set_content(
         self,
@@ -121,6 +133,7 @@ class ReadyState(Gtk.Box):
         secondary_label: str = "",
         on_secondary: Optional[Callable[[], None]] = None,
         caption: str = "",
+        details_link: bool = False,
     ) -> None:
         self.title.set_text(title)
         self.body.set_markup(body_markup)
@@ -136,6 +149,7 @@ class ReadyState(Gtk.Box):
         for child in self.caption.get_children():
             child.show()
         self.caption.set_visible(bool(caption))
+        self.details_link.set_visible(details_link)
 
     @property
     def body_text(self) -> str:

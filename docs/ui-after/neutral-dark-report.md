@@ -12,7 +12,7 @@ render's sampled pixel equal to the palette token within ±1 per channel.
 | sidebar footer | `bg_surface` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | 0.0 % | ✓ |
 | page bar | `bg_page_bar` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | 0.0 % | ✓ |
 | host header | `bg_surface` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | 0.02 % | ✓ |
-| tabs | `bg_surface` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | 0.0 % | ✓ |
+| tabs | `bg_surface` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1B1C1F` | 0.86 % | ✓ |
 | canvas margin | `bg_canvas` | `#121315` | `#121315` | `#121315` | `#121315` | 0.0 % | ✓ |
 | terminal | `terminal` | `#16171A` | `#16171A` | `#16171A` | `#16171A` | 0.0 % | ✓ |
 | status bar | `bg_surface` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | `#1A1B1E` | 0.0 % | ✓ |

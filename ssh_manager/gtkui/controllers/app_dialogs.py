@@ -52,6 +52,7 @@ class AppDialogs:
             on_export=self.export_settings_snapshot,
             latency_probe=self.win._ui.latency_probe,
             density=self.win.density,
+            tab_label_mode=self.win._ui.tab_label_mode,
         )
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
@@ -66,6 +67,8 @@ class AppDialogs:
         self.win.terminal_tabs.apply_font_scale_to_all(values.terminal_font_scale)
         self.win._apply_ui_font(values.ui_font_size)
         self.win.set_density(values.density)
+        self.win._ui.tab_label_mode = values.tab_label_mode.value
+        self.win.terminal_tabs.set_label_mode(values.tab_label_mode)
         self.win._ui.theme_mode = values.theme_mode.value
         self.win._ui.font_scale = values.terminal_font_scale
         self.win._ui.ui_font_size = self.win._ui_font_size

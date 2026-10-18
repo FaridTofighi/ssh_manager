@@ -311,28 +311,155 @@ class HostPageTests(unittest.TestCase):
         self.assertEqual(self.page.view.content.kind, "empty")
         self.assertEqual(self.page.terminal_page.ready.title.get_text(), "Select a host")
 
-    def test_tabs_shortcuts_and_maximize(self) -> None:
-        from ssh_manager.gtkui.views.host_page import PageTab
+    def test_details_panel_shortcuts_and_focus_mode(self) -> None:
+        from gi.repository import Gdk
+
+        from ssh_manager.gtkui.views.host_page import PanelPage
 
         win = self.win
-        win.lookup_action("page-tab").activate(__import__("gi.repository.GLib", fromlist=["GLib"]).Variant.new_int32(2))
-        self.assertIs(self.page.view.current_tab, PageTab.DETAILS)
-        self.assertEqual(self.page.view.stack.get_visible_child_name(), "details")
-        win.lookup_action("toggle-details").activate(None)
-        self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
-        self.page.goto_page_tab(3)
-        self.assertIs(self.page.view.current_tab, PageTab.ACTIVITY)
-        win.layout.toggle_maximized()  # focus mode
         view = self.page.view
+        win.tree.select_host("prod", "web.conf", "web-01")
+        self.assertFalse(view.panel.is_open)
+        win.lookup_action("toggle-details").activate(None)  # Ctrl+I / F9
+        self.assertTrue(view.panel.is_open)
+        self.assertIs(view.panel.page, PanelPage.DETAILS)
+        self.assertEqual(view.panel.title.get_text(), "web-01")
+        # The panel is an overlay: the session area keeps its place and size request.
+        self.assertIs(view.panel.get_parent(), view.overlay)
+        self.assertIs(view.terminal_page.get_parent(), view.overlay)
+        event = Gdk.Event.new(Gdk.EventType.KEY_PRESS)
+        event.keyval = Gdk.KEY_Escape
+        event.state = 0
+        self.assertTrue(win._on_window_key_press(win, event))  # Esc closes it
+        self.assertFalse(view.panel.is_open)
+        win.lookup_action("host-activity").activate(None)
+        self.assertTrue(view.panel.is_open)
+        self.assertIs(view.panel.page, PanelPage.ACTIVITY)
+        view.page_bar.info.clicked()  # ⓘ toggles (here: back to Details)
+        self.assertIs(view.panel.page, PanelPage.DETAILS)
+        view.page_bar.info.clicked()
+        self.assertFalse(view.panel.is_open)
+
+        win.layout.toggle_maximized()  # focus mode
         self.assertFalse(view.header.get_visible())
         self.assertFalse(view.info_bar.get_visible())
         self.assertFalse(win._header.get_visible())
-        self.assertTrue(view.tabs.get_visible() or view.strip_tabs.get_visible())
-        self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
         win.layout.toggle_maximized()
         self.assertTrue(view.header.get_visible())
         self.assertTrue(view.info_bar.get_visible())
         self.assertTrue(win._header.get_visible())
+        self.assertIsNone(win.lookup_action("page-tab"))  # Ctrl+1/2/3 are gone
+
+    def test_no_content_tabs_in_the_workspace(self) -> None:
+        from gi.repository import Gtk
+
+        def labels(widget):
+            found = []
+            if isinstance(widget, Gtk.Label):
+                found.append(widget.get_text())
+            if isinstance(widget, Gtk.Button) and widget.get_label():
+                found.append(widget.get_label())
+            if isinstance(widget, Gtk.Container):
+                children = []
+                widget.forall(children.append)
+                for child in children:
+                    found += labels(child)
+            return found
+
+        win = self.win
+        win.tree.select_host("prod", "web.conf", "web-01")
+        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+            win.sessions.connect_selected()
+        view = self.page.view
+        workspace = labels(win.terminal_tabs._strip) + labels(view.page_bar) + labels(view.header)
+        for name in ("Terminal", "Details", "Activity"):
+            self.assertNotIn(name, workspace)
+
+    def test_duplicate_sessions_get_distinct_stable_labels_and_tooltips(self) -> None:
+        win = self.win
+        notebook = win.terminal_tabs
+        win.tree.select_host("prod", "web.conf", "web-01")
+        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+            win.sessions.connect_selected()
+            first = notebook.current_tab()
+            win.sessions.duplicate_current_session()
+            second = notebook.current_tab()
+        self.assertIsNot(first, second)
+        self.assertEqual(notebook.labels(), ["web-01", "web-01 (2)"])
+        strip_titles = [tab.title for tab in notebook._strip.tabs()]
+        self.assertEqual(strip_titles, ["web-01", "web-01 (2)"])
+        tooltip = notebook._tab_labels[second].tooltip()
+        self.assertIn("web-01", tooltip)
+        self.assertRegex(tooltip, r"\S+@web-01\.internal:22")
+        self.assertIn("Duplicate session", tooltip)
+        notebook.close_tab(first)
+        self.assertEqual(notebook.labels(), ["web-01 (2)"])  # stays stable
+
+        # Label setting and renamed tabs.
+        notebook.set_label_mode("ip")
+        self.assertEqual(notebook.labels(), ["web-01.internal (2)"])
+        notebook.set_label_mode("name_ip")
+        self.assertEqual(notebook.labels(), ["web-01 · web-01.internal (2)"])
+        second.title = "my shell"
+        notebook._refresh_labels()
+        self.assertEqual(notebook.labels(), ["my shell"])
+
+    def test_activity_popover_filters_to_this_host(self) -> None:
+        win = self.win
+        win.tree.select_host("prod", "web.conf", "web-01")
+        key = win.creds.host_key(win.tree.selected_host())
+        self.page.history.record_event(key, "error", "Connection failed")
+        button = win._header.history_button
+        button.filter_host.set_active(True)
+        texts = [row.get_children()[0].get_children()[1].get_text() for row in button._list.get_children()]
+        self.assertEqual(texts, ["Connection failed"])
+        button.filter_all.set_active(True)
+        win.tree_view.get_selection().unselect_all()
+        button.filter_host.set_active(True)
+        self.assertEqual(button._list.get_children(), [])
+        self.assertIn("Select a host", button._placeholder_label.get_text())
+
+    def test_strip_reorder_and_many_tabs(self) -> None:
+        win = self.win
+        notebook = win.terminal_tabs
+        win.tree.select_host("prod", "web.conf", "web-01")
+        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+            for _ in range(16):
+                win.sessions.connect_selected()
+        self.assertEqual(len(notebook._strip.tabs()), 16)
+        self.assertEqual(notebook.labels()[:3], ["web-01", "web-01 (2)", "web-01 (3)"])
+        first = notebook._tab_labels[notebook.tabs()[0]]
+        notebook._on_strip_reorder(first, 3)  # drag the first tab onto the fourth
+        self.assertEqual(notebook.labels()[:4], ["web-01 (2)", "web-01 (3)", "web-01 (4)", "web-01"])
+        self.assertEqual([t.title for t in notebook._strip.tabs()][:4], notebook.labels()[:4])
+        menu_items = []
+        notebook._tabs_menu_button.set_active(True)
+        popup = notebook._tabs_menu_button.get_popup()
+        menu_items = [child for child in popup.get_children()]
+        notebook._tabs_menu_button.set_active(False)
+        self.assertEqual(len(menu_items), 16)  # the all-sessions list
+
+    def test_host_bar_follows_the_active_session(self) -> None:
+        win = self.win
+        notebook = win.terminal_tabs
+        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+            win.tree.select_host("prod", "web.conf", "web-01")
+            win.sessions.connect_selected()
+            web01 = notebook.current_tab()
+            win.tree.select_host("prod", "db/primary.conf", "db-primary")
+            win.sessions.connect_selected()
+            db = notebook.current_tab()
+        self.page.refresh()
+        self.assertEqual(self.page.view.content.title, db.host.alias)
+        notebook.focus_tab(web01)
+        self.page.refresh()
+        self.assertEqual(self.page.view.content.title, "web-01")
+        self.assertEqual(self.page.view.content.primary_label, "_Reconnect")
+        # Selecting another host in the tree does not switch the session in front.
+        win.tree.select_host("staging", "hosts.conf", "stage-app")
+        self.page.refresh()
+        self.assertIs(notebook.current_tab(), web01)
+        self.assertEqual(self.page.view.content.title, "web-01")
 
     def test_status_changes_feed_history_and_sessions_dock_status_bar(self) -> None:
         win = self.win

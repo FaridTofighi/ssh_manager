@@ -87,8 +87,8 @@ class MainWindowAccessibilityTests(unittest.TestCase):
         self.assertTrue(header.health_button.get_accessible().get_name())
         page = self.window.host_page.view
         self.assertEqual(page.page_bar.more.get_accessible().get_name(), "More actions")
-        self.assertEqual([b.get_label() for b in page.tabs.buttons.values()], ["Terminal", "Details", "Activity"])
-        self.assertTrue(all(b.get_tooltip_text() for b in page.tabs.buttons.values()))
+        self.assertEqual(page.page_bar.info.get_accessible().get_name(), "Host details (Ctrl+I)")
+        self.assertEqual(page.panel.get_accessible().get_name(), "Host details")
 
     def test_search_and_tree_are_named(self) -> None:
         self.assertEqual(self.window._sidebar.search_entry.get_accessible().get_name(), "Search hosts")

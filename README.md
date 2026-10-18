@@ -52,20 +52,29 @@ that direct file mode follows `Include` directives.
   filter button next to the search field takes `key:value` terms joined with
   `AND` (for example `tag:prod AND owner:alice`) and saves filters as smart
   groups. Right-click a row, or press Shift+F10, for its actions.
-- **Details drawer** (F9): facts about the selected host or group, plus
-  Connect, Edit, Duplicate and Copy SSH/SCP actions. Select several hosts to
-  connect, move or tag them together.
+- **Host bar**: shows the host of the session in front (or the tree selection
+  when no session is open), with Connect/Reconnect and a `···` menu. The ⓘ
+  button (Ctrl+I, F9) opens a panel on the right edge of the workspace with
+  the host's details (Edit, Duplicate, Copy SSH command) and its activity;
+  Esc or a click elsewhere closes it, and it never resizes the terminal.
+  Select several hosts to connect, move or tag them together.
 - **Sessions**: double-click a host, press Enter, or use Quick Connect
-  (Ctrl+Shift+T) for an ad-hoc `user@host:port`. The session toolbar acts on
-  the active tab: split pane, save transcript, copy as plain text, show all
+  (Ctrl+Shift+T or the `+` after the last tab) for an ad-hoc `user@host:port`.
+  Every session has its own tab, labelled with the host name, or with its IP
+  address, or both (Settings → Appearance → Tab label); duplicates read
+  `web-01 (2)`, and F2 renames a tab. Drag tabs to reorder them; the tooltip
+  shows `user@host:port` and the status. The session toolbar acts on the
+  active tab: split pane, save transcript, copy as plain text, show all
   sessions, broadcast and remote stats.
-- **Messages** appear as toasts; the message-history button in the header keeps
-  every message.
+- **Messages** appear as toasts; the activity button in the header keeps every
+  message and can filter to the current host.
 - **Keyboard shortcuts**: press Ctrl+? or F1 for the full list. The most
   common are Ctrl+N (new host), Ctrl+T (connect), Ctrl+W (close session),
-  Ctrl+Tab (next session), Alt+1…9 (go to session), Ctrl+B (sidebar),
-  Ctrl+Shift+B (broadcast) and F11 (maximize workspace). Terminal copy and
-  paste are Ctrl+Shift+C / Ctrl+Shift+V.
+  Ctrl+Tab / Ctrl+Shift+Tab (next / previous session), Alt+1…9 (go to
+  session), F2 (rename tab), Ctrl+Shift+D (duplicate session), Ctrl+I (host
+  details; in a terminal Ctrl+I is still Tab, use F9 there), Ctrl+B (sidebar),
+  Ctrl+Shift+B (broadcast) and F11 (focus mode). Terminal copy and paste are
+  Ctrl+Shift+C / Ctrl+Shift+V.
 
 ## Broadcast Input
 

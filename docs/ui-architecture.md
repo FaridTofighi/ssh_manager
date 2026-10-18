@@ -70,20 +70,35 @@ ssh_manager/
 ```
 HeaderView (top bar: 44 px Compact, 76 px Comfortable)
 Paned ─┬─ SidebarView ─ header · search · SessionTreeView · bulk bar · footer
-       └─ HostPageView ─ page bar · host header · tabs ·
-                         Stack[ Terminal: TerminalPage(ReadyState | TerminalNotebook) ·
-                                Details: DetailsCard · Activity: ActivityCard ] ·
+       └─ HostPageView ─ page bar · host header ·
+                         Overlay[ TerminalPage(ReadyState | TerminalNotebook) + HostPanel ] ·
                          info bar (docks the current session's status bar)
+TerminalNotebook ─ SessionStrip (tabs · + · all-sessions ▾ · toolbar) · broadcast strip ·
+                   Stack[ placeholder | Notebook (pages, tabs hidden) | tile grid ]
 ```
 
+There are no content tabs. The host bar (page bar + host header) shows the
+host of the session in front, or the tree selection when no session is open
+(`HostPageController.selection()`); selecting another host in the tree never
+switches tabs. Host details and activity live in `HostPanel`, a `Gtk.Revealer`
+over the right edge of the session area (below the session strip), opened by
+the ⓘ button, Ctrl+I/F9, the `···` menu or the ready state's *Host details*
+link, and closed by Esc, a click elsewhere in the workspace or its close
+button. The header's activity popover has *All* / *This host* filters.
+
+`SessionStrip` replaces the notebook's own tab row so `+` can follow the last
+tab: one focusable `SessionTab` per session (status dot, ellipsized label,
+close button, tooltip from `TerminalNotebook.tab_tooltip`), overflow chevrons,
+drag-to-reorder (`notebook.reorder_child`). Labels come from the pure
+`gtkui/tab_labels.session_tab_labels()`: name / IP / both
+(`TerminalNotebook.set_label_mode`, Settings → Appearance → Tab label, saved as
+`tab_label_mode`), stable duplicate counters, and Rename overrides.
+
 In Compact, `HostPageView.apply_density()` re-parents the same widgets:
-- **Row A:** the page bar is hidden; its *More* and primary buttons move into
-  the host header, which becomes the one-line host bar.
-- **Row B:** while the Terminal tab shows sessions, the standalone tabs row
-  hides. A copy of the tabs (`view.strip_tabs`) is shown at the start of the
-  notebook's tab row (`TerminalNotebook.set_strip_start` and
-  `set_strip_merged`), next to the session chips and the toolbar. Narrow
-  windows (`Layout.Page.NARROW_WIDTH`) and tile mode keep a separate strip.
+- **Host bar:** the page bar is hidden; its ⓘ, *More* and primary buttons
+  move into the host header, which becomes the one-line host bar.
+- **Session strip:** 33 px, directly under the host bar (tile mode gives the
+  toolbar its own row instead).
 - **Status bar:** the info bar becomes one line, with the session stats on
   the left and the fields on the right.
 
@@ -179,7 +194,8 @@ history popover in the header bar.
 | Workspace, broadcast, spawn path | `test_gtkui_workspace.py` |
 | Accessibility, accelerators, shortcuts window | `test_gtkui_accessibility.py` |
 | Surface colors: sidebar pixels per GTK theme, mode and focus state; sidebar CSS lint | `test_gtkui_surfaces.py` |
-| Density: preset keys and floor, setting round-trip, CSS per theme × density, 11 px floor at 10/11/14/24 pt, runtime switch with a live session, real 1920 × 1041 layout (terminal share, bands, tree rows) | `test_gtkui_density.py` |
+| Density: preset keys and floor, setting round-trip, CSS per theme × density, 11 px floor at 10/11/14/24 pt, runtime switch with a live session, real 1920 × 1041 layout (terminal share, bands, tree rows), host panel never resizes the terminal, tab overflow | `test_gtkui_density.py` |
+| Session tab labels (modes, ports, IPv6, duplicates, stable counters, rename), tab-label setting | `test_gtkui_tab_labels.py` |
 | End-to-end flows on the real window (top bar, tree, host page, session strip, bulk bar) | `test_gtkui_window_flows.py` (fixture: `tests/gtk_window_fixture.py`) |
 
 GTK tests skip when `Gtk.init_check()` fails. Windows are never mapped and

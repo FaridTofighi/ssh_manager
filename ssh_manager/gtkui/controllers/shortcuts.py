@@ -102,8 +102,8 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("font-reset", _("Reset zoom"), G_TERMINAL, ("<Primary>0", "<Primary>KP_0")),
     # View
     ActionSpec("toggle-sidebar", _("Toggle sidebar"), G_VIEW, ("<Primary>b",)),
-    ActionSpec("toggle-details", _("Switch between Terminal and Details"), G_VIEW, ("F9",)),
-    ActionSpec("page-tab", _("Terminal / Details / Activity tab"), G_VIEW, (), ("<Primary>1", "<Primary>2", "<Primary>3"), parameter="i"),
+    ActionSpec("toggle-details", _("Host details"), G_VIEW, ("<Primary>i", "F9")),
+    ActionSpec("host-activity", _("Host activity"), G_VIEW),
     ActionSpec("toggle-maximize", _("Focus mode (terminal only)"), G_VIEW, ("F11", "<Primary><Shift>m")),
 ]
 
@@ -150,9 +150,6 @@ def register_actions(
         for spec in ACTIONS:
             if spec.name in created and spec.accels:
                 app.set_accels_for_action(spec.detailed_name, list(spec.accels))
-        if "page-tab" in created:
-            for number in (1, 2, 3):
-                app.set_accels_for_action(f"win.page-tab({number})", [f"<Primary>{number}"])
         if "goto-tab" in created:
             for accel, number in GOTO_TAB_ACCELS:
                 app.set_accels_for_action(f"win.goto-tab({number})", [accel])
