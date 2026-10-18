@@ -131,6 +131,40 @@ Host dev-box-02
 }
 RELAY_SIZE = (1852, 934)
 
+# The state of docs/ui-before/density-current.png (Phase 4 brief).
+DENSITY_INVENTORY = {
+    "da/.keep": "",
+    "farid/.keep": "",
+    "lk/.keep": "",
+    "pardis/new-group-farid/asdasdasd.host": """Host asdasdasd
+    hostname 10.60.110.40
+    user ftofighi
+""",
+    "pardis/zookeeper": """Host 10.60.110.74
+    hostname 10.60.110.74
+    user ftofighi
+
+Host apzkrfpspst0103.fns
+# meta environment=sandbox
+    hostname 10.60.110.98
+    user ftofighi
+
+Host apzkrfpspst0107.fns
+    hostname 10.60.110.99
+    user ftofighi
+
+Host apzkrfpspst0109.fns
+    hostname 10.60.110.100
+    user ftofighi
+
+Host zk-sandbox
+    hostname 10.60.110.120
+    user ftofighi
+""",
+}
+DENSITY_SIZE = (1920, 1041)
+DENSITY_PROMPT = "\x1b[1;32mftofighi@apzkrfpspst0103\x1b[0m:\x1b[1;34m~\x1b[0m$ "
+
 SAMPLE_OUTPUT = (
     "Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 6.8.0-45-generic x86_64)\r\n\r\n"
     "Last login: Fri Oct 17 09:12:44 2026 from 10.0.0.15\r\n"
@@ -200,7 +234,7 @@ def _pump(iterations: int = 400) -> None:
 
 
 # ------------------------------------------------------------------- capture
-def _render(widget: Gtk.Widget, path: Path, width: int, height: int) -> None:
+def _render(widget: Gtk.Widget, path: Path, width: int, height: int, on_rendered=None) -> None:
     offscreen = Gtk.OffscreenWindow()
     offscreen.set_default_size(width, height)
     parent = widget.get_parent()
@@ -220,6 +254,8 @@ def _render(widget: Gtk.Widget, path: Path, width: int, height: int) -> None:
         print(f"saved {path}")
     else:
         print(f"FAILED {path}")
+    if on_rendered is not None:
+        on_rendered(widget)
     offscreen.remove(widget)
     widget.set_size_request(-1, -1)
     if parent is not None:
@@ -227,7 +263,7 @@ def _render(widget: Gtk.Widget, path: Path, width: int, height: int) -> None:
     offscreen.destroy()
 
 
-def capture_window(window: Gtk.Window, path: Path, width: int = 1280, height: int = 800) -> None:
+def capture_window(window: Gtk.Window, path: Path, width: int = 1280, height: int = 800, on_rendered=None) -> None:
     """Render a toplevel window (titlebar + content) into ``path``."""
 
     titlebar = window.get_titlebar()
@@ -246,7 +282,7 @@ def capture_window(window: Gtk.Window, path: Path, width: int = 1280, height: in
     if child is not None:
         window.remove(child)
         holder.pack_start(child, True, True, 0)
-    _render(holder, path, width, height)
+    _render(holder, path, width, height, on_rendered)
     if child is not None:
         holder.remove(child)
         window.add(child)
@@ -264,6 +300,108 @@ def capture_dialog(dialog: Gtk.Dialog, path: Path, width: int = 0, height: int =
         height or (default_h if default_h > 0 else 420),
     )
     dialog.destroy()
+
+
+# ------------------------------------------------------------ chrome budget
+def chrome_budget(window, holder) -> dict:
+    """Band heights and the terminal's share of the window, from real allocations."""
+
+    def box(widget):
+        if widget is None or not widget.get_visible() or not widget.get_mapped():
+            return None
+        x, y = widget.translate_coordinates(holder, 0, 0)
+        alloc = widget.get_allocation()
+        return x, y, alloc.width, alloc.height
+
+    total_w, total_h = holder.get_allocated_width(), holder.get_allocated_height()
+    view = window.host_page.view
+    current = window.terminal_tabs.current_tab
+    tab = current() if callable(current) else current
+    terminal = box(tab._terminal) if tab is not None else None
+    if terminal is None:  # no session: the ready state's canvas is the "terminal area"
+        terminal = box(window.host_page.terminal_page)
+    header = box(window._header)
+    sidebar = box(window._sidebar) if window.layout.sidebar_visible else None
+    page_bar, row_a, tabs, info = (box(w) for w in (view.page_bar, view.header, view.tabs, view.info_bar))
+    above = max((b[1] + b[3] for b in (header, page_bar, row_a, tabs) if b), default=0)
+    rows = {
+        "top bar": header[3] if header else 0,
+        "page bar": page_bar[3] if page_bar else 0,
+        "host header / row A": row_a[3] if row_a else 0,
+        "tabs (row B)": tabs[3] if tabs else 0,
+        "session strip + borders": max(0, terminal[1] - above) if terminal else 0,
+        "status bar": info[3] if info else 0,
+    }
+    tree = window.tree_view
+    visible_rows = 0
+    rng = tree.get_visible_range() if tree.get_realized() else None
+    if rng:
+        start, end = rng
+        scroller_h = tree.get_parent().get_allocated_height()
+        path = start.copy()
+        while True:
+            rect = tree.get_background_area(path, None)
+            if rect.y >= 0 and rect.y + rect.height <= scroller_h:
+                visible_rows += 1
+            if path.compare(end) == 0:
+                break
+            if not _next_visible_path(tree, path):
+                break
+    return {
+        "window": (total_w, total_h),
+        "rows": rows,
+        "chrome": total_h - (terminal[3] if terminal else 0),
+        "terminal": terminal[2:] if terminal else (0, 0),
+        "height_share": (terminal[3] / total_h) if terminal else 0.0,
+        "width_share": (terminal[2] / total_w) if terminal else 0.0,
+        "sidebar": sidebar[2] if sidebar else 0,
+        "tree_rows": visible_rows,
+    }
+
+
+def _next_visible_path(tree, path) -> bool:
+    """Advance ``path`` in place to the next row shown in ``tree`` (depth first)."""
+
+    model = tree.get_model()
+    it = model.get_iter(path)
+    if model.iter_has_child(it) and tree.row_expanded(path):
+        path.down()
+        return True
+    while True:
+        nxt = model.iter_next(model.get_iter(path))
+        if nxt is not None:
+            path.next()
+            return True
+        if path.get_depth() <= 1:
+            return False
+        path.up()
+
+
+def format_budget(name: str, budget: dict) -> str:
+    width, height = budget["window"]
+    lines = [f"Chrome budget — {name} ({width} × {height})", "", "| Band | Height |", "|---|---:|"]
+    for band, value in budget["rows"].items():
+        lines.append(f"| {band} | {value} |")
+    tw, th = budget["terminal"]
+    lines += [
+        f"| **chrome total** | **{budget['chrome']}** |",
+        "",
+        f"Terminal {tw} × {th}: **{budget['height_share']:.1%}** of the height, "
+        f"**{budget['width_share']:.1%}** of the width; sidebar {budget['sidebar']} px, "
+        f"{budget['tree_rows']} tree rows fully visible.",
+    ]
+    return "\n".join(lines)
+
+
+def report_budget(window, out_dir: Path, name: str):
+    """``on_rendered`` hook for capture_window(): print and save the chrome budget."""
+
+    def hook(holder) -> None:
+        text = format_budget(name, chrome_budget(window, holder))
+        print(text)
+        (out_dir / f"{name}-budget.md").write_text(text + "\n", encoding="utf-8")
+
+    return hook
 
 
 # ------------------------------------------------------------ sidebar probe
@@ -456,21 +594,31 @@ def prepare_relay_match(window) -> None:
         window.tree.select_host(host.parent_group, host.child_group, host.alias)
 
 
-def _make_window(app, base: Path, prefer_dark: bool):
+def snapshot_density(default: str = "compact") -> str:
+    """Density for a scenario; ``SSHM_DENSITY`` overrides it (regression runs)."""
+
+    return os.environ.get("SSHM_DENSITY") or default
+
+
+def _make_window(app, base: Path, prefer_dark: bool, density: str = ""):
+    import json
+
     from ssh_manager.gtk_app import SSHManagerWindow
     from ssh_manager.settings import AppSettings
 
     settings = AppSettings.load()
     settings.master_password_disabled = True
     ui_state = base / ".ui_state.json"
-    ui_state.write_text('{"prefer_dark": %s}' % ("true" if prefer_dark else "false"), encoding="utf-8")
+    ui_state.write_text(
+        json.dumps({"prefer_dark": bool(prefer_dark), "density": density or snapshot_density()}), encoding="utf-8"
+    )
     window = SSHManagerWindow(app, base, settings)
     window.host_page.latency.enabled = False  # snapshots never open sockets
     _pump()
     return window
 
 
-def make_window_with_mode(app, base: Path, theme_mode: str):
+def make_window_with_mode(app, base: Path, theme_mode: str, density: str = ""):
     """Main window for ``base`` with the app theme mode ``system`` / ``light`` / ``dark``."""
 
     import json
@@ -478,7 +626,9 @@ def make_window_with_mode(app, base: Path, theme_mode: str):
     from ssh_manager.gtk_app import SSHManagerWindow
     from ssh_manager.settings import AppSettings
 
-    (base / ".ui_state.json").write_text(json.dumps({"theme_mode": theme_mode}), encoding="utf-8")
+    (base / ".ui_state.json").write_text(
+        json.dumps({"theme_mode": theme_mode, "density": density or snapshot_density()}), encoding="utf-8"
+    )
     settings = AppSettings.load()
     settings.master_password_disabled = True
     window = SSHManagerWindow(app, base, settings)
@@ -687,7 +837,7 @@ def run(out_dir: Path) -> None:
     def _relay_match() -> None:
         """Reproduce docs/ui-target/relay-reference.png (light theme, 1852×934)."""
 
-        window = _make_window(app, relay_base, False)
+        window = _make_window(app, relay_base, False, snapshot_density("comfortable"))
         prepare_relay_match(window)
         _pump()
         capture_window(window, out_dir / "relay-match.png", *RELAY_SIZE)
@@ -697,7 +847,7 @@ def run(out_dir: Path) -> None:
     def _relay_dark() -> None:
         """The reference scene in the derived dark theme."""
 
-        window = _make_window(app, relay_base, True)
+        window = _make_window(app, relay_base, True, snapshot_density("comfortable"))
         prepare_relay_match(window)
         _pump()
         capture_window(window, out_dir / "relay-dark.png", *RELAY_SIZE)
@@ -707,7 +857,7 @@ def run(out_dir: Path) -> None:
     def _relay_compact() -> None:
         """The reference scene at the 960 px minimum width (compact top bar)."""
 
-        window = _make_window(app, relay_base, False)
+        window = _make_window(app, relay_base, False, snapshot_density("comfortable"))
         prepare_relay_match(window)
         window._header.set_compact(True)
         window._paned.set_position(300)
@@ -720,6 +870,51 @@ def run(out_dir: Path) -> None:
         """Sidebar crops under several GTK themes, checked against the surface token."""
 
         run_sidebar_surfaces(out_dir)
+
+    density_base = _SANDBOX / "conf"
+    _write_inventory(density_base, populated=True, inventory=DENSITY_INVENTORY)
+
+    def _density_scene(window, session: bool) -> None:
+        import time
+
+        window._header.set_user_initials("F")
+        host = window.tree.find_host_by_alias("apzkrfpspst0103.fns")
+        if host is None:
+            return
+        window.tree.select_host(host.parent_group, host.child_group, host.alias)
+        page = window.host_page
+        page.history.record_connected(window.creds.host_key(host), time.time() - 60)
+        page.inject_latency(host, 2.0)
+        page.latency.enabled = True
+        if session:
+            tab = window.terminal_tabs.new_terminal(host, autostart=False)
+            tab._terminal.feed(DENSITY_PROMPT.encode("utf-8"))
+            tab._set_status("Connected", True)
+            tab._apply_stats_result({"cpu": 0.0, "mem_used": 1600.0, "mem_total": 3800.0,
+                                     "disk_used": 10.4, "disk_total": 15.2})
+        _pump()
+
+    for theme, dark in (("dark", True), ("light", False)):
+        for kind, session in (("session", True), ("empty", False)):
+
+            @scenario(f"compact-{kind}-{theme}")
+            def _compact_scene(dark=dark, theme=theme, kind=kind, session=session) -> None:
+                name = f"compact-{kind}-{theme}"
+                window = _make_window(app, density_base, dark, snapshot_density("compact"))
+                _density_scene(window, session)
+                capture_window(window, out_dir / f"{name}.png", *DENSITY_SIZE,
+                               on_rendered=report_budget(window, out_dir, name))
+                window.destroy()
+
+    @scenario("comfortable-session-dark")
+    def _comfortable_scene() -> None:
+        """The same scene in the Comfortable preset: the "before" chrome budget."""
+
+        window = _make_window(app, density_base, True, "comfortable")
+        _density_scene(window, True)
+        capture_window(window, out_dir / "comfortable-session-dark.png", *DENSITY_SIZE,
+                       on_rendered=report_budget(window, out_dir, "comfortable-session-dark"))
+        window.destroy()
 
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:
         @scenario(name)

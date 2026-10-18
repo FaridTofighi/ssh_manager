@@ -78,6 +78,10 @@ class TreeController:
         self.host_iters = self.win.tree_view.populate(rows)
         self.restore_selection(*selected)
         self.win._sidebar.set_page(TreePage(sidebar_page_for(inventories, rows, bool(query or terms))))
+        if hasattr(self.win._sidebar, "set_host_count"):
+            self.win._sidebar.set_host_count(
+                sum(len(group.hosts) for groups in self.win.manager.tree.values() for group in groups.values())
+            )
         self.update_details()
         self.update_action_state()
 

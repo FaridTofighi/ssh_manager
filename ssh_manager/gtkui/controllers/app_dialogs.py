@@ -6,7 +6,7 @@ import datetime
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import gi
 
@@ -39,6 +39,7 @@ class AppDialogs:
 
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
+        self._shortcuts_window: Optional[Gtk.ShortcutsWindow] = None
 
     def open_settings(self) -> None:
         dialog = PreferencesDialog(
@@ -50,6 +51,7 @@ class AppDialogs:
             on_reset=self.change_master_password,
             on_export=self.export_settings_snapshot,
             latency_probe=self.win._ui.latency_probe,
+            density=self.win.density,
         )
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
@@ -63,6 +65,7 @@ class AppDialogs:
         self.win.terminal_tabs.set_default_font_scale(values.terminal_font_scale)
         self.win.terminal_tabs.apply_font_scale_to_all(values.terminal_font_scale)
         self.win._apply_ui_font(values.ui_font_size)
+        self.win.set_density(values.density)
         self.win._ui.theme_mode = values.theme_mode.value
         self.win._ui.font_scale = values.terminal_font_scale
         self.win._ui.ui_font_size = self.win._ui_font_size
@@ -152,8 +155,12 @@ class AppDialogs:
         self.win.tree.update_details()
 
     def show_shortcuts(self) -> None:
-        window = build_shortcuts_window(self.win)
+        # One window per main window, hidden on close (see build_shortcuts_window).
+        window = self._shortcuts_window
+        if window is None:
+            window = self._shortcuts_window = build_shortcuts_window(self.win)
         window.show_all()
+        window.present()
 
     def open_documentation(self) -> None:
         readme = Path(__file__).resolve().parents[3] / "README.md"

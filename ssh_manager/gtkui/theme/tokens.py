@@ -22,124 +22,47 @@ def enum_value(value: object) -> str:
 
 
 # --------------------------------------------------------------------- scales
-class Space:
-    """Spacing scale in pixels. Only these values may be used for margins/gaps."""
-
-    XS = 4
-    S = 8
-    M = 12
-    L = 16
-    XL = 20
-    XXL = 24
-    XXXL = 32
-    GUTTER = 36  # horizontal page gutter of the host page bands
-
-    @classmethod
-    def values(cls) -> Tuple[int, ...]:
-        return (cls.XS, cls.S, cls.M, cls.L, cls.XL, cls.XXL, cls.XXXL, cls.GUTTER)
+# Geometry lives in the density presets (``density.py``). ``Space``, ``Radius``,
+# ``Size``, ``Layout`` and ``FontScale`` are *live views* of the active preset:
+# ``Size.TOPBAR`` is 44 in Compact and 76 in Comfortable, read at the moment it
+# is used. Code that lays widgets out reads them in its ``apply_density()``, so
+# a density switch at runtime re-applies the geometry.
+from . import density as _density  # noqa: E402
 
 
-class Radius:
-    """Corner radius scale in pixels."""
+class _LiveGroup:
+    """Attribute access forwards to one group of the active density preset."""
 
-    SMALL = 4  # small chips
-    KEYCAP = 6  # keyboard hint badges
-    MEDIUM = 8  # buttons, selected tree rows
-    INPUT = 10  # entries, logo tile
-    LARGE = 12  # cards, popovers, toasts, host icon tile
-    CARD = 18  # empty-state icon card
-    PILL = 999  # pills, badges, dots
+    def __init__(self, group: str, doc: str = "") -> None:
+        self._group = group
+        self.__doc__ = doc
 
-    @classmethod
-    def values(cls) -> Tuple[int, ...]:
-        return (cls.SMALL, cls.KEYCAP, cls.MEDIUM, cls.INPUT, cls.LARGE, cls.CARD, cls.PILL)
+    def _tokens(self):
+        return getattr(_density.active(), self._group)
 
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._tokens(), name)
 
-class Size:
-    """Fixed component sizes (px) taken from the reference design."""
-
-    TOPBAR = 76
-    SIDEBAR = 408
-    SIDEBAR_MIN = 300
-    SIDEBAR_MAX = 520
-    PAGE_BAR = 73  # band heights are content heights; each band adds a 1px border
-    HOST_HEADER = 123
-    TABS = 57
-    INFO_BAR = 69
-    SIDEBAR_FOOTER = 66
-    TREE_ROW = 41
-    TREE_INSET = 12
-    TREE_INDENT = 25
-    LOGO_TILE = 42
-    AVATAR = 40
-    ICON_BUTTON = 40
-    SEARCH = 46
-    BUTTON = 40
-    BUTTON_LARGE = 44
-    HERO_BUTTON = 51
-    HOST_TILE = 54
-    EMPTY_CARD = 72
-    BADGE = 22
+    def __repr__(self) -> str:
+        return f"<live {self._group} tokens ({_density.active().density.value})>"
 
 
-class Layout:
-    """Offsets and gaps measured on docs/ui-target/relay-reference.png (px).
+class _LiveLayout:
+    """``Layout.Sidebar.SEARCH_TOP`` → ``active().sidebar.SEARCH_TOP``."""
 
-    Views take every reference measurement from here, so the geometry lives in
-    one place next to the other design tokens.
-    """
+    Topbar = _LiveGroup("topbar", "Top bar offsets.")
+    Sidebar = _LiveGroup("sidebar", "Sidebar offsets.")
+    Tree = _LiveGroup("tree", "Tree row geometry.")
+    Page = _LiveGroup("page", "Host page offsets.")
+    Ready = _LiveGroup("ready", "Ready-to-connect state offsets.")
 
-    class Topbar:
-        BRAND_INSET = 29  # window edge → logo tile
-        WORDMARK_GAP = 11  # logo tile → "SSH Manager"
-        DIVIDER_HEIGHT = 28
-        BRAND_DIVIDER_OFFSET = 2  # brand block = pane position + 2 (divider at x = 408)
-        WORKSPACE_GAP = 22  # divider → workspace button (its 8px padding makes 30)
-        WORKSPACE_NAME_GAP = 16  # "WORKSPACE" → inventory name
-        HEALTH_GAP = 19  # health text → activity button
-        HEALTH_DOT_GAP = 10
-        HELP_GAP = 12  # activity → help button
-        AVATAR_GAP = 17  # help → avatar
 
-    class Sidebar:
-        HEADER_TOP = 29  # sidebar top → header block ("CONNECTION MANAGER" at y = 111)
-        HEADER_HEIGHT = 52
-        TITLE_GAP = 5  # eyebrow → "Hosts" (cap top at y = 134)
-        TITLE_SLACK = 9  # line-box slack under "Hosts" that the search row may overlap
-        ADD_HOST_TOP = 12  # header top → Add host (y = 118)
-        SEARCH_TOP = 22  # header bottom → search box (y = 180)
-        SEARCH_GAP = 11  # search box → filter button
-        SEARCH_END = 25  # filter button → sidebar edge
-        TREE_TOP_GAP = 20  # search box → first tree row (y = 245)
-        FOOTER_GAP = 10  # Settings → Keys
-
-    class Tree:
-        GROUP_GAP = 7  # extra space above every top-level group but the first
-        LEAD = 26  # x of the level-0 chevron box
-        CHEVRON = 14
-        FOLDER = 18
-        HOST_ICON = 16
-        COUNT_RIGHT = 25  # count right edge → row right edge
-        DOT_RIGHT = 28  # status-dot centre → row right edge
-        DOT = 7
-        BAR_WIDTH = 4
-        BAR_HEIGHT = 24
-        RADIUS = 8
-
-    class Page:
-        CRUMB_GAP = 10
-        HEADER_GAP = 18  # host tile → title block
-        STAT_GAP = 40  # between header stat columns
-        TAB_GAP = 29  # between page tabs
-        INFO_GAP = 48  # between info-bar fields
-        INFO_COMPACT_WIDTH = 1250  # live session + narrower info bar: hide AUTH / PROXY
-
-    class Ready:
-        BODY_WIDTH = 520
-        TITLE_TOP = 24
-        BODY_TOP = 14
-        BUTTON_TOP = 32
-        CAPTION_TOP = 16
+Space = _LiveGroup("space", "Spacing scale (px) of the active density.")
+Radius = _LiveGroup("radius", "Corner radius scale (px) of the active density.")
+Size = _LiveGroup("size", "Component sizes (px) of the active density.")
+Layout = _LiveLayout()
 
 
 class Motion:
@@ -160,27 +83,23 @@ def em(px: float) -> float:
     return round(px / BASE_FONT_PX, 3)
 
 
-class FontScale:
-    """Relative type scale (multiples of the application font size)."""
+class _LiveFontScale:
+    """Relative type scale of the active density (multiples of the app font size)."""
 
-    CAPS = em(12)
-    BADGE = em(11)
-    CAPTION = em(13)
-    MONO = em(14)
-    BODY = em(15)
-    TREE = em(16)
-    SUBTITLE = em(16)
-    WORDMARK = em(20)
-    HERO_TITLE = em(22)
-    HOST_TITLE = em(26)
-    PAGE_TITLE = em(28)
-    TITLE = em(20)
+    def __getattr__(self, name: str) -> float:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        tokens = _density.active()
+        return em(getattr(tokens.font, name) / tokens.base_font_scale)
+
+
+FontScale = _LiveFontScale()
 
 
 UI_FONT_FAMILIES = ("Inter", "Cantarell", "Noto Sans", "DejaVu Sans")
 MONO_FONT_FAMILIES = ("JetBrains Mono", "Fira Code", "DejaVu Sans Mono")
-CAPS_TRACKING = "0.12em"
-BADGE_TRACKING = "0.06em"
+CAPS_TRACKING = _density.COMFORTABLE.caps_tracking  # per density: ``density.active().caps_tracking``
+BADGE_TRACKING = _density.COMFORTABLE.badge_tracking
 
 
 class Level(str, Enum):

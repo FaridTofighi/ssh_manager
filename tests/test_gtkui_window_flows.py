@@ -223,11 +223,17 @@ class RelayTreeTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_row_geometry_matches_reference(self) -> None:
+        from ssh_manager.gtkui.theme import density
         from ssh_manager.gtkui.views.session_tree import row_geometry
 
-        self.assertEqual(row_geometry("parent", 0), {"chevron": 26, "icon": 52, "text": 79})
-        self.assertEqual(row_geometry("child", 1), {"chevron": 51, "icon": -1, "text": 77})
-        self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 81, "text": 108})
+        with density.using("comfortable"):  # the Relay reference
+            self.assertEqual(row_geometry("parent", 0), {"chevron": 26, "icon": 52, "text": 79})
+            self.assertEqual(row_geometry("child", 1), {"chevron": 51, "icon": -1, "text": 77})
+            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 81, "text": 108})
+        with density.using("compact"):
+            self.assertEqual(row_geometry("parent", 0), {"chevron": 12, "icon": 30, "text": 52})
+            self.assertEqual(row_geometry("child", 1), {"chevron": 28, "icon": -1, "text": 46})
+            self.assertEqual(row_geometry("host", 2), {"chevron": -1, "icon": 46, "text": 66})
 
     def test_collapse_state_survives_rebuild_and_keyboard_expands(self) -> None:
         from gi.repository import Gdk, Gtk
@@ -316,11 +322,17 @@ class HostPageTests(unittest.TestCase):
         self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
         self.page.goto_page_tab(3)
         self.assertIs(self.page.view.current_tab, PageTab.ACTIVITY)
-        win.layout.toggle_maximized()
-        self.assertFalse(self.page.view.page_bar.get_visible())
+        win.layout.toggle_maximized()  # focus mode
+        view = self.page.view
+        self.assertFalse(view.header.get_visible())
+        self.assertFalse(view.info_bar.get_visible())
+        self.assertFalse(win._header.get_visible())
+        self.assertTrue(view.tabs.get_visible() or view.strip_tabs.get_visible())
         self.assertIs(self.page.view.current_tab, PageTab.TERMINAL)
         win.layout.toggle_maximized()
-        self.assertTrue(self.page.view.page_bar.get_visible())
+        self.assertTrue(view.header.get_visible())
+        self.assertTrue(view.info_bar.get_visible())
+        self.assertTrue(win._header.get_visible())
 
     def test_status_changes_feed_history_and_sessions_dock_status_bar(self) -> None:
         win = self.win

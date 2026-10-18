@@ -92,7 +92,12 @@ class HostPageController:
         view.page_bar.on_primary = self.on_primary
         view.page_bar.on_more = self.on_more
         view.info_bar.on_copy = self.copy_command
-        view.tabs.on_changed = self._on_tab_changed
+        view.on_tab_changed = self._on_tab_changed
+        view.on_strip_merged = self._on_strip_merged
+        if hasattr(notebook, "set_strip_start"):
+            notebook.set_strip_start(view.strip_tabs)
+        if hasattr(notebook, "on_strip_changed"):
+            notebook.on_strip_changed = self._sync_sessions_strip
         self.view = view
         self.history.add_listener(lambda _key: self.refresh())
         self._timers.append(GLib.timeout_add_seconds(REFRESH_SECONDS, self._refresh_latency_tick))
@@ -127,15 +132,37 @@ class HostPageController:
         self.select_tab(PageTab.TERMINAL if self.view.current_tab is PageTab.DETAILS else PageTab.DETAILS)
 
     def set_chrome_visible(self, visible: bool) -> None:
-        """Maximized workspace: only the terminal canvas stays visible."""
+        """Focus mode: only the tabs / session row and the terminal stay visible."""
 
         self._chrome_visible = visible
         if self.view is None:
             return
-        for band in (self.view.page_bar, self.view.header, self.view.tabs, self.view.info_bar):
-            band.set_visible(visible)
+        self.view.set_chrome_visible(visible)
         if not visible:
             self.select_tab(PageTab.TERMINAL)
+
+    def apply_density(self) -> None:
+        if self.view is None:
+            return
+        if self.terminal_page is not None:
+            self.terminal_page.ready.apply_density()
+        self.view.apply_density()
+        self._sync_sessions_strip()
+        self.refresh()
+
+    def set_narrow(self, narrow: bool) -> None:
+        if self.view is not None:
+            self.view.set_narrow(narrow)
+
+    def _sync_sessions_strip(self) -> None:
+        notebook = self.win.terminal_tabs if hasattr(self.win, "terminal_tabs") else None
+        if self.view is not None and notebook is not None and hasattr(notebook, "strip_visible"):
+            self.view.set_sessions_strip(notebook.strip_visible)
+
+    def _on_strip_merged(self, merged: bool) -> None:
+        notebook = self.win.terminal_tabs if hasattr(self.win, "terminal_tabs") else None
+        if notebook is not None and hasattr(notebook, "set_strip_merged"):
+            notebook.set_strip_merged(merged)
 
     # ----------------------------------------------------------- selection
     def selection(self):

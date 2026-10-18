@@ -175,10 +175,16 @@ def _groups(specs: Sequence[ActionSpec]) -> Dict[str, List[ActionSpec]]:
 
 
 def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
-    """Build the ``Gtk.ShortcutsWindow`` from :data:`ACTIONS`."""
+    """Build the ``Gtk.ShortcutsWindow`` from :data:`ACTIONS`.
+
+    Closing it only hides it, and callers reuse one window (never destroy it).
+    GTK 3.24 leaves dangling CSS nodes behind a destroyed ``ShortcutsWindow``,
+    and the next theme or font change restyles them and crashes the process.
+    """
 
     window = Gtk.ShortcutsWindow(modal=True)
     window.get_style_context().add_class("sm-dialog")
+    window.connect("delete-event", lambda widget, _event: widget.hide_on_delete())
     if parent is not None:
         window.set_transient_for(parent)
     section = Gtk.ShortcutsSection(section_name="main", title=_("SSH Manager"), max_height=12)

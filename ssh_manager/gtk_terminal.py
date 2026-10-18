@@ -1544,6 +1544,8 @@ class TerminalNotebook(Gtk.Box):
         self.on_new_host: Optional[Callable[[], None]] = None
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
         self.on_sessions_changed: Optional[Callable[[], None]] = None
+        self.on_strip_changed: Optional[Callable[[], None]] = None  # session strip shown/hidden
+        self.on_toggle_focus_mode: Optional[Callable[[], None]] = None
         self._status_dock: Optional[Gtk.Box] = None
 
         self._build_toolbar()
@@ -1571,6 +1573,8 @@ class TerminalNotebook(Gtk.Box):
         self._toolbar_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._toolbar_row.get_style_context().add_class("session-toolbar-row")
         self._toolbar_row.pack_end(bar, False, False, 0)
+        self._toolbar_row.show_all()
+        self._toolbar_row.set_no_show_all(True)  # _place_toolbar() owns its visibility
         self.pack_start(self._toolbar_row, False, False, 0)
 
     def _build_stack(self) -> None:
@@ -1594,22 +1598,23 @@ class TerminalNotebook(Gtk.Box):
         self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
         actions.pack_start(self._tabs_menu_button, False, False, 0)
         separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        separator.set_margin_top(Space.S)
-        separator.set_margin_bottom(Space.S)
-        actions.pack_start(separator, False, False, Space.XS)
+        self._strip_separator = separator
+        actions.pack_start(separator, False, False, 0)
         self._toolbar_slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         actions.pack_start(self._toolbar_slot, False, False, 0)
         actions.show_all()
         self._notebook.set_action_widget(actions, Gtk.PackType.END)
+        # Start of the tab row: the host page's tabs sit here while the
+        # Compact layout merges them with the session chips (see set_strip_start()).
+        self._strip_start = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._strip_start.set_no_show_all(True)  # shown only while merged (an empty slot still takes room)
+        self._notebook.set_action_widget(self._strip_start, Gtk.PackType.START)
 
         self._tile_grid = Gtk.Grid()
-        self._tile_grid.set_row_spacing(Space.S)
-        self._tile_grid.set_column_spacing(Space.S)
         self._tile_grid.set_row_homogeneous(True)
         self._tile_grid.set_column_homogeneous(True)
         self._tile_grid.set_hexpand(True)
         self._tile_grid.set_vexpand(True)
-        self._tile_grid.set_border_width(Space.S)
         self._tile_scroller = Gtk.ScrolledWindow()
         # Tiles shrink to the workspace width; only scroll vertically when there are many.
         self._tile_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -1637,6 +1642,40 @@ class TerminalNotebook(Gtk.Box):
         self._stack.add_named(self._tile_scroller, "tiles")
         self._stack.set_visible_child_name("placeholder")
         self.pack_start(self._stack, True, True, 0)
+        self.apply_density()
+
+    # ------------------------------------------------------------- density
+    def apply_density(self) -> None:
+        """Spacing of the strip and the tile grid from the active density preset."""
+
+        self._strip_separator.set_margin_top(Space.S)
+        self._strip_separator.set_margin_bottom(Space.S)
+        self._strip_separator.set_margin_start(Space.XS)
+        self._strip_separator.set_margin_end(Space.XS)
+        self._tile_grid.set_row_spacing(Space.S)
+        self._tile_grid.set_column_spacing(Space.S)
+        self._tile_grid.set_border_width(Space.S)
+        self._placeholder.apply_density()
+
+    def set_strip_start(self, widget: Gtk.Widget) -> None:
+        """Put ``widget`` at the start of the session tab row (the merged row B)."""
+
+        for child in list(self._strip_start.get_children()):
+            self._strip_start.remove(child)
+        self._strip_start.pack_start(widget, False, False, 0)
+
+    def set_strip_merged(self, merged: bool) -> None:
+        """Compact: the tab row doubles as the host page's tabs row."""
+
+        ctx = self._notebook.get_style_context()
+        (ctx.add_class if merged else ctx.remove_class)("merged-strip")
+        self._strip_start.set_visible(merged)
+
+    @property
+    def strip_visible(self) -> bool:
+        """The session chips are on screen (tabs mode with at least one session)."""
+
+        return self._stack.get_visible_child_name() == "tabs"
 
     def _overflow_menu_spec(self):
         return [
@@ -1649,6 +1688,9 @@ class TerminalNotebook(Gtk.Box):
             MenuSection("session", [
                 MenuItemSpec(_("_Duplicate Session"), self.duplicate_current, Icons.DUPLICATE, "Shift+Ctrl+D"),
                 MenuItemSpec(_("Re_name Session…"), self.rename_current, Icons.EDIT, "F2"),
+            ]),
+            MenuSection("view", [
+                MenuItemSpec(_("_Focus Mode"), self._toggle_focus_mode, Icons.MAXIMIZE, "F11"),
             ]),
             MenuSection("close", [
                 MenuItemSpec(_("Close _Other Sessions"), lambda: self.close_others(self._current_tab())),
@@ -2165,6 +2207,10 @@ class TerminalNotebook(Gtk.Box):
         self.close_tab(tab)
         return GLib.SOURCE_REMOVE
 
+    def _toggle_focus_mode(self) -> None:
+        if self.on_toggle_focus_mode is not None:
+            self.on_toggle_focus_mode()
+
     def _request_quick_connect(self) -> None:
         if self.on_quick_connect is not None:
             self.on_quick_connect()
@@ -2206,8 +2252,11 @@ class TerminalNotebook(Gtk.Box):
             visible = "tiles"
         else:
             visible = "tabs"
+        changed = self._stack.get_visible_child_name() != visible
         self._stack.set_visible_child_name(visible)
         self._place_toolbar(in_strip=visible == "tabs")
+        if changed and self.on_strip_changed is not None:
+            self.on_strip_changed()
         if len(self._tabs) <= 1:
             if self._broadcast_mode:
                 self.set_broadcast_mode(False)

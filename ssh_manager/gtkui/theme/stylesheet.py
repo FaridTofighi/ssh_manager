@@ -13,29 +13,27 @@ from __future__ import annotations
 
 import re
 from string import Template
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
+from .density import MIN_FONT_PX, DensityTokens
+from .density import active as active_density
 from .tokens import (
-    BADGE_TRACKING,
-    CAPS_TRACKING,
     ENV_BADGES,
     MONO_FONT_FAMILIES,
     UI_FONT_FAMILIES,
     em,
-    FontScale,
-    Layout,
     Motion,
     Palette,
-    Radius,
-    Size,
-    Space,
 )
+
+DEFAULT_FONT_PT = 11
 
 TOKEN_PREFIX = "sm_"
 
 _TEMPLATE = Template(r"""
 /* ===================================================================
- * SSH Manager stylesheet ($name theme) - generated from tokens.py.
+ * SSH Manager stylesheet ($name theme, $density density) - generated from
+ * tokens.py and density.py.
  * Do not edit by hand: change the tokens or stylesheet.py instead.
  * =================================================================== */
 
@@ -134,7 +132,7 @@ popover.sm-popover list, popover.sm-popover list:backdrop {
     text-shadow: none;
     -gtk-icon-shadow: none;
     padding: ${xs}px ${m}px;
-    min-height: 24px;
+    min-height: ${button_min}px;
     font-weight: 500;
 }
 .sm-window button:hover, .sm-dialog button:hover { background-color: @sm_bg_hover; }
@@ -170,8 +168,8 @@ popover.sm-popover list, popover.sm-popover list:backdrop {
 }
 button.toolbar-icon {
     padding: ${xs}px;
-    min-width: 28px;
-    min-height: 28px;
+    min-width: ${toolbar_button}px;
+    min-height: ${toolbar_button}px;
 }
 button.icon-40 { min-width: ${icon_button}px; min-height: ${icon_button}px; padding: 0; }
 
@@ -228,7 +226,7 @@ button.icon-40 { min-width: ${icon_button}px; min-height: ${icon_button}px; padd
     border: 1px solid @sm_border_input;
     border-radius: ${r_input}px;
     box-shadow: none;
-    min-height: 32px;
+    min-height: ${entry}px;
     padding: 0 ${m}px;
 }
 .sm-window spinbutton entry, .sm-dialog spinbutton entry { border: none; background: transparent; }
@@ -302,7 +300,7 @@ entry.invalid { border-color: @sm_danger; box-shadow: inset 0 0 0 1px @sm_danger
     padding: ${s}px;
 }
 .sm-window popover modelbutton, .sm-dialog popover modelbutton {
-    min-height: 36px;
+    min-height: ${menu_row}px;
     border-radius: ${r_md}px;
     padding: 0 ${m}px;
     color: @sm_text_primary;
@@ -317,7 +315,7 @@ menu, .menu, .context-menu {
     color: @sm_text_primary;
 }
 menu menuitem {
-    min-height: 36px;
+    min-height: ${menu_row}px;
     border-radius: ${r_md}px;
     padding: 0 ${m}px;
     color: @sm_text_primary;
@@ -332,7 +330,7 @@ menuitem .accel-hint, modelbutton .accel-hint { color: @sm_text_faint; }
 menuitem.destructive label, modelbutton.destructive { color: @sm_danger; }
 
 .popover-menu-item {
-    min-height: 36px;
+    min-height: ${menu_row}px;
     border-radius: ${r_md}px;
     padding: 0 ${m}px;
     border-color: transparent;
@@ -473,11 +471,11 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 .sidebar-eyebrow { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .sidebar-title {
     font-size: ${fs_page_title}em;
-    font-weight: 400;
+    font-weight: ${page_title_weight};
     color: @sm_text_primary;
     margin-bottom: -${title_slack}px;
 }
-.sm-window button.add-host { min-height: ${button_inner}px; padding: 0 15px 0 13px; font-size: ${fs_body}em; }
+.sm-window button.add-host { min-height: ${button_inner}px; padding: 0 ${add_host_pad_end}px 0 ${add_host_pad_start}px; font-size: ${fs_body}em; }
 .sm-window entry.sidebar-search-entry {
     min-height: ${search_inner}px;
     background-color: @sm_bg_input;
@@ -496,7 +494,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     background-color: @sm_bg_surface;
 }
 .sm-window button.filter-button {
-    min-width: 32px;
+    min-width: ${filter_button}px;
     min-height: ${search_inner}px;
     padding: 0;
     border-radius: ${r_md}px;
@@ -564,8 +562,8 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     font-weight: 400;
 }
 .sm-window button.breadcrumb-link:hover { background-color: @sm_bg_hover; }
-.sm-window button.page-more { min-width: 40px; min-height: ${button_large_inner}px; padding: 0; color: @sm_text_muted; }
-.sm-window button.page-primary { min-height: ${button_large_inner}px; min-width: 110px; padding: 0 ${l}px; font-size: ${fs_body}em; }
+.sm-window button.page-more { min-width: ${button}px; min-height: ${button_large_inner}px; padding: 0; color: @sm_text_muted; }
+.sm-window button.page-primary { min-height: ${button_large_inner}px; min-width: ${primary_min_width}px; padding: 0 ${l}px; font-size: ${fs_body}em; }
 .host-header {
     background-color: @sm_bg_surface;
     border-bottom: 1px solid @sm_border_subtle;
@@ -579,7 +577,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     min-width: ${host_tile}px;
     min-height: ${host_tile}px;
 }
-.host-title { font-size: ${fs_host_title}em; font-weight: 400; color: @sm_text_primary; }
+.host-title { font-size: ${fs_host_title}em; font-weight: ${host_title_weight}; color: @sm_text_primary; }
 .host-address { font-family: $mono_fonts; font-size: ${fs_mono}em; color: @sm_text_secondary; }
 .env-badge {
     border-radius: ${r_pill}px;
@@ -802,6 +800,8 @@ notebook.session-tabs > stack {
     color: @sm_text_primary;
 }
 
+$density_rules
+
 $motion
 """)
 
@@ -836,47 +836,179 @@ def _env_badges(palette: Palette) -> str:
     return "\n".join(rules)
 
 
-def _values(palette: Palette, motion: str) -> Dict[str, object]:
+_COMPACT_RULES = Template("""
+/* ------------------------------------------------- compact density */
+/* Sidebar: one header row ("Hosts" + count, Add host), no eyebrow. */
+.sidebar-header { min-height: ${sidebar_header}px; }
+.host-count {
+    background-color: @sm_chip_bg;
+    color: @sm_text_secondary;
+    border-radius: ${r_pill}px;
+    padding: 0 6px;
+    font-size: ${fs_caps}em;
+    font-weight: 500;
+}
+.sidebar-footer { padding: 0 ${s}px; }
+.sm-window button.footer-link { padding: ${xs}px ${s}px; }
+
+/* Host bar (row A): page bar + host header merged into one line. */
+.host-header.host-bar { padding: 0 ${gutter}px; }
+.host-header.host-bar .host-address { color: @sm_text_muted; }
+.host-stat-inline { font-size: ${fs_caption}em; color: @sm_text_secondary; }
+.crumb-prefix, .sm-window button.breadcrumb-link.crumb-prefix { font-size: ${fs_caption}em; color: @sm_text_muted; }
+.sm-window button.breadcrumb-link { padding: 0 ${xs}px; min-height: 0; }
+.page-tabs { padding: 0 ${gutter}px; }
+.sm-window button.page-tab { margin: 0; }
+
+/* Row B shared with the session chips; or the chips' own 32px strip. */
+notebook.session-tabs > header {
+    padding: 0 ${s}px 0 ${gutter}px;
+    min-height: ${session_strip}px;
+    background-color: @sm_bg_surface;
+    border-bottom: 1px solid @sm_border_subtle;
+}
+notebook.session-tabs.merged-strip > header { min-height: ${tabs}px; }
+notebook.session-tabs > header > tabs > tab {
+    padding: 0 ${s}px;
+    margin: ${xs}px ${xs}px ${xs}px 0;
+    min-height: ${tab_chip}px;
+}
+notebook.session-tabs > header > tabs > tab:checked { background-color: @sm_bg_canvas; }
+notebook.session-tabs > header > tabs > tab button.toolbar-icon {
+    margin: 0;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 2px;
+}
+.strip-tabs { margin-right: ${l}px; }
+.session-toolbar-row {
+    padding: 0 ${s}px 0 ${gutter}px;
+    background-color: @sm_bg_surface;
+    border-bottom: 1px solid @sm_border_subtle;
+    min-height: ${session_strip}px;
+}
+button.toolbar-icon { padding: ${xs}px; }
+.info-bar button.toolbar-icon { min-width: 20px; min-height: 20px; padding: 1px; }
+
+/* The terminal keeps the app font size: undo the density's smaller base font
+   (a custom terminal font from Settings sets its own size anyway). */
+vte-terminal { font-size: ${terminal_font}em; }
+
+/* Terminal edge to edge: no card, no canvas margin. */
+notebook.session-tabs > stack { padding: 0; }
+.terminal-card {
+    border: none;
+    border-radius: 0;
+    padding: ${terminal_pad_y}px ${terminal_pad_x}px;
+}
+.tile-frame { border-radius: ${r_md}px; }
+
+/* Single-line status bar. */
+.info-bar { padding: 0 ${gutter}px; }
+.status-field { font-size: ${fs_caption}em; color: @sm_text_muted; }
+.status-field.mono { font-family: $mono_fonts; }
+.status-sep { font-size: ${fs_caption}em; color: @sm_text_faint; }
+.info-live .statusbar { font-size: ${fs_caption}em; }
+
+.card { padding: ${l}px; }
+.broadcast-strip { padding: ${xs}px ${m}px; min-height: 24px; }
+.sm-window button.workspace-switcher { padding: ${xs}px ${xs}px; }
+""")
+
+
+def _density_rules(tokens: DensityTokens, values: Dict[str, object]) -> str:
+    """Rules that only exist in a density (empty for Comfortable, the reference)."""
+
+    if not tokens.compact:
+        return ""
+    extra = dict(values)
+    size = tokens.size
+    extra.update(
+        sidebar_header=size.SIDEBAR_HEADER, session_strip=size.SESSION_STRIP - 1, tabs=size.TABS - 1,
+        tab_chip=size.SESSION_STRIP - 8, terminal_pad_x=size.TERMINAL_PAD_X, terminal_pad_y=size.TERMINAL_PAD_Y,
+        terminal_font=round(1 / tokens.base_font_scale, 4),
+    )
+    return _COMPACT_RULES.substitute(extra)
+
+
+def font_floor_em(font_pt: float, base_font_scale: float = 1.0) -> float:
+    """Smallest ``em`` that still renders :data:`MIN_FONT_PX` at an app font of ``font_pt``.
+
+    The window's base font is ``font_pt × base_font_scale`` (see ``DensityTokens``).
+    """
+
+    return MIN_FONT_PX / (float(font_pt) * base_font_scale * 96 / 72)
+
+
+def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float) -> Dict[str, object]:
+    space, radius, size, font = tokens.space, tokens.radius, tokens.size, tokens.font
+    scale = tokens.base_font_scale
+    floor = font_floor_em(font_pt, scale)
+
+    def fs(px: float) -> float:
+        # Type scales with the app font size (em of the density's base font)
+        # but never renders below the floor.
+        return max(em(px / scale), round(floor + 0.0005, 3))
+
     return {
         "env_badges": _env_badges(palette),
         "name": palette.name,
+        "density": tokens.density.value,
         "defines": _defines(palette),
         "motion": motion,
         "ui_fonts": _families(UI_FONT_FAMILIES) + ", sans-serif",
         "mono_fonts": _families(MONO_FONT_FAMILIES) + ", monospace",
-        "caps_tracking": CAPS_TRACKING,
-        "badge_tracking": BADGE_TRACKING,
-        "xs": Space.XS, "s": Space.S, "m": Space.M, "l": Space.L, "xl": Space.XL,
-        "xxl": Space.XXL, "xxxl": Space.XXXL, "gutter": Space.GUTTER,
-        "r_sm": Radius.SMALL, "r_keycap": Radius.KEYCAP, "r_md": Radius.MEDIUM, "r_input": Radius.INPUT,
-        "r_lg": Radius.LARGE, "r_card": Radius.CARD, "r_pill": Radius.PILL,
-        "topbar": Size.TOPBAR, "page_bar": Size.PAGE_BAR, "host_header": Size.HOST_HEADER, "tabs": Size.TABS,
-        "info_bar": Size.INFO_BAR, "sidebar_footer": Size.SIDEBAR_FOOTER, "logo": Size.LOGO_TILE,
-        "avatar": Size.AVATAR, "icon_button": Size.ICON_BUTTON, "search": Size.SEARCH, "button": Size.BUTTON,
-        "button_large": Size.BUTTON_LARGE, "hero": Size.HERO_BUTTON, "host_tile": Size.HOST_TILE,
-        "empty_card": Size.EMPTY_CARD, "badge": Size.BADGE,
-        "search_text_inset": Space.GUTTER + Space.S + 1,
+        "caps_tracking": tokens.caps_tracking,
+        "badge_tracking": tokens.badge_tracking,
+        "xs": space.XS, "s": space.S, "m": space.M, "l": space.L, "xl": space.XL,
+        "xxl": space.XXL, "xxxl": space.XXXL, "gutter": space.GUTTER,
+        "r_sm": radius.SMALL, "r_keycap": radius.KEYCAP, "r_md": radius.MEDIUM, "r_input": radius.INPUT,
+        "r_lg": radius.LARGE, "r_card": radius.CARD, "r_pill": radius.PILL,
+        "topbar": size.TOPBAR, "page_bar": size.PAGE_BAR, "host_header": size.HOST_HEADER, "tabs": size.TABS,
+        "info_bar": size.INFO_BAR, "sidebar_footer": size.SIDEBAR_FOOTER, "logo": size.LOGO_TILE,
+        "avatar": size.AVATAR, "icon_button": size.ICON_BUTTON, "search": size.SEARCH, "button": size.BUTTON,
+        "button_large": size.BUTTON_LARGE, "hero": size.HERO_BUTTON, "host_tile": size.HOST_TILE,
+        "empty_card": size.EMPTY_CARD, "badge": size.BADGE,
+        "button_min": size.BUTTON_MIN, "toolbar_button": size.TOOLBAR_BUTTON, "entry": size.ENTRY,
+        "menu_row": size.MENU_ROW, "filter_button": size.FILTER_BUTTON,
+        "primary_min_width": size.PRIMARY_MIN_WIDTH,
+        "add_host_pad_start": tokens.sidebar.ADD_HOST_PAD_START, "add_host_pad_end": tokens.sidebar.ADD_HOST_PAD_END,
+        "search_text_inset": tokens.sidebar.SEARCH_TEXT_INSET,
         # GTK's min-height excludes the 1px borders: tokens are outer sizes.
-        "button_inner": Size.BUTTON - 2, "button_large_inner": Size.BUTTON_LARGE - 2,
-        "search_inner": Size.SEARCH - 2, "hero_inner": Size.HERO_BUTTON - 2,
-        "empty_card_inner": Size.EMPTY_CARD - 2,
-        "title_slack": Layout.Sidebar.TITLE_SLACK,
-        "fs_caps": FontScale.CAPS, "fs_caps_14": FontScale.MONO, "fs_badge": FontScale.BADGE,
-        "fs_caption": FontScale.CAPTION, "fs_mono": FontScale.MONO, "fs_body": FontScale.BODY,
-        "fs_tree": FontScale.TREE, "fs_subtitle": FontScale.SUBTITLE, "fs_wordmark": FontScale.WORDMARK,
-        "fs_hero_title": FontScale.HERO_TITLE, "fs_host_title": FontScale.HOST_TITLE,
-        "fs_page_title": FontScale.PAGE_TITLE, "fs_title": FontScale.TITLE,
-        "fs_dialog_title": em(18),
+        "button_inner": size.BUTTON - 2, "button_large_inner": size.BUTTON_LARGE - 2,
+        "search_inner": size.SEARCH - 2, "hero_inner": size.HERO_BUTTON - 2,
+        "empty_card_inner": size.EMPTY_CARD - 2,
+        "title_slack": tokens.sidebar.TITLE_SLACK,
+        "page_title_weight": font.PAGE_TITLE_WEIGHT, "host_title_weight": font.HOST_TITLE_WEIGHT,
+        "fs_caps": fs(font.CAPS), "fs_caps_14": fs(font.MONO), "fs_badge": fs(font.BADGE),
+        "fs_caption": fs(font.CAPTION), "fs_mono": fs(font.MONO), "fs_body": fs(font.BODY),
+        "fs_tree": fs(font.TREE), "fs_subtitle": fs(font.SUBTITLE), "fs_wordmark": fs(font.WORDMARK),
+        "fs_hero_title": fs(font.HERO_TITLE), "fs_host_title": fs(font.HOST_TITLE),
+        "fs_page_title": fs(font.PAGE_TITLE), "fs_title": fs(font.TITLE),
+        "fs_dialog_title": fs(font.DIALOG_TITLE),
     }
 
 
-def build_css(palette: Palette, *, animations: bool = True) -> str:
-    """Return the complete stylesheet for ``palette``."""
+def build_css(
+    palette: Palette,
+    *,
+    animations: bool = True,
+    tokens: Optional[DensityTokens] = None,
+    font_pt: float = DEFAULT_FONT_PT,
+) -> str:
+    """Return the complete stylesheet for ``palette`` and a density (default: the active one).
+
+    ``font_pt`` is the application font size: type is relative to it (``em``)
+    and floored at :data:`MIN_FONT_PX`.
+    """
 
     motion = (
         _MOTION_ENABLED.substitute(fast=Motion.FAST, easing=Motion.EASING) if animations else _MOTION_DISABLED
     )
-    return _TEMPLATE.substitute(_values(palette, motion))
+    tokens = tokens or active_density()
+    values = _values(palette, motion, tokens, font_pt)
+    values["density_rules"] = _density_rules(tokens, values)
+    return _TEMPLATE.substitute(values)
 
 
 _COLOR_REF = re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)")

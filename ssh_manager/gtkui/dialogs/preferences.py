@@ -20,6 +20,7 @@ from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
 from ...settings import AppSettings, TerminalAppearanceSettings  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..theme.density import DEFAULT_DENSITY, Density  # noqa: E402
 from ..theme.loader import ThemeMode  # noqa: E402
 from ..theme.terminal_schemes import SCHEMES, resolve_terminal_colors  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
@@ -28,6 +29,10 @@ from .base import BaseDialog, DialogSize  # noqa: E402
 from .files import choose_folder, choose_save_file  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
 
+DENSITY_CHOICES = [
+    (Density.COMPACT.value, _("Compact")),
+    (Density.COMFORTABLE.value, _("Comfortable")),
+]
 THEME_CHOICES = [
     (ThemeMode.SYSTEM.value, _("Follow system")),
     (ThemeMode.LIGHT.value, _("Light")),
@@ -60,6 +65,7 @@ class PreferencesValues:
     git_watch_interval: int
     latency_probe: bool = True
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
+    density: Density = DEFAULT_DENSITY
 
     @property
     def prefer_dark(self) -> bool:
@@ -118,9 +124,11 @@ class PreferencesDialog(BaseDialog):
         on_reset: Optional[Callable[[], None]] = None,
         on_export: Optional[Callable[[], None]] = None,
         latency_probe: bool = True,
+        density: object = DEFAULT_DENSITY,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
+        self._density = Density.coerce(density)
         content = self.get_content_area()
         for setter in (content.set_margin_start, content.set_margin_end, content.set_margin_top):
             setter(0)
@@ -162,6 +170,9 @@ class PreferencesDialog(BaseDialog):
         self._theme_combo = _combo(THEME_CHOICES, theme_mode.value)
         sec.add(_("_Theme"), self._theme_combo, label_group=self._labels,
                 help_text=_("“Follow system” uses the desktop's light or dark preference."))
+        self._density_combo = _combo(DENSITY_CHOICES, self._density.value)
+        sec.add(_("Interface _density"), self._density_combo, label_group=self._labels,
+                help_text=_("Compact gives the terminal more room; Comfortable uses larger text and spacing."))
         self._ui_font_spin = _spin(10, 48, 1, max(10, min(48, ui_font_size)))
         sec.add(_("Application _font size"), self._ui_font_spin, label_group=self._labels,
                 help_text=_("Scales all text in the interface (points)."))
@@ -365,6 +376,7 @@ class PreferencesDialog(BaseDialog):
             git_watch_interval=int(self._git_interval_spin.get_value()),
             latency_probe=self._latency_check.get_active(),
             terminal_appearance=self._appearance_from_controls(),
+            density=Density.coerce(self._density_combo.get_active_id()),
         )
 
     def _appearance_from_controls(self) -> TerminalAppearanceSettings:

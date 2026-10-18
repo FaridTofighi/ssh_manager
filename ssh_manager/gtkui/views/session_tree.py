@@ -8,8 +8,9 @@ subclass, so accessibility still reads the row text):
 * nested groups: chevron, label, count;
 * hosts: monitor icon, label and a status dot at the right edge.
 
-The selected row gets an inset, rounded ``accent_tint`` background with a 4px
-accent bar on its left; hover gets ``bg_hover``. GTK's own expanders and
+The selected row gets an inset, rounded ``accent_tint`` background with an
+accent bar on its left (4px Comfortable, 3px Compact); hover gets ``bg_hover``.
+All geometry comes from the active density preset at paint/measure time. GTK's own expanders and
 indentation are off: the renderer indents by depth and clicking the chevron
 (or Left/Right) collapses/expands. The row tooltip spells the status out, so
 color is never the only cue.
@@ -32,6 +33,7 @@ from ..controllers.tree_controller import TreeRow  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.loader import current_palette  # noqa: E402
 from ..constants import Icons  # noqa: E402
+from ..theme import density as density_tokens  # noqa: E402
 from ..theme.tokens import STATUS_GLYPHS, ConnectionStatus, Layout, Size  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import render_svg_surface, tinted_icon_surface  # noqa: E402
@@ -99,24 +101,8 @@ def render_count(cell, model, tree_iter) -> None:
     cell.set_property("foreground-set", True)
 
 
-# Geometry measured on the reference (sidebar 407px + 1px separator).
-ROW_HEIGHT = Size.TREE_ROW  # 41
-GROUP_GAP = Layout.Tree.GROUP_GAP
-INSET = Size.TREE_INSET  # selection inset from both sidebar edges
-INDENT = Size.TREE_INDENT  # 25 per level
-LEAD = Layout.Tree.LEAD
-CHEVRON = Layout.Tree.CHEVRON
-FOLDER = Layout.Tree.FOLDER
-HOST_ICON = Layout.Tree.HOST_ICON
-BAR_WIDTH, BAR_HEIGHT = Layout.Tree.BAR_WIDTH, Layout.Tree.BAR_HEIGHT
-COUNT_RIGHT = Layout.Tree.COUNT_RIGHT
-DOT_RIGHT = Layout.Tree.DOT_RIGHT
-DOT = Layout.Tree.DOT
-COUNT_SCALE = 13 / 16  # count font (13px) relative to the row font (16px)
-RADIUS = Layout.Tree.RADIUS
-
-
-TREE_FONT_PX = 16  # the reference row font; rows scale with the actual font size
+def _font_tokens():
+    return density_tokens.active().font
 
 
 def font_pixel_size(widget: Gtk.Widget) -> float:
@@ -129,22 +115,24 @@ def font_pixel_size(widget: Gtk.Widget) -> float:
     return size
 
 
-def row_height_for(widget: Gtk.Widget) -> int:
-    """41px at the default font (16px rows); proportionally taller for larger fonts."""
+def row_height_for(widget: Gtk.Widget, *, group: bool = False) -> int:
+    """Row pitch at the default font (41px Comfortable, 28/30px Compact); taller for larger fonts."""
 
-    return max(ROW_HEIGHT, int(round(ROW_HEIGHT * font_pixel_size(widget) / TREE_FONT_PX)))
+    base = Size.TREE_GROUP_ROW if group else Size.TREE_ROW
+    return max(base, int(round(base * font_pixel_size(widget) / _font_tokens().TREE)))
 
 
 def row_geometry(kind: object, depth: int) -> Dict[str, int]:
     """x positions (widget coordinates) of the chevron, icon and label for a row."""
 
-    base = LEAD + INDENT * max(0, depth)
+    tree = Layout.Tree
+    base = tree.LEAD + Size.TREE_INDENT * max(0, depth)
     row_kind = RowKind.coerce(kind)
     if row_kind is RowKind.HOST:
-        return {"chevron": -1, "icon": base + 5, "text": base + 32}
+        return {"chevron": -1, "icon": base + tree.HOST_ICON_X, "text": base + tree.HOST_TEXT_X}
     if depth == 0:
-        return {"chevron": base, "icon": base + 26, "text": base + 53}
-    return {"chevron": base, "icon": -1, "text": base + 26}
+        return {"chevron": base, "icon": base + tree.GROUP_ICON_X, "text": base + tree.GROUP_TEXT_X}
+    return {"chevron": base, "icon": -1, "text": base + tree.CHILD_TEXT_X}
 
 
 def _rgba(hex_color: str) -> Gdk.RGBA:
@@ -193,7 +181,8 @@ class RelayRowRenderer(Gtk.CellRendererText):
             separator = int(widget.style_get_property("vertical-separator"))
         except (TypeError, ValueError):
             separator = 0
-        height = row_height_for(widget) + self.props.gap - separator
+        group = RowKind.coerce(self.props.kind) is not RowKind.HOST and self.props.depth == 0
+        height = row_height_for(widget, group=group) + self.props.gap - separator
         return height, height
 
     def do_get_preferred_height_for_width(self, widget, _width):
@@ -208,6 +197,11 @@ class RelayRowRenderer(Gtk.CellRendererText):
     # ------------------------------------------------------------ drawing
     def do_render(self, cr, widget, background_area, cell_area, flags) -> None:
         palette = current_palette()
+        tree, size = Layout.Tree, Size
+        INSET, RADIUS, BAR_WIDTH, BAR_HEIGHT = size.TREE_INSET, tree.RADIUS, tree.BAR_WIDTH, tree.BAR_HEIGHT
+        CHEVRON, FOLDER, HOST_ICON = tree.CHEVRON, tree.FOLDER, tree.HOST_ICON
+        COUNT_RIGHT, DOT_RIGHT, DOT = tree.COUNT_RIGHT, tree.DOT_RIGHT, tree.DOT
+        COUNT_SCALE = _font_tokens().TREE_COUNT / _font_tokens().TREE
         width = widget.get_allocated_width()
         top = background_area.y + self.props.gap
         height = background_area.height - self.props.gap
@@ -225,9 +219,10 @@ class RelayRowRenderer(Gtk.CellRendererText):
             bar_y = top + (height - BAR_HEIGHT + 1) // 2
             cr.new_sub_path()
             cr.move_to(rect_x, bar_y)
-            cr.line_to(rect_x + BAR_WIDTH - 2, bar_y)
-            cr.arc(rect_x + BAR_WIDTH - 2, bar_y + 2, 2, -math.pi / 2, 0)
-            cr.arc(rect_x + BAR_WIDTH - 2, bar_y + BAR_HEIGHT - 2, 2, 0, math.pi / 2)
+            bar_r = min(2, BAR_WIDTH / 2.0)
+            cr.line_to(rect_x + BAR_WIDTH - bar_r, bar_y)
+            cr.arc(rect_x + BAR_WIDTH - bar_r, bar_y + bar_r, bar_r, -math.pi / 2, 0)
+            cr.arc(rect_x + BAR_WIDTH - bar_r, bar_y + BAR_HEIGHT - bar_r, bar_r, 0, math.pi / 2)
             cr.line_to(rect_x, bar_y + BAR_HEIGHT)
             cr.close_path()
             cr.fill()
@@ -352,7 +347,7 @@ class SessionTreeView(Gtk.TreeView):
         cell.set_property("color", model.get_value(tree_iter, TreeColumn.COLOR) or "")
         cell.set_property("expandable", model.iter_has_child(tree_iter))
         cell.set_property("expanded", self.row_expanded(path))
-        cell.set_property("gap", GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
+        cell.set_property("gap", Layout.Tree.GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
 
     # ------------------------------------------------------------------ api
     def populate(self, rows: Sequence[TreeRow]) -> Dict[str, Gtk.TreeIter]:
@@ -428,6 +423,16 @@ class SessionTreeView(Gtk.TreeView):
         self.icon_cache.clear()
         self.queue_draw()
 
+    def apply_density(self) -> None:
+        """Re-measure every row with the active density (row pitch, indents, icons)."""
+
+        self.icon_cache.clear()
+        column = self.get_column(0)
+        if column is not None:
+            column.queue_resize()
+        self.queue_resize()
+        self.queue_draw()
+
     def selected_row_rect(self) -> Optional[Gdk.Rectangle]:
         model, paths = self.get_selection().get_selected_rows()
         if not paths:
@@ -454,7 +459,7 @@ class SessionTreeView(Gtk.TreeView):
             return None
         geometry = row_geometry(model.get_value(tree_iter, TreeColumn.KIND), path.get_depth() - 1)
         left = geometry["chevron"]
-        if left < 0 or not (left - 6 <= x <= left + CHEVRON + 6):
+        if left < 0 or not (left - 6 <= x <= left + Layout.Tree.CHEVRON + 6):
             return None
         return path
 

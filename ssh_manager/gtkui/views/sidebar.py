@@ -1,6 +1,7 @@
 """Sidebar: "Hosts" header with *Add host*, search, filter popover, tree and footer.
 
-Relay layout (top → bottom)::
+Relay layout (top → bottom); Compact puts "Hosts", a host count chip and
+*Add host* on one 40px row and hides the eyebrow::
 
     CONNECTION MANAGER
     Hosts                                   [+ Add host]
@@ -31,6 +32,7 @@ from gi.repository import Gdk, Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
+from ..theme import density as density_tokens  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
@@ -44,13 +46,6 @@ FILTER_HELP = _(
     "Example: <tt>tag:prod AND owner:alice</tt>"
 )
 
-
-# Vertical rhythm of the reference (y from the sidebar top, which is y = 77).
-HEADER_TOP = Layout.Sidebar.HEADER_TOP
-TITLE_GAP = Layout.Sidebar.TITLE_GAP
-ADD_HOST_TOP = Layout.Sidebar.ADD_HOST_TOP
-SEARCH_TOP = Layout.Sidebar.SEARCH_TOP
-TREE_TOP_GAP = Layout.Sidebar.TREE_TOP_GAP
 
 
 def _add_menu_model(template_items) -> Gio.Menu:
@@ -77,8 +72,9 @@ def _footer_link(icon: str, label: str, action: str, tooltip: str) -> Gtk.Button
     button = Gtk.Button()
     button.get_style_context().add_class("footer-link")
     button.set_relief(Gtk.ReliefStyle.NONE)
-    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M - 2)
-    box.pack_start(make_icon(icon, 18), False, False, 0)
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+    button.icon = make_icon(icon, 18)  # type: ignore[attr-defined]
+    box.pack_start(button.icon, False, False, 0)  # type: ignore[attr-defined]
     box.pack_start(Gtk.Label(label=label), False, False, 0)
     button.add(box)
     button.set_action_name(action)
@@ -101,7 +97,7 @@ class SidebarView(Gtk.Box):
     def __init__(self, tree_view: Gtk.TreeView, *, template_items: Sequence = ()) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.get_style_context().add_class("sidebar-pane")
-        self.set_size_request(Size.SIDEBAR_MIN - 80, -1)
+        self._host_count = 0
 
         self.on_search_changed: Callable[[str], None] = lambda _t: None
         self.on_filter_changed: Callable[[str], None] = lambda _t: None
@@ -124,8 +120,8 @@ class SidebarView(Gtk.Box):
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_overlay_scrolling(True)
-        scroller.set_margin_top(TREE_TOP_GAP)
         scroller.add(tree_view)
+        self._scroller = scroller
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
@@ -156,41 +152,104 @@ class SidebarView(Gtk.Box):
         self.pack_start(self.stack, True, True, 0)
         self.pack_end(self._build_footer(), False, False, 0)
         self.pack_end(self._build_bulk_bar(), False, False, 0)
+        self.apply_density()
+
+    # ------------------------------------------------------------- density
+    def apply_density(self) -> None:
+        """Lay the sidebar out with the active density preset (also on a runtime switch)."""
+
+        tokens = density_tokens.active()
+        side, size = Layout.Sidebar, Size
+        single_row = tokens.variant.SINGLE_ROW_SIDEBAR_HEADER
+        self.set_size_request(max(density_tokens.MIN_SIDEBAR_PX, size.SIDEBAR_MIN - 80), -1)
+
+        header = self._header
+        header.set_spacing(Space.M)
+        header.set_margin_start(side.SIDE)
+        header.set_margin_end(side.SIDE)
+        header.set_margin_top(side.HEADER_TOP)
+        header.set_size_request(-1, size.SIDEBAR_HEADER if single_row else -1)
+        self._eyebrow.set_visible(not single_row)
+        self.title_label.set_margin_top(side.TITLE_GAP)
+        self._title_row.set_spacing(Space.S)
+        self._titles.set_valign(Gtk.Align.CENTER if single_row else Gtk.Align.START)
+        self._sync_count_chip()
+        self.add_host_button.set_valign(Gtk.Align.CENTER if single_row else Gtk.Align.START)
+        self.add_host_button.set_margin_top(side.ADD_HOST_TOP)
+        self._add_host_content.set_spacing(Space.M if not single_row else Space.S)
+        self._add_host_icon.set_pixel_size(size.ICON_BUTTON_GLYPH)
+
+        row = self._search_row
+        row.set_spacing(side.SEARCH_GAP)
+        row.set_margin_start(side.SIDE)
+        row.set_margin_end(side.SEARCH_END)
+        row.set_margin_top(side.SEARCH_TOP)
+        self._search_icon.set_margin_start(side.SEARCH_ICON_INSET)
+        self.keycap.set_margin_end(Space.M)
+        self._filter_icon.set_pixel_size(size.ICON_FOOTER)
+        self._filter_badge.set_margin_top(Space.S)
+        self._filter_badge.set_margin_end(Space.XS + 2)
+        self._scroller.set_margin_top(side.TREE_TOP_GAP)
+
+        for state in (self.no_results, self.first_run):
+            state.apply_density()
+        self._footer.set_spacing(side.FOOTER_GAP)
+        self._footer.set_size_request(-1, size.SIDEBAR_FOOTER)
+        for link in (self.settings_link, self.keys_link):
+            link.icon.set_pixel_size(size.ICON_FOOTER)
+            link.get_child().set_spacing(Space.M - 2 if not tokens.compact else Space.S)
+
+    def set_host_count(self, count: int) -> None:
+        """Number shown in the Compact header's count chip."""
+
+        self._host_count = max(0, int(count))
+        self._sync_count_chip()
+
+    def _sync_count_chip(self) -> None:
+        single_row = density_tokens.active().variant.SINGLE_ROW_SIDEBAR_HEADER
+        self.count_chip.set_text(str(self._host_count))
+        self.count_chip.set_tooltip_text(ngettext("{n} host", "{n} hosts", self._host_count).format(n=self._host_count))
+        self.count_chip.set_visible(single_row and self._host_count > 0)
 
     # ------------------------------------------------------------ building
     def _build_header(self, template_items) -> Gtk.Widget:
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         header.get_style_context().add_class("sidebar-header")
-        header.set_margin_start(Space.XXL)
-        header.set_margin_end(Space.XXL)
-        header.set_margin_top(HEADER_TOP)
+        self._header = header
         titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        eyebrow = Gtk.Label(label=_("CONNECTION MANAGER"))
+        self._titles = titles
+        self._eyebrow = eyebrow = Gtk.Label(label=_("CONNECTION MANAGER"))
         eyebrow.set_xalign(0.0)
         eyebrow.set_ellipsize(Pango.EllipsizeMode.END)
         eyebrow.get_style_context().add_class("sidebar-eyebrow")
+        eyebrow.set_no_show_all(True)  # visibility belongs to apply_density()
         titles.pack_start(eyebrow, False, False, 0)
+        self._title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.title_label = Gtk.Label(label=_("Hosts"))
         self.title_label.set_xalign(0.0)
         self.title_label.get_style_context().add_class("sidebar-title")
-        self.title_label.set_margin_top(TITLE_GAP)
-        titles.pack_start(self.title_label, False, False, 0)
+        self._title_row.pack_start(self.title_label, False, False, 0)
+        self.count_chip = Gtk.Label()
+        self.count_chip.get_style_context().add_class("host-count")
+        self.count_chip.set_valign(Gtk.Align.CENTER)
+        self.count_chip.set_no_show_all(True)  # Compact only, see _sync_count_chip()
+        self._title_row.pack_start(self.count_chip, False, False, 0)
+        titles.pack_start(self._title_row, False, False, 0)
         # The title's line box is taller than its glyphs; the stylesheet pulls
         # the search row up over that slack (.sidebar-title margin-bottom), so
-        # the block is 52px tall at the default font and still grows with it.
-        titles.set_valign(Gtk.Align.START)
+        # the Comfortable block is 52px tall at the default font and still grows with it.
         header.pack_start(titles, True, True, 0)
 
         self.add_host_button = Gtk.Button()
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
-        content.pack_start(make_icon(Icons.NEW, 20), False, False, 0)
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._add_host_content = content
+        self._add_host_icon = make_icon(Icons.NEW, 20)
+        content.pack_start(self._add_host_icon, False, False, 0)
         content.pack_start(Gtk.Label(label=_("Add host")), False, False, 0)
         self.add_host_button.add(content)
         ctx = self.add_host_button.get_style_context()
         ctx.add_class("suggested-action")
         ctx.add_class("add-host")
-        self.add_host_button.set_valign(Gtk.Align.START)
-        self.add_host_button.set_margin_top(ADD_HOST_TOP)
         self.add_host_button.set_tooltip_text(
             _("Add a new host (Ctrl+N). Right-click or Shift+click for templates, groups and Quick Connect.")
         )
@@ -206,11 +265,9 @@ class SidebarView(Gtk.Box):
         return header
 
     def _build_search_row(self) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Sidebar.SEARCH_GAP)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         row.get_style_context().add_class("sidebar-search")
-        row.set_margin_start(Space.XXL)
-        row.set_margin_end(Layout.Sidebar.SEARCH_END)
-        row.set_margin_top(SEARCH_TOP)
+        self._search_row = row
 
         overlay = Gtk.Overlay()
         self.search_entry = Gtk.SearchEntry()
@@ -228,14 +285,13 @@ class SidebarView(Gtk.Box):
         search_icon = make_icon(Icons.SEARCH, 16, css_class="search-icon")
         search_icon.set_halign(Gtk.Align.START)
         search_icon.set_valign(Gtk.Align.CENTER)
-        search_icon.set_margin_start(Space.L - 1)
+        self._search_icon = search_icon
         overlay.add_overlay(search_icon)
         overlay.set_overlay_pass_through(search_icon, True)
         self.keycap = Gtk.Label(label=_("Ctrl K"))
         self.keycap.get_style_context().add_class("keycap")
         self.keycap.set_halign(Gtk.Align.END)
         self.keycap.set_valign(Gtk.Align.CENTER)
-        self.keycap.set_margin_end(Space.M)
         self.keycap.set_no_show_all(True)
         overlay.add_overlay(self.keycap)
         overlay.set_overlay_pass_through(self.keycap, True)
@@ -244,12 +300,11 @@ class SidebarView(Gtk.Box):
         self.filter_button = Gtk.MenuButton()
         self.filter_button.get_style_context().add_class("filter-button")
         filter_overlay = Gtk.Overlay()
-        filter_overlay.add(make_icon(Icons.FILTER, 18))
+        self._filter_icon = make_icon(Icons.FILTER, 18)
+        filter_overlay.add(self._filter_icon)
         self._filter_badge = Dot(6, css_class="filter-dot")
         self._filter_badge.set_halign(Gtk.Align.END)
         self._filter_badge.set_valign(Gtk.Align.START)
-        self._filter_badge.set_margin_top(Space.S)
-        self._filter_badge.set_margin_end(Space.XS + 2)
         self._filter_badge.set_no_show_all(True)
         filter_overlay.add_overlay(self._filter_badge)
         self.filter_button.add(filter_overlay)
@@ -288,9 +343,9 @@ class SidebarView(Gtk.Box):
         self.bulk_revealer.set_reveal_child(active)
 
     def _build_footer(self) -> Gtk.Widget:
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Sidebar.FOOTER_GAP)
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         footer.get_style_context().add_class("sidebar-footer")
-        footer.set_size_request(-1, Size.SIDEBAR_FOOTER)
+        self._footer = footer
         self.settings_link = _footer_link(Icons.SETTINGS, _("Settings"), "win.settings", _("Settings (Ctrl+,)"))
         footer.pack_start(self.settings_link, False, False, 0)
         self.keys_link = _footer_link(Icons.KEY, _("Keys"), "win.credentials", _("Credentials and keys"))

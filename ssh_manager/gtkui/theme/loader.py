@@ -20,6 +20,7 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gio, GLib, Gtk  # type: ignore  # noqa: E402
 
 from . import css_dark, css_light  # noqa: E402
+from . import density as density_tokens  # noqa: E402
 from .tokens import Palette, enum_value, palette_for  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
@@ -69,6 +70,8 @@ class ThemeManager:
         self._mode = ThemeMode.SYSTEM
         self._dark = False
         self._listeners: List[Callable[[bool], None]] = []
+        self._font_pt = 11
+        self._loaded_css = ""
         self._settings = Gtk.Settings.get_default()
         self._initial_prefer_dark = bool(
             self._settings.get_property("gtk-application-prefer-dark-theme")
@@ -158,7 +161,27 @@ class ThemeManager:
 
     def stylesheet(self) -> str:
         module = css_dark if self._dark else css_light
-        return module.css(animations=self.animations_enabled)
+        return module.css(animations=self.animations_enabled, tokens=density_tokens.active(), font_pt=self._font_pt)
+
+    @property
+    def font_pt(self) -> int:
+        return self._font_pt
+
+    def set_ui_font_size(self, points: int) -> None:
+        """App font size: type is ``em``-relative to it and floored at 11px, so the CSS depends on it."""
+
+        points = max(1, int(points))
+        if points == self._font_pt:
+            return
+        self._font_pt = points
+        if self._provider is not None:
+            self._load_provider()
+
+    def reload(self) -> None:
+        """Regenerate the stylesheet (density switch) without changing the theme."""
+
+        if self._provider is not None:
+            self._load_provider()
 
     def shutdown(self) -> None:
         for obj, handler in self._signal_ids:
@@ -183,9 +206,12 @@ class ThemeManager:
         screen = Gdk.Screen.get_default()
         if screen is None:
             return
+        css = self.stylesheet()
+        if self._provider is not None and css == self._loaded_css:
+            return  # unchanged: swapping providers would restyle every widget for nothing
         provider = Gtk.CssProvider()
         try:
-            provider.load_from_data(self.stylesheet().encode("utf-8"))
+            provider.load_from_data(css.encode("utf-8"))
         except GLib.Error as exc:
             LOGGER.warning("stylesheet failed to load: %s", exc)
             return
@@ -194,6 +220,7 @@ class ThemeManager:
             screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
         self._provider = provider
+        self._loaded_css = css
 
     def _on_external_change(self, *_args) -> None:
         GLib.idle_add(self._reapply_idle)

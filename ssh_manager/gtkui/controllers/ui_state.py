@@ -15,9 +15,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...persistence import write_json_atomic
-from ..theme.tokens import Size
+from ..theme.density import COMFORTABLE, DEFAULT_DENSITY, Density
 
-DEFAULT_SIDEBAR_WIDTH = Size.SIDEBAR - 1  # + the 1px pane separator = 408
+# Stored when the user never resized the sidebar (the Comfortable default; with
+# the 1px pane separator the edge is at x = 408). It stands for "the active
+# density's default width", see LayoutController.resolve_sidebar_width().
+DEFAULT_SIDEBAR_WIDTH = COMFORTABLE.size.SIDEBAR - 1
 
 UI_STATE_FILE = ".ui_state.json"
 
@@ -97,6 +100,7 @@ class UiState:
     host_colors: Dict[str, str] = field(default_factory=dict)
     recent_inventories: List[str] = field(default_factory=list)
     latency_probe: bool = True
+    density: str = DEFAULT_DENSITY.value  # "compact" | "comfortable"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "UiState":
@@ -128,6 +132,7 @@ class UiState:
             host_colors=_str_map(data.get("host_colors")),
             recent_inventories=_str_list(data.get("recent_inventories")),
             latency_probe=_bool(data.get("latency_probe"), True),
+            density=Density.coerce(data.get("density")).value,
         )
 
     def to_dict(self) -> Dict[str, object]:
@@ -148,5 +153,6 @@ class UiState:
             "group_colors": dict(self.group_colors),
             "recent_inventories": list(self.recent_inventories),
             "latency_probe": self.latency_probe,
+            "density": Density.coerce(self.density).value,
             "host_colors": dict(self.host_colors),
         }

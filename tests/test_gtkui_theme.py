@@ -51,7 +51,12 @@ class TokenTests(unittest.TestCase):
         self.assertIs(ConnectionStatus.coerce("weird"), ConnectionStatus.UNKNOWN)
 
     def test_spacing_scale_is_fixed(self) -> None:
-        self.assertEqual(Space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
+        from ssh_manager.gtkui.theme import density
+
+        with density.using("comfortable"):
+            self.assertEqual(Space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
+        with density.using("compact"):
+            self.assertEqual(Space.values(), (2, 4, 8, 12, 16, 16, 24, 12))
 
 
 class RelayContrastTests(unittest.TestCase):

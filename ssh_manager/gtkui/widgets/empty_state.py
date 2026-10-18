@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from .icons import make_icon  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 
 
 class EmptyState(Gtk.Box):
@@ -28,14 +28,11 @@ class EmptyState(Gtk.Box):
         on_secondary: Optional[Callable[[], None]] = None,
         compact: bool = False,
     ) -> None:
-        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.get_style_context().add_class("empty-state")
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)
-        self.set_margin_start(Space.XL)
-        self.set_margin_end(Space.XL)
-        self.set_margin_top(Space.XL)
-        self.set_margin_bottom(Space.XL)
+        self._compact = compact
 
         self._icon = make_icon(icon_name, 28 if compact else 32)
         self._icon.get_style_context().add_class("empty-icon")
@@ -57,9 +54,8 @@ class EmptyState(Gtk.Box):
 
         # Compact states live in narrow panes: stack their buttons vertically.
         orientation = Gtk.Orientation.VERTICAL if compact else Gtk.Orientation.HORIZONTAL
-        buttons = Gtk.Box(orientation=orientation, spacing=Space.S)
+        self._buttons = buttons = Gtk.Box(orientation=orientation, spacing=0)
         buttons.set_halign(Gtk.Align.CENTER)
-        buttons.set_margin_top(Space.S)
         self.primary_button: Optional[Gtk.Button] = None
         self.secondary_button: Optional[Gtk.Button] = None
         if action_label:
@@ -75,6 +71,20 @@ class EmptyState(Gtk.Box):
             buttons.pack_start(self.secondary_button, False, False, 0)
         if action_label or secondary_label:
             self.pack_start(buttons, False, False, 0)
+        self.apply_density()
+
+    def apply_density(self) -> None:
+        """Spacing and icon size from the active density preset."""
+
+        self.set_spacing(Space.S)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(self, f"set_margin_{side}")(Space.XL)
+        icon = Size.EMPTY_CARD_ICON - (4 if self._compact else 0)
+        setter = getattr(self._icon, "set_pixel_size", None)
+        if callable(setter):
+            setter(icon)
+        self._buttons.set_spacing(Space.S)
+        self._buttons.set_margin_top(Space.S)
 
     def set_text(self, title: str, description: str = "") -> None:
         self._title.set_text(title)

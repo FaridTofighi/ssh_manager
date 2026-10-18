@@ -152,6 +152,18 @@ class SvgIcon(Gtk.DrawingArea):
         self._name = name
         self.queue_draw()
 
+    @property
+    def pixel_size(self) -> int:
+        return self._size
+
+    def set_pixel_size(self, size: int) -> None:
+        """Change the drawn size (density switch); same name as ``Gtk.Image``'s setter."""
+
+        if size != self._size:
+            self._size = int(size)
+            self.set_size_request(self._size, self._size)
+            self.queue_draw()
+
     def _on_draw(self, widget: Gtk.Widget, cr) -> bool:
         color = widget.get_style_context().get_color(widget.get_state_flags())
         hex_color = _hex(color)

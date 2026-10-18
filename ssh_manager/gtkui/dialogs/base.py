@@ -2,7 +2,8 @@
 
 ``BaseDialog`` standardises:
 
-* sizes (:class:`DialogSize`), margins (16 px) and content spacing (12 px);
+* sizes (:class:`DialogSize`, scaled by the density's ``dialog_scale``),
+  margins (``Size.DIALOG_PADDING``) and content spacing (``Size.DIALOG_GAP``);
 * action ordering – secondary/cancel first, the primary action last;
 * ``suggested-action`` / ``destructive-action`` styling of the primary button;
 * ``Esc`` = cancel and ``Enter`` = default response;
@@ -23,7 +24,8 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ..i18n import _  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme import density as density_tokens  # noqa: E402
+from ..theme.tokens import Size, Space  # noqa: E402
 
 
 class DialogSize(IntEnum):
@@ -35,6 +37,18 @@ class DialogSize(IntEnum):
 
 
 ResponseValidator = Callable[[int], bool]
+
+
+def dialog_width(size: int) -> int:
+    """Default width for ``size`` in the active density (Compact dialogs open smaller)."""
+
+    return int(round(int(size) * density_tokens.active().dialog_scale))
+
+
+def dialog_height(height: int) -> int:
+    """Default height in the active density; ``-1`` (natural height) stays ``-1``."""
+
+    return height if height <= 0 else int(round(height * density_tokens.active().dialog_scale))
 
 
 class BaseDialog(Gtk.Dialog):
@@ -52,7 +66,7 @@ class BaseDialog(Gtk.Dialog):
     ) -> None:
         Gtk.Dialog.__init__(self, title=title, transient_for=parent, modal=modal)
         self.set_destroy_with_parent(True)
-        self.set_default_size(int(size), height)
+        self.set_default_size(dialog_width(size), dialog_height(height))
         self.set_resizable(resizable)
         self.get_style_context().add_class("sm-dialog")
         if parent is not None:
@@ -61,18 +75,19 @@ class BaseDialog(Gtk.Dialog):
             self.set_position(Gtk.WindowPosition.CENTER)
 
         content = self.get_content_area()
-        content.set_spacing(Space.M)
-        content.set_margin_start(Space.L)
-        content.set_margin_end(Space.L)
-        content.set_margin_top(Space.L)
+        pad = Size.DIALOG_PADDING
+        content.set_spacing(Size.DIALOG_GAP)
+        content.set_margin_start(pad)
+        content.set_margin_end(pad)
+        content.set_margin_top(pad)
         content.set_margin_bottom(Space.S)
         with warnings.catch_warnings():
             # Deprecated accessor, but GTK 3 offers no other way to style the action area.
             warnings.simplefilter("ignore", DeprecationWarning)
             action_area = self.get_action_area()
-        action_area.set_margin_start(Space.L)
-        action_area.set_margin_end(Space.L)
-        action_area.set_margin_bottom(Space.L)
+        action_area.set_margin_start(pad)
+        action_area.set_margin_end(pad)
+        action_area.set_margin_bottom(pad)
         action_area.set_spacing(Space.S)
 
         self._validator: Optional[ResponseValidator] = None

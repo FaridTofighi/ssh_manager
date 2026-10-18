@@ -110,13 +110,17 @@ class MainWindowAccessibilityTests(unittest.TestCase):
         from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window
 
         shortcuts = build_shortcuts_window(self.window)
-        try:
-            titles = [w.props.title for w in _walk(shortcuts) if isinstance(w, Gtk.ShortcutsShortcut)]
-        finally:
-            shortcuts.destroy()
+        # Never destroyed (GTK 3.24 bug, see build_shortcuts_window): kept for the process.
+        _KEEP_ALIVE.append(shortcuts)
+        titles = [w.props.title for w in _walk(shortcuts) if isinstance(w, Gtk.ShortcutsShortcut)]
         self.assertIn("Toggle broadcast input", titles)
         self.assertIn("Keyboard shortcuts", titles)
+        # Closing only hides it (a destroyed ShortcutsWindow crashes GTK on the next restyle).
+        self.assertTrue(shortcuts.emit("delete-event", None))
         self.assertGreater(len(titles), 25)
+
+
+_KEEP_ALIVE: list = []
 
 
 if __name__ == "__main__":  # pragma: no cover

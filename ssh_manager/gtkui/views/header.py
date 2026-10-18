@@ -29,6 +29,7 @@ from ..constants import Icons  # noqa: E402
 from ..controllers.notifications import MessageHistory  # noqa: E402
 from ..health import Health  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..theme import density as density_tokens  # noqa: E402
 from ..theme.tokens import Layout, Level, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
@@ -36,8 +37,15 @@ from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import MessageHistoryButton  # noqa: E402
 from ..workspaces import Workspace  # noqa: E402
 
-BRAND_PADDING = Layout.Topbar.BRAND_INSET
-WORKSPACE_GAP = Layout.Topbar.WORKSPACE_GAP
+
+def _compact_density() -> bool:
+    return density_tokens.active().compact
+
+
+def _set_icon_size(icon: Gtk.Widget, size: int) -> None:
+    setter = getattr(icon, "set_pixel_size", None)
+    if callable(setter):
+        setter(size)
 
 
 def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) -> Gio.Menu:
@@ -56,7 +64,7 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     menu.append_section(None, inventory)
 
     view = Gio.Menu()
-    view.append(_("Restore Panels") if maximized else _("Maximize Workspace"), "win.toggle-maximize")
+    view.append(_("Exit Focus Mode") if maximized else _("Focus Mode"), "win.toggle-maximize")
     view.append(_("Toggle Sidebar"), "win.toggle-sidebar")
     menu.append_section(None, view)
 
@@ -89,49 +97,44 @@ class HeaderView(Gtk.HeaderBar):
         self.set_custom_title(Gtk.Box())  # no centred title: the wordmark is the title
         self.set_property("spacing", 0)
         self.get_style_context().add_class("sm-topbar")
-        self.set_size_request(-1, Size.TOPBAR)
 
         self.on_workspace_selected: Callable[[Workspace], None] = lambda _w: None
         self._git_updates = False
         self._maximized = False
         self._compact = False
+        self._brand_width: Optional[int] = None
         self._workspace_path = ""
 
         self._build_brand()
         self._build_workspace_switcher()
         self._build_end_cluster(history)
-        self.set_compact(False)
+        self.apply_density()
 
     # ------------------------------------------------------------ building
     def _build_brand(self) -> None:
         self.brand = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.brand.get_style_context().add_class("topbar-brand")
-        logo = Gtk.Box()
+        self.logo = logo = Gtk.Box()
         logo.get_style_context().add_class("logo-tile")
-        logo.set_size_request(Size.LOGO_TILE, Size.LOGO_TILE)
         logo.set_valign(Gtk.Align.CENTER)
-        logo.set_margin_start(BRAND_PADDING)
-        glyph = make_icon(Icons.TERMINAL, 22)
+        self._logo_glyph = glyph = make_icon(Icons.TERMINAL, 22)
         glyph.set_valign(Gtk.Align.CENTER)
         logo.set_center_widget(glyph)
         self.brand.pack_start(logo, False, False, 0)
         self.wordmark = Gtk.Label(label=_("SSH Manager"))
         self.wordmark.get_style_context().add_class("wordmark")
-        self.wordmark.set_margin_start(Layout.Topbar.WORDMARK_GAP)
         self.wordmark.set_ellipsize(Pango.EllipsizeMode.END)
         self.brand.pack_start(self.wordmark, False, False, 0)
 
         self.sidebar_expand_button = IconButton(
             Icons.SIDEBAR, _("Show sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("topbar-icon",)
         )
-        self.sidebar_expand_button.set_margin_start(Space.M)
         self.sidebar_expand_button.set_no_show_all(True)
         self.brand.pack_start(self.sidebar_expand_button, False, False, 0)
 
         self.divider = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         self.divider.get_style_context().add_class("topbar-divider")
         self.divider.set_valign(Gtk.Align.CENTER)
-        self.divider.set_size_request(1, Layout.Topbar.DIVIDER_HEIGHT)
         self.brand.pack_end(self.divider, False, False, 0)
         self.pack_start(self.brand)
 
@@ -140,7 +143,6 @@ class HeaderView(Gtk.HeaderBar):
         self.workspace_button.get_style_context().add_class("workspace-switcher")
         self.workspace_button.set_relief(Gtk.ReliefStyle.NONE)
         self.workspace_button.set_valign(Gtk.Align.CENTER)
-        self.workspace_button.set_margin_start(WORKSPACE_GAP)
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._workspace_caption = Gtk.Label(label=_("WORKSPACE"))
         self._workspace_caption.get_style_context().add_class("workspace-label")
@@ -148,13 +150,11 @@ class HeaderView(Gtk.HeaderBar):
         content.pack_start(self._workspace_caption, False, False, 0)
         self._workspace_name = Gtk.Label(label="")
         self._workspace_name.get_style_context().add_class("workspace-name")
-        self._workspace_name.set_margin_start(Layout.Topbar.WORKSPACE_NAME_GAP)
         self._workspace_name.set_ellipsize(Pango.EllipsizeMode.END)
         self._workspace_name.set_max_width_chars(32)
         content.pack_start(self._workspace_name, False, False, 0)
-        chevron = make_icon(Icons.CHEVRON_DOWN, 16, css_class="workspace-chevron")
-        chevron.set_margin_start(Space.M)
-        content.pack_start(chevron, False, False, 0)
+        self._workspace_chevron = make_icon(Icons.CHEVRON_DOWN, 16, css_class="workspace-chevron")
+        content.pack_start(self._workspace_chevron, False, False, 0)
         self.workspace_button.add(content)
         set_accessible_name(self.workspace_button, _("Switch workspace"))
         self.workspace_button.set_tooltip_text(_("Switch workspace"))
@@ -174,8 +174,6 @@ class HeaderView(Gtk.HeaderBar):
         self.avatar_button.get_style_context().add_class("avatar")
         self.avatar_button.set_valign(Gtk.Align.CENTER)
         self.avatar_button.set_halign(Gtk.Align.CENTER)
-        self.avatar_button.set_size_request(Size.AVATAR, Size.AVATAR)
-        self.avatar_button.set_margin_start(Layout.Topbar.AVATAR_GAP)
         self._avatar_label = Gtk.Label(label="U")
         self.avatar_button.add(self._avatar_label)
         self.avatar_button.set_tooltip_text(_("Account and application menu (F10)"))
@@ -189,10 +187,10 @@ class HeaderView(Gtk.HeaderBar):
         self.help_button.get_style_context().add_class("topbar-icon")
         self.help_button.set_relief(Gtk.ReliefStyle.NONE)
         self.help_button.set_valign(Gtk.Align.CENTER)
-        self.help_button.add(make_icon(Icons.HELP, 20))
+        self._help_icon = make_icon(Icons.HELP, 20)
+        self.help_button.add(self._help_icon)
         self.help_button.set_tooltip_text(_("Help"))
         set_accessible_name(self.help_button, _("Help"))
-        self.help_button.set_margin_start(Layout.Topbar.HELP_GAP)
         help_popover = Gtk.Popover.new_from_model(self.help_button, _help_menu_model())
         help_popover.get_style_context().add_class("sm-popover")
         self.help_button.set_popover(help_popover)
@@ -208,8 +206,7 @@ class HeaderView(Gtk.HeaderBar):
         self.health_button.get_style_context().add_class("health")
         self.health_button.set_relief(Gtk.ReliefStyle.NONE)
         self.health_button.set_valign(Gtk.Align.CENTER)
-        self.health_button.set_margin_end(Layout.Topbar.HEALTH_GAP)
-        health = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Layout.Topbar.HEALTH_DOT_GAP)
+        self._health_box = health = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._health_dot = Dot(9, css_class="health-dot")
         health.pack_start(self._health_dot, False, False, 0)
         self._health_label = Gtk.Label(label=_("All systems operational"))
@@ -220,10 +217,36 @@ class HeaderView(Gtk.HeaderBar):
         self.pack_end(self.health_button)
         self.set_health(Health(Level.SUCCESS, _("All systems operational"), _("Operational")))
 
+    # ------------------------------------------------------------- density
+    def apply_density(self) -> None:
+        """Lay the bar out with the active density preset (also on a runtime switch)."""
+
+        top, size = Layout.Topbar, Size
+        self.set_size_request(-1, size.TOPBAR)
+        self.logo.set_size_request(size.LOGO_TILE, size.LOGO_TILE)
+        self.logo.set_margin_start(top.BRAND_INSET)
+        _set_icon_size(self._logo_glyph, size.LOGO_GLYPH)
+        self.wordmark.set_margin_start(top.WORDMARK_GAP)
+        self.sidebar_expand_button.set_margin_start(Space.M)
+        self.divider.set_size_request(1, top.DIVIDER_HEIGHT)
+        self.workspace_button.set_margin_start(top.WORKSPACE_GAP)
+        self._workspace_name.set_margin_start(top.WORKSPACE_NAME_GAP)
+        self._workspace_chevron.set_margin_start(top.WORKSPACE_NAME_GAP if _compact_density() else Space.M)
+        self.avatar_button.set_size_request(size.AVATAR, size.AVATAR)
+        self.avatar_button.set_margin_start(top.AVATAR_GAP)
+        _set_icon_size(self._help_icon, size.ICON_TOPBAR)
+        self.help_button.set_margin_start(top.HELP_GAP)
+        self.health_button.set_margin_end(top.HEALTH_GAP)
+        self._health_box.set_spacing(top.HEALTH_DOT_GAP)
+        self.set_compact(self._compact)
+        if self._brand_width is not None:
+            self.set_brand_width(self._brand_width)
+
     # ---------------------------------------------------------------- api
     def set_brand_width(self, width: Optional[int]) -> None:
         """Line the brand divider up with the sidebar edge (``None`` = sidebar hidden)."""
 
+        self._brand_width = width
         if width is None:
             self.brand.set_size_request(-1, -1)
             self.sidebar_expand_button.show()
@@ -330,11 +353,14 @@ class HeaderView(Gtk.HeaderBar):
         self._avatar_popover.bind_model(_avatar_menu_model(git_updates=self._git_updates, maximized=self._maximized), None)
 
     def set_compact(self, compact: bool) -> None:
-        """Narrow windows: dot-only health and no ``WORKSPACE`` caption."""
+        """Narrow windows: dot-only health and no ``WORKSPACE`` caption.
+
+        The Compact density never shows the caption (name and chevron only).
+        """
 
         self._compact = compact
         self._health_label.set_visible(not compact)
-        self._workspace_caption.set_visible(not compact)
+        self._workspace_caption.set_visible(not compact and not _compact_density())
 
     def open_app_menu(self) -> None:
         self.avatar_button.set_active(True)

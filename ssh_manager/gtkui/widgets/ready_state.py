@@ -3,13 +3,15 @@
 Layout (reference)::
 
           ┌──────┐
-          │  >_  │        72×72 card, radius 18
+          │  >_  │        72×72 card, radius 18 (Compact 48)
           └──────┘
-      Ready to connect     22/400
+      Ready to connect     22/400 (Compact 17)
    Start a secure SSH session with **api-prod-01**. Your
         session will open here in the workspace.        16/400, ≤ 520px
-       [ >_  Connect to host ]   h 51, accent
+       [ >_  Connect to host ]   h 51, accent (Compact 34)
      ⚷ Using ed25519 authentication                     13/400 faint
+
+Sizes come from the active density preset (:meth:`ReadyState.apply_density`).
 """
 
 from __future__ import annotations
@@ -25,12 +27,6 @@ from ..constants import Icons  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from .icons import make_icon  # noqa: E402
 
-BODY_WIDTH = Layout.Ready.BODY_WIDTH
-TITLE_TOP = Layout.Ready.TITLE_TOP
-BODY_TOP = Layout.Ready.BODY_TOP
-BUTTON_TOP = Layout.Ready.BUTTON_TOP
-CAPTION_TOP = Layout.Ready.CAPTION_TOP
-
 
 class ReadyState(Gtk.Box):
     """Icon card, title, body, primary (+ optional secondary) button and caption."""
@@ -44,9 +40,8 @@ class ReadyState(Gtk.Box):
         self._primary_cb: Optional[Callable[[], None]] = None
         self._secondary_cb: Optional[Callable[[], None]] = None
 
-        card = Gtk.Box()
+        self._card = card = Gtk.Box()
         card.get_style_context().add_class("empty-card")
-        card.set_size_request(Size.EMPTY_CARD, Size.EMPTY_CARD)
         card.set_halign(Gtk.Align.CENTER)
         self._card_icon = make_icon(Icons.TERMINAL, 32, css_class="empty-icon")
         self._card_icon.set_valign(Gtk.Align.CENTER)
@@ -55,7 +50,6 @@ class ReadyState(Gtk.Box):
 
         self.title = Gtk.Label()
         self.title.get_style_context().add_class("empty-title")
-        self.title.set_margin_top(TITLE_TOP)
         self.title.set_justify(Gtk.Justification.CENTER)
         self.pack_start(self.title, False, False, 0)
 
@@ -63,21 +57,16 @@ class ReadyState(Gtk.Box):
         self.body.get_style_context().add_class("empty-description")
         self.body.set_line_wrap(True)
         self.body.set_justify(Gtk.Justification.CENTER)
-        # Wrap at exactly BODY_WIDTH: the size request sets the width, and a
-        # one-character natural width keeps the label from growing past it.
         self.body.set_max_width_chars(1)
-        self.body.set_size_request(BODY_WIDTH, -1)
-        self.body.set_margin_top(BODY_TOP)
         self.pack_start(self.body, False, False, 0)
 
-        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
+        self._buttons = buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         buttons.set_halign(Gtk.Align.CENTER)
-        buttons.set_margin_top(BUTTON_TOP)
         self.primary = Gtk.Button()
         self.primary.get_style_context().add_class("suggested-action")
         self.primary.get_style_context().add_class("hero")
         self.primary.set_can_default(True)
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
+        self._primary_content = content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self._primary_icon = make_icon(Icons.TERMINAL, 18)
         content.pack_start(self._primary_icon, False, False, 0)
         self._primary_label = Gtk.Label()
@@ -94,9 +83,8 @@ class ReadyState(Gtk.Box):
         buttons.pack_start(self.secondary, False, False, 0)
         self.pack_start(buttons, False, False, 0)
 
-        self.caption = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S + 1)
+        self.caption = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.caption.set_halign(Gtk.Align.CENTER)
-        self.caption.set_margin_top(CAPTION_TOP)
         self.caption.get_style_context().add_class("empty-caption")
         self.caption.pack_start(make_icon(Icons.KEY, 14, css_class="empty-caption"), False, False, 0)
         self._caption_label = Gtk.Label()
@@ -104,6 +92,23 @@ class ReadyState(Gtk.Box):
         self.caption.pack_start(self._caption_label, False, False, 0)
         self.caption.set_no_show_all(True)
         self.pack_start(self.caption, False, False, 0)
+        self.apply_density()
+
+    def apply_density(self) -> None:
+        ready = Layout.Ready
+        self._card.set_size_request(Size.EMPTY_CARD, Size.EMPTY_CARD)
+        self._card_icon.set_pixel_size(Size.EMPTY_CARD_ICON)
+        self.title.set_margin_top(ready.TITLE_TOP)
+        # Wrap at exactly BODY_WIDTH: the size request sets the width, and a
+        # one-character natural width keeps the label from growing past it.
+        self.body.set_size_request(ready.BODY_WIDTH, -1)
+        self.body.set_margin_top(ready.BODY_TOP)
+        self._buttons.set_spacing(Space.M)
+        self._buttons.set_margin_top(ready.BUTTON_TOP)
+        self._primary_content.set_spacing(Space.M)
+        self._primary_icon.set_pixel_size(Size.ICON_BUTTON_GLYPH - 2)
+        self.caption.set_spacing(Space.S + 1)
+        self.caption.set_margin_top(ready.CAPTION_TOP)
 
     def set_content(
         self,

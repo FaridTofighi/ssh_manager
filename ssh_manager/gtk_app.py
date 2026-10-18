@@ -55,6 +55,8 @@ from ssh_manager.gtkui.dialogs.confirm import confirm  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
 from ssh_manager.gtkui.i18n import _  # noqa: E402
+from ssh_manager.gtkui.theme import density as density_tokens  # noqa: E402
+from ssh_manager.gtkui.theme.density import Density  # noqa: E402
 from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import Level  # noqa: E402
 from ssh_manager.gtkui.controllers.host_page import HostPageController  # noqa: E402
@@ -249,6 +251,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._ui.prefer_dark if self._ui.prefer_dark is not None else True
         ))
         self._prefer_dark = self._theme_mode is ThemeMode.DARK
+        # Views read the active density while they are built, so set it first.
+        self._density = Density.coerce(self._ui.density)
+        density_tokens.set_active(self._density, notify=False)
         self._base_font_family = _system_font_family()
         self._ui_font_size = self._ui.ui_font_size
         self._apply_ui_font(self._ui_font_size)
@@ -290,8 +295,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         self._apply_theme_mode(self._theme_mode)
         get_theme_manager().add_listener(self._on_theme_changed)
+        density_tokens.add_listener(self._on_density_changed)
+        self.terminal_tabs.on_toggle_focus_mode = self.layout.toggle_maximized
         self.show_all()
         self.connect("size-allocate", self.layout.on_size_allocate)
+        self.connect("key-press-event", self._on_window_key_press)
 
     def _build_header(self) -> None:
         self._header = HeaderView(self._toasts.history)
@@ -500,13 +508,17 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     # -------------------------------------------------------- theme / font
     def _apply_ui_font(self, size: int) -> None:
         self._ui_font_size = max(10, min(48, int(size)))
+        get_theme_manager().set_ui_font_size(self._ui_font_size)  # the 11px type floor depends on it
         settings = Gtk.Settings.get_default()
         if not settings:
             return
         desc = Pango.FontDescription()
         desc.set_family(self._base_font_family or "Sans")
-        desc.set_size(self._ui_font_size * Pango.SCALE)
-        settings.set_property("gtk-font-name", desc.to_string())
+        # The density scales the base font (Compact: 13px body at 11pt); em sizes follow it.
+        desc.set_size(int(round(self._ui_font_size * density_tokens.active().base_font_scale * Pango.SCALE)))
+        name = desc.to_string()
+        if settings.get_property("gtk-font-name") != name:  # a change restyles every widget of the process
+            settings.set_property("gtk-font-name", name)
 
     def _apply_dark_theme(self, prefer_dark: bool) -> None:
         self._apply_theme_mode(ThemeMode.DARK if prefer_dark else ThemeMode.LIGHT)
@@ -518,6 +530,50 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._prefer_dark = app.set_theme_mode(self._theme_mode)
         else:
             self._prefer_dark = get_theme_manager().apply(self._theme_mode)
+
+    # ------------------------------------------------------------- density
+    @property
+    def density(self) -> Density:
+        return self._density
+
+    def set_density(self, density: object) -> None:
+        """Switch Compact / Comfortable at runtime: new CSS, then every view lays itself out again."""
+
+        density = Density.coerce(density)
+        self._density = density
+        self._ui.density = density.value
+        density_tokens.set_active(density)  # → _on_density_changed (and other windows' listeners), if it changed
+
+    def _on_density_changed(self, _tokens) -> None:
+        if self.closing or not hasattr(self, "_host_page"):
+            return
+        get_theme_manager().reload()
+        self._apply_ui_font(self._ui_font_size)  # base font follows the density
+        self._header.apply_density()
+        self.refresh_workspaces()
+        self._sidebar.apply_density()
+        self.tree_view.apply_density()
+        self.terminal_tabs.apply_density()
+        self.host_page.apply_density()
+        other = density_tokens.COMFORTABLE if density_tokens.active().compact else density_tokens.COMPACT
+        self.layout.on_density_changed(previous_default=other.size.SIDEBAR - 1)
+        self.layout.set_narrow(self.layout.compact, force=True)
+        self._density = density_tokens.active().density
+
+    def _on_window_key_press(self, _widget, event: Gdk.EventKey) -> bool:
+        """Esc leaves focus mode unless a terminal has focus (it needs Esc); broadcast stops first."""
+
+        if not self.layout.maximized or event.keyval != Gdk.KEY_Escape:
+            return False
+        if event.state & Gtk.accelerator_get_default_mod_mask():
+            return False
+        if isinstance(self.get_focus(), Vte.Terminal):
+            return False
+        if self.terminal_tabs.broadcast_active:
+            self.terminal_tabs.set_broadcast_mode(False)
+        else:
+            self.layout.set_maximized(False)
+        return True
 
     def _on_theme_changed(self, _is_dark: bool) -> None:
         """Re-render rows whose colors come from the active palette."""
@@ -545,6 +601,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         ui.prefer_dark = self._prefer_dark
         ui.font_scale = self.terminal_tabs.default_font_scale
         ui.ui_font_size = self._ui_font_size
+        ui.density = self._density.value
         ui.filter_query = self.tree.filter_query
         ui.group_colors = dict(self.colors.group_colors)
         ui.host_colors = dict(self.colors.host_colors)
@@ -561,8 +618,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self.resize(*ui.window_size)
         if ui.is_maximized:
             self.maximize()
-        self.layout.sidebar_width_saved = ui.sidebar_width
-        self._paned.set_position(ui.sidebar_width)
+        self._paned.set_position(self.layout.sidebar_width_saved)
         self.layout.set_sidebar_visible(ui.sidebar_visible, initial=True)
         self.layout.sidebar_visible_before_max = ui.sidebar_prev_visible
         self.layout.set_maximized(ui.terminal_maximized, initial=True)
@@ -576,6 +632,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def _on_destroy(self, *_args) -> None:
         self.closing = True
         get_theme_manager().remove_listener(self._on_theme_changed)
+        density_tokens.remove_listener(self._on_density_changed)
         self._toasts.shutdown()
         self.inventory.shutdown()
         self.host_page.shutdown()
