@@ -11,9 +11,9 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 
 from ..constants import RowKind  # noqa: E402
-from ..i18n import _  # noqa: E402
+from ..i18n import _, ngettext  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
-from ..validation import validate_child_path, validate_group_name  # noqa: E402
+from ..validation import validators_for  # noqa: E402
 from .guards import requires_editable_inventory  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -29,12 +29,41 @@ class GroupActions:
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
 
+    @property
+    def _store_names(self) -> bool:
+        """App store: readable names, groups are not files (no ``.conf``, no file wording)."""
+
+        return bool(getattr(self.win.manager, "allows_display_names", False))
+
+    def _validator(self, kind: str):
+        return validators_for(self.win.manager)[kind]
+
+    def _host_count(self, parent: str, child: str = "") -> int:
+        counter = getattr(self.win.manager, "child_host_count", None)
+        if counter is not None:
+            return counter(parent, child)
+        groups = self.win.manager.tree.get(parent, {})
+        if child:
+            group = groups.get(child)
+            return len(group.hosts) if group else 0
+        return sum(len(group.hosts) for group in groups.values())
+
+    def _copy_duplicate_bindings(self) -> None:
+        """App store: the hosts of a duplicated group keep their credentials (bound by the new ids)."""
+
+        mapping = getattr(self.win.manager, "last_duplicate_map", None) or {}
+        store = self.win._credential_store
+        bindings = {new: store.binding_for_host(old) for old, new in mapping.items() if store.binding_for_host(old)}
+        if bindings:
+            self.win.creds.bind_many(bindings)
+
     @requires_editable_inventory
     def create_parent_group(self) -> None:
         name = self.win._prompt_text(
             _("New Group"),
-            _("Name of the new top-level group (a folder under the config directory)."),
-            validator=validate_group_name,
+            _("Name of the new top-level group.") if self._store_names
+            else _("Name of the new top-level group (a folder under the config directory)."),
+            validator=self._validator("group"),
             accept_label=_("_Create"),
         )
         if not name:
@@ -51,6 +80,22 @@ class GroupActions:
             return
         parent = data.get("parent", "")
         if not parent:
+            return
+        if self._store_names:
+            base_child = data.get("child", "") if kind != RowKind.PARENT.value else ""
+            name = self.win._prompt_text(
+                _("New Subgroup"),
+                _("Name of the new group under {path}:").format(path="/".join(filter(None, (parent, base_child)))),
+                validator=self._validator("group"), accept_label=_("_Create"),
+            )
+            if not name:
+                return
+            child_path = f"{base_child}/{name.strip()}" if base_child else name.strip()
+            success, msg = self.win.manager.create_child_group(parent, child_path)
+            self.win._log_event(msg, success)
+            if success:
+                self.win.tree.rebuild(refresh=True)
+                self.win.tree.select_child_group(parent, child_path)
             return
         if kind == RowKind.CHILD.value:
             base_child = data.get("child", "")
@@ -105,7 +150,7 @@ class GroupActions:
 
     def normalize_group_filename(self, name: str) -> str:
         slug = name.strip()
-        if not slug:
+        if not slug or self._store_names:  # app-store groups are not files
             return slug
         return slug if slug.lower().endswith(".conf") else f"{slug}.conf"
 
@@ -117,7 +162,7 @@ class GroupActions:
         current = data["parent"]
         new_name = self.win._prompt_text(
             _("Rename Group"), _("New name for “{name}”:").format(name=current), current,
-            validator=validate_group_name, accept_label=_("_Rename"),
+            validator=self._validator("group"), accept_label=_("_Rename"),
         )
         if not new_name:
             return
@@ -137,13 +182,14 @@ class GroupActions:
         default = f"{source}-copy"
         new_name = self.win._prompt_text(
             _("Duplicate Group"), _("Name of the copy:"), default,
-            validator=validate_group_name, accept_label=_("_Duplicate"),
+            validator=self._validator("group"), accept_label=_("_Duplicate"),
         )
         if not new_name:
             return
         success, msg = self.win.manager.duplicate_parent_group(source, new_name)
         self.win._log_event(msg, success)
         if success:
+            self._copy_duplicate_bindings()
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_parent_group(new_name)
 
@@ -155,8 +201,10 @@ class GroupActions:
         parent = data["parent"]
         current = data["child"]
         new_name = self.win._prompt_text(
-            _("Rename Child Group"), _("New file name for “{name}”:").format(name=current), current,
-            validator=validate_child_path, accept_label=_("_Rename"),
+            _("Rename Group") if self._store_names else _("Rename Child Group"),
+            (_("New name or path for “{name}”:") if self._store_names
+             else _("New file name for “{name}”:")).format(name=current), current,
+            validator=self._validator("child_path"), accept_label=_("_Rename"),
         )
         if not new_name:
             return
@@ -179,14 +227,16 @@ class GroupActions:
         child = data["child"]
         default = f"{child}-copy"
         new_name = self.win._prompt_text(
-            _("Duplicate Child Group"), _("File name of the copy:"), default,
-            validator=validate_child_path, accept_label=_("_Duplicate"),
+            _("Duplicate Group") if self._store_names else _("Duplicate Child Group"),
+            _("Name of the copy:") if self._store_names else _("File name of the copy:"), default,
+            validator=self._validator("child_path"), accept_label=_("_Duplicate"),
         )
         if not new_name:
             return
         success, msg = self.win.manager.duplicate_child_group(parent, child, new_name)
         self.win._log_event(msg, success)
         if success:
+            self._copy_duplicate_bindings()
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, new_name)
 
@@ -196,9 +246,13 @@ class GroupActions:
         if kind != RowKind.PARENT.value:
             return
         name = data["parent"]
+        count = self._host_count(name)
         if not self.win._confirm(
             _("Delete group “{name}”?").format(name=name),
-            detail=_("All child groups and hosts in this folder are deleted. This cannot be undone."),
+            detail=ngettext("Its subgroups and {n} host are deleted (saved credentials are kept). "
+                            "This cannot be undone.",
+                            "Its subgroups and {n} hosts are deleted (saved credentials are kept). "
+                            "This cannot be undone.", count).format(n=count),
             confirm_label=_("_Delete Group"),
         ):
             return
@@ -215,9 +269,15 @@ class GroupActions:
             return
         parent = data["parent"]
         child = data["child"]
+        count = self._host_count(parent, child)
         if not self.win._confirm(
-            _("Delete child group “{name}”?").format(name=f"{parent}/{child}"),
-            detail=_("The config file and every host in it are deleted. This cannot be undone."),
+            _("Delete group “{name}”?").format(name=f"{parent}/{child}") if self._store_names
+            else _("Delete child group “{name}”?").format(name=f"{parent}/{child}"),
+            detail=ngettext("The group, its subgroups and {n} host are deleted (saved credentials are kept). "
+                            "This cannot be undone.",
+                            "The group, its subgroups and {n} hosts are deleted (saved credentials are kept). "
+                            "This cannot be undone.", count).format(n=count) if self._store_names
+            else _("The config file and every host in it are deleted. This cannot be undone."),
             confirm_label=_("_Delete Child Group"),
         ):
             return

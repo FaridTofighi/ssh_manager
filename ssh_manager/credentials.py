@@ -193,6 +193,31 @@ class CredentialStore:
             self._bindings = old_bindings
             raise
 
+    def prune_bindings(self, valid_host_ids: set) -> int:
+        """Drop bindings of app-store hosts that no longer exist (the cascade for deleted hosts).
+
+        Only id-style keys are considered; legacy ``parent::child::alias`` keys of
+        folder inventories are left alone. The credentials themselves are kept.
+        """
+
+        stale = [key for key in self._bindings if "::" not in key and key not in valid_host_ids]
+        if not stale:
+            return 0
+        old_bindings = dict(self._bindings)
+        for key in stale:
+            self._bindings.pop(key, None)
+        try:
+            self._save()
+        except SecureStoreError:
+            self._bindings = old_bindings
+            raise
+        return len(stale)
+
+    def legacy_bindings(self) -> Dict[str, str]:
+        """``{parent::child::alias: credential id}`` left from folder inventories (for migration)."""
+
+        return {key: cid for key, cid in self._bindings.items() if "::" in key}
+
     def rebind_host(self, old_host_key: str, new_host_key: str) -> None:
         old_bindings = dict(self._bindings)
         cred_id = self._bindings.pop(old_host_key, None)

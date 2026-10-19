@@ -12,7 +12,7 @@ ProxyJump.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import gi
 
@@ -88,8 +88,10 @@ class HostDialog(BaseDialog):
         vault_unlocked: bool = False,
         template_defaults: Optional[Dict[str, str]] = None,
         profiles: Optional[Dict[str, SessionProfile]] = None,
+        alias_validator: Optional[Callable[[str], Optional[str]]] = None,
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
+        self._alias_validator = alias_validator or validate_alias  # app store: display names
         BaseDialog.__init__(self, parent, title, size=DialogSize.LARGE, height=560)
         self.get_content_area().set_margin_start(0)
         self.get_content_area().set_margin_end(0)
@@ -165,7 +167,7 @@ class HostDialog(BaseDialog):
     def _page_general(self, labels: Gtk.SizeGroup) -> None:
         general = self.layout.new_page("general", _("General"), _("How the host appears in the tree and where it lives."))
         sec = FormSection()
-        self._alias_row = sec.add(_("_Alias"), self.alias_entry, validator=validate_alias, label_group=labels,
+        self._alias_row = sec.add(_("_Alias"), self.alias_entry, validator=self._alias_validator, label_group=labels,
                                   help_text=_("The name used in the tree and with “ssh <alias>”."))
         self._hostname_row = sec.add(_("_Host name"), self.hostname_entry, validator=validate_hostname, label_group=labels,
                                      help_text=_("Leave empty to connect to the alias itself."))

@@ -20,6 +20,7 @@ from ..dialogs.host_dialog import HostDialog  # noqa: E402
 from ..constants import RowKind  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
+from ..validation import validators_for  # noqa: E402
 from .guards import requires_editable_inventory  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -55,7 +56,7 @@ class HostActions:
             dialog.destroy()
 
     def host_dialog(self, host: Optional[HostEntry] = None, **kwargs) -> HostDialog:
-        binding = self.win._credential_store.binding_for_host(self.win.creds.host_key(host)) if host else None
+        binding = self.win._credential_store.binding_for_host(self.win.creds.credential_key(host)) if host else None
         return HostDialog(
             self.win,
             host,
@@ -65,6 +66,7 @@ class HostActions:
             vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
             vault_unlocked=self.win._vault.unlocked,
             profiles=self.win._profiles,
+            alias_validator=validators_for(self.win.manager)["alias"],
             **kwargs,
         )
 
@@ -96,7 +98,7 @@ class HostActions:
         success, msg = self.win.manager.add_host(parent, child, host)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.host_key(host), cred_id)
+            self.win.creds.bind_credential(self.win.creds.credential_key(host), cred_id)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(parent, child, host.alias)
 
@@ -130,9 +132,9 @@ class HostActions:
         success, msg = self.win.manager.update_host(host.parent_group, host.child_group, host.alias, updated)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.host_key(updated), cred_id)
-            if self.win.creds.host_key(updated) != self.win.creds.host_key(host):
-                self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+            self.win.creds.bind_credential(self.win.creds.credential_key(updated), cred_id)
+            if self.win.creds.credential_key(updated) != self.win.creds.credential_key(host):
+                self.win.creds.bind_credential(self.win.creds.credential_key(host), None)
             if changed:
                 self.win.sessions.audit_log("edit", updated, extra={"fields": ",".join(changed)})
             self.win.tree.rebuild(refresh=True)
@@ -161,7 +163,7 @@ class HostActions:
         success, msg = self.win.manager.add_host(host.parent_group, host.child_group, clone)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.host_key(clone), cred_id)
+            self.win.creds.bind_credential(self.win.creds.credential_key(clone), cred_id)
             self.win.sessions.audit_log("edit", clone, extra={"fields": "duplicate"})
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(clone.parent_group, clone.child_group, clone.alias)
@@ -188,7 +190,7 @@ class HostActions:
         if not selection:
             return
         target_parent, target_child, create_child = selection
-        binding = self.win._credential_store.binding_for_host(self.win.creds.host_key(host))
+        binding = self.win._credential_store.binding_for_host(self.win.creds.credential_key(host))
         success, msg = self.win.manager.move_hosts(
             [(host.parent_group, host.child_group, host.alias)],
             target_parent,
@@ -197,12 +199,12 @@ class HostActions:
         )
         self.win._log_event(msg, success)
         if success:
-            if binding:
+            if binding and not host.id:  # folder inventories key bindings by path; app-store ids are stable
                 self.win.creds.bind_credential(
                     f"{target_parent}::{target_child}::{host.alias}",
                     binding,
                 )
-                self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+                self.win.creds.bind_credential(self.win.creds.credential_key(host), None)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(target_parent, target_child, host.alias)
 
@@ -227,7 +229,7 @@ class HostActions:
         success, msg = self.win.manager.delete_host(host.parent_group, host.child_group, host.alias)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.host_key(host), None)
+            self.win.creds.bind_credential(self.win.creds.credential_key(host), None)
             self.win.sessions.audit_log("delete", host)
             self.win.tree.rebuild(refresh=True)
 
@@ -336,7 +338,7 @@ class HostActions:
         success, msg = self.win.manager.add_host(parent, child, host)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.host_key(host), cred_id)
+            self.win.creds.bind_credential(self.win.creds.credential_key(host), cred_id)
             self.win.sessions.audit_log("edit", host, extra={"fields": "new"})
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(parent, child, host.alias)

@@ -27,9 +27,10 @@ class HostEntry:
     alias: str
     options: Dict[str, str] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    source_file: Path = Path("")
+    source_file: Path = Path("")  # legacy (file-based inventories); empty for the app store
     parent_group: str = ""
     child_group: str = ""
+    id: str = ""  # stable host id (app store); "" for file-based inventories
 
     def option(self, *names: str) -> Optional[str]:
         wanted = {name.lower() for name in names}
@@ -54,8 +55,10 @@ class HostEntry:
 class GroupConfig:
     parent: str
     name: str
-    path: Path
+    path: Path  # legacy: the child-group file; empty for the app store
     hosts: List[HostEntry]
+    id: str = ""  # stable group id (app store)
+    file_backed: bool = True  # a *.conf file of a folder inventory (icon); app-store groups are folders
 
 
 ###############################################################################
@@ -503,7 +506,13 @@ class ImportTransaction:
 
 
 class ConfigManager:
-    """Handles reading and mutating SSH config groups on disk."""
+    """Handles reading and mutating SSH config groups on disk (legacy folder inventories).
+
+    The app's own inventory is :class:`ssh_manager.inventory.manager.StoreConfigManager`
+    (same API); this class remains for ``--base-dir`` folders, shared files and tests.
+    """
+
+    allows_display_names = False  # file names: [A-Za-z0-9._-] only
 
     def __init__(self, base_dir: Path) -> None:
         self.base_dir = base_dir

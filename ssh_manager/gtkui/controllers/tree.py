@@ -79,6 +79,7 @@ class TreeController:
                     if row.shared:
                         self.read_only_keys.add(row.key)
         self.host_iters = self.win.tree_view.populate(rows)
+        self.win.creds.prune_bindings()  # app store: bindings of deleted hosts go away
         self.restore_selection(*selected)
         self.win._sidebar.set_page(TreePage(sidebar_page_for(inventories, rows, bool(query or terms))))
         if hasattr(self.win._sidebar, "set_host_count"):

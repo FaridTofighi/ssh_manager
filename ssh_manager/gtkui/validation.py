@@ -91,3 +91,51 @@ def validate_child_path(value: str) -> Optional[str]:
         if error:
             return error
     return None
+
+
+# ------------------------------------------------- app-store (display) names
+def validate_display_name(value: str) -> Optional[str]:
+    """Group name in the app store: any readable text (1–128 chars, no '/', no control characters)."""
+
+    from ..inventory.store import validate_name
+
+    error = validate_name(value)
+    if error is None:
+        return None
+    text = value.strip()
+    if not text:
+        return _("Name is required.")
+    if "/" in text:
+        return _("Name must not contain '/'.")
+    if len(text) > 128:
+        return _("Name is longer than 128 characters.")
+    return _("Name must not contain control characters or line breaks.")
+
+
+def validate_display_path(value: str) -> Optional[str]:
+    """``a/b/c`` of display names (app store)."""
+
+    parts = [part for part in value.strip().strip("/").split("/")]
+    if not any(part.strip() for part in parts):
+        return _("Name is required.")
+    for part in parts:
+        error = validate_display_name(part)
+        if error:
+            return error
+    return None
+
+
+def validate_display_alias(value: str) -> Optional[str]:
+    """Host alias in the app store: a free display name (spaces and Unicode allowed)."""
+
+    if not value.strip():
+        return _("Alias is required.")
+    return validate_display_name(value)
+
+
+def validators_for(manager: object) -> "dict[str, Validator]":
+    """``{"group", "child_path", "alias"}`` validators for the active inventory backend."""
+
+    if getattr(manager, "allows_display_names", False):
+        return {"group": validate_display_name, "child_path": validate_display_path, "alias": validate_display_alias}
+    return {"group": validate_group_name, "child_path": validate_child_path, "alias": validate_alias}

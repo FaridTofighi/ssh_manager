@@ -68,4 +68,5 @@ def with_user(host: HostEntry, username: str) -> HostEntry:
         parent_group=host.parent_group,
         child_group=host.child_group,
         source_file=host.source_file,
+        id=host.id,  # credential bindings follow the stable id
     )

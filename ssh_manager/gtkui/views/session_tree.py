@@ -44,7 +44,7 @@ from ..tree_icons import icon_color, pulse_alpha, quantize_alpha, show_status_ba
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import render_svg_surface, render_tree_icon  # noqa: E402
 
-COLUMN_TYPES = (str, str, str, str, str, str, GObject.TYPE_PYOBJECT, str, str, str, int, str, bool)
+COLUMN_TYPES = (str, str, str, str, str, str, GObject.TYPE_PYOBJECT, str, str, str, int, str, bool, bool)
 PULSE_INTERVAL_MS = 100
 
 
@@ -117,6 +117,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
     expandable = GObject.Property(type=bool, default=False)
     expanded = GObject.Property(type=bool, default=False)
     read_only = GObject.Property(type=bool, default=False)
+    file_backed = GObject.Property(type=bool, default=True)
     gap = GObject.Property(type=int, default=0)
 
     def __init__(self, icon_cache: dict) -> None:
@@ -230,6 +231,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
     def _paint_tree_icon(self, cr, widget, kind, selected: bool, size: int, x: float, mid: float, scale: int) -> None:
         palette = current_palette()
         icon = tree_icon_for(kind, self.props.expanded, self.props.read_only,
+                             self.props.file_backed if kind is RowKind.CHILD else None,
                              selected=selected, has_children=self.props.expandable)
         color = icon_color(palette, icon, self.props.color)
         badge_name = badge_color = ""
@@ -327,6 +329,7 @@ class SessionTreeView(Gtk.TreeView):
         cell.set_property("status", model.get_value(tree_iter, TreeColumn.STATUS) or "")
         cell.set_property("color", model.get_value(tree_iter, TreeColumn.COLOR) or "")
         cell.set_property("read_only", bool(model.get_value(tree_iter, TreeColumn.READ_ONLY)))
+        cell.set_property("file_backed", bool(model.get_value(tree_iter, TreeColumn.FILE_BACKED)))
         cell.set_property("expandable", model.iter_has_child(tree_iter))
         cell.set_property("expanded", self.row_expanded(path))
         cell.set_property("gap", Layout.Tree.GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
@@ -357,6 +360,7 @@ class SessionTreeView(Gtk.TreeView):
                     row.count,
                     row.tooltip,
                     row.read_only,
+                    row.file_backed,
                 ],
             )
             if row.kind is RowKind.HOST:

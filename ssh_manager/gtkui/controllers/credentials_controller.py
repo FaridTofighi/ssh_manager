@@ -60,7 +60,38 @@ class CredentialController:
         return ", ".join(parts)
 
     def host_key(self, host: HostEntry) -> str:
+        """Path key (``parent::child::alias``) for status, history and colors."""
+
         return host_config_key(host)
+
+    def credential_key(self, host: HostEntry) -> str:
+        """Key of the host's credential binding: its stable id (app store), else the path key."""
+
+        return host.id or host_config_key(host)
+
+    @property
+    def _ids_are_stable(self) -> bool:
+        return bool(getattr(self.win.manager, "allows_display_names", False))
+
+    def bind_many(self, mapping: Dict[str, Optional[str]]) -> bool:
+        try:
+            self.win._credential_store.bind_many(mapping)
+            return True
+        except (SecureStoreError, KeyError) as exc:
+            self.win._notify(_("Could not save credential bindings. See logs for details."), Level.ERROR)
+            LOGGER.warning("credential bind_many failed: %s", exc)
+            return False
+
+    def prune_bindings(self) -> None:
+        """App store: forget bindings of deleted hosts (credentials are kept)."""
+
+        ids = getattr(self.win.manager, "all_host_ids", None)
+        if ids is None:
+            return
+        try:
+            self.win._credential_store.prune_bindings(ids())
+        except Exception as exc:  # pragma: no cover - best effort
+            LOGGER.warning("credential prune failed: %s", exc)
 
     def bind_credential(self, host_key: str, cred_id: Optional[str]) -> bool:
         try:
@@ -72,6 +103,8 @@ class CredentialController:
             return False
 
     def rebind_credential(self, old_key: str, new_key: str) -> bool:
+        if self._ids_are_stable:
+            return True  # bindings follow the host id across renames and moves
         try:
             self.win._credential_store.rebind_host(old_key, new_key)
             return True
@@ -81,6 +114,8 @@ class CredentialController:
             return False
 
     def remap_credential_prefix(self, old_prefix: str, new_prefix: str) -> bool:
+        if self._ids_are_stable:
+            return True
         try:
             self.win._credential_store.remap_bindings_prefix(old_prefix, new_prefix)
             return True
@@ -90,6 +125,9 @@ class CredentialController:
             return False
 
     def unbind_credential_prefix(self, prefix: str) -> bool:
+        if self._ids_are_stable:
+            self.prune_bindings()  # deleted hosts lose their bindings
+            return True
         try:
             self.win._credential_store.unbind_prefix(prefix)
             return True
@@ -99,7 +137,7 @@ class CredentialController:
             return False
 
     def credential_for_host(self, host: HostEntry) -> Optional[Credential]:
-        return self.win._credential_store.credential_for_host(self.host_key(host))
+        return self.win._credential_store.credential_for_host(self.credential_key(host))
 
     def vault_entry_for_host(self, host: HostEntry) -> Optional[VaultEntry]:
         vault_id = host.metadata.get("vault_id")
@@ -141,7 +179,7 @@ class CredentialController:
         except SecureStoreError as exc:
             LOGGER.warning("per-host password update failed: %s", exc)
 
-        cred_id = self.win._credential_store.binding_for_host(self.host_key(host))
+        cred_id = self.win._credential_store.binding_for_host(self.credential_key(host))
         if cred_id and self.win._credential_store.get(cred_id):
             required_sources_ok = False
             try:
@@ -219,9 +257,9 @@ class CredentialController:
         hostname, port, username = self.host_connection_params(resolved)
         try:
             self.win._secure_store.delete(hostname, port, username)
-            binding = self.win._credential_store.binding_for_host(self.host_key(host))
+            binding = self.win._credential_store.binding_for_host(self.credential_key(host))
             if binding:
-                self.bind_credential(self.host_key(host), None)
+                self.bind_credential(self.credential_key(host), None)
             self.win._notify(_("Password removed for {alias}. You will be prompted next time.").format(alias=host.alias), Level.SUCCESS)
         except SecureStoreError as exc:
             self.win._notify(_("Could not remove the stored password. See logs for details."), Level.WARNING)

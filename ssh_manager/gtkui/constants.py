@@ -45,6 +45,7 @@ class TreeColumn(IntEnum):
     COUNT = 10
     TOOLTIP = 11
     READ_ONLY = 12  # host is read-only / shared / permission-restricted (lock overlay)
+    FILE_BACKED = 13  # group row is a *.conf file of a folder inventory (file icon)
 
 
 class Icons:

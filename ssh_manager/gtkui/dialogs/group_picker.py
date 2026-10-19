@@ -13,7 +13,7 @@ from ...config import ConfigManager  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..theme.tokens import Size  # noqa: E402
-from ..validation import validate_child_path  # noqa: E402
+from ..validation import validators_for  # noqa: E402
 from ..widgets.icons import add_combo_icon  # noqa: E402
 from ..widgets.forms import FormSection  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
@@ -62,7 +62,7 @@ class GroupPickerDialog(BaseDialog):
                 _("_New child group"),
                 self._new_child_entry,
                 help_text=_("Leave empty to use the selected child group."),
-                validator=lambda value: validate_child_path(value) if value.strip() else None,
+                validator=lambda value: validators_for(manager)["child_path"](value) if value.strip() else None,
             )
         self.add_body(section)
 
@@ -89,8 +89,10 @@ class GroupPickerDialog(BaseDialog):
         new_child = self._new_child_entry.get_text().strip() if self._allow_new_child else ""
         if new_child:
             return parent, new_child, True
-        child = self._child_combo.get_active_text()
-        if not child:
+        if self._child_combo.get_active() < 0:
+            return None
+        child = self._child_combo.get_active_id() or ""  # "" = directly in the top-level group (app store)
+        if not child and not getattr(self._manager, "allows_display_names", False):
             return None
         return parent, child, False
 
@@ -116,9 +118,11 @@ class GroupPickerDialog(BaseDialog):
         parent = self._parent_combo.get_active_text()
         if not parent:
             return
-        names = sorted(self._manager.tree.get(parent, {}).keys(), key=str.lower)
+        names = sorted((n for n in self._manager.tree.get(parent, {}) if n), key=str.lower)
+        if getattr(self._manager, "allows_display_names", False):
+            names.insert(0, "")  # hosts may sit directly in a top-level group
         for name in names:
-            self._child_combo.append_text(name)
+            self._child_combo.append(name or "", name or _("(directly in “{group}”)").format(group=parent))
         if initial_child and initial_child in names:
             self._child_combo.set_active(names.index(initial_child))
         elif names:

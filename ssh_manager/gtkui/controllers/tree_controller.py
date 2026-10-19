@@ -109,13 +109,16 @@ class TreeRow:
     tooltip: str = ""
     shared: bool = False
     read_only: bool = False  # hosts: shared inventory or no edit permission (lock overlay)
+    file_backed: bool = True  # a *.conf group of a folder inventory; app-store groups are folders
     children: List["TreeRow"] = field(default_factory=list)
 
     @property
     def icon(self) -> str:
         """The row's icon at rest (collapsed); the tree swaps in the open folder when expanded."""
 
-        return tree_icon_for(self.kind, read_only=self.read_only, has_children=bool(self.children)).name
+        file_backed = self.file_backed if self.kind is RowKind.CHILD else None
+        return tree_icon_for(self.kind, read_only=self.read_only, file_backed_group=file_backed,
+                             has_children=bool(self.children)).name
 
     @property
     def key(self) -> str:
@@ -183,13 +186,23 @@ def _child_rows(
             container = folder.children
         return container
 
-    for child_name, group in sorted(children.items(), key=lambda kv: kv[0].lower()):
+    for child_name, group in sorted(children.items(), key=lambda kv: [p.lower() for p in kv[0].split("/")]):
         name_match = parent_matches or (bool(query) and query in child_name.lower())
         host_rows = _host_rows(label_parent, child_name, group, query, terms, name_match and bool(query), callbacks, shared)
         keep_empty = not filtered or (name_match and bool(query) and not terms)
         if not host_rows and not keep_empty:
             continue
+        if not child_name:  # app store: hosts placed directly in the top-level group
+            top.extend(host_rows)
+            continue
         segments = child_name.split("/")
+        existing = folders.get(child_name)
+        if existing is not None:  # an app-store group seen first as the holder of a subgroup
+            existing.kind = RowKind.CHILD
+            existing.color = callbacks.color(label_parent, child_name)
+            existing.file_backed = group.file_backed
+            existing.children = host_rows + existing.children
+            continue
         child_row = TreeRow(
             RowKind.CHILD,
             segments[-1],
@@ -200,12 +213,19 @@ def _child_rows(
             count=len(host_rows),
             tooltip=_count_tooltip(len(host_rows)),
             shared=shared,
+            file_backed=group.file_backed,
             children=host_rows,
         )
         folder_for(segments[:-1]).append(child_row)
+        if not group.file_backed:
+            folders[child_name] = child_row  # its subgroups nest inside it
 
+    if filtered:
+        top = [row for row in top if _keep_filtered(row)]
     for row in top:
         _fill_folder_counts(row)
+        _groups_first(row)
+    top.sort(key=lambda row: row.kind is RowKind.HOST)
     return top
 
 
@@ -251,12 +271,31 @@ def _host_rows(
 
 
 def _fill_folder_counts(row: TreeRow) -> int:
-    """Set folder host counts to the sum of their descendants."""
+    """Set group host counts to their hosts plus everything below them."""
 
-    if row.kind is RowKind.CHILD_FOLDER:
+    if row.kind is RowKind.HOST:
+        return 1
+    if row.kind in (RowKind.CHILD_FOLDER, RowKind.CHILD):
         row.count = sum(_fill_folder_counts(child) for child in row.children)
         row.tooltip = _count_tooltip(row.count)
     return row.count
+
+
+def _groups_first(row: TreeRow) -> None:
+    """Subgroups above hosts (a group may hold both in the app store)."""
+
+    row.children.sort(key=lambda child: child.kind is RowKind.HOST)
+    for child in row.children:
+        _groups_first(child)
+
+
+def _keep_filtered(row: TreeRow) -> bool:
+    """While filtering, drop holder rows whose whole branch has no matching host."""
+
+    if row.kind is RowKind.HOST:
+        return True
+    row.children = [child for child in row.children if _keep_filtered(child)]
+    return bool(row.children) or row.kind is RowKind.CHILD
 
 
 # Top-level groups named after a deployment stage are listed in pipeline
@@ -294,7 +333,7 @@ def build_tree_rows(
             keep_empty = not filtered or (parent_matches and bool(query) and not terms)
             if not child_rows and not keep_empty:
                 continue
-            count = sum(row.count for row in child_rows)
+            count = sum(_fill_folder_counts(row) for row in child_rows)
             rows.append(
                 TreeRow(
                     RowKind.PARENT,
