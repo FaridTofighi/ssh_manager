@@ -6,6 +6,114 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## The app-owned inventory (and the "Base path is a file" fix)
+
+Details: `docs/inventory-store.md`. Screenshots:
+`docs/ui-after/inventory-store-{dark,light}.png`.
+
+### Part A — the bug
+
+After every group was deleted, creating anything failed with "Base path
+'~/.ssh/config' is a file". When `~/.ssh/conf.d` had no groups,
+`ConfigManager.refresh()` fell back to `~/.ssh/config` and made that *file*
+the base.
+
+- **Fix:** the fallback is gone. An empty inventory stays empty and editable,
+  and a missing folder is created with mode 0700.
+- **A single file as inventory:** it is read-only. Every change asks
+  "‘…’ is a file. SSH Manager keeps its groups in a folder. Use
+  ‘~/.ssh/conf.d’ instead?" (Use Folder / Cancel); it never leaves a failing
+  button.
+- **Test:** regression tests with a temp HOME check that creates succeed and
+  `~/.ssh/config` stays byte-identical.
+
+### Part B — what changed
+
+- **The store:** groups and hosts live in one SQLite database
+  (`$XDG_DATA_HOME/ssh-manager/inventory.db`) that the app owns:
+  - transactions, foreign keys, WAL, schema versions and rolling backups;
+  - groups of any depth, which may hold hosts and subgroups; empty groups are
+    real;
+  - readable Unicode names (case-insensitive uniqueness that works for
+    Unicode too);
+  - stable host and group ids.
+- **The facade:** `StoreConfigManager` keeps the `ConfigManager` API and the
+  `manager.tree` shape. Every group is an entry, and top-level hosts sit under
+  the child path `""`. The tree nests every group once, subgroups above
+  hosts, with folder icons and counts that include subgroups.
+- **Credential bindings:** keyed by host id. Renames and moves need nothing,
+  duplicates copy their bindings, and bindings of deleted hosts are pruned
+  (credentials are kept).
+- **OpenSSH files are sources only:**
+  - **Import → From OpenSSH Config…:** sources, preview, policy; idempotent;
+    patterns and `Match` blocks skipped with notes.
+  - **Export → To OpenSSH Config…:** writes a generated file, never
+    `~/.ssh/config`. An optional `Include` line goes at the top, after a
+    backup and with a diff shown first.
+  - **Open config folder:** now opens the import.
+- **First-run import:** offered once per source. Old names and old credential
+  bindings carry over; nothing changes on "No".
+- **Start-up problems:** each asks what to do — locked, damaged (restore a
+  backup / start empty), newer schema (left untouched), unwritable
+  (read-only). A read-only store explains itself, and changes made by other
+  windows are picked up.
+- **Preferences → Inventory:** shows the location, with Back Up Now, Reveal
+  and Export.
+- **MobaXterm import:** into the store, it keeps the original names and needs
+  no `General` / `_hosts` workaround (one transaction, id-keyed bindings).
+- **Command line:** `--inventory <db>` is new, and `--base-dir` now opens a
+  folder inventory. The old "Base path" wording is gone.
+
+### Decisions
+
+- **Bindings stay in `credentials.json`** (keyed by host id) rather than in a
+  database table. The credentials and their secrets live there already, and
+  a database table would couple the two stores. Deleting hosts prunes their
+  bindings when the tree next rebuilds.
+- **`--base-dir <folder>` stays editable.** It is the layout the app itself
+  created, the user chose it explicitly, and folder-based workflows and tests
+  keep working. A single file is read-only.
+- **"Open SSH Config Folder…" became an import** (for the store) rather than
+  a read-only workspace. Folders are import sources.
+- **The `Include` line goes at the top of `~/.ssh/config`,** not at the end
+  as the brief said: at the end it would only apply to the last `Host`.
+- **Locked database while running:** the write fails with "Try again" in the
+  message, rather than offering a retry button.
+
+### Verification
+
+- **Store:** `tests/test_inventory_store.py`, 23 tests.
+  - **Behaviour:** CRUD, Unicode and case-insensitive uniqueness, the name
+    rules, groups that hold hosts and subgroups, move cycles, duplicate,
+    cascade, depth 50, rollback on an injected failure.
+  - **Lifecycle:** migration from v0, a newer schema refused untouched,
+    corruption, an unwritable location, read-only, a second writer, data
+    version, backup rotation and restore.
+  - **Performance:** insert and load.
+- **Facade:** `tests/test_inventory_manager.py`, 14 tests. The tree shape,
+  Unicode names, rows without duplicates, every group operation, the host
+  rules, external changes, lock messages, bulk helpers, bindings that follow
+  ids, duplicate and prune, and a 5,000-host tree load.
+- **OpenSSH:** `tests/test_inventory_openssh.py`, 10 tests.
+  - **Import:** folder import with names, patterns, `Match`, BOM, CRLF, quotes
+    and tabs; duplicate blocks; idempotent re-import and the policies; legacy
+    bindings carried and reported; rollback when a binding fails; `Include`
+    loops; the size cap; the first-run sources.
+  - **Export:** a round trip; never over `~/.ssh/config`; an idempotent
+    `Include` line with a backup.
+- **Window and start-up:** `tests/test_gtkui_inventory_store.py`, 17 tests.
+  - **Start-up:** each decision, including a too-new file that stays
+    byte-identical.
+  - **Names and validation:** Unicode groups and hosts through the UI (create,
+    subgroup, rename, search, breadcrumb), inline duplicate validation,
+    dialog validators.
+  - **Behaviour:** bindings through moves and deletes, a read-only store,
+    external changes, the first-run offer (imported once, or "No").
+  - **Dialogs:** the import dialog, export with `Include`, Preferences →
+    Inventory, and the MobaXterm wizard into the store.
+- **Part A:** `tests/test_base_dir_regression.py`.
+- **Full suite:** `python3 -m unittest discover` passes.
+
 ## Import from MobaXterm (`.mxtsessions`)
 
 Details: `docs/import-mobaxterm.md`. Screenshots:

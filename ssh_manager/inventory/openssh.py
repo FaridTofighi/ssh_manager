@@ -152,11 +152,11 @@ def plan_openssh_import(sources: Sequence[Path], *, exclude_under: Sequence[Path
                 for child_name, group in children.items():
                     if group.path in big:
                         continue
-                    path = (parent, *[part for part in child_name.split("/") if part])
+                    group_path = (parent, *[part for part in child_name.split("/") if part])
                     if not group.hosts:
-                        add_group(path)
+                        add_group(group_path)
                     for host in group.hosts:
-                        take(host, path, f"{parent}::{child_name}::{host.alias}")
+                        take(host, group_path, f"{parent}::{child_name}::{host.alias}")
             continue
         if _too_big(source):
             plan.notes.append(Note("warning", f"{source} is larger than 20 MB; skipped."))
@@ -211,7 +211,7 @@ def commit_openssh_import(plan: OpenSSHPlan, manager, credential_store=None, *, 
     to the new host ids; keys that match no imported host are reported.
     """
 
-    from .store import InventoryError, ValidationError, _fold
+    from .store import HostRow, ValidationError, _fold
 
     report = OpenSSHImportReport()
     store = manager.store
@@ -232,7 +232,7 @@ def commit_openssh_import(plan: OpenSSHPlan, manager, credential_store=None, *, 
         for path in plan.groups:
             group_id(path)
             report.first_group = report.first_group or path[0]
-        existing: Dict[str, Dict[str, object]] = {}
+        existing: Dict[str, Dict[str, HostRow]] = {}
         for planned in plan.hosts:
             gid = group_id(planned.group)
             if gid not in existing:

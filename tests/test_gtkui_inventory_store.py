@@ -149,6 +149,53 @@ class StoreWindowTests(unittest.TestCase):
             self.win.groups.rename_child_group()
         self.assertIn("Team B — مرکز", self.win.manager.tree[UNICODE])
 
+    def test_duplicate_names_are_inline_errors(self) -> None:
+        captured = {}
+
+        def prompt(*args, **kwargs):
+            captured["validator"] = kwargs.get("validator")
+            return None
+
+        with mock.patch.object(self.win, "_prompt_text", side_effect=prompt):
+            self.win.groups.create_parent_group()
+        validate = captured["validator"]
+        self.assertIsNotNone(validate("PROD"))  # case-insensitive clash with "prod"
+        self.assertIsNone(validate("Prod \u2014 new"))
+        self.win.tree.select_child_group("prod", "web.conf")
+        with mock.patch.object(self.win, "_prompt_text", side_effect=prompt):
+            self.win.groups.rename_child_group()
+        validate = captured["validator"]
+        self.assertIsNone(validate("web.conf"))  # unchanged is fine
+        self.assertIsNotNone(validate("DB"))  # the sibling group "db"
+        self.assertIsNone(validate("frontend"))
+
+    def test_mobaxterm_wizard_imports_into_the_store(self) -> None:
+        from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
+        from ssh_manager.importers.mobaxterm import ImportStatus
+        from tests.mxt_synthetic import ACME
+
+        export = self.home / "acme.mxtsessions"
+        export.parent.mkdir(parents=True, exist_ok=True)
+        export.write_bytes(ACME.encode())
+        dialog = MobaXtermImportDialog(self.win, self.win.manager, self.win._credential_store,
+                                       report_dir=self.home / "reports", choose_file=lambda _p: str(export))
+        try:
+            dialog.choose_file()
+            dialog.wait()
+            for _step in range(2):
+                dialog.response(RESPONSE_NEXT)
+                dialog.wait()
+            dialog.default_combo.set_active_id("__none__")
+            dialog.response(RESPONSE_NEXT)
+            self.assertTrue(dialog.start_import())
+            dialog.wait()
+            self.assertIs(dialog.report.status, ImportStatus.SUCCESS)
+        finally:
+            dialog.destroy()
+        tree = self.win.manager.tree
+        self.assertIn("web 01", [h.alias for h in tree["Acme"]["Team A/Servers"].hosts])
+        self.assertIn("acme bastion", [h.alias for h in tree["Acme"][""].hosts])
+
     def test_store_validators_in_dialogs(self) -> None:
         dialog = self.win.hosts.host_dialog(None)
         try:

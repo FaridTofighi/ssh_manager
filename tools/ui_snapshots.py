@@ -1120,6 +1120,46 @@ def run(out_dir: Path) -> None:
                 holder.restore()
                 window.destroy()
 
+    for theme, dark in (("dark", True), ("light", False)):
+
+        @scenario(f"inventory-store-{theme}")
+        def _inventory_store(dark=dark, theme=theme) -> None:
+            """The app-owned inventory: readable names, any depth, a group with hosts and subgroups."""
+
+            import json
+
+            from ssh_manager.config import HostEntry
+            from ssh_manager.gtk_app import SSHManagerWindow
+            from ssh_manager.inventory.manager import StoreConfigManager
+            from ssh_manager.inventory.store import InventoryStore
+            from ssh_manager.settings import AppSettings
+
+            folder = _SANDBOX / f"store-{theme}"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / ".ui_state.json").write_text(json.dumps({"prefer_dark": dark, "density": snapshot_density()}),
+                                                   encoding="utf-8")
+            store = InventoryStore(folder / "inventory.db")
+            manager = StoreConfigManager(store)
+            top = "Prod DB (10.0.0.5) \u2014 \u0645\u0631\u06a9\u0632"
+            manager.create_parent_group(top)
+            manager.create_child_group(top, "Team A \u2014 EU/Servers")
+            manager.create_child_group(top, "Empty group")
+            manager.add_host(top, "", HostEntry("Bastion (jump)", {"hostname": "10.0.0.1", "user": "ops"}))
+            manager.add_host(top, "Team A \u2014 EU", HostEntry("Load balancer", {"hostname": "10.0.0.2"}))
+            for index, name in enumerate(("Web 01 (primary)", "Web 02", "\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc")):
+                manager.add_host(top, "Team A \u2014 EU/Servers", HostEntry(name, {"hostname": f"10.0.1.{index + 1}"}))
+            manager.create_parent_group("Staging")
+            manager.add_host("Staging", "", HostEntry("stage app", {"hostname": "10.70.0.5"}))
+            settings = AppSettings.load()
+            settings.master_password_disabled = True
+            window = SSHManagerWindow(app, manager.base_dir, settings, manager=manager)
+            window.host_page.latency.enabled = False
+            window.tree.select_host(top, "Team A \u2014 EU/Servers", "Web 01 (primary)")
+            _pump()
+            capture_window(window, out_dir / f"inventory-store-{theme}.png")
+            window.destroy()
+            store.close()
+
     @scenario("tree-icons-sheet")
     def _tree_icons_sheet() -> None:
         """docs/ui-target/tree-icons-sheet.png, regenerated with the real renderer.

@@ -35,8 +35,36 @@ class GroupActions:
 
         return bool(getattr(self.win.manager, "allows_display_names", False))
 
-    def _validator(self, kind: str):
-        return validators_for(self.win.manager)[kind]
+    def _validator(self, kind: str, *, siblings=None, current: str = ""):
+        """Format rules of the backend, plus (app store) an inline duplicate check against ``siblings``."""
+
+        base = validators_for(self.win.manager)[kind]
+        if siblings is None or not self._store_names:
+            return base
+        taken = {name.strip().casefold() for name in siblings if name}
+        keep = current.strip().casefold()
+
+        def check(value: str):
+            error = base(value)
+            if error:
+                return error
+            name = value.strip().strip("/").casefold()
+            if name != keep and name in taken:
+                return _("A group with this name already exists here.")
+            return None
+
+        return check
+
+    def _top_names(self):
+        return list(self.win.manager.tree)
+
+    def _child_siblings(self, parent: str, child: str):
+        """Names of the groups next to ``child`` (the full child paths of its holder)."""
+
+        holder = child.rsplit("/", 1)[0] if "/" in child else ""
+        prefix = f"{holder}/" if holder else ""
+        return [name for name in self.win.manager.tree.get(parent, {})
+                if name and name.startswith(prefix) and "/" not in name[len(prefix):]]
 
     def _host_count(self, parent: str, child: str = "") -> int:
         counter = getattr(self.win.manager, "child_host_count", None)
@@ -63,7 +91,7 @@ class GroupActions:
             _("New Group"),
             _("Name of the new top-level group.") if self._store_names
             else _("Name of the new top-level group (a folder under the config directory)."),
-            validator=self._validator("group"),
+            validator=self._validator("group", siblings=self._top_names()),
             accept_label=_("_Create"),
         )
         if not name:
@@ -86,7 +114,9 @@ class GroupActions:
             name = self.win._prompt_text(
                 _("New Subgroup"),
                 _("Name of the new group under {path}:").format(path="/".join(filter(None, (parent, base_child)))),
-                validator=self._validator("group"), accept_label=_("_Create"),
+                validator=self._validator("group", siblings=[name.rsplit("/", 1)[-1] for name in self._child_siblings(
+                    parent, f"{base_child}/x" if base_child else "x")]),
+                accept_label=_("_Create"),
             )
             if not name:
                 return
@@ -162,7 +192,7 @@ class GroupActions:
         current = data["parent"]
         new_name = self.win._prompt_text(
             _("Rename Group"), _("New name for “{name}”:").format(name=current), current,
-            validator=self._validator("group"), accept_label=_("_Rename"),
+            validator=self._validator("group", siblings=self._top_names(), current=current), accept_label=_("_Rename"),
         )
         if not new_name:
             return
@@ -182,7 +212,7 @@ class GroupActions:
         default = f"{source}-copy"
         new_name = self.win._prompt_text(
             _("Duplicate Group"), _("Name of the copy:"), default,
-            validator=self._validator("group"), accept_label=_("_Duplicate"),
+            validator=self._validator("group", siblings=self._top_names()), accept_label=_("_Duplicate"),
         )
         if not new_name:
             return
@@ -204,7 +234,8 @@ class GroupActions:
             _("Rename Group") if self._store_names else _("Rename Child Group"),
             (_("New name or path for “{name}”:") if self._store_names
              else _("New file name for “{name}”:")).format(name=current), current,
-            validator=self._validator("child_path"), accept_label=_("_Rename"),
+            validator=self._validator("child_path", siblings=self._child_siblings(parent, current), current=current),
+            accept_label=_("_Rename"),
         )
         if not new_name:
             return

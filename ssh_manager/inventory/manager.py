@@ -25,7 +25,6 @@ from .store import (
     NewHost,
     ValidationError,
     clean_name,
-    validate_alias,
     validate_name,
 )
 

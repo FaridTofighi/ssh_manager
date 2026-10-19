@@ -1,8 +1,9 @@
 # SSH Manager
 
-SSH Manager is a local desktop and terminal UI for browsing grouped OpenSSH
-config files, launching SSH sessions, managing credentials, and editing host
-metadata.
+SSH Manager is a local desktop and terminal UI for organising SSH hosts in
+groups, launching SSH sessions, managing credentials, and editing host
+metadata. The desktop app keeps its own inventory; OpenSSH config files can be
+imported and exported.
 
 ## Launching
 
@@ -26,12 +27,35 @@ Diagnostic config listing:
 python3 farid.py --base-dir ~/.ssh/conf.d
 ```
 
-All entry points accept `--base-dir`. The GTK entry points default to
-`~/.ssh/conf.d`; the Textual app also accepts `--terminal`.
+The GTK app uses its own inventory database by default (see below);
+`--inventory <file>` picks another database, and `--base-dir <folder>` opens a
+folder of grouped config files instead (the layout of older versions, edited in
+place). The Textual app and `farid.py` work on folders (`--base-dir`, default
+`~/.ssh/conf.d`); the Textual app also accepts `--terminal`.
 
-## Config Layout
+## Inventory
 
-The grouped inventory mode expects a directory such as:
+The desktop app keeps groups and hosts in
+`~/.local/share/ssh-manager/inventory.db` (SQLite, mode 0600, rolling backups).
+Groups can be nested to any depth, a group can hold hosts and subgroups, and
+names can be any readable text — spaces, accents, Persian, … Your `~/.ssh`
+files are never changed implicitly:
+
+- **First run**: if `~/.ssh/conf.d` or `~/.ssh/config` has hosts, the app
+  offers once to import them (with their names and saved credential
+  bindings); "No" changes nothing.
+- **Import → From OpenSSH Config…** (files or folders, with a preview) and
+  **Import → From MobaXterm…**.
+- **Export → To OpenSSH Config…** writes `~/.config/ssh-manager/ssh_config`
+  and can add one `Include` line to `~/.ssh/config` (after a backup).
+- **Settings → Inventory** shows the location, with Back Up Now, Reveal and
+  Export.
+
+Details: `docs/inventory-store.md`.
+
+## Folder Layout (`--base-dir`)
+
+A folder inventory expects a directory such as:
 
 ```text
 ~/.ssh/conf.d/
@@ -128,6 +152,7 @@ authentication.
 - `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
 - `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
+- `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)

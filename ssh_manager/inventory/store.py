@@ -581,7 +581,7 @@ class InventoryStore:
 
     def add_host(self, new: NewHost) -> HostRow:
         alias, hostname, user = clean_name(new.alias), (new.hostname or "").strip(), (new.user or "").strip()
-        port = int(new.port) if new.port not in (None, "") else None
+        port = int(new.port) if new.port is not None and new.port != "" else None
         self._validate_host(alias, hostname, port, user)
         options_json, metadata_json = self._json(new.options, "Option"), self._json(new.metadata, "Metadata")
         hid = new.id or _new_id()
