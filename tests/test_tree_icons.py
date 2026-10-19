@@ -29,22 +29,22 @@ class TreeIconForTests(unittest.TestCase):
     def test_groups(self) -> None:
         for kind in (RowKind.PARENT, RowKind.CHILD_FOLDER, "parent", "child-folder"):
             with self.subTest(kind=kind):
-                self.assertEqual(tree_icon_for(kind), TreeIcon(Icons.FOLDER, "icon_group"))
-                self.assertEqual(tree_icon_for(kind, expanded=True), TreeIcon(Icons.FOLDER_OPEN, "icon_group"))
+                self.assertEqual(tree_icon_for(kind), TreeIcon(Icons.FOLDER, "icon_default"))
+                self.assertEqual(tree_icon_for(kind, expanded=True), TreeIcon(Icons.FOLDER_OPEN, "icon_default"))
 
     def test_empty_group_keeps_the_closed_folder(self) -> None:
         self.assertEqual(tree_icon_for("parent", expanded=True, has_children=False).name, Icons.FOLDER)
 
     def test_config_file_group(self) -> None:
-        self.assertEqual(tree_icon_for(RowKind.CHILD), TreeIcon(Icons.FILE_CONF, "icon_file"))
+        self.assertEqual(tree_icon_for(RowKind.CHILD), TreeIcon(Icons.FILE_CONF, "icon_default"))
         self.assertEqual(tree_icon_for(RowKind.CHILD, expanded=True).name, Icons.FILE_CONF)  # never "opens"
         self.assertEqual(tree_icon_for(RowKind.PARENT, file_backed_group=True).name, Icons.FILE_CONF)
         self.assertEqual(tree_icon_for(RowKind.CHILD, file_backed_group=False).name, Icons.FOLDER)
 
     def test_hosts(self) -> None:
-        self.assertEqual(tree_icon_for("host"), TreeIcon(Icons.HOST, "icon_host"))
-        self.assertEqual(tree_icon_for("host", selected=True), TreeIcon(Icons.HOST, "icon_host_selected"))
-        self.assertEqual(tree_icon_for("host", read_only=True), TreeIcon(Icons.HOST, "icon_host", lock=True))
+        self.assertEqual(tree_icon_for("host"), TreeIcon(Icons.HOST, "icon_default"))
+        self.assertEqual(tree_icon_for("host", selected=True), tree_icon_for("host"))  # no state color
+        self.assertEqual(tree_icon_for("host", read_only=True), TreeIcon(Icons.HOST, "icon_default", lock=True))
         self.assertFalse(tree_icon_for("parent", read_only=True).lock)  # the lock is a host overlay
 
     def test_all_four_roles_are_distinct_icons(self) -> None:
@@ -52,11 +52,13 @@ class TreeIconForTests(unittest.TestCase):
                  tree_icon_for("child").name, tree_icon_for("host").name}
         self.assertEqual(len(names), 4)
 
-    def test_user_color_tints_except_the_selected_host(self) -> None:
-        self.assertEqual(icon_color(DARK, tree_icon_for("parent"), "#123456"), "#123456")
-        self.assertEqual(icon_color(DARK, tree_icon_for("host"), "#123456"), "#123456")
-        self.assertEqual(icon_color(DARK, tree_icon_for("host", selected=True), "#123456"), DARK.icon_host_selected)
-        self.assertEqual(icon_color(LIGHT, tree_icon_for("child")), LIGHT.icon_file)
+    def test_user_color_wins_and_clearing_restores_the_default(self) -> None:
+        for kind in ("parent", "child", "child-folder", "host"):
+            with self.subTest(kind=kind):
+                self.assertEqual(icon_color(DARK, tree_icon_for(kind), "#123456"), "#123456")
+                self.assertEqual(icon_color(DARK, tree_icon_for(kind, selected=True), "#123456"), "#123456")
+                self.assertEqual(icon_color(DARK, tree_icon_for(kind), ""), "#FFFFFF")  # "Clear Color"
+                self.assertEqual(icon_color(LIGHT, tree_icon_for(kind), ""), "#18231F")
 
 
 class DensityTests(unittest.TestCase):
@@ -80,20 +82,31 @@ class DensityTests(unittest.TestCase):
 
 
 class TokenTests(unittest.TestCase):
-    BRIEF = {
-        "dark": {"icon_group": "#E2B04F", "icon_file": "#A3A8B0", "icon_host": "#A3A8B0", "icon_host_selected": "#5CCB9C"},
-        "light": {"icon_group": "#B07A1E", "icon_file": "#5B6B64", "icon_host": "#5B6B64", "icon_host_selected": "#176B4D"},
-    }
+    ICON_DEFAULT = {"dark": "#FFFFFF", "light": "#18231F"}  # Phase 9b
+    LEGACY = ("icon_group", "icon_file", "icon_host", "icon_host_selected")
 
-    def test_brief_values(self) -> None:
+    def test_one_icon_default_per_palette(self) -> None:
         for palette in (DARK, LIGHT):
-            for role, value in self.BRIEF[palette.name].items():
-                with self.subTest(palette=palette.name, role=role):
-                    self.assertEqual(getattr(palette, role).upper(), value)
+            with self.subTest(palette=palette.name):
+                self.assertEqual(palette.icon_default.upper(), self.ICON_DEFAULT[palette.name])
+                for role in self.LEGACY:
+                    self.assertEqual(getattr(palette, role), palette.icon_default, role)
+        self.assertEqual(LIGHT.icon_default, LIGHT.text_primary)
+
+    def test_no_literal_icon_colors_outside_the_tokens(self) -> None:
+        root = Path(__file__).resolve().parent.parent / "ssh_manager"
+        banned = re.compile(r"#(FFFFFF|18231F|E2B04F|B07A1E|D9A84E|A57828|A3A8B0|5B6B64|5CCB9C|176B4D)\b", re.I)
+        found = []
+        for path in root.rglob("*.py"):
+            if path.parent.name == "theme":  # the token modules (palettes, terminal color schemes)
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if banned.search(line):
+                    found.append(f"{path.relative_to(root)}:{number}")
+        self.assertEqual(found, [])
 
     def test_icon_and_badge_colors_reach_3_to_1_on_every_row_background(self) -> None:
-        roles = ("icon_group", "icon_file", "icon_host", "icon_host_selected",
-                 "badge_connected", "warning", "danger", "badge_unknown")
+        roles = ("icon_default", "badge_connected", "warning", "danger", "badge_unknown")
         for palette in (DARK, LIGHT):
             for role in roles:
                 for background in ("bg_surface", "bg_hover", "bg_selected"):
@@ -101,9 +114,10 @@ class TokenTests(unittest.TestCase):
                         ratio = contrast_ratio(getattr(palette, role), getattr(palette, background))
                         self.assertGreaterEqual(ratio, 3.0)
 
-    def test_selected_host_follows_the_accent_text(self) -> None:
-        for palette in (DARK, LIGHT):
-            self.assertEqual(palette.icon_host_selected, palette.accent_text)
+    def test_white_icons_on_dark_are_far_above_the_floor(self) -> None:
+        for background in ("bg_surface", "bg_hover", "bg_selected"):
+            self.assertGreaterEqual(contrast_ratio(DARK.icon_default, getattr(DARK, background)), 13.0)
+            self.assertGreaterEqual(contrast_ratio(LIGHT.icon_default, getattr(LIGHT, background)), 13.0)
 
 
 def _triple(badge):

@@ -39,7 +39,7 @@ class GroupPickerDialog(BaseDialog):
 
         section = FormSection()
         self._parent_combo = Gtk.ComboBoxText()
-        add_combo_icon(self._parent_combo, Icons.FOLDER, "icon_group", Size.ICON)  # as in the tree
+        add_combo_icon(self._parent_combo, Icons.FOLDER, "icon_default", Size.ICON)  # as in the tree
         parents = sorted(manager.tree.keys(), key=str.lower)
         for name in parents:
             self._parent_combo.append_text(name)
@@ -50,7 +50,7 @@ class GroupPickerDialog(BaseDialog):
         section.add(_("_Parent group"), self._parent_combo)
 
         self._child_combo = Gtk.ComboBoxText()
-        add_combo_icon(self._child_combo, Icons.FILE_CONF, "icon_file", Size.ICON)
+        add_combo_icon(self._child_combo, Icons.FILE_CONF, "icon_default", Size.ICON)
         section.add(_("_Child group"), self._child_combo)
 
         self._new_child_entry = Gtk.Entry()

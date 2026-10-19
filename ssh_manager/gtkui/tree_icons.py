@@ -3,19 +3,19 @@
 The icon family (``gtkui/assets/icons``, 24-grid, 1.75 outline converted to
 filled paths plus a 20 % duotone fill):
 
-========================  =====================  ======================
-Row                       Icon                   Color token
-========================  =====================  ======================
-group, collapsed          ``sshm-folder``        ``icon_group`` (amber)
-group, expanded           ``sshm-folder-open``   ``icon_group``
-config-file group         ``sshm-file-conf``     ``icon_file``
-host                      ``sshm-server``        ``icon_host``
-host, selected row        ``sshm-server``        ``icon_host_selected``
-========================  =====================  ======================
+========================  =====================
+Row                       Icon
+========================  =====================
+group, collapsed          ``sshm-folder``
+group, expanded           ``sshm-folder-open``
+config-file group         ``sshm-file-conf``
+host                      ``sshm-server``
+========================  =====================
 
-A user-chosen item color replaces the token color (except on a selected host,
-which follows the row's accent text). Read-only hosts get a lock overlay; hosts
-get a connection-status badge. Both are separate small SVGs composited onto the
+Every icon is drawn in one color, ``icon_default`` (white on dark, near-black
+on light), in every row state: groups and hosts differ by shape, badge and
+label weight, never by icon color. A user-chosen item color replaces it.
+Read-only hosts get a lock overlay; hosts get a connection-status badge. Both are separate small SVGs composited onto the
 icon with a transparent cut-out ring, so the row's real background (normal,
 hover, selected) shows around them.
 
@@ -45,7 +45,7 @@ class TreeIcon:
     """The icon of one row: bundled icon name, palette color role, lock overlay."""
 
     name: str
-    color_role: str
+    color_role: str = "icon_default"
     lock: bool = False
 
 
@@ -70,22 +70,19 @@ def tree_icon_for(
     group keeps the closed folder even when GTK reports it expanded.
     """
 
+    del selected  # the icon color is the same in every row state
     row_kind = RowKind.coerce(kind)
     if row_kind is RowKind.HOST:
-        role = "icon_host_selected" if selected else "icon_host"
-        return TreeIcon(Icons.HOST, role, lock=bool(read_only))
+        return TreeIcon(Icons.HOST, lock=bool(read_only))
     if file_backed(kind) if file_backed_group is None else file_backed_group:
-        return TreeIcon(Icons.FILE_CONF, "icon_file")
-    name = Icons.FOLDER_OPEN if expanded and has_children else Icons.FOLDER
-    return TreeIcon(name, "icon_group")
+        return TreeIcon(Icons.FILE_CONF)
+    return TreeIcon(Icons.FOLDER_OPEN if expanded and has_children else Icons.FOLDER)
 
 
-def icon_color(palette, icon: TreeIcon, user_color: str = "") -> str:
-    """The color to draw ``icon`` in: the user's item color, else its token."""
+def icon_color(palette, icon: Optional[TreeIcon] = None, user_color: str = "") -> str:
+    """The color to draw a group / host icon in: the user's item color, else ``icon_default``."""
 
-    if user_color and icon.color_role != "icon_host_selected":
-        return user_color
-    return getattr(palette, icon.color_role)
+    return user_color or getattr(palette, icon.color_role if icon is not None else "icon_default")
 
 
 @dataclass(frozen=True)

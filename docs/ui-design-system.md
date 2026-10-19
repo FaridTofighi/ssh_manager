@@ -35,7 +35,7 @@ every color role becomes `@define-color sm_<role>`.
 | `chip_bg` | `#F1F4F2` | `#25272B` | Chips |
 | `avatar_bg` | `#233B32` | `#3F4A45` | User avatar |
 | `broadcast_bg` / `broadcast_fg` | `#FDECEA` / `#8F1D14` | `#4A1A16` / `#FFDAD5` | Broadcast warning strip |
-| `icon_group` / `icon_file` / `icon_host` / `icon_host_selected` | `#B07A1E` / `#5B6B64` / `#5B6B64` / `#176B4D` | `#E2B04F` / `#A3A8B0` / `#A3A8B0` / `#5CCB9C` | Tree icons: folders, `*.conf` groups, hosts, host on the selected row (all ≥ 3:1 on surface, hover and selected rows) |
+| `icon_default` (aliases: `icon_group`, `icon_file`, `icon_host`, `icon_host_selected`) | `#18231F` | `#FFFFFF` | Every group and host icon, in every row state (Phase 9b); a user-picked item color overrides it |
 | `badge_connected` / `badge_unknown` | `#2A9D6A` / `#848E88` | `#48C48D` / `#8A9098` | Host status badge (connecting and failed use `warning` / `danger`); light values are the nearest shades of `success` / `text_muted` that reach 3:1 on the selected row |
 | `scrollbar` | `#C9D2CD` | `#454951` | Overlay scrollbar thumb |
 | `pane_border` / `pane_border_focus` / `pane_border_broadcast` | `#868F8A` / `#176B4D` / `#B42318` | `#5E6269` / `#1F7A57` / `#F07A6E` | Pane outlines in split and tile mode (all ≥ 3:1 against the gutter) |
@@ -213,15 +213,25 @@ shapes, not hairlines. They contain no strokes, so GTK's own symbolic
 recoloring (which rewrites `fill` and ignores `stroke`) cannot turn them into
 blobs. Reference: `docs/ui-target/tree-icons-sheet.png`.
 
-| Row | Icon | Color |
-|---|---|---|
-| Group (top-level or nested directory), collapsed / empty | `sshm-folder` | `icon_group` |
-| Group, expanded | `sshm-folder-open` | `icon_group` |
-| Config-file group (`*.conf`, `RowKind.CHILD`) | `sshm-file-conf` | `icon_file` |
-| Host | `sshm-server` | `icon_host` |
-| Host on the selected row | `sshm-server` | `icon_host_selected` |
-| Read-only / shared / no edit permission | `sshm-server` + `sshm-badge-lock` (50 %) | as the host |
-| Any row with a user-picked color | same icon | the user color (a selected host stays accent) |
+| Row | Icon |
+|---|---|
+| Group (top-level or nested directory), collapsed / empty | `sshm-folder` |
+| Group, expanded | `sshm-folder-open` |
+| Config-file group (`*.conf`, `RowKind.CHILD`) | `sshm-file-conf` |
+| Host | `sshm-server` |
+| Read-only / shared / no edit permission | `sshm-server` + `sshm-badge-lock` (50 %) |
+
+**Icon color (Phase 9b):** every group and host icon is drawn in one token,
+`icon_default`, in every row state (normal, hover, selected, focused,
+drag-over, backdrop): **`#FFFFFF` in the dark palette**, **`#18231F` (the
+light `text_primary`) in the light palette**. Groups and hosts differ by
+shape, badge and label weight, never by icon color. The duotone fill is the
+same color at 20 %. A user-picked item color overrides it, on selected rows
+too; *Clear Color* returns to `icon_default`. Decision: white icons would be
+invisible (1:1) on the light theme's white surfaces. A white icon on light
+would need a dark rounded tile behind it, which is deliberately not done. The
+host-bar tile, the group picker and empty states use `icon_default` too; menu
+icons stay in the menu text color.
 
 Status badge on the host icon (≈ 42 % of it, bottom-right):
 

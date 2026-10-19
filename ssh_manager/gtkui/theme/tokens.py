@@ -177,11 +177,10 @@ class Palette:
     avatar_bg: str
     broadcast_bg: str
     broadcast_fg: str
-    # Session-tree icons (gtkui/tree_icons.py): ≥ 3:1 on bg_surface, bg_hover and bg_selected.
-    icon_group: str  # folders (amber)
-    icon_file: str  # *.conf groups
-    icon_host: str
-    icon_host_selected: str  # host icon on the selected row (the row's accent text)
+    # Group and host icons (gtkui/tree_icons.py), in every row state: white on dark,
+    # near-black on light (white would be 1:1 on the light surfaces). The legacy
+    # names icon_group / icon_file / icon_host / icon_host_selected alias it.
+    icon_default: str
     # Status badge on the host icon (warning/danger for connecting/failed).
     badge_connected: str
     badge_unknown: str
@@ -205,6 +204,23 @@ class Palette:
             if field.name == "name":
                 continue
             yield field.name, getattr(self, field.name)
+
+    # Legacy icon roles: one token drives every group / host icon (Phase 9b).
+    @property
+    def icon_group(self) -> str:
+        return self.icon_default
+
+    @property
+    def icon_file(self) -> str:
+        return self.icon_default
+
+    @property
+    def icon_host(self) -> str:
+        return self.icon_default
+
+    @property
+    def icon_host_selected(self) -> str:
+        return self.icon_default
 
     def surface_colors(self) -> Tuple[str, ...]:
         """Colors a widget background may legitimately use (see :data:`SURFACE_ROLES`)."""
@@ -276,10 +292,7 @@ LIGHT = Palette(
     avatar_bg="#233B32",
     broadcast_bg="#FDECEA",
     broadcast_fg="#8F1D14",
-    icon_group="#B07A1E",
-    icon_file="#5B6B64",
-    icon_host="#5B6B64",
-    icon_host_selected="#176B4D",
+    icon_default="#18231F",  # = text_primary; a white icon on light would need a dark tile (not done)
     # success / text_muted reach only 2.7:1 on the selected row; nearest shades that reach 3:1.
     badge_connected="#2A9D6A",
     badge_unknown="#848E88",
@@ -332,10 +345,7 @@ DARK = Palette(
     avatar_bg="#3F4A45",
     broadcast_bg="#4A1A16",
     broadcast_fg="#FFDAD5",
-    icon_group="#E2B04F",
-    icon_file="#A3A8B0",
-    icon_host="#A3A8B0",
-    icon_host_selected="#5CCB9C",
+    icon_default="#FFFFFF",
     badge_connected="#48C48D",
     badge_unknown="#8A9098",
     scrollbar="#454951",
@@ -474,8 +484,7 @@ CONTRAST_PAIRS: List[Tuple[str, str, float]] = [
 ] + [
     # Tree icons and the host status badge, on every row background they sit on.
     (fg, bg, AA_UI)
-    for fg in ("icon_group", "icon_file", "icon_host", "icon_host_selected",
-               "badge_connected", "warning", "danger", "badge_unknown")
+    for fg in ("icon_default", "badge_connected", "warning", "danger", "badge_unknown")
     for bg in ("bg_surface", "bg_hover", "bg_selected")
 ]
 

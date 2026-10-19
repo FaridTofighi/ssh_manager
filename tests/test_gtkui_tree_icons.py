@@ -85,10 +85,14 @@ class TreeIconRenderTests(unittest.TestCase):
         legacy = TreeRow(RowKind.PARENT, "legacy", "legacy", count=1, color=self.USER_COLOR,
                          children=[TreeRow(RowKind.CHILD, "old.conf", "legacy", child="old.conf", count=1,
                                            children=[host("old")])])
+        archive = TreeRow(RowKind.PARENT, "archive", "archive", count=1,
+                          children=[TreeRow(RowKind.CHILD, "gone.conf", "archive", child="gone.conf", count=1,
+                                            children=[host("gone")])])
         self.tree = SessionTreeView()
         self.tree.show()  # an unshown tree keeps a 1 px allocation
-        self.tree.populate([prod, legacy])
+        self.tree.populate([prod, legacy, archive])
         self.tree.set_row_collapsed("parent", "legacy", "", True)
+        self.tree.set_row_collapsed("parent", "archive", "", True)
         rect = Gdk.Rectangle()
         rect.x, rect.y, rect.width, rect.height = 0, 0, 320, 900
         self.tree.size_allocate(rect)
@@ -223,6 +227,65 @@ class TreeIconRenderTests(unittest.TestCase):
                     ratio = len(ink) / float(size * size)
                     self.assertGreater(ratio, 0.08, "empty icon")
                     self.assertLess(ratio, 0.55, "solid blob: a stroke rendered as a fill")
+
+    @contextmanager
+    def palette(self, palette):
+        with mock.patch("ssh_manager.gtkui.views.session_tree.current_palette", return_value=palette), \
+                mock.patch("ssh_manager.gtkui.theme.loader.current_palette", return_value=palette):
+            self.tree.clear_icon_cache()
+            yield palette
+
+    def test_icon_color_is_icon_default_in_every_row_state(self) -> None:
+        """Phase 9b: white on dark, #18231F on light, whatever the row state; badges keep their colors."""
+
+        from gi.repository import Gtk  # type: ignore
+
+        from ssh_manager.gtkui.theme.tokens import DARK, LIGHT
+
+        S = Gtk.CellRendererState
+        states = {
+            "normal": (S(0), None), "hover": (S.PRELIT, None), "selected": (S.SELECTED, None),
+            "focused": (S.SELECTED | S.FOCUSED, None), "drag-over": (S(0), "drag"),
+            "backdrop": (S.SELECTED, "backdrop"),
+        }
+        rows = {"collapsed group": "archive", "expanded group": "prod", "file group": "web.conf",
+                "host": "idle", "host + lock": "locked"}
+        for palette in (DARK, LIGHT):
+            with self.palette(palette):
+                for row_name, text in rows.items():
+                    for state_name, (flags, extra) in states.items():
+                        with self.subTest(theme=palette.name, row=row_name, state=state_name):
+                            if extra == "drag":
+                                self.tree.set_drag_dest_row(self.path_of(text), Gtk.TreeViewDropPosition.INTO_OR_BEFORE)
+                            if extra == "backdrop":
+                                self.tree.set_state_flags(Gtk.StateFlags.BACKDROP, False)
+                            try:
+                                raster, geometry, height, drawn = self.render(text, flags)
+                            finally:
+                                self.tree.set_drag_dest_row(None, Gtk.TreeViewDropPosition.BEFORE)
+                                self.tree.unset_state_flags(Gtk.StateFlags.BACKDROP)
+                            self.assertEqual(drawn[0][0][1], palette.icon_default)
+                            bg = self.background(flags)
+                            box = self.icon_box(geometry, height)
+                            ink = self.ink(raster, box, bg, palette.icon_default)
+                            strongest = max(ink, key=lambda item: _dist(item[2], bg))[2]
+                            self.assertLessEqual(_dist(strongest, _hex(palette.icon_default)), 1,
+                                                 f"outline {strongest} is not {palette.icon_default}")
+
+    def test_user_color_overrides_and_clearing_restores_white(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        from ssh_manager.gtkui.constants import TreeColumn
+        from ssh_manager.gtkui.theme.tokens import DARK
+
+        with self.palette(DARK):
+            for flags in (Gtk.CellRendererState(0), Gtk.CellRendererState.SELECTED):
+                _raster, _geometry, _height, drawn = self.render("legacy", flags)
+                self.assertEqual(drawn[0][0][1], self.USER_COLOR)
+            store = self.tree.store
+            store.set_value(store.get_iter(self.path_of("legacy")), TreeColumn.COLOR, "")  # "Clear Color"
+            raster, geometry, height, drawn = self.render("legacy")
+            self.assertEqual(drawn[0][0][1], "#FFFFFF")
 
     def test_colors_selected_and_user_tint(self) -> None:
         from gi.repository import Gtk  # type: ignore
@@ -406,7 +469,7 @@ class TreeIconRenderTests(unittest.TestCase):
                     mock.patch("ssh_manager.gtkui.theme.loader.current_palette", return_value=palette):
                 _raster, _geometry, _height, drawn = self.render("prod")
                 colors[palette.name] = drawn[0][0][1]
-        self.assertEqual(colors, {"dark": DARK.icon_group, "light": LIGHT.icon_group})
+        self.assertEqual(colors, {"dark": "#FFFFFF", "light": "#18231F"})
 
 
 @unittest.skipUnless(_display_available(), "needs a display")
@@ -528,5 +591,85 @@ class TreeIconWindowTests(unittest.TestCase):
             dialog.destroy()
 
 
+def _theme_switch_child() -> None:
+    """Child process: switch the real window's theme mode and report the tree's icon colors."""
+
+    import json
+
+    from gi.repository import Gtk  # type: ignore
+
+    if not Gtk.init_check(None)[0]:
+        print(json.dumps({"skip": "no display"}))
+        return
+    from ssh_manager.gtkui.theme.loader import ThemeMode
+    from ssh_manager.gtkui.views import session_tree
+    from tests.gtk_window_fixture import WindowSandbox
+
+    sandbox = WindowSandbox()
+    window = sandbox.window
+    tree = window.tree_view
+    results = {}
+    try:
+        for mode in (ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.DARK):
+            window._apply_theme_mode(mode)
+            for _ in range(200):
+                if not Gtk.events_pending():
+                    break
+                Gtk.main_iteration_do(False)
+            host = window.tree.find_host_by_alias("web-01")
+            path = window.tree_store.get_path(window.tree.host_iters[window.creds.host_key(host)])
+            colors = []
+            real = session_tree.render_tree_icon
+
+            def spy(*args, **kwargs):
+                colors.append(args[1])  # the resolved icon color
+                return real(*args, **kwargs)
+
+            session_tree.render_tree_icon = spy
+            try:
+                renderer = tree.row_renderer
+                tree._row_data(None, renderer, window.tree_store, window.tree_store.get_iter(path))
+                import cairo
+                from gi.repository import Gdk  # type: ignore
+
+                area = Gdk.Rectangle()
+                area.x, area.y, area.width, area.height = 0, 0, 300, 30
+                renderer.render(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 300, 30)), tree, area, area,
+                                Gtk.CellRendererState(0))
+            finally:
+                session_tree.render_tree_icon = real
+            results.setdefault(mode.value, []).append(colors[-1])
+    finally:
+        sandbox.close()
+    print("RESULT " + json.dumps(results))
+
+
+@unittest.skipUnless(_display_available(), "needs a display")
+class ThemeModeSwitchTests(unittest.TestCase):
+    def test_runtime_theme_switch_retints_tree_icons(self) -> None:
+        import json
+        import re
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        env = dict(os.environ, PYTHONPATH=str(root), GSETTINGS_BACKEND="memory")
+        proc = subprocess.run([sys.executable, "-m", "tests.test_gtkui_tree_icons", "--theme-child"], cwd=root,
+                              env=env, capture_output=True, text=True, timeout=300)
+        match = re.search(r"^RESULT (.*)$", proc.stdout, re.MULTILINE)
+        if match is None:
+            if '"skip"' in proc.stdout:
+                raise unittest.SkipTest("no display in child process")
+            self.fail(f"child failed ({proc.returncode}):\n{proc.stdout[-2000:]}\n{proc.stderr[-3000:]}")
+        results = json.loads(match.group(1))
+        self.assertEqual(results, {"dark": ["#FFFFFF", "#FFFFFF"], "light": ["#18231F"]})
+
+
 if __name__ == "__main__":
-    unittest.main()
+    import sys
+
+    if "--theme-child" in sys.argv:
+        _theme_switch_child()
+    else:
+        unittest.main()

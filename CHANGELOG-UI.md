@@ -6,6 +6,59 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Phase 9b — one icon color: white on dark
+
+Amends Phase 9: only the icon colors change. Target sheet regenerated with
+the real renderer: `docs/ui-target/tree-icons-sheet.png`
+(`tools/ui_snapshots.py docs/ui-target tree-icons-sheet`). The Phase 9 sheet
+is in the history of that file.
+
+### What changed
+
+- **One token,** `icon_default`, draws every group and host icon:
+  - folder, open folder, file-conf, server, and server + lock;
+  - in every row state: normal, hover, selected, focused, drag-over and an
+    unfocused window.
+  - **Dark:** `#FFFFFF`, 15:1 or more on surface, hover and selected rows.
+  - **Light:** `#18231F`, the light `text_primary`, 13:1 or more on the
+    same three backgrounds. A white icon would be 1:1 on the light surfaces.
+    Showing white on light would need a dark rounded tile behind the icon,
+    which is deliberately not done.
+  - The selected host no longer turns accent green; only its label, bar and
+    background change.
+- **Legacy names:** `icon_group`, `icon_file`, `icon_host` and
+  `icon_host_selected` are now read-only aliases of `icon_default`, so a
+  future change is a one-line edit. The amber, gray and accent icon values
+  are gone. A test fails if any of those hex values appears in Python
+  outside the theme token modules.
+- **User colors** still win, on selected rows too. *Clear Color* returns to
+  `icon_default`.
+- **Unchanged:** the status badges keep their colors, and their ring is still
+  cut out of the row's own background.
+- **Same token elsewhere:** the host-bar tile icon, the group picker rows and
+  empty-state icons now use `icon_default` too. Menu icons stay in the menu
+  text color.
+
+### Verification
+
+- **`tests/test_tree_icons.py`:**
+  - `icon_default` is `#FFFFFF` (dark) and `#18231F` (light), and the four
+    legacy names resolve to it.
+  - User color wins and clearing it restores the default.
+  - The grep test for literal icon colors passes.
+  - Contrast is ≥ 3:1 on all three row backgrounds, and ≥ 13:1 in practice.
+- **`tests/test_gtkui_tree_icons.py`:**
+  - In both themes, each of the five icon kinds was drawn in each of the six
+    row states. The strongest outline pixel equals `icon_default` within 1
+    per channel.
+  - Badges keep their status colors, and a user-colored group keeps its
+    color on selected rows. After *Clear Color* it is white.
+  - In a child process, the real window switches dark → light → dark, and the
+    tree re-tints without a restart.
+- **Screenshots:** `docs/ui-after/` regenerated, including the four
+  `tree-icons-*` scenarios.
+- **Full suite:** `python3 -m unittest discover` passes.
+
 ## Phase 9 — bigger, distinguishable tree icons with the status on the host icon
 
 Target: `docs/ui-target/tree-icons-sheet.png`. After:

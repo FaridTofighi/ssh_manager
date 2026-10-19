@@ -572,7 +572,7 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
 }
 .host-tile {
     background-color: @sm_accent_tint;
-    color: @sm_accent_text;
+    color: @sm_icon_default;
     border-radius: ${r_lg}px;
     min-width: ${host_tile}px;
     min-height: ${host_tile}px;
@@ -591,7 +591,7 @@ $env_badges
 .latency-dot.good, .latency-good { color: @sm_success; }
 .latency-dot.warn, .latency-warn { color: @sm_warning; }
 .latency-dot.bad, .latency-bad { color: @sm_danger; }
-.host-tile image, .host-tile { color: @sm_accent_text; }
+.host-tile image, .host-tile { color: @sm_icon_default; }
 .sm-window button.info-copy { color: @sm_text_muted; }
 .stat-label { font-size: ${fs_caps}em; font-weight: 500; letter-spacing: $caps_tracking; color: @sm_text_muted; }
 .stat-value { font-size: ${fs_body}em; font-weight: 600; color: @sm_text_primary; }
@@ -650,7 +650,7 @@ $env_badges
     box-shadow: 0 1px 2px @sm_shadow;
     color: @sm_text_secondary;
 }
-.empty-state .empty-icon { color: @sm_text_secondary; }
+.empty-state .empty-icon { color: @sm_icon_default; }
 .empty-state .empty-title { font-size: ${fs_hero_title}em; font-weight: 400; color: @sm_text_primary; }
 .empty-state .empty-description { color: @sm_text_secondary; font-size: ${fs_subtitle}em; }
 .empty-state .empty-caption { color: @sm_text_faint; font-size: ${fs_caption}em; }

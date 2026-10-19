@@ -703,6 +703,99 @@ def prepare_relay_match(window) -> None:
         window.tree.select_host(host.parent_group, host.child_group, host.alias)
 
 
+def render_tree_icon_sheet(path: Path, tree_crops: dict) -> None:
+    """The icon sheet (docs/ui-target/tree-icons-sheet.png) drawn with the real renderer.
+
+    Same layout as the approved Phase 9 sheet: per theme, every row icon at 16 /
+    20 / 24 px, the status badges, and the tree itself (``tree_crops``: theme →
+    pixbuf of the compact tree-icons scene).
+    """
+
+    import cairo
+    from gi.repository import Gdk, Pango, PangoCairo
+
+    from ssh_manager.gtkui.constants import Icons
+    from ssh_manager.gtkui.theme.tokens import DARK, LIGHT
+    from ssh_manager.gtkui.tree_icons import status_badge
+    from ssh_manager.gtkui.widgets.icons import render_tree_icon
+
+    width, height = 1960, 1240
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    cr = cairo.Context(surface)
+
+    def rgb(value):
+        rgba = Gdk.RGBA()
+        rgba.parse(value)
+        return rgba.red, rgba.green, rgba.blue
+
+    def text(x, y, value, color, size=15, weight=Pango.Weight.NORMAL, spacing=0.0):
+        layout = PangoCairo.create_layout(cr)
+        font = Pango.FontDescription.from_string(f"Inter, Cantarell, Sans {size}px")
+        font.set_weight(weight)
+        layout.set_font_description(font)
+        if spacing:
+            attrs = Pango.AttrList()
+            attrs.insert(Pango.attr_letter_spacing_new(int(spacing * Pango.SCALE)))
+            layout.set_attributes(attrs)
+        layout.set_text(value, -1)
+        cr.set_source_rgb(*rgb(color))
+        cr.move_to(x, y)
+        PangoCairo.show_layout(cr, layout)
+
+    def rounded(x, y, w, h, r):
+        import math
+
+        cr.new_sub_path()
+        cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+        cr.close_path()
+
+    cr.set_source_rgb(*rgb(DARK.bg_canvas))
+    cr.paint()
+    text(40, 34, "Tree icons — duotone outline, 24-grid, drawn 20 px (Phase 9b: one icon color)",
+         DARK.text_primary, 30, Pango.Weight.BOLD)
+    text(40, 80, "Columns: 16 px (menus) · 20 px (Compact) · 24 px (Comfortable) · icon_default: "
+         "white on dark, #18231F on light", DARK.text_secondary, 17)
+    rows = [("Group · collapsed", Icons.FOLDER, False), ("Group · expanded", Icons.FOLDER_OPEN, False),
+            ("Config-file group", Icons.FILE_CONF, False), ("Host", Icons.HOST, False),
+            ("Host · read-only", Icons.HOST, True)]
+    for index, palette in enumerate((DARK, LIGHT)):
+        x0, y0, w, h = 40 + index * 960, 130, 920, 1070
+        cr.set_source_rgb(*rgb(palette.bg_surface))
+        rounded(x0, y0, w, h, 16)
+        cr.fill()
+        text(x0 + 32, y0 + 30, f"{palette.name.upper()} THEME", palette.text_secondary, 18, Pango.Weight.BOLD, 1.5)
+        for r, (label, name, lock) in enumerate(rows):
+            y = y0 + 84 + r * 58
+            text(x0 + 32, y, label, palette.text_primary, 17)
+            for c, size in enumerate((16, 20, 24)):
+                icon = render_tree_icon(name, palette.icon_default, size, lock=lock, cache={})
+                cr.set_source_surface(icon, x0 + 250 + c * 56, y + 12 - size / 2.0)
+                cr.paint()
+        y = y0 + 84 + len(rows) * 58 + 20
+        text(x0 + 32, y, "STATUS BADGE (RING CUT-OUT IN THE ROW BACKGROUND)", palette.text_secondary, 15,
+             spacing=1.2)
+        for c, (status, label) in enumerate((("connected", "connected"), ("connecting", "connecting"),
+                                             ("failed", "failed (20 / 24 px)"), ("unknown", "unknown"))):
+            bx = x0 + 32 + c * 210
+            for k, size in enumerate((20, 24) if status == "failed" else (20,)):
+                badge = status_badge(status, size)
+                icon = render_tree_icon(Icons.HOST, palette.icon_default, size, badge=badge.name,
+                                        badge_color=getattr(palette, badge.color_role), cache={})
+                cr.set_source_surface(icon, bx + k * 34, y + 40)
+                cr.paint()
+            text(bx, y + 76, label, palette.text_secondary, 15)
+        y += 130
+        text(x0 + 32, y, "IN THE TREE (COMPACT: 20 PX ICONS, 30 PX ROWS)", palette.text_secondary, 15, spacing=1.2)
+        crop = tree_crops.get(palette.name)
+        if crop is not None:
+            Gdk.cairo_set_source_pixbuf(cr, crop, x0 + 32, y + 34)
+            cr.paint()
+    surface.write_to_png(str(path))
+
+
 def prepare_tree_icons(window) -> None:
     """Statuses, a read-only host, a user color, a collapsed group and a selected host."""
 
@@ -1026,6 +1119,26 @@ def run(out_dir: Path) -> None:
                     str(out_dir / f"tree-icons-{theme}-{density_name}.png"), "png", [], [])
                 holder.restore()
                 window.destroy()
+
+    @scenario("tree-icons-sheet")
+    def _tree_icons_sheet() -> None:
+        """docs/ui-target/tree-icons-sheet.png, regenerated with the real renderer.
+
+        Only when named: ``tools/ui_snapshots.py docs/ui-target tree-icons-sheet``.
+        """
+
+        if "tree-icons-sheet" not in sys.argv[2:]:
+            return
+        crops = {}
+        for theme, dark in (("dark", True), ("light", False)):
+            window = _make_window(app, tree_icons_base, dark, "compact")
+            prepare_tree_icons(window)
+            pixbuf, holder = render_window_pixbuf(window, 1280, 1000)
+            x, y, width, height = tree_area(window._sidebar, holder)
+            crops[theme] = pixbuf.new_subpixbuf(x, y, width, min(height, 470)).copy()
+            holder.restore()
+            window.destroy()
+        render_tree_icon_sheet(out_dir / "tree-icons-sheet.png", crops)
 
     @scenario("sidebar-surfaces")
     def _sidebar_surfaces() -> None:
