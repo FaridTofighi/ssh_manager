@@ -355,16 +355,32 @@ def sanitize_name(original: str) -> Tuple[str, List[IssueCode]]:
     return name, issues
 
 
-def _unique(name: str, taken: Set[str]) -> str:
-    """``name``, else ``name-2``, ``name-3``… (case-insensitive against ``taken``)."""
+MAX_DISPLAY = 128
 
-    if name.lower() not in taken:
+
+def display_name(original: str) -> Tuple[str, List[IssueCode]]:
+    """Name for the app store: the original text, readable (no control/bidi chars, no '/'), ≤ 128 chars."""
+
+    text = clean_label(original).replace("/", "-").strip()
+    issues: List[IssueCode] = []
+    if len(text) > MAX_DISPLAY:
+        text = text[: MAX_DISPLAY - 5].rstrip() + "-" + _short_hash(original)
+        issues.append(IssueCode.NAME_TRUNCATED)
+    if text != (original or "").strip():
+        issues.append(IssueCode.NAME_SANITIZED)
+    return text, issues
+
+
+def _unique(name: str, taken: Set[str], limit: int = MAX_SEGMENT) -> str:
+    """``name``, else ``name-2``, ``name-3``… (case-insensitive against ``taken``, at most ``limit`` chars)."""
+
+    if name.casefold() not in taken:
         return name
     counter = 2
     while True:
         suffix = f"-{counter}"
-        candidate = name[: MAX_SEGMENT - len(suffix)] + suffix
-        if candidate.lower() not in taken:
+        candidate = name[: limit - len(suffix)] + suffix
+        if candidate.casefold() not in taken:
             return candidate
         counter += 1
 
@@ -519,9 +535,12 @@ class ExistingInventory:
     base_dir: Path
     tree: Mapping[str, Mapping[str, GroupConfig]] = field(default_factory=dict)
     disk: bool = True  # False: plan without looking at the disk (tests, previews of a bare file)
+    display_names: bool = False  # app store: keep readable names, groups hold hosts and subgroups
 
     @classmethod
     def from_manager(cls, manager) -> "ExistingInventory":
+        if getattr(manager, "allows_display_names", False):
+            return cls(Path(manager.base_dir), manager.tree, disk=False, display_names=True)
         return cls(Path(manager.base_dir), manager.tree)
 
     def path(self, parent: str, child: Sequence[str] = ()) -> Path:
@@ -691,23 +710,24 @@ def plan_import(
     siblings: Dict[Tuple[str, ...], Set[str]] = {}  # sanitized parent path → names taken
     unnamed = [0]
     renamed: List[Tuple[str, str]] = []
-    reserved = {OWN_HOSTS_CHILD_NAME.lower()}
+    display = existing.display_names
+    reserved = set() if display else {OWN_HOSTS_CHILD_NAME.lower()}
 
     def mapped(path: Tuple[str, ...]) -> Tuple[str, ...]:
         out: List[str] = []
         for depth in range(1, len(path) + 1):
             prefix = path[:depth]
             if prefix not in seg_map:
-                name, codes = sanitize_name(prefix[-1])
+                name, codes = display_name(prefix[-1]) if display else sanitize_name(prefix[-1])
                 if not name:
                     unnamed[0] += 1
                     name = f"unnamed-{unnamed[0]}"
                 parent_key = tuple(out)
                 taken = siblings.setdefault(parent_key, set(reserved) if depth > 1 else set())
-                unique = _unique(name, taken)
+                unique = _unique(name, taken, MAX_DISPLAY if display else MAX_SEGMENT)
                 if unique != name:
                     codes = codes + [IssueCode.FOLDER_COLLISION_RESOLVED]
-                taken.add(unique.lower())
+                taken.add(unique.casefold())
                 seg_map[prefix] = unique
                 for code in codes:
                     issues.append(ImportIssue(Severity.INFO, code,
@@ -724,6 +744,8 @@ def plan_import(
             parent, child = options.target_parent, segs
         else:
             parent, child = segs[0], segs[1:]
+        if display:  # the app store: a group holds its own hosts and its subgroups
+            return parent, child
         if not child:
             taken = siblings.get((segs[0],), set()) if options.destination is Destination.NEW_PARENTS else set()
             child = [OWN_HOSTS_CHILD_NAME if ROOT_CHILD_NAME.lower() in taken else ROOT_CHILD_NAME]
@@ -764,7 +786,7 @@ def plan_import(
         if group is None:
             group = groups[key] = PlannedGroup(parent, key[1], path)
             original = _folder_text(path)
-            target_text = f"{parent}/{key[1]}"
+            target_text = "/".join(part for part in (parent, key[1]) if part)
             if original.replace("\\", "/") != target_text:
                 renamed.append((original, target_text))
 
@@ -774,13 +796,13 @@ def plan_import(
     for session, target in sorted(targets, key=lambda item: item[0].line):
         key = folder_target[session.folder]
         group = groups[key]
-        name, codes = sanitize_name(session.name)
+        name, codes = display_name(session.name) if display else sanitize_name(session.name)
         if not name:
             unnamed[0] += 1
             name = f"unnamed-{unnamed[0]}"
         taken = taken_aliases.setdefault(key, set())
-        alias = _unique(name, taken)
-        taken.add(alias.lower())
+        alias = _unique(name, taken, MAX_DISPLAY if display else MAX_SEGMENT)
+        taken.add(alias.casefold())
         label = _safe_label(session.name)
         if alias != name:
             codes = codes + [IssueCode.ALIAS_DEDUPLICATED]
@@ -833,6 +855,8 @@ class GroupWrite:
     existed: bool
     new_hosts: int = 0
     overwritten_hosts: int = 0
+    new_entries: List[HostEntry] = field(default_factory=list)  # app store: inserted
+    replaced: List[HostEntry] = field(default_factory=list)  # app store: overwrite (entry.id = existing host)
 
 
 @dataclass(frozen=True)
@@ -858,6 +882,7 @@ class ImportJob:
     overwritten: int = 0
     mapping: Dict[str, Optional[str]] = field(default_factory=dict)
     credential_names: Dict[str, str] = field(default_factory=dict)
+    entries: Dict[str, HostEntry] = field(default_factory=dict)  # planned host key → final entry
 
     @property
     def host_count(self) -> int:
@@ -918,6 +943,7 @@ def apply_credential_mapping(
         if cred_id and cred_id not in credentials:
             raise CredentialMissingError(cred_id)
     writes: List[GroupWrite] = []
+    entries: Dict[str, HostEntry] = {}
     bindings: Dict[str, Optional[str]] = {}
     expected: Dict[Path, Optional[bytes]] = {}
     imported: List[ImportedHost] = []
@@ -929,10 +955,12 @@ def apply_credential_mapping(
         existing_group = plan.existing.tree.get(group.parent, {}).get(group.child)
         existed = path.is_file()
         current: List[HostEntry] = [
-            HostEntry(h.alias, dict(h.options), dict(h.metadata), h.source_file, h.parent_group, h.child_group)
+            HostEntry(h.alias, dict(h.options), dict(h.metadata), h.source_file, h.parent_group, h.child_group, h.id)
             for h in (existing_group.hosts if existing_group is not None else [])
         ]
-        by_alias = {h.alias.lower(): index for index, h in enumerate(current)}
+        if plan.existing.display_names:
+            existed = existing_group is not None or (group.parent in plan.existing.tree and not group.child)
+        by_alias = {h.alias.casefold(): index for index, h in enumerate(current)}
         identities = {_identity(h) for h in current}
         write = GroupWrite(group.parent, group.child, GroupConfig(group.parent, group.child, path, current), existed)
         for host in group.hosts:
@@ -945,7 +973,7 @@ def apply_credential_mapping(
                                           f"'{label}': the same host name, port and user is already in "
                                           f"'{group.parent}/{group.child}'; skipped.", host.session.line))
                 continue
-            clash = by_alias.get(entry.alias.lower())
+            clash = by_alias.get(entry.alias.casefold())
             if clash is not None:
                 if policy is ConflictPolicy.SKIP:
                     skipped_existing += 1
@@ -954,16 +982,20 @@ def apply_credential_mapping(
                                               "skipped.", host.session.line))
                     continue
                 if policy is ConflictPolicy.RENAME:
-                    new_alias = _unique(entry.alias, set(by_alias))
+                    new_alias = _unique(entry.alias, set(by_alias),
+                                        MAX_DISPLAY if plan.existing.display_names else MAX_SEGMENT)
                     issues.append(ImportIssue(Severity.INFO, IssueCode.EXISTING_HOST_RENAMED,
                                               f"'{entry.alias}' already exists; imported as '{new_alias}'.",
                                               host.session.line))
                     entry.alias = new_alias
                     current.append(entry)
-                    by_alias[new_alias.lower()] = len(current) - 1
+                    by_alias[new_alias.casefold()] = len(current) - 1
                     write.new_hosts += 1
+                    write.new_entries.append(entry)
                 else:
+                    entry.id = current[clash].id  # the existing host keeps its id (and bindings follow)
                     current[clash] = entry
+                    write.replaced.append(entry)
                     overwritten += 1
                     write.overwritten_hosts += 1
                     issues.append(ImportIssue(Severity.WARNING, IssueCode.EXISTING_HOST_OVERWRITTEN,
@@ -971,11 +1003,13 @@ def apply_credential_mapping(
                                               host.session.line))
             else:
                 current.append(entry)
-                by_alias[entry.alias.lower()] = len(current) - 1
+                by_alias[entry.alias.casefold()] = len(current) - 1
                 write.new_hosts += 1
+                write.new_entries.append(entry)
             identities.add(_identity(entry))
             final = ImportedHost(host, entry.alias)
             imported.append(final)
+            entries[final.host_key] = entry
             overwrote = clash is not None and policy is ConflictPolicy.OVERWRITE
             if cred_id or overwrote:  # an overwritten host drops its old binding when mapped to None
                 bindings[final.host_key] = cred_id
@@ -983,13 +1017,15 @@ def apply_credential_mapping(
         changed = write.new_hosts or write.overwritten_hosts or (not existed and plan.options.create_empty_folders)
         if changed:
             writes.append(write)
+            if plan.existing.display_names:
+                continue  # the store checks concurrency itself (transactions)
             try:
                 expected[path] = path.read_bytes() if existed else None
             except OSError:
                 expected[path] = None
     names = {cid: getattr(credentials[cid], "name", cid) for cid in resolved.values() if cid}
     return ImportJob(plan, writes, bindings, expected, issues, imported, skipped_existing, skipped_duplicates,
-                     overwritten, dict(resolved), names)
+                     overwritten, dict(resolved), names, entries)
 
 
 # --------------------------------------------------------------------- commit
@@ -1035,6 +1071,8 @@ def commit(
     if missing:
         return ImportReport(ImportStatus.FAILED,
                             "Import failed, no changes were made: a chosen credential was deleted meanwhile.")
+    if getattr(manager, "store", None) is not None:
+        return _commit_to_store(job, manager, credential_store, parents, progress, should_cancel)
     try:
         txn = manager.import_groups([w.group for w in job.writes], expected=job.expected,
                                     progress=progress, should_cancel=should_cancel)
@@ -1064,6 +1102,53 @@ def commit(
     manager.refresh()
     return ImportReport(ImportStatus.SUCCESS, f"Imported {job.host_count} host(s) into {len(job.writes)} group(s).",
                         job.host_count, len(job.writes), parents)
+
+
+def _commit_to_store(job: ImportJob, manager, credential_store, parents: List[str], progress, should_cancel
+                     ) -> ImportReport:
+    """App store: one transaction for groups, hosts and bindings (a failure or cancel changes nothing)."""
+
+    from ..inventory.store import InventoryError
+
+    store = manager.store
+    total = len(job.writes)
+    try:
+        with store.transaction():
+            for index, write in enumerate(job.writes):
+                if should_cancel is not None and should_cancel():
+                    raise ImportCancelled("Import cancelled.")
+                group_id = manager.create_group_path(write.parent, write.child)
+                for entry in write.replaced:
+                    from ..inventory.manager import host_columns
+
+                    hostname, port, user, rest = host_columns(entry.options)
+                    store.update_host(entry.id, alias=entry.alias, hostname=hostname, port=port, user=user,
+                                      options=rest, metadata=dict(entry.metadata))
+                rows = store.add_hosts_bulk(manager._new_host(group_id, entry) for entry in write.new_entries)
+                for entry, row in zip(write.new_entries, rows):
+                    entry.id = row.id
+                if progress is not None:
+                    progress(index + 1, total)
+            if should_cancel is not None and should_cancel():
+                raise ImportCancelled("Import cancelled.")
+            bindings = {job.entries[key].id: cid for key, cid in job.bindings.items()
+                        if key in job.entries and job.entries[key].id}
+            if bindings:
+                credential_store.bind_many(bindings)  # a failure rolls the database back too
+    except ImportCancelled:
+        manager.refresh()
+        return ImportReport(ImportStatus.CANCELLED, "Import cancelled, no changes were made.")
+    except InventoryError as exc:
+        manager.refresh()
+        return ImportReport(ImportStatus.FAILED, f"Import failed, no changes were made: {exc}")
+    except Exception as exc:  # SecureStoreError, KeyError (credential gone) …
+        manager.refresh()
+        return ImportReport(ImportStatus.FAILED,
+                            f"Import failed, no changes were made: credential bindings could not be saved "
+                            f"({type(exc).__name__}).")
+    manager.refresh()
+    return ImportReport(ImportStatus.SUCCESS, f"Imported {job.host_count} host(s) into {total} group(s).",
+                        job.host_count, total, parents)
 
 
 # --------------------------------------------------------------------- report

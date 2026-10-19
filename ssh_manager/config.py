@@ -138,7 +138,7 @@ def parse_ssh_config_file(
         current_meta = {}
 
     try:
-        raw_text = path.read_text(encoding="utf-8", errors="ignore")
+        raw_text = path.read_text(encoding="utf-8-sig", errors="ignore")  # a BOM must not hide the first Host
     except OSError:
         return entries
 

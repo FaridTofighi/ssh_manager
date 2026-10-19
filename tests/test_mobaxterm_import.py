@@ -607,6 +607,73 @@ class CommitTests(unittest.TestCase):
         self.assertTrue(path.name.startswith("mobaxterm-"))
 
 
+class StoreTargetTests(unittest.TestCase):
+    """Importing into the app store: readable names, no General/_hosts, one transaction."""
+
+    def setUp(self) -> None:
+        from ssh_manager.inventory.manager import StoreConfigManager
+        from ssh_manager.inventory.store import InventoryStore
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.store = InventoryStore(self.root / "inventory.db")
+        self.manager = StoreConfigManager(self.store)
+        self.creds, self.ops, self.root_cred = make_creds(self.root)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        self.tmp.cleanup()
+
+    def run_import(self, mapping=None, **options):
+        plan = plan_import(parse_mxtsessions(ACME.encode()), ImportOptions(**options),
+                           existing=ExistingInventory.from_manager(self.manager))
+        job = apply_credential_mapping(plan, mapping or {}, {c.id: c for c in self.creds.list()})
+        return plan, job, commit(job, self.manager, self.creds)
+
+    def test_original_names_and_structure(self) -> None:
+        plan, job, report = self.run_import({"alice": self.ops.id})
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        tree = self.manager.tree
+        self.assertEqual([h.alias for h in tree["Acme"][""].hosts], ["acme bastion"])  # directly in the folder
+        self.assertEqual([h.alias for h in tree["Acme"]["Team A"].hosts], ["team-a-gw"])  # hosts + subfolders
+        self.assertEqual({h.alias for h in tree["Acme"]["Team A/Servers"].hosts},
+                         {"web 01", "db (primary)", "backup", "behind-jump", "no user"})
+        self.assertIn("Team B/00 - deep/level 4", tree["Acme"])
+        self.assertIn("\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc", [h.alias for h in tree["Beta"][""].hosts])
+        self.assertNotIn("General", tree["Acme"])
+        self.assertFalse(any("_hosts" in child for child in tree["Acme"]))
+        web = next(h for h in tree["Acme"]["Team A/Servers"].hosts if h.alias == "web 01")
+        self.assertEqual(web.options["user"], "ops")
+        self.assertEqual(self.creds.binding_for_host(web.id), self.ops.id)  # bound by the stable id
+
+    def test_second_run_adds_nothing(self) -> None:
+        self.run_import()
+        _plan, job, report = self.run_import()
+        self.assertIs(report.status, ImportStatus.NOTHING)
+        self.assertEqual(job.host_count, 0)
+
+    def test_overwrite_keeps_the_host_id(self) -> None:
+        self.run_import()
+        before = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
+        _plan, job, report = self.run_import({"alice": self.ops.id}, conflict_policy=ConflictPolicy.OVERWRITE,
+                                             skip_duplicates=False)
+        self.assertEqual(job.overwritten, 9)
+        after = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
+        self.assertEqual(before, after)
+        self.assertEqual(self.creds.binding_for_host(after["web 01"]), self.ops.id)
+
+    def test_binding_failure_and_cancel_roll_back(self) -> None:
+        with mock.patch.object(self.creds, "_save", side_effect=SecureStoreError("disk")):
+            _plan, _job, report = self.run_import({"alice": self.ops.id})
+        self.assertIs(report.status, ImportStatus.FAILED)
+        self.assertEqual(self.manager.tree, {})
+        plan = plan_import(parse_mxtsessions(ACME.encode()), existing=ExistingInventory.from_manager(self.manager))
+        job = apply_credential_mapping(plan, {}, {})
+        report = commit(job, self.manager, self.creds, should_cancel=lambda: True)
+        self.assertIs(report.status, ImportStatus.CANCELLED)
+        self.assertEqual(self.manager.tree, {})
+
+
 class BindManyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
