@@ -215,6 +215,8 @@ def commit_openssh_import(plan: OpenSSHPlan, manager, credential_store=None, *, 
 
     report = OpenSSHImportReport()
     store = manager.store
+    if policy is Policy.OVERWRITE:
+        manager.backup_before("before-import-overwrite")
     new_bindings: Dict[str, str] = {}
     matched_keys: Set[str] = set()
     legacy = dict(legacy_bindings or {})

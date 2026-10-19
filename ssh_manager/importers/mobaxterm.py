@@ -1112,6 +1112,8 @@ def _commit_to_store(job: ImportJob, manager, credential_store, parents: List[st
 
     store = manager.store
     total = len(job.writes)
+    if job.overwritten:
+        manager.backup_before("before-import-overwrite")
     try:
         with store.transaction():
             for index, write in enumerate(job.writes):

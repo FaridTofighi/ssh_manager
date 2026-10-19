@@ -125,6 +125,15 @@ class GroupOperationTests(ManagerTestCase):
         self.assertNotIn("QA", m.tree)
         self.assertFalse(m.move_child_group("staging", "front", "staging", "front")[0])
 
+    def test_backup_before_deleting_hosts(self) -> None:
+        m = self.manager
+        m.create_parent_group("empty")
+        m.delete_parent_group("empty")  # no hosts lost: no snapshot
+        self.assertEqual(self.store.list_backups(), [])
+        m.delete_child_group("prod", "web")  # deletes web-01
+        self.assertEqual(len(self.store.list_backups()), 1)
+        self.assertIn("before-delete", self.store.list_backups()[0].name)
+
     def test_moving_a_group_into_its_own_subgroup_is_refused(self) -> None:
         m = self.manager
         m.create_child_group("prod", "web/eu")

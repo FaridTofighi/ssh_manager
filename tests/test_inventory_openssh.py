@@ -109,6 +109,7 @@ class ImportTests(OpenSSHTestCase):
         (self.confd / "prod" / "web.conf").write_text("Host web-01\n    HostName 10.8.8.8\n", encoding="utf-8")
         report = commit_openssh_import(plan_openssh_import([self.confd]), self.manager, policy=Policy.OVERWRITE)
         self.assertEqual(report.overwritten, 1)
+        self.assertTrue(any("before-import-overwrite" in p.name for p in self.store.list_backups()))
         web1 = next(h for h in self.manager.tree["prod"]["web.conf"].hosts if h.alias == "web-01")
         self.assertEqual(web1.options["hostname"], "10.8.8.8")
 

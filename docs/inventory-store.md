@@ -8,7 +8,7 @@ are never the live store, and `~/.ssh` is never written implicitly.
 |---|---|
 | Location | `$XDG_DATA_HOME/ssh-manager/inventory.db` (default `~/.local/share/ssh-manager/inventory.db`); `--inventory <file>` uses another one |
 | Permissions | database 0600, folder 0700 |
-| Backups | `backups/inventory-<stamp>-<reason>.db` (newest 5) and `inventory.db.bak`; made on schema migration, by **Back Up Now** (Preferences → Inventory) and before destructive bulk operations |
+| Backups | `backups/inventory-<stamp>-<reason>.db` (newest 5) and `inventory.db.bak`; made on schema migration, by **Back Up Now** (Preferences → Inventory), before deleting a group that contains hosts, and before an Overwrite import |
 | Code | `ssh_manager/inventory/store.py` (`InventoryStore`), `manager.py` (`StoreConfigManager`), `openssh.py` (import/export), `startup.py` (opening with decisions) |
 
 ## Why

@@ -195,6 +195,15 @@ class StoreConfigManager:
     def all_host_ids(self) -> set:
         return self.store.host_ids()
 
+    def backup_before(self, reason: str, group_id: Optional[str] = None) -> None:
+        """A snapshot before a destructive change (only when it would delete hosts); never blocks the change."""
+
+        try:
+            if group_id is None or self.store.count_hosts(group_id) > 0:
+                self.store.backup(reason)
+        except (OSError, InventoryError):
+            pass
+
     def _run(self, action, success: str) -> Result:
         try:
             action()
@@ -230,6 +239,7 @@ class StoreConfigManager:
         group_id = self.group_id(name)
         if group_id is None:
             return False, f"Group '{name}' does not exist."
+        self.backup_before("before-delete", group_id)
         return self._run(lambda: self.store.delete_group(group_id), f"Removed group '{name}'.")
 
     # ---------------------------------------------------------------- child
@@ -294,6 +304,7 @@ class StoreConfigManager:
         group_id = self.group_id(parent_name, child_name) if child_name else None
         if group_id is None:
             return False, f"Group '{child_name}' not found."
+        self.backup_before("before-delete", group_id)
         return self._run(lambda: self.store.delete_group(group_id), f"Removed group '{child_name}'.")
 
     def move_child_group(self, parent_name: str, child_name: str, target_parent: str,
