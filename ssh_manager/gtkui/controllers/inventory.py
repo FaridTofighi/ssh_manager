@@ -62,7 +62,11 @@ class InventoryController:
         self.win.refresh_workspaces()
         self.win.tree.rebuild(refresh=False)
         self.win._save_ui_state()
-        self.win._notify_info(_("Loaded configuration from {path}.").format(path=path))
+        if self.win.manager.read_only:
+            self.win._notify_info(_("Opened {path} read-only: it is a single file. Changes go to a folder; you will "
+                                    "be asked which one.").format(path=path))
+        else:
+            self.win._notify_info(_("Loaded configuration from {path}.").format(path=path))
 
     def switch_workspace(self, workspace: Workspace) -> None:
         if workspace.read_only:

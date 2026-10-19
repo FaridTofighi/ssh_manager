@@ -20,6 +20,7 @@ from ..dialogs.host_dialog import HostDialog  # noqa: E402
 from ..constants import RowKind  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
+from .guards import requires_editable_inventory  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -67,6 +68,7 @@ class HostActions:
             **kwargs,
         )
 
+    @requires_editable_inventory
     def prompt_new_host(self, template: Optional[HostTemplate] = None) -> None:
         parent, child = self.win.tree.infer_target_group()
         create_child = False
@@ -102,6 +104,7 @@ class HostActions:
         template = next((t for t in built_in_templates() if t.id == template_id), None)
         self.prompt_new_host(template=template)
 
+    @requires_editable_inventory
     def edit_selected(self) -> None:
         if self.win.tree.current_item_is_read_only():
             self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
@@ -135,6 +138,7 @@ class HostActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(updated.parent_group, updated.child_group, updated.alias)
 
+    @requires_editable_inventory
     def duplicate_selected(self) -> None:
         if self.win.tree.current_item_is_read_only():
             self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
@@ -162,6 +166,7 @@ class HostActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(clone.parent_group, clone.child_group, clone.alias)
 
+    @requires_editable_inventory
     def move_selected(self) -> None:
         if self.win.tree.current_item_is_read_only():
             self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
@@ -201,6 +206,7 @@ class HostActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(target_parent, target_child, host.alias)
 
+    @requires_editable_inventory
     def delete_selected(self) -> None:
         if self.win.tree.current_item_is_read_only():
             self.win._notify(_("Editing this host is disabled by local permissions."), Level.INFO)
@@ -225,6 +231,7 @@ class HostActions:
             self.win.sessions.audit_log("delete", host)
             self.win.tree.rebuild(refresh=True)
 
+    @requires_editable_inventory
     def bulk_move_selected(self) -> None:
         hosts = self.win.tree.selected_hosts()
         if len(hosts) < 2:
@@ -244,6 +251,7 @@ class HostActions:
                 )
             self.win.tree.rebuild(refresh=True)
 
+    @requires_editable_inventory
     def bulk_tag_selected(self) -> None:
         hosts = self.win.tree.selected_hosts()
         if len(hosts) < 2:
@@ -277,6 +285,7 @@ class HostActions:
         if tree_view:
             tree_view.queue_draw()
 
+    @requires_editable_inventory
     def create_host_in_current_group(self) -> None:
         kind, data = self.win.tree.current_item()
         parent = data.get("parent", "")
@@ -317,6 +326,7 @@ class HostActions:
                     return
             self.create_host_in_group(parent, child)
 
+    @requires_editable_inventory
     def create_host_in_group(self, parent: str, child: str) -> None:
         host, cred_id = self.run_host_dialog(self.host_dialog(), parent, child)
         if not host:

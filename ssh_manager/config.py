@@ -511,35 +511,26 @@ class ConfigManager:
         self.refresh()
 
     # ------------------------------------------------------------------ helpers
+    @property
+    def read_only(self) -> bool:
+        """True when the base path is a file (a single ssh config): it can be shown, not edited."""
+
+        return self.base_dir.exists() and not self.base_dir.is_dir()
+
     def refresh(self) -> None:
-        # Primary load attempt
+        """Reload the tree from ``base_dir`` (never switches to another path).
+
+        An empty inventory stays empty and editable: there is no fallback to
+        ``~/.ssh/config`` (that made the app adopt a *file* as its base, after
+        which every create failed). A missing folder is created (mode 0700).
+        """
+
+        if not self.base_dir.exists():
+            try:
+                self.base_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            except OSError:
+                pass  # mutations report the problem through _ensure_directory_base
         self.tree = load_config_tree(self.base_dir)
-
-        default_conf_d = (Path.home() / ".ssh" / "conf.d").resolve()
-        is_default_conf_d = self.base_dir.resolve() == default_conf_d
-
-        # Only the default conf.d path falls back to common OpenSSH locations.
-        # Custom empty directories should remain editable instead of silently
-        # switching to the user's real ~/.ssh/config.
-        if not self.tree and is_default_conf_d:
-            fallback_paths = [
-                Path.home() / ".ssh" / "config",
-                Path.home() / ".ssh",
-            ]
-            for path in fallback_paths:
-                # Skip if already the current base_dir
-                if path.resolve() == self.base_dir.resolve():
-                    continue
-                if path.exists():
-                    tree = load_config_tree(path)
-                    if tree:
-                        self.base_dir = path
-                        self.tree = tree
-                        return
-
-        # If still empty, ensure the configured group directory exists.
-        if not self.tree and not self.base_dir.exists():
-            self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_child(self, parent_name: str, child_name: str) -> Optional[GroupConfig]:
         child = self.tree.get(parent_name, {}).get(child_name)

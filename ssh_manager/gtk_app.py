@@ -108,6 +108,19 @@ def _system_font_family() -> str:
     return "Sans"
 
 
+def default_inventory_folder() -> Path:
+    """The folder the app keeps its groups in by default."""
+
+    return Path.home() / ".ssh" / "conf.d"
+
+
+def _home_relative(path: Path) -> str:
+    try:
+        return "~/" + str(Path(path).expanduser().relative_to(Path.home()))
+    except ValueError:
+        return str(path)
+
+
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
@@ -462,6 +475,29 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
     def _notify(self, message: str, level: Level = Level.INFO, *, action_label: str = "", action=None) -> None:
         if message:
             self._toasts.notify(message, level, action_label=action_label, action=action)
+
+    def ensure_editable_inventory(self) -> bool:
+        """Before a change: offer a folder when the inventory is a single file (never a failing button)."""
+
+        manager = getattr(self, "manager", None)
+        if manager is None or not manager.read_only:
+            return True
+        folder = default_inventory_folder()
+        if not confirm(
+            self,
+            _("Use a folder for your groups?"),
+            _("‘{path}’ is a file. SSH Manager keeps its groups in a folder. Use ‘{folder}’ instead?").format(
+                path=_home_relative(manager.base_dir), folder=_home_relative(folder)),
+            confirm_label=_("_Use Folder"),
+        ):
+            return False
+        try:
+            folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as exc:
+            self._notify_error(_("Cannot create {folder}: {error}").format(folder=folder, error=exc.strerror or exc))
+            return False
+        self.inventory.load_workspace(folder)
+        return not self.manager.read_only
 
     def _notify_info(self, message: str) -> None:
         self._notify(message, Level.INFO)

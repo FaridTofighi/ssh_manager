@@ -14,6 +14,7 @@ from gi.repository import Gdk, Gtk  # type: ignore  # noqa: E402
 
 from ..constants import RowKind, TreeColumn  # noqa: E402
 from ..i18n import _  # noqa: E402
+from .guards import requires_editable_inventory  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -195,6 +196,7 @@ class DragDropController:
             return self._drop_child_group(items, target)
         return False
 
+    @requires_editable_inventory
     def _drop_hosts(self, items: list, target: Dict[str, str]) -> bool:
         win = self.win
         if target.get("type") == RowKind.CHILD.value:
@@ -232,6 +234,7 @@ class DragDropController:
             win.tree.select_child_group(target_parent, target_child)
         return success
 
+    @requires_editable_inventory
     def _drop_child_group(self, items: list, target: Dict[str, str]) -> bool:
         win = self.win
         if len(items) != 1:

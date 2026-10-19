@@ -14,6 +14,7 @@ from ..constants import RowKind  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
 from ..validation import validate_child_path, validate_group_name  # noqa: E402
+from .guards import requires_editable_inventory  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -28,6 +29,7 @@ class GroupActions:
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
 
+    @requires_editable_inventory
     def create_parent_group(self) -> None:
         name = self.win._prompt_text(
             _("New Group"),
@@ -42,6 +44,7 @@ class GroupActions:
         if success:
             self.win.tree.rebuild(refresh=True)
 
+    @requires_editable_inventory
     def create_child_group_for_current(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind not in {RowKind.PARENT.value, RowKind.CHILD.value, RowKind.CHILD_FOLDER.value}:
@@ -78,6 +81,7 @@ class GroupActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, child_path)
 
+    @requires_editable_inventory
     def create_child_group(self) -> None:
         parent, _child = self.win.tree.infer_target_group()
         selection = self.win.hosts.pick_group(
@@ -105,6 +109,7 @@ class GroupActions:
             return slug
         return slug if slug.lower().endswith(".conf") else f"{slug}.conf"
 
+    @requires_editable_inventory
     def rename_parent_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.PARENT.value:
@@ -123,6 +128,7 @@ class GroupActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_parent_group(new_name)
 
+    @requires_editable_inventory
     def duplicate_parent_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.PARENT.value:
@@ -141,6 +147,7 @@ class GroupActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_parent_group(new_name)
 
+    @requires_editable_inventory
     def rename_child_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.CHILD.value:
@@ -163,6 +170,7 @@ class GroupActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, new_name)
 
+    @requires_editable_inventory
     def duplicate_child_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.CHILD.value:
@@ -182,6 +190,7 @@ class GroupActions:
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, new_name)
 
+    @requires_editable_inventory
     def delete_parent_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.PARENT.value:
@@ -199,6 +208,7 @@ class GroupActions:
             self.win.creds.unbind_credential_prefix(f"{name}::")
             self.win.tree.rebuild(refresh=True)
 
+    @requires_editable_inventory
     def delete_child_group(self) -> None:
         kind, data = self.win.tree.current_item()
         if kind != RowKind.CHILD.value:
