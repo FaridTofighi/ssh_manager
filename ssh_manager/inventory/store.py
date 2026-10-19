@@ -210,6 +210,8 @@ class InventoryStore:
     def __init__(self, path: Optional[Path] = None, *, read_only: bool = False) -> None:
         self.path = Path(path) if path is not None else default_inventory_path()
         self.read_only = read_only
+        self.read_only_reason = "The inventory is open read-only." if read_only else ""
+        self.created = False  # True when this open created the database (first run)
         self._conn: Optional[sqlite3.Connection] = None
         self._depth = 0
         self.open()
@@ -236,12 +238,14 @@ class InventoryStore:
         self._conn = conn
         try:
             conn.execute("PRAGMA foreign_keys=ON")
-            if not self.read_only and not memory:
-                conn.execute("PRAGMA journal_mode=WAL")
             check = conn.execute("PRAGMA quick_check(1)").fetchone()[0]
             if check != "ok":
                 raise InventoryCorrupt(f"The inventory {self.path} is damaged ({check}).")
+            # Read the version before anything that writes (WAL changes the file header):
+            # a database from a newer SSH Manager must stay byte-identical.
             version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version <= SCHEMA_VERSION and not self.read_only and not memory:
+                conn.execute("PRAGMA journal_mode=WAL")
         except InventoryCorrupt:
             self.close()
             raise
@@ -260,6 +264,7 @@ class InventoryStore:
                 self.close()
                 raise InventoryUnavailable(f"The inventory {self.path} needs an upgrade but is read-only.")
             self._migrate(version, backup=existed and version > 0)
+            self.created = not existed
         if not memory and not self.read_only:
             try:
                 os.chmod(self.path, 0o600)

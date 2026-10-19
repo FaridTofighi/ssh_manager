@@ -268,7 +268,7 @@ class ConfigMutationTests(unittest.TestCase):
 
             ok, message = manager.create_parent_group("prod")
             self.assertFalse(ok)
-            self.assertIn("directory base", message)
+            self.assertIn("is a single file", message)
 
             parent = cfg.parent.name
             child = cfg.name

@@ -36,6 +36,10 @@ from ssh_manager.gtkui.controllers.host_actions import HostActions  # noqa: E402
 from ssh_manager.gtkui.controllers.inventory import InventoryController  # noqa: E402
 from ssh_manager.gtkui.controllers.layout import LayoutController  # noqa: E402
 from ssh_manager.gtkui.controllers.mobaxterm_import import MobaXtermImportController  # noqa: E402
+from ssh_manager.gtkui.controllers.store_actions import StoreActions  # noqa: E402
+from ssh_manager.inventory.manager import StoreConfigManager  # noqa: E402
+from ssh_manager.inventory.startup import Choice, open_inventory_store  # noqa: E402
+from ssh_manager.inventory.store import default_inventory_path  # noqa: E402
 from ssh_manager.gtkui.controllers.notifications import ToastController  # noqa: E402
 from ssh_manager.gtkui.controllers.session_controller import (  # noqa: E402,F401
     SessionController,
@@ -52,7 +56,7 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
     save_ui_state,
     ui_state_path_for_base,
 )
-from ssh_manager.gtkui.dialogs.confirm import confirm  # noqa: E402
+from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
 from ssh_manager.gtkui.i18n import _  # noqa: E402
@@ -124,9 +128,10 @@ def _home_relative(path: Path) -> str:
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
-    def __init__(self, base_dir: Path) -> None:
+    def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None) -> None:
         Gtk.Application.__init__(self, application_id="org.codex.SSHManager")
-        self._base_dir = base_dir
+        self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
+        self._inventory = inventory  # --inventory: another database file
         self._window: Optional[SSHManagerWindow] = None
         self._theme = get_theme_manager()
         self._settings = AppSettings.load()
@@ -142,8 +147,47 @@ class SSHManagerApplication(Gtk.Application):
             if not self._ensure_master_password():
                 self.quit()
                 return
-            self._window = SSHManagerWindow(self, self._base_dir, self._settings, master_password=self._master_password)
+            manager = None
+            if self._base_dir is None:
+                store = open_inventory_store(self._inventory or default_inventory_path(), self._ask_startup)
+                if store is None:
+                    self.quit()
+                    return
+                manager = StoreConfigManager(store)
+            base = manager.base_dir if manager is not None else self._base_dir
+            self._window = SSHManagerWindow(self, base, self._settings, master_password=self._master_password,
+                                            manager=manager)
+            if manager is not None and not manager.read_only:
+                GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
         self._window.present()
+
+    def _ask_startup(self, kind: str, message: str) -> Choice:
+        """A start-up problem with the inventory: ask what to do (never crash, never lose data silently)."""
+
+        buttons = {
+            "locked": [(_("_Quit"), Choice.QUIT), (_("Open _Read-Only"), Choice.READ_ONLY), (_("_Retry"), Choice.RETRY)],
+            "corrupt": [(_("_Quit"), Choice.QUIT), (_("Start _Empty"), Choice.START_EMPTY),
+                        (_("_Restore Latest Backup"), Choice.RESTORE)],
+            "too_new": [(_("_Quit"), Choice.QUIT), (_("Open _Empty and Read-Only"), Choice.READ_ONLY)],
+            "unavailable": [(_("_Quit"), Choice.QUIT), (_("Open _Read-Only"), Choice.READ_ONLY)],
+        }[kind]
+        titles = {
+            "locked": _("The inventory is in use"),
+            "corrupt": _("The inventory is damaged"),
+            "too_new": _("The inventory is from a newer SSH Manager"),
+            "unavailable": _("The inventory cannot be saved"),
+        }
+        detail = message
+        if kind == "corrupt":
+            detail += "\n\n" + _("Start Empty keeps the damaged file next to the new one.")
+        dialog = Gtk.MessageDialog(modal=True, message_type=Gtk.MessageType.WARNING, text=titles[kind])
+        dialog.format_secondary_text(detail)
+        for index, (label, _choice) in enumerate(buttons):
+            dialog.add_button(label, index)
+        dialog.set_default_response(len(buttons) - 1)
+        response = dialog.run()
+        dialog.destroy()
+        return buttons[response][1] if 0 <= response < len(buttons) else Choice.QUIT
 
     def _ensure_master_password(self) -> bool:
         if self._settings.master_password_disabled:
@@ -227,6 +271,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         settings: AppSettings,
         *,
         master_password: Optional[str] = None,
+        manager=None,
     ) -> None:
         Gtk.ApplicationWindow.__init__(self, application=app)
         self.set_title(_("SSH Manager"))
@@ -236,7 +281,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.get_style_context().add_class("sm-window")
 
         self.closing = False
-        self._init_services(base_dir, settings, master_password)
+        self._init_services(base_dir, settings, master_password, manager)
         self._init_controllers()
         self._build_ui()
         self._register_actions()
@@ -244,13 +289,16 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.tree.rebuild(refresh=True)
         self.inventory.refresh_git_watch()
         self.creds.warn_if_password_file_locked()
+        # Another window/instance changed the store: reload (PRAGMA data_version).
+        self._external_poll = GLib.timeout_add_seconds(2, self._check_external_changes)
 
         self.connect("delete-event", self._on_delete_event)
         self.connect("destroy", self._on_destroy)
 
     # ---------------------------------------------------------------- setup
-    def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str]) -> None:
-        self.manager = ConfigManager(base_dir)
+    def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str], manager=None) -> None:
+        # The app store (StoreConfigManager) by default; a folder inventory for --base-dir and tests.
+        self.manager = manager if manager is not None else ConfigManager(base_dir)
         self._settings = settings
         self._master_password = master_password
         self._secure_store = SecureStore.with_default_backend(master_password=master_password)
@@ -285,6 +333,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
+        self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / HOST_HISTORY_FILE)
 
@@ -428,6 +477,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "documentation": dialogs.open_documentation,
             "open-folder": self.inventory.open_inventory_folder,
             "import-mobaxterm": self.importer.open,
+            "import-openssh": lambda: self.store_actions.import_openssh(),
+            "export-openssh": lambda: self.store_actions.export_openssh(),
+            "backup-inventory": lambda: self.store_actions.backup_now(),
             "quit": self.close,
             "host-connect": sessions.connect_current_item,
             "host-edit": hosts.edit_selected,
@@ -476,12 +528,24 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if message:
             self._toasts.notify(message, level, action_label=action_label, action=action)
 
+    def _check_external_changes(self) -> bool:
+        if self.closing:
+            return GLib.SOURCE_REMOVE
+        changed = getattr(self.manager, "changed_externally", None)
+        if changed is not None and changed():
+            self.manager.refresh()
+            self.tree.rebuild(refresh=False)
+        return GLib.SOURCE_CONTINUE
+
     def ensure_editable_inventory(self) -> bool:
-        """Before a change: offer a folder when the inventory is a single file (never a failing button)."""
+        """Before a change: explain a read-only store, or offer a folder for a single-file inventory."""
 
         manager = getattr(self, "manager", None)
         if manager is None or not manager.read_only:
             return True
+        if getattr(manager, "store", None) is not None:
+            show_message(self, _("The inventory is read-only"), manager.read_only_reason, level=Level.WARNING)
+            return False
         folder = default_inventory_folder()
         if not confirm(
             self,
@@ -692,6 +756,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _on_destroy(self, *_args) -> None:
         self.closing = True
+        if getattr(self, "_external_poll", 0):
+            GLib.source_remove(self._external_poll)
+            self._external_poll = 0
         get_theme_manager().remove_listener(self._on_theme_changed)
         density_tokens.remove_listener(self._on_density_changed)
         self._toasts.shutdown()

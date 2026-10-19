@@ -465,11 +465,11 @@ class HostPageController:
         elif not self.win.tree.host_lookup and not self.win.manager.tree:
             page.ready.set_content(
                 _("Add your first host"),
-                GLib.markup_escape_text(_("Add a host, or open a folder that contains SSH config files.")),
+                GLib.markup_escape_text(_("Add a host, or import hosts from your SSH config files or MobaXterm.")),
                 _("Add host"),
                 self.win.hosts.prompt_new_host,
                 primary_icon=Icons.NEW,
-                secondary_label=_("_Open config folder"),
+                secondary_label=_("_Import from OpenSSH config"),
                 on_secondary=self.win.inventory.open_inventory_folder,
             )
         elif kind == "multi":

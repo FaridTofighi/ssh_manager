@@ -53,6 +53,7 @@ class AppDialogs:
             latency_probe=self.win._ui.latency_probe,
             density=self.win.density,
             tab_label_mode=self.win._ui.tab_label_mode,
+            inventory=self.inventory_info(),
         )
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
@@ -60,6 +61,21 @@ class AppDialogs:
             dialog.destroy()
         if values is not None:
             self.apply_preferences(values)
+
+    def inventory_info(self):
+        """Preferences → Inventory (app store only)."""
+
+        manager = self.win.manager
+        if getattr(manager, "store", None) is None:
+            return None
+        actions = self.win.store_actions
+        return {
+            "location": str(manager.base_dir),
+            "detail": manager.read_only_reason if manager.read_only else "",
+            "backup": None if manager.read_only else actions.backup_now,
+            "reveal": actions.reveal_inventory,
+            "export": lambda: actions.export_openssh(),
+        }
 
     def apply_preferences(self, values: PreferencesValues) -> None:
         self.win._apply_theme_mode(values.theme_mode)

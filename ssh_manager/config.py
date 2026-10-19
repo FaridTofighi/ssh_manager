@@ -522,7 +522,7 @@ class ConfigManager:
     # ------------------------------------------------------------------ helpers
     @property
     def read_only(self) -> bool:
-        """True when the base path is a file (a single ssh config): it can be shown, not edited."""
+        """True when this inventory is a single ssh config file: it can be shown, not edited."""
 
         return self.base_dir.exists() and not self.base_dir.is_dir()
 
@@ -566,8 +566,8 @@ class ConfigManager:
         if self.base_dir.exists():
             if not self.base_dir.is_dir():
                 return (
-                    f"Base path '{self.base_dir}' is a file; "
-                    "group operations require a directory base."
+                    f"'{self.base_dir}' is a single file, so groups cannot be added to it. "
+                    "SSH Manager keeps groups in its own inventory (or in a folder)."
                 )
             return None
         try:

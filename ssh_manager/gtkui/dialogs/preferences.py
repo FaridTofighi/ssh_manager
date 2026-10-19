@@ -133,6 +133,7 @@ class PreferencesDialog(BaseDialog):
         latency_probe: bool = True,
         density: object = DEFAULT_DENSITY,
         tab_label_mode: object = TabLabelMode.NAME,
+        inventory: Optional[Dict[str, object]] = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -159,6 +160,8 @@ class PreferencesDialog(BaseDialog):
         self._build_master_password()
         self._build_git()
         self._build_audit()
+        if inventory:
+            self._build_inventory(inventory)
         self.add_body(self.layout, expand=True)
 
         self.add_cancel()
@@ -342,6 +345,31 @@ class PreferencesDialog(BaseDialog):
         sec.add(_("Check _interval (seconds)"), self._git_interval_spin, label_group=self._labels)
         self._git_watch_enable.connect("toggled", lambda btn: self._set_sensitive([row, self._git_interval_spin], btn.get_active()))
         self._set_sensitive([row, self._git_interval_spin], settings.git_watch_enabled)
+
+    def _build_inventory(self, inventory: Dict[str, object]) -> None:
+        """Where the app keeps its groups and hosts, with backup, reveal and export."""
+
+        page = self.layout.new_page("inventory", _("Inventory"),
+                                    _("SSH Manager keeps its groups and hosts in one database."))
+        sec = self._section(page)
+        location = Gtk.Label(label=str(inventory.get("location", "")), xalign=0.0)
+        location.set_selectable(True)
+        location.set_line_wrap(True)
+        location.get_style_context().add_class("mono")
+        sec.add(_("Location"), location, label_group=self._labels,
+                help_text=str(inventory.get("detail") or _("Backups are kept in the backups folder next to it.")))
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        self.inventory_buttons = {}
+        for key, label in (("backup", _("_Back Up Now")), ("reveal", _("_Reveal in File Manager")),
+                           ("export", _("_Export…"))):
+            button = Gtk.Button.new_with_mnemonic(label)
+            callback = inventory.get(key)
+            button.set_sensitive(callable(callback))
+            if callable(callback):
+                button.connect("clicked", lambda _b, cb=callback: cb())
+            buttons.pack_start(button, False, False, 0)
+            self.inventory_buttons[key] = button
+        sec.add_widget(buttons)
 
     def _build_audit(self) -> None:
         settings = self._settings

@@ -43,9 +43,13 @@ def display_available() -> bool:
 
 
 class WindowSandbox:
-    """Create the main window against a temporary HOME/XDG and sample inventory."""
+    """Create the main window against a temporary HOME/XDG and sample inventory.
 
-    def __init__(self) -> None:
+    ``store=True`` uses the app-owned SQLite inventory (the SAMPLE hosts imported
+    into it) instead of the legacy folder inventory.
+    """
+
+    def __init__(self, *, store: bool = False) -> None:
         from gi.repository import Gtk  # type: ignore
 
         self.tmp = tempfile.TemporaryDirectory()
@@ -84,11 +88,24 @@ class WindowSandbox:
         self.app = shared_application()
         settings = AppSettings.load()
         settings.master_password_disabled = True
-        self.window = SSHManagerWindow(self.app, self.base, settings)
+        self.store = None
+        manager = None
+        if store:
+            from ssh_manager.inventory.manager import StoreConfigManager
+            from ssh_manager.inventory.openssh import commit_openssh_import, plan_openssh_import
+            from ssh_manager.inventory.store import InventoryStore
+
+            self.store = InventoryStore(self.root / "data" / "ssh-manager" / "inventory.db")
+            manager = StoreConfigManager(self.store)
+            commit_openssh_import(plan_openssh_import([self.base]), manager)
+        self.window = SSHManagerWindow(self.app, manager.base_dir if manager else self.base, settings,
+                                       manager=manager)
         self.window.host_page.latency.enabled = False  # tests never open sockets
 
     def close(self) -> None:
         self.window.destroy()
+        if self.store is not None:
+            self.store.close()
         self.show_patch.stop()
         self.env.stop()
         self.tmp.cleanup()

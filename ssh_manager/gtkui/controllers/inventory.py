@@ -47,6 +47,11 @@ class InventoryController:
         self.win.tree.rebuild(refresh=True)
 
     def open_inventory_folder(self) -> None:
+        """SSH config folders are import sources for the app inventory (never its live store)."""
+
+        if getattr(self.win.manager, "store", None) is not None:
+            self.win.store_actions.import_openssh()
+            return
         folder = choose_folder(self.win, _("Open SSH Config Folder"), current_folder=str(Path.home() / ".ssh"))
         if not folder:
             return
@@ -57,7 +62,7 @@ class InventoryController:
 
         ui = self.win._ui
         ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
-        self.win.manager = ConfigManager(Path(path))
+        self.win.manager = self._manager_for(Path(path))
         ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
         self.win.refresh_workspaces()
         self.win.tree.rebuild(refresh=False)
@@ -67,6 +72,17 @@ class InventoryController:
                                     "be asked which one.").format(path=path))
         else:
             self.win._notify_info(_("Loaded configuration from {path}.").format(path=path))
+
+    def _manager_for(self, path: Path):
+        """The app store for an inventory database (``*.db``), else a folder/file inventory."""
+
+        if path.suffix == ".db":
+            from ...inventory.manager import StoreConfigManager
+            from ...inventory.startup import Choice, empty_read_only_store, open_inventory_store
+
+            store = open_inventory_store(path, lambda _kind, _message: Choice.READ_ONLY)
+            return StoreConfigManager(store or empty_read_only_store(_("The inventory could not be opened.")))
+        return ConfigManager(path)
 
     def switch_workspace(self, workspace: Workspace) -> None:
         if workspace.read_only:

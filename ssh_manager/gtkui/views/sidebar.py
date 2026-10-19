@@ -148,7 +148,7 @@ class SidebarView(Gtk.Box):
             on_action=lambda: self.on_import_mobaxterm(),
             secondary_label=_("_Add host"),
             on_secondary=lambda: self.on_add_host(),
-            link_label=_("_Open config folder…"),
+            link_label=_("Import from _OpenSSH config…"),
             on_link=lambda: self.on_open_folder(),
             compact=True,
         )

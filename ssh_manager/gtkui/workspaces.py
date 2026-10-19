@@ -31,6 +31,8 @@ def workspace_name(path: Path) -> str:
     """Human name for an inventory: its folder (or file stem) name."""
 
     path = Path(path)
+    if path.suffix == ".db":
+        return "SSH Manager"  # the app-owned inventory
     name = path.stem if path.suffix else path.name
     return name or str(path)
 

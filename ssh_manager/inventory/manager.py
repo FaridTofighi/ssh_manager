@@ -95,6 +95,10 @@ class StoreConfigManager:
     def read_only(self) -> bool:
         return self.store.read_only
 
+    @property
+    def read_only_reason(self) -> str:
+        return getattr(self.store, "read_only_reason", "") or "The inventory is open read-only."
+
     def refresh(self) -> None:
         """Reload the whole tree from the database (one query for groups, one for hosts)."""
 
