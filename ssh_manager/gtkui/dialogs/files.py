@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 import gi
 
@@ -53,10 +53,20 @@ def choose_open_file(
     *,
     current_folder: str = "",
     accept_label: str = "",
+    filters: Sequence[Tuple[str, Sequence[str]]] = (),
 ) -> Optional[str]:
+    """Pick a file; ``filters`` = ``[(label, ["*.ext", …]), …]`` (an "All files" filter is added)."""
+
     dialog = _chooser(parent, title, Gtk.FileChooserAction.OPEN, accept_label or _("_Open"))
     if current_folder:
         dialog.set_current_folder(current_folder)
+    if filters:
+        for label, patterns in list(filters) + [(_("All files"), ["*"])]:
+            file_filter = Gtk.FileFilter()
+            file_filter.set_name(label)
+            for pattern in patterns:
+                file_filter.add_pattern(pattern)
+            dialog.add_filter(file_filter)
     return _run(dialog)
 
 

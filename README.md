@@ -66,6 +66,13 @@ that direct file mode follows `Include` directives.
   shows `user@host:port` and the status. The session toolbar acts on the
   active tab: split pane, save transcript, copy as plain text, show all
   sessions, broadcast and remote stats.
+- **Import from MobaXterm**: app menu → Import → From MobaXterm
+  (.mxtsessions)…, or the empty sidebar's main button. SSH sessions and their
+  folders become groups and hosts; you choose which SSH Manager credential
+  replaces each username found in the file. RDP/FTP sessions, icons and
+  colors are not imported, and passwords are never in an export. Any failure
+  rolls back completely; re-running the same import adds nothing. See
+  `docs/import-mobaxterm.md`.
 - **Messages** appear as toasts; the activity button in the header keeps every
   message and can filter to the current host.
 - **Keyboard shortcuts**: press Ctrl+? or F1 for the full list. The most
@@ -120,6 +127,7 @@ authentication.
 
 - `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
+- `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)

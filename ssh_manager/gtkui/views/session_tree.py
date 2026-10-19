@@ -39,7 +39,7 @@ from ..i18n import _  # noqa: E402
 from ..theme.loader import current_palette  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
-from ..theme.tokens import ConnectionStatus, Layout, Size  # noqa: E402
+from ..theme.tokens import Layout, Size  # noqa: E402
 from ..tree_icons import icon_color, pulse_alpha, quantize_alpha, show_status_badge, status_badge, tree_icon_for  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import render_svg_surface, render_tree_icon  # noqa: E402

@@ -58,6 +58,9 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     menu.append_section(None, main)
 
     inventory = Gio.Menu()
+    import_menu = Gio.Menu()
+    import_menu.append(_("From MobaXterm (.mxtsessions)…"), "win.import-mobaxterm")
+    inventory.append_submenu(_("Import"), import_menu)
     inventory.append(_("Open Shared Inventory…"), "win.open-shared")
     inventory.append(_("Git Updates Available…") if git_updates else _("Check for Git Updates"), "win.git-check")
     inventory.append(_("Reload Configuration"), "win.refresh")

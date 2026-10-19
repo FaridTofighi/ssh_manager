@@ -26,6 +26,8 @@ class EmptyState(Gtk.Box):
         on_action: Optional[Callable[[], None]] = None,
         secondary_label: str = "",
         on_secondary: Optional[Callable[[], None]] = None,
+        link_label: str = "",
+        on_link: Optional[Callable[[], None]] = None,
         compact: bool = False,
     ) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -69,7 +71,15 @@ class EmptyState(Gtk.Box):
             if on_secondary is not None:
                 self.secondary_button.connect("clicked", lambda _b: on_secondary())
             buttons.pack_start(self.secondary_button, False, False, 0)
-        if action_label or secondary_label:
+        self.link_button: Optional[Gtk.Button] = None
+        if link_label:  # a third, flat action under the buttons
+            self.link_button = Gtk.Button.new_with_mnemonic(link_label)
+            self.link_button.set_relief(Gtk.ReliefStyle.NONE)
+            self.link_button.get_style_context().add_class("flat")
+            if on_link is not None:
+                self.link_button.connect("clicked", lambda _b: on_link())
+            buttons.pack_start(self.link_button, False, False, 0)
+        if action_label or secondary_label or link_label:
             self.pack_start(buttons, False, False, 0)
         self.apply_density()
 

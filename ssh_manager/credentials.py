@@ -169,6 +169,30 @@ class CredentialStore:
             self._bindings = old_bindings
             raise
 
+    def bind_many(self, mapping: Dict[str, Optional[str]]) -> None:
+        """Bind (credential id) or unbind (``None``) many hosts and save once.
+
+        Unknown credential ids raise ``KeyError`` before anything changes; a
+        failed save restores the previous bindings and re-raises.
+        """
+
+        unknown = sorted({cid for cid in mapping.values() if cid and cid not in self._credentials})
+        if unknown:
+            raise KeyError(f"Unknown credential id(s): {', '.join(unknown)}")
+        if not mapping:
+            return
+        old_bindings = dict(self._bindings)
+        for host_key, cred_id in mapping.items():
+            if cred_id:
+                self._bindings[host_key] = cred_id
+            else:
+                self._bindings.pop(host_key, None)
+        try:
+            self._save()
+        except SecureStoreError:
+            self._bindings = old_bindings
+            raise
+
     def rebind_host(self, old_host_key: str, new_host_key: str) -> None:
         old_bindings = dict(self._bindings)
         cred_id = self._bindings.pop(old_host_key, None)

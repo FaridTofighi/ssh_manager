@@ -1140,6 +1140,51 @@ def run(out_dir: Path) -> None:
             window.destroy()
         render_tree_icon_sheet(out_dir / "tree-icons-sheet.png", crops)
 
+    for theme, dark in (("dark", True), ("light", False)):
+
+        @scenario(f"import-wizard-{theme}")
+        def _import_wizard(dark=dark, theme=theme) -> None:
+            """The MobaXterm import wizard, one image per step (synthetic export, no real data)."""
+
+            from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
+            from ssh_manager.gtkui.theme import density
+            from tests.mxt_synthetic import ACME
+
+            export = _SANDBOX / "acme.mxtsessions"
+            export.write_bytes(ACME.encode("utf-8"))
+            import_base = _SANDBOX / f"import-inventory-{theme}"  # fresh per theme: the scene imports into it
+            _write_inventory(import_base, populated=True)
+            window = _make_window(app, import_base, dark)
+            store = window._credential_store
+            ops = next((c for c in store.list() if c.username == "ops"), None) or store.add("Ops account", "ops", "pw")
+            dialog = MobaXtermImportDialog(window, window.manager, store, report_dir=_SANDBOX / "imports",
+                                           choose_file=lambda _parent: str(export))
+            scale = density.active().dialog_scale
+            size = (int(round(820 * scale)), int(round(660 * scale)))
+
+            def shot(step: str) -> None:
+                _pump()
+                capture_window(dialog, out_dir / f"import-wizard-{step}-{theme}.png", *size)
+
+            dialog.choose_file()
+            dialog.wait()
+            shot("1-file")
+            dialog.response(RESPONSE_NEXT)
+            dialog.set_folder_active(("Acme", "+ Empty container (old)"), False)
+            shot("2-options")
+            dialog.response(RESPONSE_NEXT)
+            dialog.wait()
+            dialog.set_row_credential("alice", ops.id)
+            dialog.default_combo.set_active_id("__none__")
+            shot("3-credentials")
+            dialog.response(RESPONSE_NEXT)
+            shot("4-review")
+            dialog.start_import()
+            dialog.wait()
+            shot("5-result")
+            dialog.destroy()
+            window.destroy()
+
     @scenario("sidebar-surfaces")
     def _sidebar_surfaces() -> None:
         """Sidebar crops under several GTK themes, checked against the surface token."""

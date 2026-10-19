@@ -35,6 +35,7 @@ from ssh_manager.gtkui.controllers.group_actions import GroupActions  # noqa: E4
 from ssh_manager.gtkui.controllers.host_actions import HostActions  # noqa: E402
 from ssh_manager.gtkui.controllers.inventory import InventoryController  # noqa: E402
 from ssh_manager.gtkui.controllers.layout import LayoutController  # noqa: E402
+from ssh_manager.gtkui.controllers.mobaxterm_import import MobaXtermImportController  # noqa: E402
 from ssh_manager.gtkui.controllers.notifications import ToastController  # noqa: E402
 from ssh_manager.gtkui.controllers.session_controller import (  # noqa: E402,F401
     SessionController,
@@ -271,6 +272,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
+        self.importer = MobaXtermImportController(self)
         self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / HOST_HISTORY_FILE)
 
     def _build_ui(self) -> None:
@@ -353,6 +355,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.on_delete_smart_group = self.tree.delete_smart_group
         sidebar.on_add_host = self.hosts.prompt_new_host
         sidebar.on_open_folder = self.inventory.open_inventory_folder
+        sidebar.on_import_mobaxterm = lambda: self.importer.open()
         sidebar.on_escape_to_tree = lambda: self.tree_view.grab_focus()
         sidebar.on_bulk_connect = self.actions.bulk_connect_selected
         sidebar.on_bulk_move = self.actions.bulk_move_selected
@@ -411,6 +414,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "about": dialogs.show_about,
             "documentation": dialogs.open_documentation,
             "open-folder": self.inventory.open_inventory_folder,
+            "import-mobaxterm": self.importer.open,
             "quit": self.close,
             "host-connect": sessions.connect_current_item,
             "host-edit": hosts.edit_selected,

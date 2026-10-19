@@ -58,6 +58,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("quick-connect", _("Quick connect"), G_GENERAL, ("<Primary><Shift>t",)),
     ActionSpec("focus-search", _("Search hosts"), G_GENERAL, ("<Primary>k", "<Primary>f")),
     ActionSpec("open-folder", _("Open config folder"), G_GENERAL),
+    ActionSpec("import-mobaxterm", _("Import from MobaXterm"), G_GENERAL),
     ActionSpec("refresh", _("Reload configuration"), G_GENERAL, ("F5",)),
     ActionSpec("settings", _("Settings"), G_GENERAL, ("<Primary>comma",)),
     ActionSpec("app-menu", _("Open the application menu"), G_GENERAL, ("F10",)),

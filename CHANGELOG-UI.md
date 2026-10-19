@@ -6,6 +6,97 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Import from MobaXterm (`.mxtsessions`)
+
+Details: `docs/import-mobaxterm.md`. Screenshots:
+`docs/ui-after/import-wizard-{1-file,2-options,3-credentials,4-review,5-result}-{dark,light}.png`.
+
+### What changed
+
+- **Entry points:** app menu → **Import → From MobaXterm (.mxtsessions)…**
+  (action `win.import-mobaxterm`). The empty sidebar's main button is now
+  **Import from MobaXterm…**; *Add host* moved to the second button and
+  *Open config folder…* to a flat link under them (new `EmptyState`
+  `link_label`).
+- **A five-step wizard** (`gtkui/dialogs/mobaxterm_import.py`):
+  1. **File:** parsed in a worker thread; errors appear inline.
+  2. **Destination and options:** new parents or an existing parent;
+     Skip / Rename / Overwrite; empty folders; skip duplicates; a checkable
+     folder tree with live counts.
+  3. **Credentials:** every username in the selected SSH sessions mapped to a
+     credential, None or a new one, with a default credential first.
+  4. **Review:** a copyable report.
+  5. **Result:** the write runs in a worker, is cancellable and rolls back.
+     The report is saved (0600) under `<data dir>/imports/`.
+- **Pure importer:** `ssh_manager/importers/mobaxterm.py` parses
+  line by line (no `configparser`), plans the parent/child mapping (`General`
+  and `_hosts` rules, sanitized unique names, original names kept in
+  `# meta`), discovers usernames, applies the credential choices and the
+  conflict policy, and commits.
+- **Bulk storage APIs:**
+  - `ConfigManager.import_groups` writes each file once, validates every path
+    against the inventory folder, checks for concurrent changes, and rolls
+    back on any failure (`ImportTransaction`).
+  - `CredentialStore.bind_many` saves once and restores on error.
+  - `render_group_file()` is split out of `_write_group_file`.
+  - `choose_open_file` takes file filters.
+- **Not imported:** RDP, FTP and other non-SSH sessions, MobaXterm icons,
+  colors and fonts. Passwords are never in an export.
+
+### Decisions and deviations
+
+- **Group labels:** no display-name sidecar for groups. Every group rename,
+  move, duplicate and delete would have to keep one consistent. Hosts keep
+  their original name (`display_name`) and folder (`mobaxterm_folder`), and
+  the report lists every folder stored under a different name.
+- **Empty `SubRep=`:** MobaXterm writes this for sessions at the root of its
+  tree. Such sessions are imported under a `MobaXterm` parent group, with an
+  `empty_subrep` note, rather than dropped.
+- **Sections without `SubRep`:** their sessions are skipped and reported
+  (`orphan_session`).
+- **Existing parent target:** chosen from a list of the parent groups,
+  rather than through the move-host picker.
+- **Unlock:** the credential store is unlocked at start-up (master
+  password), so the wizard has no separate unlock step.
+- **Extra issue codes:** `duplicate_host`, `existing_host_skipped`,
+  `existing_host_renamed`, `existing_host_overwritten`, `empty_subrep`,
+  `folder_too_deep` and `invalid_field`.
+- **Rejected values:** host names, users and jump hosts starting with `-` are
+  rejected, so they can never be read as `ssh` options.
+
+### Verification
+
+- **`tests/test_mobaxterm_import.py`** (55 tests, no GTK):
+  - **Parser:** line endings, BOM, UTF-16, cp1252, NULs, truncated lines,
+    names with `=`, unknown types, orphans, duplicate sections, odd
+    `SubRep`s, depth 12 and over 32, Persian, RTL and zero-width names, long
+    lines.
+  - **File errors:** missing, folder, empty, binary, not MobaXterm,
+    permission, size cap.
+  - **Sanitizing and planning:** sanitizing and truncation, `General` /
+    `_hosts`, empty folders, unique siblings and aliases, the existing-parent
+    destination, selection, path traversal.
+  - **Hosts and usernames:** host name, port and IPv6 edge cases, the
+    jump-host formats and `build_ssh_command` compatibility, username
+    discovery.
+  - **Commit:** credential mapping (default, overrides, None with a literal or
+    a label), the round trip through `load_config_tree`, Skip / Rename /
+    Overwrite, an idempotent second run, clashes with existing files.
+  - **Rollback:** an injected `OSError` on the third write, a failed binding
+    save, a read-only target, a concurrent change, a deleted credential and a
+    cancel all leave the inventory byte-identical.
+  - **Bulk writes:** one refresh and one binding save with no per-host
+    writes, `bind_many`, the private report with no secrets.
+  - **Performance:** a synthetic 1,500-session, 800-folder, depth-12 export
+    is parsed, planned and committed well under the bound.
+- **`tests/test_gtkui_mobaxterm_import.py`** (10 tests): step gating, the
+  empty credential store, unticking folders (counts and usernames), the full
+  import and an idempotent re-run, creating a credential from a row, cancel
+  at every step, closing during the write (rolled back, single start), parse
+  errors, accessible names, entry points.
+- **Test data:** synthetic only (`tests/mxt_synthetic.py`, which also
+  generates large exports); no real export is in the repository.
+
 ## Phase 9b — one icon color: white on dark
 
 Amends Phase 9: only the icon colors change. Target sheet regenerated with

@@ -106,6 +106,7 @@ class SidebarView(Gtk.Box):
         self.on_delete_smart_group: Callable[[int], None] = lambda _i: None
         self.on_add_host: Callable[[], None] = lambda: None
         self.on_open_folder: Callable[[], None] = lambda: None
+        self.on_import_mobaxterm: Callable[[], None] = lambda: None
         self.on_escape_to_tree: Callable[[], None] = lambda: None
         self.on_bulk_connect: Callable[[], None] = lambda: None
         self.on_bulk_move: Callable[[], None] = lambda: None
@@ -141,11 +142,14 @@ class SidebarView(Gtk.Box):
         self.first_run = EmptyState(
             Icons.SERVER,
             _("No hosts yet"),
-            _("Add your first host, or open a folder that contains SSH config files."),
-            action_label=_("_Add host"),
-            on_action=lambda: self.on_add_host(),
-            secondary_label=_("_Open config folder…"),
-            on_secondary=lambda: self.on_open_folder(),
+            _("Import your sessions from MobaXterm, add your first host, or open a folder that contains SSH "
+              "config files."),
+            action_label=_("_Import from MobaXterm…"),
+            on_action=lambda: self.on_import_mobaxterm(),
+            secondary_label=_("_Add host"),
+            on_secondary=lambda: self.on_add_host(),
+            link_label=_("_Open config folder…"),
+            on_link=lambda: self.on_open_folder(),
             compact=True,
         )
         self.stack.add_named(self.first_run, TreePage.EMPTY.value)
