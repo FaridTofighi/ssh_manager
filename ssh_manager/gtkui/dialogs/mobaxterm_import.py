@@ -211,34 +211,34 @@ class MobaXtermImportDialog(BaseDialog):
 
     def _build_options_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
-        section = FormSection(_("Where to import"))
+        section = FormSection(_("Where to import"),
+                              _("Every MobaXterm folder becomes a group with the same name, at any depth."))
         self.new_parents_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(
-            None, _("Create a new parent group per _top-level folder"))
+            None, _("Create _top-level groups (one per top-level MobaXterm folder)"))
         self.existing_parent_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(
-            self.new_parents_radio, _("Import under an _existing parent group:"))
+            self.new_parents_radio, _("Import under an _existing group:"))
         section.add_widget(self.new_parents_radio)
         parent_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         parent_row.pack_start(self.existing_parent_radio, False, False, 0)
-        self.parent_combo = Gtk.ComboBoxText()
-        set_accessible_name(self.parent_combo, _("Existing parent group"))
+        self.parent_combo = Gtk.ComboBoxText()  # any group, shown as its path
+        set_accessible_name(self.parent_combo, _("Existing group"))
         parent_row.pack_start(self.parent_combo, False, False, 0)
         section.add_widget(parent_row)
         self.existing_parent_radio.connect("toggled", lambda *_a: self._sync_options())
         self.parent_combo.connect("changed", lambda *_a: self._sync_options())
 
         self.policy_combo = Gtk.ComboBoxText()
-        for policy, label in ((ConflictPolicy.SKIP, _("Skip the existing host")),
-                              (ConflictPolicy.RENAME, _("Rename the imported host (add a suffix)")),
-                              (ConflictPolicy.OVERWRITE, _("Overwrite the existing host"))):
+        for policy, label in ((ConflictPolicy.SKIP, _("Skip it (leave the existing host as it is)")),
+                              (ConflictPolicy.RENAME, _("Import a copy named “… (2)”")),
+                              (ConflictPolicy.OVERWRITE, _("Update the existing host"))):
             self.policy_combo.append(policy.value, label)
         self.policy_combo.set_active_id(ConflictPolicy.SKIP.value)
-        section.add(_("When a host already _exists"), self.policy_combo)
-        self.empty_check = Gtk.CheckButton.new_with_mnemonic(_("Also create empty _folders"))
-        self.duplicates_check = Gtk.CheckButton.new_with_mnemonic(
-            _("Skip hosts whose host name, port and user already exist in the target _group"))
-        self.duplicates_check.set_active(True)
-        section.add_widget(self.empty_check)
-        section.add_widget(self.duplicates_check)
+        set_accessible_name(self.policy_combo, _("When a host already exists"))
+        section.add(_("When a host already _exists"), self.policy_combo,
+                    help_text=_("The same host: same group, host name, port and user. Importing the same file "
+                                "again with “Skip” changes nothing."))
+        self.skip_empty_check = Gtk.CheckButton.new_with_mnemonic(_("Skip _empty folders"))
+        section.add_widget(self.skip_empty_check)
         page.pack_start(section, False, False, 0)
 
         tree_section = FormSection(_("Folders to import"), _("Untick a folder to leave it and everything in it out."))
@@ -382,7 +382,7 @@ class MobaXtermImportDialog(BaseDialog):
             Step.FILE: self.result is not None,
             Step.OPTIONS: self._selected_host_count() > 0 and self._options_valid(),
             Step.CREDENTIALS: all(row.decided for row in self._rows.values()),
-            Step.REVIEW: self.job is not None and self.job.host_count > 0,
+            Step.REVIEW: self.job is not None and not self.job.nothing_to_do and not self.job.plan.destination_missing,
             Step.RESULT: self.report is not None,
         }[self.step]
         self.next_button.set_sensitive(ready and not busy)
@@ -503,9 +503,10 @@ class MobaXtermImportDialog(BaseDialog):
     # ========================================================= step 2: options
     def _enter_options(self) -> None:
         self.parent_combo.remove_all()
-        for name in sorted(self._manager.tree, key=str.lower):
-            self.parent_combo.append(name, name)
-        has_parents = bool(self._manager.tree)
+        existing = ExistingInventory.from_manager(self._manager)
+        for path in sorted(existing.paths.values(), key=lambda p: [part.casefold() for part in p]):
+            self.parent_combo.append("\x1f".join(path), " / ".join(path))
+        has_parents = bool(existing.paths)
         self.existing_parent_radio.set_sensitive(has_parents)
         if self.parent_combo.get_active() < 0 and has_parents:
             self.parent_combo.set_active(0)
@@ -594,13 +595,12 @@ class MobaXtermImportDialog(BaseDialog):
         self._sync_buttons()
 
     def options(self) -> ImportOptions:
-        existing = self.existing_parent_radio.get_active() and self.parent_combo.get_active_id()
+        target = self.parent_combo.get_active_id() if self.existing_parent_radio.get_active() else None
         return ImportOptions(
-            destination=Destination.EXISTING_PARENT if existing else Destination.NEW_PARENTS,
-            target_parent=self.parent_combo.get_active_id() or "" if existing else "",
+            destination=Destination.EXISTING_GROUP if target else Destination.NEW_TOP_LEVEL,
+            target_group=tuple(target.split("\x1f")) if target else (),
             conflict_policy=ConflictPolicy(self.policy_combo.get_active_id() or ConflictPolicy.SKIP.value),
-            create_empty_folders=self.empty_check.get_active(),
-            skip_duplicates=self.duplicates_check.get_active(),
+            skip_empty_folders=self.skip_empty_check.get_active(),
         )
 
     # ===================================================== step 3: credentials
@@ -786,8 +786,8 @@ class MobaXtermImportDialog(BaseDialog):
         job, plan = self.job, self.plan
         self.report_text = render_report(plan, job, source_name=self.source_path.name if self.source_path else "")
         self.review_text.get_buffer().set_text(self.report_text)
-        self.review_summary.set_text(_("{parents} parent groups, {groups} child groups, {hosts} hosts to import.").format(
-            parents=len({w.parent for w in job.writes}), groups=len(job.writes), hosts=job.host_count))
+        self.review_summary.set_text(_("{groups} groups ({new} new), {hosts} hosts to import.").format(
+            groups=len(plan.groups), new=len(plan.new_groups), hosts=job.host_count))
         notes = []
         skipped = sum(plan.skipped_types.values())
         if skipped:
@@ -798,19 +798,22 @@ class MobaXtermImportDialog(BaseDialog):
         if problems:
             notes.append(ngettext("{n} session could not be read.", "{n} sessions could not be read.",
                                   problems).format(n=problems))
-        if job.skipped_existing or job.skipped_duplicates:
-            notes.append(_("Already there: {n} skipped.").format(n=job.skipped_existing + job.skipped_duplicates))
+        if job.skipped_existing:
+            notes.append(_("Already there: {n} skipped.").format(n=job.skipped_existing))
+        if job.renamed:
+            notes.append(ngettext("{n} host is imported as a numbered copy.", "{n} hosts are imported as numbered copies.",
+                                  job.renamed).format(n=job.renamed))
         if job.overwritten:
-            notes.append(ngettext("{n} existing host will be overwritten.", "{n} existing hosts will be overwritten.",
+            notes.append(ngettext("{n} existing host will be updated.", "{n} existing hosts will be updated.",
                                   job.overwritten).format(n=job.overwritten))
-        renamed = sum(1 for i in plan.issues if i.code in (IssueCode.NAME_SANITIZED, IssueCode.NAME_TRUNCATED))
-        if renamed:
-            notes.append(ngettext("{n} name was adjusted (the original is kept with each host).",
-                                  "{n} names were adjusted (the originals are kept with each host).",
-                                  renamed).format(n=renamed))
+        if plan.renamed:
+            notes.append(ngettext("{n} name had to change (see the report).", "{n} names had to change (see the report).",
+                                  len(plan.renamed)).format(n=len(plan.renamed)))
+        if plan.destination_missing:
+            notes.insert(0, _("The destination group no longer exists; go back and choose it again."))
         notes.append(_("Hosts mapped to None keep a real username from the file; a bracketed MobaXterm credential "
                        "label is dropped."))
-        if job.host_count == 0:
+        if job.nothing_to_do:
             notes.insert(0, _("Nothing new to import."))
         self.review_notes.set_text(" ".join(notes))
         self._go(Step.REVIEW)

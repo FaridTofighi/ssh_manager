@@ -29,7 +29,7 @@ class ImportWizardTests(unittest.TestCase):
     def setUp(self) -> None:
         from tests.gtk_window_fixture import WindowSandbox
 
-        self.sandbox = WindowSandbox()
+        self.sandbox = WindowSandbox(store=True)  # imports go into the app inventory
         self.win = self.sandbox.window
         self.tmp = tempfile.TemporaryDirectory()
         self.export = Path(self.tmp.name) / "acme.mxtsessions"
@@ -54,10 +54,11 @@ class ImportWizardTests(unittest.TestCase):
         return dialog
 
     def snapshot(self):
-        base = Path(self.win.manager.base_dir)
-        files = {str(p.relative_to(base)): p.read_bytes() for p in sorted(base.rglob("*")) if p.is_file()}
+        conn = self.win.manager.store.conn
+        rows = (conn.execute("SELECT * FROM groups ORDER BY id").fetchall()
+                + conn.execute("SELECT * FROM hosts ORDER BY id").fetchall())
         creds = self.win._credential_store
-        return files, dict(creds._bindings), [c.id for c in creds.list()]
+        return [tuple(r) for r in rows], dict(creds._bindings), [c.id for c in creds.list()]
 
     def next(self, dialog) -> None:
         from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT
@@ -140,10 +141,10 @@ class ImportWizardTests(unittest.TestCase):
         self.assertIs(dialog.step, Step.RESULT)
         self.assertIs(dialog.report.status, ImportStatus.SUCCESS)
         tree = self.win.manager.tree
-        self.assertIn("Team-A/Servers", tree["Acme"])
-        web = next(h for h in tree["Acme"]["Team-A/Servers"].hosts if h.alias == "web-01")
+        self.assertIn("Team A/Servers", tree["Acme"])
+        web = next(h for h in tree["Acme"]["Team A/Servers"].hosts if h.alias == "web 01")
         self.assertEqual(web.options["user"], "ops")
-        self.assertEqual(self.win._credential_store.binding_for_host("Acme::Team-A/Servers::web-01"), ops.id)
+        self.assertEqual(self.win._credential_store.binding_for_host(web.id), ops.id)
         self.assertTrue(dialog.report.log_path.exists())
         self.assertEqual(oct(dialog.report.log_path.stat().st_mode & 0o777), "0o600")
         self.assertNotIn("pw", dialog.report.log_path.read_text().split())
@@ -221,15 +222,16 @@ class ImportWizardTests(unittest.TestCase):
         dialog.default_combo.set_active_id(ops.id)
         self.next(dialog)
         gate = threading.Event()
-        real_write = __import__("ssh_manager.config", fromlist=["write_text_atomic"]).write_text_atomic
+        store = self.win.manager.store
+        real_bulk = store.add_hosts_bulk
 
-        def slow_write(path, text, **kwargs):
-            gate.wait(5)
-            return real_write(path, text, **kwargs)
+        def slow_bulk(hosts):
+            gate.wait(5)  # still inside the import transaction
+            return real_bulk(hosts)
 
         closed = []
         dialog.connect("response", lambda _d, response: closed.append(response))
-        with mock.patch("ssh_manager.config.write_text_atomic", side_effect=slow_write):
+        with mock.patch.object(store, "add_hosts_bulk", side_effect=slow_bulk):
             self.assertTrue(dialog.start_import())
             self.assertFalse(dialog.start_import())  # a second click does nothing
             self.assertTrue(dialog.busy)

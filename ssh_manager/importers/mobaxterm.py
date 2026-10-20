@@ -1,17 +1,20 @@
-"""Import MobaXterm session exports (``*.mxtsessions``) — pure Python, no GTK.
+"""Import MobaXterm session exports (``*.mxtsessions``) into the app inventory — pure Python, no GTK.
 
 Pipeline (each step is a pure function except :func:`commit`):
 
 1. :func:`parse_mxtsessions` — bytes/path → :class:`MxtParseResult` (folders,
    sessions, problems). Hand-rolled, line-based, O(n); never raises on bad
    lines (fatal file-level problems raise :class:`MxtFileError`).
-2. :func:`plan_import` — folders → parent/child groups, SSH sessions → hosts
-   (sanitized, de-duplicated, collision-free), plus the usernames found.
+2. :func:`plan_import` — every MobaXterm folder becomes a group 1:1 (any
+   depth; a group holds hosts and subgroups), SSH sessions become hosts; names
+   are kept verbatim; plus the usernames found.
 3. :func:`apply_credential_mapping` — the user's username → credential choices
-   (+ conflict policy against the existing inventory) → :class:`ImportJob`.
-4. :func:`commit` — one bulk write (``ConfigManager.import_groups``), one
-   ``CredentialStore.bind_many``, one ``refresh()``; rolls everything back on
-   any failure.
+   and the conflict policy against the existing inventory → :class:`ImportJob`.
+4. :func:`commit` — **one** ``InventoryStore.transaction()``: groups
+   (``create_group_path``), hosts (``add_hosts_bulk``), updates, and
+   ``CredentialStore.bind_many`` by the new host ids; one refresh. Any error or
+   a cancel rolls the transaction back: nothing changes. Nothing is written to
+   disk outside the database.
 
 Nothing here logs, prints or stores raw session lines; issues carry line
 numbers, codes and the (user-visible) folder/session names only. Passwords are
@@ -28,7 +31,6 @@ the jump host, its port and user.
 from __future__ import annotations
 
 import codecs
-import hashlib
 import re
 import time
 import unicodedata
@@ -37,15 +39,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-from ..config import GroupConfig, HostEntry, ImportCancelled, ImportConflictError, ImportWriteError
+from ..config import HostEntry
 
 # ----------------------------------------------------------------- constants
 MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_LINE_CHARS = 64 * 1024
 MAX_DEPTH = 32
-MAX_SEGMENT = 64
-ROOT_CHILD_NAME = "General"  # child group for sessions directly in a top-level folder
-OWN_HOSTS_CHILD_NAME = "_hosts"  # a folder's own hosts when it also has subfolders
+MAX_NAME = 128  # the store's limit for group names and host aliases
+UNNAMED = "Unnamed"
+SLASH_REPLACEMENT = "\u2215"  # DIVISION SLASH: '/' separates group paths in the store
 EMPTY_SUBREP_PARENT = "MobaXterm"  # folder for sessions of a section with an empty SubRep
 NO_USERNAME = ""  # username-entry key for sessions without a username
 SSH_TYPE = 0
@@ -53,12 +55,11 @@ TYPE_NAMES = {
     0: "SSH", 1: "Telnet", 2: "Rsh", 3: "Xdmcp", 4: "RDP", 5: "VNC", 6: "FTP", 7: "SFTP",
     8: "Serial", 9: "Mosh", 10: "AWS S3", 11: "WSL", 12: "Shell",
 }
-_HIDDEN_SUFFIXES = (".bak", ".tmp", ".swp", ".pyc")  # load_config_tree skips these names
 _SESSION_VALUE = re.compile(r"^\s*#(\d+)#(\d+)%(.*)$", re.DOTALL)
 _SECTION = re.compile(r"^\s*\[(.*)\]\s*$")
 _BOOKMARKS = re.compile(r"^bookmarks(_\d+)?$", re.IGNORECASE)
-_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
-_DASHES = re.compile(r"-{2,}")
+_LINE_BREAKS = re.compile(r"[\r\n\u0085\u2028\u2029]+")
+_BIDI_OVERRIDES = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|_[A-Za-z]+_\\)|\\")
 _KEY_FILE = re.compile(r"(?:\.(?:pem|ppk|key)$)|(?:[\\/]\.ssh[\\/][^\\/]+$)", re.IGNORECASE)
 _USER_OK = re.compile(r"^[^\s@:/\x00-\x1f\x7f]+$")
@@ -77,22 +78,21 @@ class IssueCode(str, Enum):
     INVALID_HOSTNAME = "invalid_hostname"
     INVALID_PORT = "invalid_port"
     INVALID_GATEWAY = "invalid_gateway"
-    NAME_SANITIZED = "name_sanitized"
-    NAME_TRUNCATED = "name_truncated"
-    ALIAS_DEDUPLICATED = "alias_deduplicated"
-    FOLDER_COLLISION_RESOLVED = "folder_collision_resolved"
+    INVALID_FIELD = "invalid_field"
     WINDOWS_KEY_PATH = "windows_key_path"
-    DUPLICATE_EXISTING_HOST = "duplicate_existing_host"
-    DUPLICATE_HOST = "duplicate_host"
+    SLASH_REPLACED = "slash_replaced"
+    NAME_TRUNCATED = "name_truncated"
+    NAME_EMPTY = "name_empty"
+    NAME_DEDUPLICATED = "name_deduplicated"
     EXISTING_HOST_SKIPPED = "existing_host_skipped"
     EXISTING_HOST_RENAMED = "existing_host_renamed"
     EXISTING_HOST_OVERWRITTEN = "existing_host_overwritten"
+    DESTINATION_MISSING = "destination_missing"
     ORPHAN_SESSION = "orphan_session"
     DUPLICATE_FOLDER_SECTION = "duplicate_folder_section"
     EMPTY_SUBREP = "empty_subrep"
     FOLDER_TOO_DEEP = "folder_too_deep"
     LINE_TOO_LONG = "line_too_long"
-    INVALID_FIELD = "invalid_field"
 
 
 @dataclass(frozen=True)
@@ -308,13 +308,9 @@ def parse_mxtsessions(source: Union[bytes, bytearray, Path, str]) -> MxtParseRes
     return MxtParseResult(list(folders.values()), sessions, problems, encoding, len(data), len(lines))
 
 
-# ----------------------------------------------------------------- sanitizing
-def _short_hash(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()[:4]
-
-
+# ---------------------------------------------------------------------- names
 def clean_label(text: str) -> str:
-    """Original name for display/metadata: no control, format (bidi, zero-width) chars or line breaks."""
+    """Original name for issue messages: no control, format (bidi, zero-width) chars or line breaks."""
 
     kept = "".join(" " if ch in "\t\r\n" else ch for ch in unicodedata.normalize("NFC", text or "")
                    if unicodedata.category(ch) not in ("Cc", "Cf") or ch in "\t\r\n")
@@ -330,59 +326,60 @@ def _folder_text(path: Sequence[str]) -> str:
     return "\\".join(clean_label(part) for part in path)
 
 
-def sanitize_name(original: str) -> Tuple[str, List[IssueCode]]:
-    """ASCII-only on-disk name ``[A-Za-z0-9._-]`` (≤ 64 chars) and the issues it raised.
+def verbatim_name(original: str) -> Tuple[str, List["IssueCode"]]:
+    """The store name for a MobaXterm folder/session name, kept as written.
 
-    Empty results come back as ``""`` (the caller numbers them ``unnamed-<n>``).
+    NFC; line breaks (and tabs) become one space; control and bidi-override
+    characters are dropped; trimmed. Spaces, ``+``, parentheses, Persian text
+    and zero-width joiners stay. ``/`` becomes ``∕`` (U+2215) and names longer
+    than 128 characters are cut — both reported. ``""`` means "unnamed" (the
+    caller numbers it).
     """
 
-    text = unicodedata.normalize("NFC", original or "").strip()
-    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    name = _DASHES.sub("-", _UNSAFE.sub("-", ascii_text)).strip("-.")
+    text = _LINE_BREAKS.sub(" ", unicodedata.normalize("NFC", original or "")).replace("\t", " ")
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cc" and ch not in _BIDI_OVERRIDES).strip()
     issues: List[IssueCode] = []
-    if name in (".", ".."):
-        name = ""
-    lowered = name.lower()
-    if lowered.endswith(_HIDDEN_SUFFIXES):
-        name = name[: name.rfind(".")] + "-" + name[name.rfind(".") + 1:]
-    if lowered == "__pycache__":
-        name = "pycache"
-    if len(name) > MAX_SEGMENT:
-        name = name[: MAX_SEGMENT - 5].rstrip("-.") + "-" + _short_hash(original)
+    if "/" in text:
+        text = text.replace("/", SLASH_REPLACEMENT)
+        issues.append(IssueCode.SLASH_REPLACED)
+    if len(text) > MAX_NAME:
+        text = text[:MAX_NAME].rstrip()
         issues.append(IssueCode.NAME_TRUNCATED)
-    if name != text:
-        issues.append(IssueCode.NAME_SANITIZED)
-    return name, issues
-
-
-MAX_DISPLAY = 128
-
-
-def display_name(original: str) -> Tuple[str, List[IssueCode]]:
-    """Name for the app store: the original text, readable (no control/bidi chars, no '/'), ≤ 128 chars."""
-
-    text = clean_label(original).replace("/", "-").strip()
-    issues: List[IssueCode] = []
-    if len(text) > MAX_DISPLAY:
-        text = text[: MAX_DISPLAY - 5].rstrip() + "-" + _short_hash(original)
-        issues.append(IssueCode.NAME_TRUNCATED)
-    if text != (original or "").strip():
-        issues.append(IssueCode.NAME_SANITIZED)
     return text, issues
 
 
-def _unique(name: str, taken: Set[str], limit: int = MAX_SEGMENT) -> str:
-    """``name``, else ``name-2``, ``name-3``… (case-insensitive against ``taken``, at most ``limit`` chars)."""
+def unique_name(name: str, taken: Set[str]) -> str:
+    """``name``, else ``name (2)``, ``name (3)``… unique case-insensitively against ``taken`` (≤ 128 chars)."""
 
     if name.casefold() not in taken:
         return name
     counter = 2
     while True:
-        suffix = f"-{counter}"
-        candidate = name[: limit - len(suffix)] + suffix
+        suffix = f" ({counter})"
+        candidate = name[: MAX_NAME - len(suffix)].rstrip() + suffix
         if candidate.casefold() not in taken:
             return candidate
         counter += 1
+
+
+class _Namer:
+    """Names in one scope (a group's subgroups, or its hosts): verbatim, numbered when empty, unique."""
+
+    def __init__(self, taken: Iterable[str] = ()) -> None:
+        self.taken: Set[str] = {name.casefold() for name in taken}
+        self.unnamed = 0
+
+    def name(self, original: str) -> Tuple[str, List["IssueCode"]]:
+        text, issues = verbatim_name(original)
+        if not text:
+            self.unnamed += 1
+            text = UNNAMED if self.unnamed == 1 else f"{UNNAMED} {self.unnamed}"
+            issues.append(IssueCode.NAME_EMPTY)
+        unique = unique_name(text, self.taken)
+        if unique != text:
+            issues.append(IssueCode.NAME_DEDUPLICATED)
+        self.taken.add(unique.casefold())
+        return unique, issues
 
 
 # ------------------------------------------------------------------ SSH fields
@@ -450,7 +447,8 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
         port = 22
     user_raw = session.field(2)
     user_key, reference = normalize_username(user_raw)
-    if user_key and (user_key.startswith("-") or any(ord(ch) < 32 or ord(ch) == 127 for ch in user_key)):
+    if user_key and (user_key.startswith("-") or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127
+                                                     for ch in user_key)):
         issues.append(ImportIssue(Severity.WARNING, IssueCode.INVALID_FIELD,
                                   f"'{label}' has an unusable username; it is treated as empty.", session.line))
         user_key, reference = "", False
@@ -509,8 +507,8 @@ def _identity_file(session: MxtSession, label: str, issues: List[ImportIssue]) -
 
 # ------------------------------------------------------------------ planning
 class Destination(str, Enum):
-    NEW_PARENTS = "new_parents"  # one parent group per top-level folder
-    EXISTING_PARENT = "existing_parent"  # under one existing parent; the top folder becomes a child prefix
+    NEW_TOP_LEVEL = "new_top_level"  # every top-level MobaXterm folder becomes a top-level group
+    EXISTING_GROUP = "existing_group"  # the whole MobaXterm tree goes beneath one existing group
 
 
 class ConflictPolicy(str, Enum):
@@ -521,39 +519,73 @@ class ConflictPolicy(str, Enum):
 
 @dataclass(frozen=True)
 class ImportOptions:
-    destination: Destination = Destination.NEW_PARENTS
-    target_parent: str = ""
+    destination: Destination = Destination.NEW_TOP_LEVEL
+    target_group: Tuple[str, ...] = ()  # EXISTING_GROUP: the group path (as shown in the tree)
     conflict_policy: ConflictPolicy = ConflictPolicy.SKIP
-    create_empty_folders: bool = False
-    skip_duplicates: bool = True
+    skip_empty_folders: bool = False  # empty MobaXterm folders are created by default
+
+
+@dataclass(frozen=True)
+class ExistingHost:
+    id: str
+    alias: str
+    hostname: str
+    port: Optional[int]
+    user: str
+
+
+def _cf(path: Sequence[str]) -> Tuple[str, ...]:
+    return tuple(unicodedata.normalize("NFC", part).strip().casefold() for part in path)
 
 
 @dataclass
 class ExistingInventory:
-    """What is already on disk under ``base_dir`` (captured when planning)."""
+    """The store's groups and hosts when the import was planned (paths compared case-insensitively)."""
 
-    base_dir: Path
-    tree: Mapping[str, Mapping[str, GroupConfig]] = field(default_factory=dict)
-    disk: bool = True  # False: plan without looking at the disk (tests, previews of a bare file)
-    display_names: bool = False  # app store: keep readable names, groups hold hosts and subgroups
+    group_ids: Dict[Tuple[str, ...], str] = field(default_factory=dict)  # folded path → group id
+    paths: Dict[Tuple[str, ...], Tuple[str, ...]] = field(default_factory=dict)  # folded path → stored names
+    hosts: Dict[str, List[ExistingHost]] = field(default_factory=dict)  # group id → hosts
+
+    @classmethod
+    def from_store(cls, store) -> "ExistingInventory":
+        groups = {g.id: g for g in store.list_groups()}
+        cache: Dict[str, Tuple[str, ...]] = {}
+
+        def path_of(group_id: str) -> Tuple[str, ...]:
+            if group_id not in cache:
+                group = groups[group_id]
+                cache[group_id] = (path_of(group.parent_id) if group.parent_id in groups else ()) + (group.name,)
+            return cache[group_id]
+
+        inventory = cls()
+        for group_id in groups:
+            path = path_of(group_id)
+            inventory.group_ids[_cf(path)] = group_id
+            inventory.paths[_cf(path)] = path
+        for host in store.list_hosts():
+            inventory.hosts.setdefault(host.group_id, []).append(
+                ExistingHost(host.id, host.alias, host.hostname, host.port, host.user))
+        return inventory
 
     @classmethod
     def from_manager(cls, manager) -> "ExistingInventory":
-        if getattr(manager, "allows_display_names", False):
-            return cls(Path(manager.base_dir), manager.tree, disk=False, display_names=True)
-        return cls(Path(manager.base_dir), manager.tree)
+        store = getattr(manager, "store", None)
+        if store is None:
+            raise TypeError("The MobaXterm import needs the SSH Manager inventory (InventoryStore).")
+        return cls.from_store(store)
 
-    def path(self, parent: str, child: Sequence[str] = ()) -> Path:
-        return self.base_dir.joinpath(parent, *child)
+    def group_id(self, path: Sequence[str]) -> Optional[str]:
+        return self.group_ids.get(_cf(path))
 
-    def exists(self, parent: str, child: Sequence[str] = ()) -> bool:
-        return self.disk and self.path(parent, child).exists()
+    def stored_name(self, parent: Sequence[str], name: str) -> Optional[str]:
+        """The existing sibling's spelling of ``name`` under ``parent``, if there is one."""
 
-    def is_file(self, parent: str, child: Sequence[str] = ()) -> bool:
-        return self.disk and self.path(parent, child).is_file()
+        path = self.paths.get(_cf(tuple(parent) + (name,)))
+        return path[-1] if path else None
 
-    def is_dir(self, parent: str, child: Sequence[str] = ()) -> bool:
-        return self.disk and self.path(parent, child).is_dir()
+    def hosts_in(self, path: Sequence[str]) -> List[ExistingHost]:
+        group_id = self.group_id(path)
+        return list(self.hosts.get(group_id, [])) if group_id else []
 
 
 @dataclass
@@ -571,22 +603,17 @@ class FolderNode:
 class PlannedHost:
     session: MxtSession
     target: SshTarget
-    folder: Tuple[str, ...]
-    parent: str
-    child: str
+    folder: Tuple[str, ...]  # MobaXterm folder path (as written)
+    group: Tuple[str, ...]  # store group path
     alias: str
     original_name: str
-
-    @property
-    def host_key(self) -> str:
-        return f"{self.parent}::{self.child}::{self.alias}"
 
 
 @dataclass
 class PlannedGroup:
-    parent: str
-    child: str
-    folder: Tuple[str, ...]
+    path: Tuple[str, ...]  # store group path
+    folder: Tuple[str, ...]  # MobaXterm folder path (() for an implicit / mount ancestor)
+    exists: bool
     hosts: List[PlannedHost] = field(default_factory=list)
 
 
@@ -609,17 +636,22 @@ class ImportPlan:
     usernames: List[UsernameEntry]
     folder_tree: List[FolderNode]
     skipped_types: Dict[int, int]
-    renamed_folders: List[Tuple[str, str]]  # (original folder path, parent/child target)
+    renamed: List[Tuple[str, str]]  # (MobaXterm name/path, stored name/path) where they differ
     existing: ExistingInventory
     excluded_hosts: int = 0
+    destination_missing: bool = False
 
     @property
-    def parents(self) -> List[str]:
+    def top_level(self) -> List[str]:
         seen: List[str] = []
         for group in self.groups:
-            if group.parent not in seen:
-                seen.append(group.parent)
+            if group.path and group.path[0] not in seen:
+                seen.append(group.path[0])
         return seen
+
+    @property
+    def new_groups(self) -> List[Tuple[str, ...]]:
+        return [g.path for g in self.groups if not g.exists]
 
 
 def build_folder_tree(result: MxtParseResult) -> List[FolderNode]:
@@ -660,14 +692,15 @@ def plan_import(
     excluded_folders: Iterable[Tuple[str, ...]] = (),
     existing: Optional[ExistingInventory] = None,
 ) -> ImportPlan:
-    """Map folders → parent/child groups and SSH sessions → hosts (no credentials yet).
+    """Map MobaXterm folders 1:1 to groups and SSH sessions to hosts (no credentials yet).
 
-    Deterministic: the same input always gives the same names (section order,
-    then line order). ``excluded_folders`` drops those folders and their
-    descendants (the wizard's unticked branches).
+    Deterministic (file order). Names are verbatim; only names the store would
+    reject are changed (``/``, length, empty) and only collisions it forbids are
+    numbered (``Name (2)``) — both reported. A folder whose name matches an
+    existing group at the same place (case-insensitively) is merged into it.
     """
 
-    existing = existing or ExistingInventory(Path("."), disk=False)
+    existing = existing or ExistingInventory()
     excluded = {tuple(path) for path in excluded_folders}
     issues: List[ImportIssue] = list(result.problems)
     skipped_types: Dict[int, int] = {}
@@ -688,133 +721,76 @@ def plan_import(
         issues.append(ImportIssue(Severity.INFO, IssueCode.UNSUPPORTED_TYPE,
                                   f"{count} {name} session(s) skipped (only SSH is imported)."))
 
-    # Which folders are needed: those with hosts (or every selected one with the empty-folder option).
-    host_folders: Dict[Tuple[str, ...], List[Tuple[MxtSession, SshTarget]]] = {}
-    for session, target in targets:
-        host_folders.setdefault(session.folder, []).append((session, target))
+    # Folders to create: every selected folder (and implicit ancestors), or only those leading to hosts.
     order: Dict[Tuple[str, ...], int] = {}
-    for index, folder in enumerate(result.folders):
-        order.setdefault(folder.path, index)
+    for folder in result.folders:
+        for depth in range(1, len(folder.path) + 1):
+            order.setdefault(folder.path[:depth], len(order))
     for session, _target in targets:
-        order.setdefault(session.folder, len(order) + 10**6)
-    needed: Set[Tuple[str, ...]] = set(host_folders)
-    if options.create_empty_folders:
-        needed |= {f.path for f in result.folders if not _excluded(f.path, excluded)}
-    with_descendants: Set[Tuple[str, ...]] = set()
-    for path in needed:
-        for depth in range(1, len(path)):
-            with_descendants.add(path[:depth])
+        for depth in range(1, len(session.folder) + 1):
+            order.setdefault(session.folder[:depth], len(order))
+    with_hosts = {session.folder for session, _target in targets}
+    leading_to_hosts = {folder[:depth] for folder in with_hosts for depth in range(1, len(folder) + 1)}
+    folders = [path for path in order if path and not _excluded(path, excluded)
+               and (not options.skip_empty_folders or path in leading_to_hosts)]
+    folders.sort(key=lambda path: (order[path], len(path)))
 
-    # Sanitize every needed path top-down; siblings stay unique (case-insensitive).
-    seg_map: Dict[Tuple[str, ...], str] = {}
-    siblings: Dict[Tuple[str, ...], Set[str]] = {}  # sanitized parent path → names taken
-    unnamed = [0]
-    renamed: List[Tuple[str, str]] = []
-    display = existing.display_names
-    reserved = set() if display else {OWN_HOSTS_CHILD_NAME.lower()}
-
-    def mapped(path: Tuple[str, ...]) -> Tuple[str, ...]:
-        out: List[str] = []
-        for depth in range(1, len(path) + 1):
-            prefix = path[:depth]
-            if prefix not in seg_map:
-                name, codes = display_name(prefix[-1]) if display else sanitize_name(prefix[-1])
-                if not name:
-                    unnamed[0] += 1
-                    name = f"unnamed-{unnamed[0]}"
-                parent_key = tuple(out)
-                taken = siblings.setdefault(parent_key, set(reserved) if depth > 1 else set())
-                unique = _unique(name, taken, MAX_DISPLAY if display else MAX_SEGMENT)
-                if unique != name:
-                    codes = codes + [IssueCode.FOLDER_COLLISION_RESOLVED]
-                taken.add(unique.casefold())
-                seg_map[prefix] = unique
-                for code in codes:
-                    issues.append(ImportIssue(Severity.INFO, code,
-                                              f"Folder '{_folder_text(prefix)}' is stored as '{'/'.join(out + [unique])}'."))
-            out.append(seg_map[prefix])
-        return tuple(out)
-
-    for path in sorted(needed, key=lambda p: (order.get(p, 10**9), p)):
-        mapped(path)  # every sibling name is known before any target is chosen
-
-    def group_target(path: Tuple[str, ...]) -> Tuple[str, List[str]]:
-        segs = list(mapped(path))
-        if options.destination is Destination.EXISTING_PARENT and options.target_parent:
-            parent, child = options.target_parent, segs
+    # The mount point.
+    base: Tuple[str, ...] = ()
+    destination_missing = False
+    if options.destination is Destination.EXISTING_GROUP:
+        stored = existing.paths.get(_cf(options.target_group))
+        if stored is None:
+            destination_missing = True
+            issues.append(ImportIssue(Severity.ERROR, IssueCode.DESTINATION_MISSING,
+                                      "The destination group does not exist any more; choose it again."))
+            base = tuple(options.target_group)
         else:
-            parent, child = segs[0], segs[1:]
-        if display:  # the app store: a group holds its own hosts and its subgroups
-            return parent, child
-        if not child:
-            taken = siblings.get((segs[0],), set()) if options.destination is Destination.NEW_PARENTS else set()
-            child = [OWN_HOSTS_CHILD_NAME if ROOT_CHILD_NAME.lower() in taken else ROOT_CHILD_NAME]
-        elif path in with_descendants:
-            child = child + [OWN_HOSTS_CHILD_NAME]
-        return parent, child
+            base = stored
 
-    # Resolve clashes with what already exists on disk (a file where a folder is needed, …).
-    def resolve_disk(parent: str, child: List[str], folder: Tuple[str, ...]) -> Tuple[str, List[str]]:
-        if existing.exists(parent) and not existing.is_dir(parent):
-            new_parent = _unique(parent, {parent.lower()})
-            issues.append(ImportIssue(Severity.WARNING, IssueCode.FOLDER_COLLISION_RESOLVED,
-                                      f"'{parent}' exists and is not a folder; using '{new_parent}'."))
-            parent = new_parent
-        for depth in range(1, len(child)):
-            prefix = child[:depth]
-            if existing.is_file(parent, prefix):
-                renamed_seg = _unique(prefix[-1], {prefix[-1].lower()})
-                issues.append(ImportIssue(Severity.WARNING, IssueCode.FOLDER_COLLISION_RESOLVED,
-                                          f"'{parent}/{'/'.join(prefix)}' is an existing group file; "
-                                          f"the folder is stored as '{renamed_seg}'."))
-                child = prefix[:-1] + [renamed_seg] + child[depth:]
-        if existing.is_dir(parent, child):
-            issues.append(ImportIssue(Severity.INFO, IssueCode.FOLDER_COLLISION_RESOLVED,
-                                      f"'{parent}/{'/'.join(child)}' is an existing folder; "
-                                      f"its hosts go to '{OWN_HOSTS_CHILD_NAME}'."))
-            child = child + [OWN_HOSTS_CHILD_NAME]
-        return parent, child
-
-    groups: Dict[Tuple[str, str], PlannedGroup] = {}
-    folder_target: Dict[Tuple[str, ...], Tuple[str, str]] = {}
-    for path in sorted(needed, key=lambda p: (order.get(p, 10**9), p)):
-        if not path:
-            continue
-        parent, child = resolve_disk(*group_target(path), path)
-        key = folder_target[path] = (parent, "/".join(child))
-        group = groups.get(key)
-        if group is None:
-            group = groups[key] = PlannedGroup(parent, key[1], path)
-            original = _folder_text(path)
-            target_text = "/".join(part for part in (parent, key[1]) if part)
-            if original.replace("\\", "/") != target_text:
-                renamed.append((original, target_text))
-
-    # Hosts: sanitized, unique per group (case-insensitive), deterministic order.
-    hosts: List[PlannedHost] = []
-    taken_aliases: Dict[Tuple[str, str], Set[str]] = {}
-    for session, target in sorted(targets, key=lambda item: item[0].line):
-        key = folder_target[session.folder]
-        group = groups[key]
-        name, codes = display_name(session.name) if display else sanitize_name(session.name)
-        if not name:
-            unnamed[0] += 1
-            name = f"unnamed-{unnamed[0]}"
-        taken = taken_aliases.setdefault(key, set())
-        alias = _unique(name, taken, MAX_DISPLAY if display else MAX_SEGMENT)
-        taken.add(alias.casefold())
-        label = _safe_label(session.name)
-        if alias != name:
-            codes = codes + [IssueCode.ALIAS_DEDUPLICATED]
+    # Folder → group path, top-down; names verbatim, merged with existing siblings, unique among imported ones.
+    mapped: Dict[Tuple[str, ...], Tuple[str, ...]] = {(): base}
+    namers: Dict[Tuple[str, ...], _Namer] = {}
+    renamed: List[Tuple[str, str]] = []
+    groups: Dict[Tuple[str, ...], PlannedGroup] = {}
+    for depth in range(1, len(base) + 1):  # the mount point and its ancestors already exist
+        groups[_cf(base[:depth])] = PlannedGroup(base[:depth], (), not destination_missing)
+    for path in folders:
+        parent = mapped[path[:-1]]
+        namer = namers.setdefault(_cf(parent), _Namer())
+        name, codes = namer.name(path[-1])
+        existing_name = existing.stored_name(parent, name)
+        if existing_name is not None and not codes:
+            name = existing_name  # merge into the existing group (its spelling)
+        group_path = parent + (name,)
+        mapped[path] = group_path
         for code in codes:
-            issues.append(ImportIssue(Severity.INFO, code, f"Session '{label}' is stored as '{alias}'.", session.line))
-        planned = PlannedHost(session, target, session.folder, key[0], key[1], alias, clean_label(session.name))
-        group.hosts.append(planned)
+            issues.append(ImportIssue(Severity.INFO, code,
+                                      f"Folder '{_folder_text(path)}' is stored as '{name}'."))
+        if codes:
+            renamed.append((_folder_text(path), " / ".join(group_path)))
+        if _cf(group_path) not in groups:
+            groups[_cf(group_path)] = PlannedGroup(group_path, path, existing.group_id(group_path) is not None)
+
+    # Sessions → hosts; aliases unique among the imported hosts of a group (clashes with existing ones: apply).
+    hosts: List[PlannedHost] = []
+    alias_namers: Dict[Tuple[str, ...], _Namer] = {}
+    for session, target in sorted(targets, key=lambda item: item[0].line):
+        group_path = mapped[session.folder]
+        namer = alias_namers.setdefault(_cf(group_path), _Namer())
+        alias, codes = namer.name(session.name)
+        for code in codes:
+            issues.append(ImportIssue(Severity.INFO, code,
+                                      f"Session '{_safe_label(session.name)}' is stored as '{alias}'.", session.line))
+        if codes:
+            renamed.append((_safe_label(session.name), alias))
+        planned = PlannedHost(session, target, session.folder, group_path, alias, clean_label(session.name))
+        groups[_cf(group_path)].hosts.append(planned)
         hosts.append(planned)
 
     usernames = discover_usernames(hosts)
     return ImportPlan(options, list(groups.values()), hosts, issues, usernames, build_folder_tree(result),
-                      skipped_types, renamed, existing, excluded_hosts)
+                      skipped_types, renamed, existing, excluded_hosts, destination_missing)
 
 
 def discover_usernames(hosts: Sequence[PlannedHost]) -> List[UsernameEntry]:
@@ -847,46 +823,33 @@ class CredentialMissingError(Exception):
     """A credential chosen in the wizard no longer exists."""
 
 
-@dataclass
-class GroupWrite:
-    parent: str
-    child: str
-    group: GroupConfig
-    existed: bool
-    new_hosts: int = 0
-    overwritten_hosts: int = 0
-    new_entries: List[HostEntry] = field(default_factory=list)  # app store: inserted
-    replaced: List[HostEntry] = field(default_factory=list)  # app store: overwrite (entry.id = existing host)
-
-
-@dataclass(frozen=True)
-class ImportedHost:
-    planned: PlannedHost
-    alias: str  # final alias (the Rename policy may change it)
-
-    @property
-    def host_key(self) -> str:
-        return f"{self.planned.parent}::{self.planned.child}::{self.alias}"
+class ImportCancelled(Exception):
+    """The user cancelled while the import was being written (the transaction is rolled back)."""
 
 
 @dataclass
 class ImportJob:
     plan: ImportPlan
-    writes: List[GroupWrite]
-    bindings: Dict[str, Optional[str]]  # host_key → credential id (None = unbind, for overwritten hosts)
-    expected: Dict[Path, Optional[bytes]]  # target file → bytes when planned (None = absent)
+    inserts: List[Tuple[Tuple[str, ...], HostEntry]]  # (group path, new host)
+    updates: List[HostEntry]  # Overwrite: entry.id = the matched existing host
+    bindings: List[Tuple[HostEntry, Optional[str]]]  # (host, credential id or None = unbind), ids known at commit
     issues: List[ImportIssue]
-    imported: List[ImportedHost]
     skipped_existing: int = 0
-    skipped_duplicates: int = 0
-    overwritten: int = 0
+    renamed: int = 0
     mapping: Dict[str, Optional[str]] = field(default_factory=dict)
     credential_names: Dict[str, str] = field(default_factory=dict)
-    entries: Dict[str, HostEntry] = field(default_factory=dict)  # planned host key → final entry
 
     @property
     def host_count(self) -> int:
-        return len(self.imported)
+        return len(self.inserts)
+
+    @property
+    def overwritten(self) -> int:
+        return len(self.updates)
+
+    @property
+    def nothing_to_do(self) -> bool:
+        return not self.inserts and not self.updates and not self.plan.new_groups
 
 
 def _host_user(host: PlannedHost, cred_id: Optional[str], credentials: Mapping[str, object]) -> Optional[str]:
@@ -900,7 +863,7 @@ def _host_user(host: PlannedHost, cred_id: Optional[str], credentials: Mapping[s
     return None  # a [label] is only MobaXterm's credential name
 
 
-def host_entry(host: PlannedHost, user: Optional[str], base_dir: Path) -> HostEntry:
+def host_entry(host: PlannedHost, user: Optional[str], alias: Optional[str] = None) -> HostEntry:
     options: Dict[str, str] = {"hostname": host.target.hostname, "port": str(host.target.port)}
     if user:
         options["user"] = user
@@ -908,18 +871,16 @@ def host_entry(host: PlannedHost, user: Optional[str], base_dir: Path) -> HostEn
         options["proxyjump"] = host.target.proxy_jump
     if host.target.identity_file:
         options["identityfile"] = host.target.identity_file
-    metadata: Dict[str, object] = {
-        "display_name": host.original_name or host.alias,
-        "imported_from": "mobaxterm",
-        "mobaxterm_folder": _folder_text(host.folder),
-    }
-    return HostEntry(alias=host.alias, options=options, metadata=metadata,
-                     source_file=base_dir.joinpath(host.parent, *host.child.split("/")),
-                     parent_group=host.parent, child_group=host.child)
+    metadata: Dict[str, object] = {"imported_from": "mobaxterm", "mobaxterm_folder": _folder_text(host.folder)}
+    group = host.group
+    return HostEntry(alias=alias or host.alias, options=options, metadata=metadata,
+                     parent_group=group[0] if group else "", child_group="/".join(group[1:]))
 
 
-def _identity(entry: HostEntry) -> Tuple[str, str, str]:
-    return ((entry.option("hostname", "host") or "").lower(), entry.option("port") or "22", entry.option("user") or "")
+def identity_key(hostname: str, port: Optional[int], user: Optional[str]) -> Tuple[str, int, str]:
+    """``(host name, port, user)`` as compared for "the same host" (case-insensitive name and user)."""
+
+    return ((hostname or "").strip().lower(), int(port or 22), (user or "").strip().casefold())
 
 
 def apply_credential_mapping(
@@ -929,103 +890,72 @@ def apply_credential_mapping(
     *,
     default: Optional[str] = None,
 ) -> ImportJob:
-    """Final hosts (``User`` from the chosen credential) and what to write/bind.
+    """Final hosts (``User`` from the chosen credential), matched against the existing inventory.
 
     ``mapping`` maps a username entry key (``""`` = no username) to a credential
-    id or ``None``; keys missing from it use ``default``. Applies the conflict
-    policy and the duplicate option against the existing inventory.
+    id or ``None``; keys missing from it use ``default``. A host matching an
+    existing one in the same group (host name, port, normalized user) is
+    skipped, imported as ``Alias (2)`` or overwrites it in place, per policy.
     """
 
-    base_dir = plan.existing.base_dir
-    issues: List[ImportIssue] = []
     resolved = {entry.key: mapping.get(entry.key, default) for entry in plan.usernames}
     for cred_id in resolved.values():
         if cred_id and cred_id not in credentials:
             raise CredentialMissingError(cred_id)
-    writes: List[GroupWrite] = []
-    entries: Dict[str, HostEntry] = {}
-    bindings: Dict[str, Optional[str]] = {}
-    expected: Dict[Path, Optional[bytes]] = {}
-    imported: List[ImportedHost] = []
-    skipped_existing = skipped_duplicates = overwritten = 0
+    issues: List[ImportIssue] = []
+    inserts: List[Tuple[Tuple[str, ...], HostEntry]] = []
+    updates: List[HostEntry] = []
+    bindings: List[Tuple[HostEntry, Optional[str]]] = []
+    skipped = renamed = 0
     policy = plan.options.conflict_policy
-
     for group in plan.groups:
-        path = base_dir.joinpath(group.parent, *group.child.split("/"))
-        existing_group = plan.existing.tree.get(group.parent, {}).get(group.child)
-        existed = path.is_file()
-        current: List[HostEntry] = [
-            HostEntry(h.alias, dict(h.options), dict(h.metadata), h.source_file, h.parent_group, h.child_group, h.id)
-            for h in (existing_group.hosts if existing_group is not None else [])
-        ]
-        if plan.existing.display_names:
-            existed = existing_group is not None or (group.parent in plan.existing.tree and not group.child)
-        by_alias = {h.alias.casefold(): index for index, h in enumerate(current)}
-        identities = {_identity(h) for h in current}
-        write = GroupWrite(group.parent, group.child, GroupConfig(group.parent, group.child, path, current), existed)
+        existing = plan.existing.hosts_in(group.path) if group.exists else []
+        by_identity: Dict[Tuple[str, int, str], List[ExistingHost]] = {}
+        for existing_host in existing:
+            by_identity.setdefault(identity_key(existing_host.hostname or existing_host.alias, existing_host.port,
+                                                existing_host.user), []).append(existing_host)
+        taken = {h.alias.casefold() for h in existing}
         for host in group.hosts:
             cred_id = resolved.get(host.target.user_key)
-            entry = host_entry(host, _host_user(host, cred_id, credentials), base_dir)
+            user = _host_user(host, cred_id, credentials)
             label = _safe_label(host.original_name)
-            if plan.options.skip_duplicates and _identity(entry) in identities:
-                skipped_duplicates += 1
-                issues.append(ImportIssue(Severity.INFO, IssueCode.DUPLICATE_EXISTING_HOST,
-                                          f"'{label}': the same host name, port and user is already in "
-                                          f"'{group.parent}/{group.child}'; skipped.", host.session.line))
-                continue
-            clash = by_alias.get(entry.alias.casefold())
-            if clash is not None:
+            candidates = by_identity.get(identity_key(host.target.hostname, host.target.port, user), [])
+            # The same host twice (an earlier "Rename" copy): prefer the one with this alias, else the first.
+            match = next((h for h in candidates if h.alias.casefold() == host.alias.casefold()),
+                         candidates[0] if candidates else None)
+            alias = host.alias
+            if match is not None:
                 if policy is ConflictPolicy.SKIP:
-                    skipped_existing += 1
+                    skipped += 1
                     issues.append(ImportIssue(Severity.INFO, IssueCode.EXISTING_HOST_SKIPPED,
-                                              f"'{entry.alias}' already exists in '{group.parent}/{group.child}'; "
-                                              "skipped.", host.session.line))
+                                              f"'{label}' already exists as '{match.alias}' in "
+                                              f"'{' / '.join(group.path)}'; skipped.", host.session.line))
                     continue
-                if policy is ConflictPolicy.RENAME:
-                    new_alias = _unique(entry.alias, set(by_alias),
-                                        MAX_DISPLAY if plan.existing.display_names else MAX_SEGMENT)
-                    issues.append(ImportIssue(Severity.INFO, IssueCode.EXISTING_HOST_RENAMED,
-                                              f"'{entry.alias}' already exists; imported as '{new_alias}'.",
-                                              host.session.line))
-                    entry.alias = new_alias
-                    current.append(entry)
-                    by_alias[new_alias.casefold()] = len(current) - 1
-                    write.new_hosts += 1
-                    write.new_entries.append(entry)
-                else:
-                    entry.id = current[clash].id  # the existing host keeps its id (and bindings follow)
-                    current[clash] = entry
-                    write.replaced.append(entry)
-                    overwritten += 1
-                    write.overwritten_hosts += 1
+                if policy is ConflictPolicy.OVERWRITE:
+                    entry = host_entry(host, user, alias=match.alias)  # the alias stays
+                    entry.id = match.id
+                    updates.append(entry)
+                    bindings.append((entry, cred_id))  # None drops an old binding
                     issues.append(ImportIssue(Severity.WARNING, IssueCode.EXISTING_HOST_OVERWRITTEN,
-                                              f"'{entry.alias}' in '{group.parent}/{group.child}' is replaced.",
+                                              f"'{match.alias}' in '{' / '.join(group.path)}' is updated.",
                                               host.session.line))
-            else:
-                current.append(entry)
-                by_alias[entry.alias.casefold()] = len(current) - 1
-                write.new_hosts += 1
-                write.new_entries.append(entry)
-            identities.add(_identity(entry))
-            final = ImportedHost(host, entry.alias)
-            imported.append(final)
-            entries[final.host_key] = entry
-            overwrote = clash is not None and policy is ConflictPolicy.OVERWRITE
-            if cred_id or overwrote:  # an overwritten host drops its old binding when mapped to None
-                bindings[final.host_key] = cred_id
-        current.sort(key=lambda h: h.alias.lower())
-        changed = write.new_hosts or write.overwritten_hosts or (not existed and plan.options.create_empty_folders)
-        if changed:
-            writes.append(write)
-            if plan.existing.display_names:
-                continue  # the store checks concurrency itself (transactions)
-            try:
-                expected[path] = path.read_bytes() if existed else None
-            except OSError:
-                expected[path] = None
+                    continue
+                alias = unique_name(alias, taken | {alias.casefold()})  # Rename: always a numbered copy
+                renamed += 1
+                issues.append(ImportIssue(Severity.INFO, IssueCode.EXISTING_HOST_RENAMED,
+                                          f"'{label}' already exists; imported as '{alias}'.", host.session.line))
+            elif alias.casefold() in taken:
+                alias = unique_name(alias, taken)
+                issues.append(ImportIssue(Severity.INFO, IssueCode.NAME_DEDUPLICATED,
+                                          f"Another host is already called '{host.alias}' here; '{label}' is "
+                                          f"stored as '{alias}'.", host.session.line))
+            taken.add(alias.casefold())
+            entry = host_entry(host, user, alias=alias)
+            inserts.append((group.path, entry))
+            if cred_id:
+                bindings.append((entry, cred_id))
     names = {cid: getattr(credentials[cid], "name", cid) for cid in resolved.values() if cid}
-    return ImportJob(plan, writes, bindings, expected, issues, imported, skipped_existing, skipped_duplicates,
-                     overwritten, dict(resolved), names, entries)
+    return ImportJob(plan, inserts, updates, bindings, issues, skipped, renamed, dict(resolved), names)
 
 
 # --------------------------------------------------------------------- commit
@@ -1042,8 +972,11 @@ class ImportReport:
     message: str
     hosts: int = 0
     groups: int = 0
-    parents: List[str] = field(default_factory=list)
+    parents: List[str] = field(default_factory=list)  # top-level groups touched (to select afterwards)
     log_path: Optional[Path] = None
+
+
+FAILED_PREFIX = "Import failed, no changes were made"
 
 
 def commit(
@@ -1054,103 +987,71 @@ def commit(
     progress: Optional[Callable[[int, int], None]] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
 ) -> ImportReport:
-    """Write the job (one bulk write, one binding save, one refresh) or change nothing.
+    """Write the job in **one** store transaction (groups, hosts, updates, bindings) or change nothing.
 
-    Credential ids are re-checked right before writing. Any failure — a write
-    error, a target changed on disk, a credential deleted meanwhile, a failed
-    binding save, a cancel — rolls back every file and binding.
+    Credential ids are re-checked right before writing; inside the transaction
+    the destination group must still exist. Any error or a cancel rolls back.
+    One ``refresh()`` at the end.
     """
 
-    parents = []
-    for write in job.writes:
-        if write.parent not in parents:
-            parents.append(write.parent)
-    if not job.writes:
+    plan = job.plan
+    parents = plan.top_level
+    if job.nothing_to_do:
         return ImportReport(ImportStatus.NOTHING, "Nothing new to import: every host already exists.")
-    missing = sorted({cid for cid in job.bindings.values() if cid and credential_store.get(cid) is None})
-    if missing:
-        return ImportReport(ImportStatus.FAILED,
-                            "Import failed, no changes were made: a chosen credential was deleted meanwhile.")
-    if getattr(manager, "store", None) is not None:
-        return _commit_to_store(job, manager, credential_store, parents, progress, should_cancel)
-    try:
-        txn = manager.import_groups([w.group for w in job.writes], expected=job.expected,
-                                    progress=progress, should_cancel=should_cancel)
-    except ImportCancelled:
-        manager.refresh()
-        return ImportReport(ImportStatus.CANCELLED, "Import cancelled, no changes were made.")
-    except ImportConflictError as exc:
-        return ImportReport(ImportStatus.FAILED, f"Import failed, no changes were made: {exc}")
-    except ImportWriteError as exc:
-        manager.refresh()
-        return ImportReport(ImportStatus.FAILED, f"Import failed, no changes were made: {exc}")
-    try:
-        if should_cancel is not None and should_cancel():
-            raise ImportCancelled("Import cancelled.")
-        credential_store.bind_many(job.bindings)
-    except ImportCancelled:
-        txn.rollback()
-        manager.refresh()
-        return ImportReport(ImportStatus.CANCELLED, "Import cancelled, no changes were made.")
-    except Exception as exc:  # SecureStoreError, KeyError (credential gone) …
-        problems = txn.rollback()
-        manager.refresh()
-        detail = " Some files could not be restored." if problems else ""
-        return ImportReport(ImportStatus.FAILED,
-                            f"Import failed, no changes were made: credential bindings could not be saved "
-                            f"({type(exc).__name__}).{detail}")
-    manager.refresh()
-    return ImportReport(ImportStatus.SUCCESS, f"Imported {job.host_count} host(s) into {len(job.writes)} group(s).",
-                        job.host_count, len(job.writes), parents)
-
-
-def _commit_to_store(job: ImportJob, manager, credential_store, parents: List[str], progress, should_cancel
-                     ) -> ImportReport:
-    """App store: one transaction for groups, hosts and bindings (a failure or cancel changes nothing)."""
-
-    from ..inventory.store import InventoryError
-
+    if plan.destination_missing:
+        return ImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: the destination group does not exist.")
+    if any(cid and credential_store.get(cid) is None for _entry, cid in job.bindings):
+        return ImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: a chosen credential was deleted meanwhile.")
     store = manager.store
-    total = len(job.writes)
-    if job.overwritten:
+    if job.updates:
         manager.backup_before("before-import-overwrite")
+    total = len(plan.groups) + 1
+
+    def check_cancel() -> None:
+        if should_cancel is not None and should_cancel():
+            raise ImportCancelled()
+
+    from ..inventory.manager import host_columns
+
     try:
         with store.transaction():
-            for index, write in enumerate(job.writes):
-                if should_cancel is not None and should_cancel():
-                    raise ImportCancelled("Import cancelled.")
-                group_id = manager.create_group_path(write.parent, write.child)
-                for entry in write.replaced:
-                    from ..inventory.manager import host_columns
-
-                    hostname, port, user, rest = host_columns(entry.options)
-                    store.update_host(entry.id, alias=entry.alias, hostname=hostname, port=port, user=user,
-                                      options=rest, metadata=dict(entry.metadata))
-                rows = store.add_hosts_bulk(manager._new_host(group_id, entry) for entry in write.new_entries)
-                for entry, row in zip(write.new_entries, rows):
-                    entry.id = row.id
+            group_ids: Dict[Tuple[str, ...], str] = {}
+            if plan.options.destination is Destination.EXISTING_GROUP:
+                target_id = plan.existing.group_id(plan.options.target_group)
+                if target_id is None or store.get_group(target_id) is None:
+                    raise LookupError("the destination group was deleted meanwhile")
+            for index, group in enumerate(plan.groups):
+                check_cancel()
+                group_ids[_cf(group.path)] = store.create_group_path(list(group.path)).id
                 if progress is not None:
                     progress(index + 1, total)
-            if should_cancel is not None and should_cancel():
-                raise ImportCancelled("Import cancelled.")
-            bindings = {job.entries[key].id: cid for key, cid in job.bindings.items()
-                        if key in job.entries and job.entries[key].id}
-            if bindings:
-                credential_store.bind_many(bindings)  # a failure rolls the database back too
+            check_cancel()
+            new_rows = store.add_hosts_bulk(manager._new_host(group_ids[_cf(path)], entry) for path, entry in job.inserts)
+            for (_path, entry), row in zip(job.inserts, new_rows):
+                entry.id = row.id
+            for entry in job.updates:
+                hostname, port, user, rest = host_columns(entry.options)
+                store.update_host(entry.id, hostname=hostname, port=port, user=user, options=rest,
+                                  metadata=dict(entry.metadata))
+            binding_map = {entry.id: cid for entry, cid in job.bindings if entry.id}
+            if binding_map:
+                credential_store.bind_many(binding_map)  # a failure rolls the database back as well
+            check_cancel()
+            if progress is not None:
+                progress(total, total)
     except ImportCancelled:
         manager.refresh()
         return ImportReport(ImportStatus.CANCELLED, "Import cancelled, no changes were made.")
-    except InventoryError as exc:
+    except Exception as exc:  # sqlite3.Error, InventoryError, SecureStoreError, KeyError, LookupError…
         manager.refresh()
-        return ImportReport(ImportStatus.FAILED, f"Import failed, no changes were made: {exc}")
-    except Exception as exc:  # SecureStoreError, KeyError (credential gone) …
-        manager.refresh()
-        return ImportReport(ImportStatus.FAILED,
-                            f"Import failed, no changes were made: credential bindings could not be saved "
-                            f"({type(exc).__name__}).")
+        return ImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: {exc}" if str(exc) else FAILED_PREFIX)
     manager.refresh()
-    return ImportReport(ImportStatus.SUCCESS, f"Imported {job.host_count} host(s) into {total} group(s).",
-                        job.host_count, total, parents)
+    new_groups = len(plan.new_groups)
+    message = f"Imported {job.host_count} host(s)"
+    if job.overwritten:
+        message += f", updated {job.overwritten}"
+    message += f"; {new_groups} new group(s)."
+    return ImportReport(ImportStatus.SUCCESS, message, job.host_count, new_groups, parents)
 
 
 # --------------------------------------------------------------------- report
@@ -1164,13 +1065,13 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
     if report is not None:
         lines += ["", f"Result: {report.status.value} — {report.message}"]
     lines += ["", "Summary",
-              f"  Parent groups: {len(plan.parents)}",
-              f"  Child groups: {len(plan.groups)}",
+              f"  Top-level groups: {len(plan.top_level)}",
+              f"  Groups: {len(plan.groups)} ({len(plan.new_groups)} new)",
               f"  SSH hosts planned: {len(plan.hosts)}"]
     if job is not None:
         lines += [f"  Hosts to import: {job.host_count}",
                   f"  Skipped (already exist): {job.skipped_existing}",
-                  f"  Skipped (same host, port and user): {job.skipped_duplicates}",
+                  f"  Imported as a numbered copy: {job.renamed}",
                   f"  Overwritten: {job.overwritten}"]
     if plan.excluded_hosts:
         lines.append(f"  Excluded by unticked folders: {plan.excluded_hosts}")
@@ -1189,9 +1090,9 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
             target = job.credential_names.get(cred_id, cred_id) if cred_id else "None"
             label = entry.key or "(no username)"
             lines.append(f"  {label} ({entry.count} host(s)) → {target}")
-    if plan.renamed_folders:
-        lines += ["", "Folders stored under a different name (original → group)"]
-        lines += [f"  {original} → {target}" for original, target in plan.renamed_folders]
+    if plan.renamed:
+        lines += ["", "Names stored differently (MobaXterm → SSH Manager)"]
+        lines += [f"  {original} → {stored}" for original, stored in plan.renamed]
     if all_issues:
         lines += ["", "Details"]
         for issue in all_issues:

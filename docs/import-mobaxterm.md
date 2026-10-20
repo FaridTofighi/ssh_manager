@@ -2,8 +2,8 @@
 
 App menu → **Import → From MobaXterm (.mxtsessions)…**, or **Import from
 MobaXterm…** in the empty sidebar. A five-step wizard reads a MobaXterm
-sessions export and turns its folders and SSH sessions into SSH Manager
-groups and hosts. Nothing is written until you press **Import**. Nothing in
+sessions export and copies its folders and SSH sessions into the SSH Manager
+inventory as groups and hosts. Nothing is written until you press **Import**. Nothing in
 the file is executed, connected to or resolved (no DNS, no ping).
 
 Code: `ssh_manager/importers/mobaxterm.py` (pure Python: parse, plan, map
@@ -70,51 +70,48 @@ behind jump= #109#0%10.0.0.13%22%bob%%-1%-1%%10.0.0.254%22%alice%…
 
 ## How folders and sessions are mapped
 
-SSH Manager stores a parent group as a directory and a child group as a file
-inside it (a child may be a nested path such as `a/b/c`). Hosts are `Host`
-stanzas inside child-group files.
+The import writes into the SSH Manager inventory (`docs/inventory-store.md`).
+There, groups nest to any depth and a group can hold both hosts and
+subgroups, so the MobaXterm tree is copied **1:1**.
 
 | MobaXterm | SSH Manager |
 |---|---|
-| Top-level folder `S1` | Parent group `S1` (one per top-level folder) |
-| Folder `S1\S2\…\Sn` | Child group `S2/…/Sn` |
-| Sessions directly in `S1` | Child group `General` (`_hosts` if a real subfolder is called General) |
-| A folder with its own sessions **and** subfolders | Its sessions go to `…/Sn/_hosts`, because a file and a folder cannot share a name |
-| Container folders (no SSH sessions beneath) | Not created, unless **Also create empty folders** is ticked |
-| Session | Host, with `hostname`, `port`, `user` (below), `proxyjump` and optionally `identityfile` |
-| Session name, folder path | `# meta display_name=…`, `# meta mobaxterm_folder=…`, `# meta imported_from=mobaxterm` |
+| Folder `S1\S2\…\Sn` | Group path `S1 / S2 / … / Sn` (any depth) |
+| Top-level folder `S1` | Top-level group `S1`; sessions directly in it are its hosts |
+| A folder with sessions **and** subfolders | One group holding both |
+| Empty container folders | Created as empty groups (**Skip empty folders** leaves them out) |
+| Session | Host: alias = session name, `hostname`, `port`, `user` (see below), `proxyjump`, optionally `identityfile`; metadata `imported_from=mobaxterm` and `mobaxterm_folder=<original SubRep>` |
 
-- **Existing parent group:** with **Import under an existing parent group**,
-  the top-level folder becomes the first segment of each child path.
-- **Names on disk:**
-  - Group names and aliases use only `A–Z a–z 0–9 . _ -`. Other characters
-    become `-`, accents are transliterated, and leading or trailing `-` / `.`
-    are stripped.
-  - `.` and `..` are never used.
-  - Names are capped at 64 characters, ending in a stable 4-character hash of
-    the original.
-  - Names that would be hidden by the loader (`.bak`, `.tmp`, …) are adjusted,
-    and empty results become `unnamed-<n>`.
-- **Uniqueness:** siblings and aliases in one group are kept unique
-  case-insensitively (`-2`, `-3`, …). Naming is deterministic: the same file
-  always gives the same names.
-- **Original names:** each host keeps its original session name in
-  `display_name`. Groups have no display-name storage. A sidecar file would
-  have to follow every rename, move, duplicate and delete of groups, so the
-  import report lists every folder that was stored under a different name
-  instead, and each host records its original folder path in
-  `mobaxterm_folder`.
+- **Under an existing group:** with **Import under an existing group…** (any
+  group, chosen by its path), the whole MobaXterm tree is mounted beneath that
+  group.
+- **Names are kept verbatim:**
+  - NFC normalisation.
+  - Line breaks and tabs become a space, control and bidi-override characters
+    are dropped, and the result is trimmed.
+  - Spaces, `+`, parentheses, accents, Persian text and zero-width joiners
+    stay as they are.
+- **Only what the store cannot hold changes,** and every change is reported:
+  - `/` becomes `∕` (U+2215), because `/` separates group paths;
+  - names longer than 128 characters are cut at 128;
+  - empty names become `Unnamed`, `Unnamed 2`, ….
+- **Uniqueness, only where the store requires it:**
+  - **Collisions:** sibling groups and the hosts of one group are unique
+    case-insensitively. A collision gets ` (2)`, ` (3)` (file order), and is
+    reported.
+  - **Same names elsewhere:** sessions with the same name in different folders
+    are not renamed.
+  - **Existing groups:** a folder whose name matches an existing group at the
+    same place is merged into it, which is what makes re-imports idempotent.
+- **Hosts that cannot be imported:** an empty or invalid host name skips the
+  session and reports it. The alias is free text now, so it cannot stand in
+  for a host name.
 - **Jump hosts:** a jump host becomes `ProxyJump [user@]host[:port]`, which
-  the SSH command builder passes as `-J`. The port is left out when it is
-  22, and IPv6 hosts are bracketed. An invalid jump host is dropped, with a
-  warning.
-- **Safety:**
-  - Host names, users and jump hosts that start with `-` are rejected, so
-    they can never become `ssh` options.
-  - Every target path is checked to lie inside the inventory folder before
-    anything is written. A file with `..\..\etc` or `C:\…` folders cannot
-    write outside it.
-  - Folders nested deeper than 32 levels are skipped.
+  `build_ssh_command` passes as `-J`. The port is left out when it is 22, and
+  IPv6 hosts are bracketed. An invalid jump host is dropped, with a warning.
+- **Safety:** host names, users and jump hosts that start with `-` are
+  rejected, so they can never become `ssh` options. Folders nested deeper than
+  32 levels are skipped.
 
 ## The Credentials step
 
@@ -142,39 +139,46 @@ The credential store is unlocked at application start (master password), so
 the wizard never needs a separate unlock. Credentials are re-checked right
 before writing: one deleted meanwhile aborts the import with no changes.
 
-## Conflicts, duplicates, re-runs
+## Conflicts and re-runs
 
-- **When a host already exists:**
-  - **Skip** (default) keeps the existing host.
-  - **Rename** imports the new one with a `-2` suffix.
-  - **Overwrite** replaces it, after a confirmation that shows how many hosts
-    are affected.
-- **Skip duplicates:** with **Skip hosts whose host name, port and user
-  already exist in the target group** (on by default), such hosts are not
-  imported again, even under another alias.
-- **Existing groups:** hosts are added to an existing group; its other hosts
-  are kept.
-- **Clashes on disk:** a group file where the import needs a folder gets a
-  suffixed folder, and a folder where it needs a file puts the hosts in
-  `_hosts`.
-- **Re-runs:** importing the same file twice with the defaults adds nothing,
-  and the wizard says so.
+An imported host **is the same host** as an existing one when it has the same
+destination group, host name, port and user (host name and user compared
+case-insensitively). For such hosts:
+
+- **Skip** (default) leaves the existing host untouched.
+- **Import a copy named “… (2)”** adds a numbered copy.
+- **Update the existing host** overwrites its options, user, metadata and
+  credential binding **in place**. The host keeps its alias and its id, and
+  the wizard asks for confirmation, showing the count. A database backup is
+  made first. If an earlier copy has the same host, the one with the same
+  alias is updated.
+
+A different user means a different host: it is added, never merged. A
+different host that already uses the alias gets ` (2)`.
+
+Importing the same file twice with the defaults changes nothing; the tests
+compare row counts and a content hash.
 
 ## Atomicity
 
-The whole import is planned in memory first. Then
-`ConfigManager.import_groups` writes each child-group file **once**,
-atomically, and the credential bindings are saved once. The tree is
-refreshed once.
+The whole import is planned in memory. The commit is **one**
+`InventoryStore.transaction()`, and nothing is written to disk outside the
+database. Inside it:
 
-- **Concurrent edits:** if any target file changed on disk since the import
-  was prepared, nothing is written.
-- **Failures:** a write error (disk full, permissions), a failed binding
-  save, a deleted credential or a cancel restores overwritten files byte for
-  byte and deletes the files and folders the import created. The result is
-  "Import failed, no changes were made".
-- **Busy wizard:** while writing, the wizard cannot be closed. Cancel or Esc
-  cancels the write, rolls it back, then closes.
+- **Destination:** the destination group must still exist (another window may
+  have deleted it).
+- **Writes:** all groups are created (`create_group_path`), all hosts are
+  inserted (`add_hosts_bulk`) and the overwritten ones updated.
+- **Bindings:** the credential bindings are saved with `bind_many`, keyed by
+  the **new host ids**.
+
+Credentials are re-checked right before writing. The tree is refreshed once.
+
+**Rollback is the transaction.** A database error, a failed binding save, a
+problem found late, a deleted credential or destination, or a cancel all
+leave the inventory exactly as it was: "Import failed, no changes were made".
+While writing, the wizard cannot be closed. Cancel or Esc cancels the write,
+the transaction rolls back, then the wizard closes.
 
 ## The report
 
@@ -198,5 +202,6 @@ The application log records only the outcome and counts.
 | `unsupported_type` in the report | Non-SSH sessions (RDP, FTP, …) are counted, not imported. |
 | `empty_hostname` / `invalid_hostname` | The session has no usable host name; fix it in MobaXterm or add the host by hand. |
 | `windows_key_path` | The key path points to Windows; edit the host and choose the key again. |
-| `folder_collision_resolved` | A folder was stored under another name to avoid a clash; the report shows where. |
-| "…changed since the import was prepared." | Another window or tool edited the inventory; run the import again. |
+| `slash_replaced` / `name_truncated` / `name_deduplicated` | A name had to change for the inventory; the report lists original → stored. |
+| `destination_missing` | The group chosen under “Import under an existing group” was deleted; choose it again. |
+| "The inventory is in use by another SSH Manager window" | Another instance is writing; try again in a moment. |

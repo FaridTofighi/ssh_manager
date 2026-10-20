@@ -6,6 +6,47 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## MobaXterm import, amended for the inventory store
+
+The import writes only into the app inventory: one transaction, no files.
+Details: `docs/import-mobaxterm.md`.
+
+- **Tree copied 1:1:** each MobaXterm folder becomes a group at any depth. A
+  folder with sessions and subfolders is one group. Empty folders are created
+  unless **Skip empty folders** is ticked. The flattening, `General` and
+  `_hosts` are gone.
+- **Names kept verbatim:**
+  - Spaces, `+`, parentheses and Persian stay as written.
+  - Only what the store rejects changes, and it is reported: `/` → `∕`, more
+    than 128 characters, empty → `Unnamed`.
+  - Collisions the store forbids get ` (2)`. The same name in different
+    folders is fine.
+  - The `display_name` metadata is no longer needed.
+- **Matching:** existing hosts are matched by group path, host name, port and
+  normalized user. Skip leaves them; Rename imports a ` (2)` copy; Overwrite
+  updates the matched host in place, keeping its alias, id and bindings, after
+  a backup.
+- **Re-runs:** a second import with the defaults changes nothing.
+- **Under an existing group:** mounts the whole tree beneath any group, picked
+  by its path. A destination deleted meanwhile fails the import cleanly.
+- **One transaction:** groups, hosts, updates and `bind_many` by the new host
+  ids, then one refresh. Any error or a cancel rolls it back.
+- **Removed:** `ConfigManager.import_groups` / `ImportTransaction` and the
+  ASCII sanitizer. The wizard refuses a folder inventory.
+- **Tests:**
+  - **Names and structure:** verbatim names survive a round trip; an 11-level
+    tree equals the source (path sets); folders with hosts and subfolders;
+    slash replacement and numbering.
+  - **Policies and re-runs:** an idempotent re-run (row counts and a content
+    hash); Skip, Rename and Overwrite, where Overwrite keeps ids and picks the
+    alias match among copies; the existing-group destination, and one deleted
+    meanwhile.
+  - **Bindings and rollback:** bindings by the new id survive a later rename
+    and move; rollback on an injected failure, a failed binding save and a
+    cancel; exactly one `BEGIN`/`COMMIT`.
+  - **Performance:** 1,500 hosts in 800 folders take under 2 s.
+  - **Wizard:** the wizard tests run on the store.
+
 ## The app-owned inventory (and the "Base path is a file" fix)
 
 Details: `docs/inventory-store.md`. Screenshots:

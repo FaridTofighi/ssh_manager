@@ -34,6 +34,13 @@ class MobaXtermImportController:
         if self.dialog is not None:  # one wizard at a time
             self.dialog.present()
             return
+        if getattr(self.win.manager, "store", None) is None:
+            self.win._notify_info(_("MobaXterm imports go into the SSH Manager inventory; this window shows a "
+                                    "folder inventory."))
+            return
+        if self.win.manager.read_only:
+            self.win.ensure_editable_inventory()  # explains why
+            return
         self.dialog = MobaXtermImportDialog(self.win, self.win.manager, self.win._credential_store,
                                             report_dir=import_report_dir())
         try:

@@ -1192,9 +1192,27 @@ def run(out_dir: Path) -> None:
 
             export = _SANDBOX / "acme.mxtsessions"
             export.write_bytes(ACME.encode("utf-8"))
-            import_base = _SANDBOX / f"import-inventory-{theme}"  # fresh per theme: the scene imports into it
-            _write_inventory(import_base, populated=True)
-            window = _make_window(app, import_base, dark)
+            import json
+
+            from ssh_manager.gtk_app import SSHManagerWindow
+            from ssh_manager.inventory.manager import StoreConfigManager
+            from ssh_manager.inventory.openssh import commit_openssh_import, plan_openssh_import
+            from ssh_manager.inventory.store import InventoryStore
+            from ssh_manager.settings import AppSettings
+
+            # A fresh app inventory per theme (the scene imports into it), seeded with the sample hosts.
+            folder = _SANDBOX / f"import-store-{theme}"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / ".ui_state.json").write_text(json.dumps({"prefer_dark": dark, "density": snapshot_density()}),
+                                                   encoding="utf-8")
+            seed = _SANDBOX / f"import-seed-{theme}"
+            _write_inventory(seed, populated=True)
+            manager = StoreConfigManager(InventoryStore(folder / "inventory.db"))
+            commit_openssh_import(plan_openssh_import([seed]), manager)
+            settings = AppSettings.load()
+            settings.master_password_disabled = True
+            window = SSHManagerWindow(app, manager.base_dir, settings, manager=manager)
+            window.host_page.latency.enabled = False
             store = window._credential_store
             ops = next((c for c in store.list() if c.username == "ops"), None) or store.add("Ops account", "ops", "pw")
             dialog = MobaXtermImportDialog(window, window.manager, store, report_dir=_SANDBOX / "imports",

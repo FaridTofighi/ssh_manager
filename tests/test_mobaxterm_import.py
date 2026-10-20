@@ -1,6 +1,7 @@
-"""MobaXterm import: parser, planner, usernames, credential mapping, commit and rollback (no GTK)."""
+"""MobaXterm import into the app inventory: parser, planner, usernames, credentials, commit (no GTK)."""
 
 import codecs
+import hashlib
 import os
 import stat
 import tempfile
@@ -9,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import ConfigManager, ImportTransaction, load_config_tree
+from ssh_manager.config import HostEntry
 from ssh_manager.credentials import CredentialStore
 from ssh_manager.importers.mobaxterm import (
     NO_USERNAME,
@@ -29,9 +30,12 @@ from ssh_manager.importers.mobaxterm import (
     parse_mxtsessions,
     plan_import,
     render_report,
-    sanitize_name,
     save_report,
+    unique_name,
+    verbatim_name,
 )
+from ssh_manager.inventory.manager import StoreConfigManager
+from ssh_manager.inventory.store import InventoryStore
 from ssh_manager.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
 from ssh_manager.ssh_command import build_ssh_command
 from tests.mxt_synthetic import ACME, make_export, session_value
@@ -170,7 +174,8 @@ class ParserTests(unittest.TestCase):
         result = parse_mxtsessions(export(("Acme", [name + "=" + session_value("10.0.0.1")])))
         plan = plan_import(result)
         host = plan.hosts[0]
-        self.assertRegex(host.alias, r"^unnamed-\d+$")
+        # Kept verbatim: only the bidi override (U+202E) goes; RLM/ZWSP are format characters the store allows.
+        self.assertEqual(host.alias, "\u200f\u0633\u0631\u0648\u0631\u200b \u0627\u0635\u0644\u06cc")
         self.assertEqual(host.original_name, "\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc")
         self.assertEqual(clean_label("a\u200b\u202eb\tc\r\nd"), "ab c d")
 
@@ -228,74 +233,86 @@ class FileErrorTests(unittest.TestCase):
         self.assertEqual(len(parse_mxtsessions(path).sessions), 11)
 
 
-class SanitizeTests(unittest.TestCase):
-    def test_rules(self) -> None:
-        cases = {
-            "web 01": "web-01", "00 - zone": "00-zone", "+ Ops - keep running": "Ops-keep-running",
-            "0- legacy unused": "0-legacy-unused", "  ..hidden..  ": "hidden", "..": "", ".": "", "C:": "C",
-            "#comment": "comment", "Caf\u00e9": "Cafe", "a/b\\c": "a-b-c", "x.bak": "x-bak", "__pycache__": "pycache",
-        }
-        for original, expected in cases.items():
+class NameTests(unittest.TestCase):
+    def test_verbatim(self) -> None:
+        for original in ("web 01", "00 - zone", "+ Ops - keep running", "0- legacy unused", "db (primary)",
+                         "\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc", "\u0645\u06cc\u200c\u0647\u0627", "Caf\u00e9",
+                         "a.b_c-d", "x  y"):
             with self.subTest(original=original):
-                self.assertEqual(sanitize_name(original)[0], expected)
+                self.assertEqual(verbatim_name(original), (original, []))
 
-    def test_truncation_is_stable_and_unique(self) -> None:
-        a, issues = sanitize_name("x" * 100 + "-alpha")
-        b, _ = sanitize_name("x" * 100 + "-beta")
-        self.assertLessEqual(len(a), 64)
-        self.assertIn(IssueCode.NAME_TRUNCATED, issues)
-        self.assertNotEqual(a, b)
-        self.assertEqual(a, sanitize_name("x" * 100 + "-alpha")[0])
+    def test_only_what_the_store_rejects_changes(self) -> None:
+        self.assertEqual(verbatim_name("  a/b  "), ("a\u2215b", [IssueCode.SLASH_REPLACED]))
+        self.assertEqual(verbatim_name("line\r\nbreak\ttab")[0], "line break tab")
+        self.assertEqual(verbatim_name("rtl\u202eoverride\x01")[0], "rtloverride")
+        long, issues = verbatim_name("x" * 200)
+        self.assertEqual((len(long), issues), (128, [IssueCode.NAME_TRUNCATED]))
+        self.assertEqual(verbatim_name("   ")[0], "")
+
+    def test_numbering(self) -> None:
+        self.assertEqual(unique_name("web", {"web"}), "web (2)")
+        self.assertEqual(unique_name("Web", {"web", "web (2)"}), "Web (3)")
+        self.assertEqual(len(unique_name("x" * 128, {"x" * 128})), 128)
 
 
 class PlannerTests(unittest.TestCase):
     def plan(self, data=ACME.encode(), **kwargs):
         return plan_import(parse_mxtsessions(data), ImportOptions(**kwargs.pop("options", {})), **kwargs)
 
-    def test_depth_mapping_general_and_hosts_collision(self) -> None:
+    def paths(self, plan):
+        return [g.path for g in plan.groups]
+
+    def test_folders_map_one_to_one_with_verbatim_names(self) -> None:
         plan = self.plan()
-        self.assertEqual([(g.parent, g.child) for g in plan.groups], [
-            ("Acme", "General"), ("Acme", "Team-A/_hosts"), ("Acme", "Team-A/Servers"),
-            ("Acme", "Team-B/00-deep/level-4"), ("Beta", "General")])
-        self.assertEqual(plan.parents, ["Acme", "Beta"])
-        self.assertEqual(len(plan.hosts), 9)
+        self.assertEqual(self.paths(plan), [
+            ("Acme",), ("Acme", "Team A"), ("Acme", "Team A", "Servers"), ("Acme", "+ Empty container (old)"),
+            ("Acme", "Team B"), ("Acme", "Team B", "00 - deep"), ("Acme", "Team B", "00 - deep", "level 4"),
+            ("Beta",)])
+        hosts = {h.alias: h.group for h in plan.hosts}
+        self.assertEqual(hosts["acme bastion"], ("Acme",))  # directly in the top-level group
+        self.assertEqual(hosts["team-a-gw"], ("Acme", "Team A"))  # a folder with hosts and subfolders
+        self.assertEqual(hosts["db (primary)"], ("Acme", "Team A", "Servers"))
+        self.assertEqual(plan.top_level, ["Acme", "Beta"])
+        self.assertEqual(plan.renamed, [])
 
-    def test_general_taken_by_a_real_subfolder(self) -> None:
-        data = export(("Acme", ["root=" + session_value("10.0.0.1")]),
-                      ("Acme\\General", ["sub=" + session_value("10.0.0.2")]))
-        self.assertEqual([(g.child, [h.alias for h in g.hosts]) for g in self.plan(data).groups],
-                         [("_hosts", ["root"]), ("General", ["sub"])])
+    def test_skip_empty_folders_option(self) -> None:
+        plan = self.plan(options={"skip_empty_folders": True})
+        self.assertNotIn(("Acme", "+ Empty container (old)"), self.paths(plan))
+        self.assertIn(("Acme", "Team B"), self.paths(plan))  # leads to a host
 
-    def test_empty_folders_option(self) -> None:
-        self.assertNotIn("+-Empty-container-old", [g.child for g in self.plan().groups])
-        plan = self.plan(options={"create_empty_folders": True})
-        empty = [g for g in plan.groups if not g.hosts]
-        self.assertIn(("Acme", "Empty-container-old"), [(g.parent, g.child) for g in empty])
-        self.assertNotIn(("Acme", "Team-B"), [(g.parent, g.child) for g in plan.groups])  # containers: dirs only
+    def test_eleven_levels_equal_the_source_tree(self) -> None:
+        deep = [f"level {i} (+x)" for i in range(11)]
+        sections = [("\\".join(deep[: i + 1]), []) for i in range(11)]
+        sections[-1] = (sections[-1][0], ["leaf host=" + session_value("10.0.0.1")])
+        sections.append(("\\".join(deep[:4] + ["side branch"]), ["side=" + session_value("10.0.0.2")]))
+        result = parse_mxtsessions(export(*sections))
+        plan = self.plan(export(*sections))
+        source = {f.path for f in result.folders}
+        self.assertEqual(set(self.paths(plan)), source)
 
-    def test_sibling_names_stay_unique_case_insensitively(self) -> None:
-        data = export(("Acme\\a b", ["x=" + session_value("10.0.0.1")]), ("Acme\\a-b", ["y=" + session_value("10.0.0.2")]),
-                      ("Acme\\A B", ["z=" + session_value("10.0.0.3")]))
-        self.assertEqual([g.child for g in self.plan(data).groups], ["a-b", "a-b-2", "A-B-3"])
+    def test_slash_and_collisions(self) -> None:
+        data = export(("Acme\\a/b", ["x=" + session_value("10.0.0.1")]),
+                      ("Acme\\Team", ["web=" + session_value("10.0.0.2"), "WEB=" + session_value("10.0.0.3")]),
+                      ("Acme\\team", ["web=" + session_value("10.0.0.4")]),
+                      ("Other", ["web=" + session_value("10.0.0.5")]))
+        plan = self.plan(data)
+        self.assertIn(("Acme", "a\u2215b"), self.paths(plan))
+        self.assertIn(("Acme", "team (2)"), self.paths(plan))  # a different folder with the same name
+        aliases = [(h.group, h.alias) for h in plan.hosts]
+        self.assertIn((("Acme", "Team"), "WEB (2)"), aliases)
+        self.assertIn((("Other",), "web"), aliases)  # same name in another folder: not renamed
+        codes = [i.code for i in plan.issues]
+        self.assertIn(IssueCode.SLASH_REPLACED, codes)
+        self.assertIn(IssueCode.NAME_DEDUPLICATED, codes)
+        self.assertTrue(plan.renamed)
 
-    def test_alias_dedupe_case_insensitive_and_deterministic(self) -> None:
-        data = export(("Acme", ["web 1=" + session_value("10.0.0.1"), "web-1=" + session_value("10.0.0.2"),
-                                "WEB 1=" + session_value("10.0.0.3")]))
-        first = [h.alias for h in self.plan(data).hosts]
-        self.assertEqual(first, ["web-1", "web-1-2", "WEB-1-3"])
-        self.assertEqual(first, [h.alias for h in self.plan(data).hosts])
-        self.assertIn(IssueCode.ALIAS_DEDUPLICATED, codes(self.plan(data).issues))
-
-    def test_existing_parent_destination(self) -> None:
-        plan = self.plan(options={"destination": Destination.EXISTING_PARENT, "target_parent": "imported"})
-        self.assertEqual({g.parent for g in plan.groups}, {"imported"})
-        self.assertIn("Acme/_hosts", [g.child for g in plan.groups])
-        self.assertIn("Acme/Team-A/Servers", [g.child for g in plan.groups])
-        self.assertIn("Beta", [g.child for g in plan.groups])
+    def test_unnamed(self) -> None:
+        data = export(("Acme", [" =" + session_value("10.0.0.1"), "=" + session_value("10.0.0.2")]))
+        self.assertEqual([h.alias for h in self.plan(data).hosts], ["Unnamed", "Unnamed 2"])
 
     def test_selection_excludes_branches(self) -> None:
         plan = self.plan(excluded_folders=[("Acme", "Team A")])
-        self.assertEqual([g.child for g in plan.groups], ["General", "Team-B/00-deep/level-4", "General"])
+        self.assertNotIn(("Acme", "Team A"), self.paths(plan))
         self.assertEqual(plan.excluded_hosts, 6)
 
     def test_folder_tree_counts(self) -> None:
@@ -304,24 +321,6 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual((acme.label, acme.own_hosts, acme.total_hosts), ("Acme", 1, 8))
         team_a = next(c for c in acme.children if c.label == "Team A")
         self.assertEqual((team_a.own_hosts, team_a.total_hosts), (1, 6))  # RDP/FTP not counted
-        self.assertIn("+ Empty container (old)", [c.label for c in acme.children])
-
-    def test_path_traversal_never_leaves_base_dir(self) -> None:
-        data = export(("..\\..\\etc", ["pwn=" + session_value("10.0.0.1")]),
-                      ("/abs\\..\\x", ["a=" + session_value("10.0.0.2")]),
-                      ("C:\\Windows\\..", ["b=" + session_value("10.0.0.3")]))
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp) / "inv"
-            manager = ConfigManager(base)
-            plan = plan_import(parse_mxtsessions(data), existing=ExistingInventory.from_manager(manager))
-            job = apply_credential_mapping(plan, {}, {})
-            for write in job.writes:
-                resolved = write.group.path.resolve()
-                self.assertTrue(base.resolve() in resolved.parents, resolved)
-            store = CredentialStore(SecureStore(InMemoryKeyring()), path=Path(tmp) / "c.json")
-            self.assertIs(commit(job, manager, store).status, ImportStatus.SUCCESS)
-            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir() if p.name != "c.json"), ["inv"])
-            self.assertEqual(sorted(manager.tree), ["C", "abs", "unnamed-1"])
 
     def test_hostname_edge_cases(self) -> None:
         data = export(("Acme", [
@@ -361,6 +360,8 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(codes(plan.issues).count(IssueCode.WINDOWS_KEY_PATH), 2)
 
 
+
+
 class GatewayTests(unittest.TestCase):
     def jump(self, **kwargs):
         data = export(("Acme", ["h=" + session_value("10.0.0.1", **kwargs)]))
@@ -391,7 +392,7 @@ class GatewayTests(unittest.TestCase):
     def test_ssh_command_uses_the_jump_host(self) -> None:
         plan = plan_import(parse_mxtsessions(ACME.encode()))
         job = apply_credential_mapping(plan, {}, {})
-        entry = next(h for w in job.writes for h in w.group.hosts if h.alias == "behind-jump")
+        entry = next(entry for _path, entry in job.inserts if entry.alias == "behind-jump")
         self.assertEqual(build_ssh_command(entry), ["ssh", "-p", "22", "-J", "alice@10.0.0.254", "bob@10.0.0.13"])
 
 
@@ -419,201 +420,8 @@ def make_creds(tmp: Path):
     return store, ops, root
 
 
-class CommitTests(unittest.TestCase):
+class StoreTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.base = self.root / "inventory"
-        self.manager = ConfigManager(self.base)
-        self.store, self.ops, self.root_cred = make_creds(self.root)
-        self.creds = {c.id: c for c in self.store.list()}
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
-
-    def plan(self, data=ACME.encode(), **options):
-        return plan_import(parse_mxtsessions(data), ImportOptions(**options), existing=ExistingInventory.from_manager(self.manager))
-
-    def snapshot(self):
-        return {p.relative_to(self.base): p.read_bytes() for p in sorted(self.base.rglob("*")) if p.is_file()}, \
-            sorted(str(p.relative_to(self.base)) for p in self.base.rglob("*"))
-
-    def run_import(self, mapping=None, default=None, **options):
-        job = apply_credential_mapping(self.plan(**options), mapping or {}, self.creds, default=default)
-        return job, commit(job, self.manager, self.store)
-
-    def host(self, parent, child, alias):
-        return next(h for h in self.manager.tree[parent][child].hosts if h.alias == alias)
-
-    def test_round_trip_users_bindings_and_metadata(self) -> None:
-        job, report = self.run_import({"alice": self.ops.id, "bob": None}, default=self.root_cred.id)
-        self.assertIs(report.status, ImportStatus.SUCCESS)
-        tree = load_config_tree(self.base)
-        self.assertEqual(sum(len(g.hosts) for groups in tree.values() for g in groups.values()), 9)
-        web = self.host("Acme", "Team-A/Servers", "web-01")
-        self.assertEqual(web.options["user"], "ops")  # [alice] → Ops account
-        self.assertEqual(web.metadata["display_name"], "web 01")
-        self.assertEqual(web.metadata["imported_from"], "mobaxterm")
-        self.assertEqual(web.metadata["mobaxterm_folder"], "Acme\\Team A\\Servers")
-        self.assertEqual(self.store.binding_for_host("Acme::Team-A/Servers::web-01"), self.ops.id)
-        # "None" + literal username keeps it; "None" + [label] drops it.
-        self.assertEqual(self.host("Acme", "Team-A/Servers", "behind-jump").options["user"], "bob")
-        self.assertNotIn("user", self.host("Acme", "Team-B/00-deep/level-4", "deep-host").options)
-        self.assertIsNone(self.store.binding_for_host("Acme::Team-B/00-deep/level-4::deep-host"))
-        # Unmapped rows use the default credential.
-        self.assertEqual(self.host("Acme", "Team-A/Servers", "backup").options["user"], "root")
-        self.assertEqual(self.host("Acme", "Team-A/Servers", "no-user").options["user"], "root")
-        self.assertEqual(self.host("Acme", "Team-A/Servers", "backup").options["port"], "2222")
-
-    def test_second_run_adds_nothing(self) -> None:
-        self.run_import()
-        before = self.snapshot()
-        job, report = self.run_import()
-        self.assertIs(report.status, ImportStatus.NOTHING)
-        self.assertEqual(job.host_count, 0)
-        self.assertEqual(self.snapshot(), before)
-
-    def test_conflict_policies(self) -> None:
-        self.run_import()
-        job, report = self.run_import(conflict_policy=ConflictPolicy.SKIP, skip_duplicates=False)
-        self.assertIs(report.status, ImportStatus.NOTHING)
-        self.assertEqual(job.skipped_existing, 9)
-        job, report = self.run_import(conflict_policy=ConflictPolicy.RENAME, skip_duplicates=False)
-        self.assertEqual(job.host_count, 9)
-        self.assertIn("web-01-2", [h.alias for h in self.manager.tree["Acme"]["Team-A/Servers"].hosts])
-        job, report = self.run_import({"alice": self.ops.id}, conflict_policy=ConflictPolicy.OVERWRITE,
-                                      skip_duplicates=False)
-        self.assertEqual(job.overwritten, 9)
-        self.assertEqual(self.host("Acme", "Team-A/Servers", "web-01").options["user"], "ops")
-        self.assertEqual(len(self.manager.tree["Acme"]["Team-A/Servers"].hosts), 10)  # 5 + 5 renamed
-
-    def test_existing_hosts_in_a_group_are_kept(self) -> None:
-        self.manager.create_parent_group("Acme")
-        self.manager.create_child_group("Acme", "General")
-        from ssh_manager.config import HostEntry
-
-        self.manager.add_host("Acme", "General", HostEntry("mine", {"hostname": "10.9.9.9"}))
-        self.run_import()
-        self.assertEqual([h.alias for h in self.manager.tree["Acme"]["General"].hosts], ["acme-bastion", "mine"])
-
-    def test_disk_collisions_with_existing_files_and_folders(self) -> None:
-        (self.base / "Acme").mkdir(parents=True)
-        (self.base / "Acme" / "Team-A").write_text("")  # a group file where the import needs a folder
-        (self.base / "Acme" / "General").mkdir()  # a folder where the import needs a file
-        (self.base / "Acme" / "General" / "x").write_text("")
-        self.manager.refresh()
-        job, report = self.run_import()
-        self.assertIs(report.status, ImportStatus.SUCCESS)
-        children = set(self.manager.tree["Acme"])
-        self.assertIn("General/_hosts", children)
-        self.assertIn("Team-A-2/Servers", children)
-        self.assertIn(IssueCode.FOLDER_COLLISION_RESOLVED, codes(job.plan.issues))
-
-    def test_rollback_on_injected_oserror_leaves_tree_identical(self) -> None:
-        self.run_import()  # some existing content to protect
-        before = self.snapshot()
-        real = __import__("ssh_manager.config", fromlist=["write_text_atomic"]).write_text_atomic
-        calls = {"n": 0}
-
-        def failing(path, text, **kwargs):
-            calls["n"] += 1
-            if calls["n"] == 3:
-                raise OSError(28, "No space left on device")
-            return real(path, text, **kwargs)
-
-        job = apply_credential_mapping(self.plan(conflict_policy=ConflictPolicy.RENAME, skip_duplicates=False,
-                                                 create_empty_folders=True), {}, self.creds)
-        self.assertGreaterEqual(len(job.writes), 3)
-        with mock.patch("ssh_manager.config.write_text_atomic", side_effect=failing):
-            report = commit(job, self.manager, self.store)
-        self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertIn("no changes were made", report.message)
-        self.assertEqual(self.snapshot(), before)
-
-    def test_binding_failure_rolls_back_files(self) -> None:
-        before = self.snapshot()
-        job = apply_credential_mapping(self.plan(), {"alice": self.ops.id}, self.creds)
-        with mock.patch.object(self.store, "_save", side_effect=SecureStoreError("disk full")):
-            report = commit(job, self.manager, self.store)
-        self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertEqual(self.snapshot(), before)
-        self.assertIsNone(self.store.binding_for_host("Acme::Team-A/Servers::web-01"))
-
-    def test_read_only_target(self) -> None:
-        if os.geteuid() == 0:
-            self.skipTest("root ignores permissions")
-        self.base.chmod(0o500)
-        try:
-            job = apply_credential_mapping(self.plan(), {}, self.creds)
-            report = commit(job, self.manager, self.store)
-        finally:
-            self.base.chmod(0o700)
-        self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertEqual(list(self.base.iterdir()), [])
-
-    def test_concurrent_modification_is_detected(self) -> None:
-        self.run_import()
-        job = apply_credential_mapping(self.plan(conflict_policy=ConflictPolicy.RENAME, skip_duplicates=False), {}, self.creds)
-        target = job.writes[0].group.path
-        target.write_text(target.read_text() + "\nHost sneaky\n    hostname 10.1.1.1\n")
-        before = self.snapshot()
-        report = commit(job, self.manager, self.store)
-        self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertIn("changed since", report.message)
-        self.assertEqual(self.snapshot(), before)
-
-    def test_deleted_credential_fails_cleanly(self) -> None:
-        job = apply_credential_mapping(self.plan(), {"alice": self.ops.id}, self.creds)
-        self.store.delete(self.ops.id)
-        before = self.snapshot()
-        report = commit(job, self.manager, self.store)
-        self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertEqual(self.snapshot(), before)
-        with self.assertRaises(CredentialMissingError):
-            apply_credential_mapping(self.plan(), {"alice": "gone"}, self.creds)
-
-    def test_cancel_rolls_back(self) -> None:
-        before = self.snapshot()
-        job = apply_credential_mapping(self.plan(), {}, self.creds)
-        calls = {"n": 0}
-
-        def cancel_after_two():
-            calls["n"] += 1
-            return calls["n"] > 2
-
-        report = commit(job, self.manager, self.store, should_cancel=cancel_after_two)
-        self.assertIs(report.status, ImportStatus.CANCELLED)
-        self.assertEqual(self.snapshot(), before)
-
-    def test_refresh_once_and_no_per_host_writes(self) -> None:
-        job = apply_credential_mapping(self.plan(), {"alice": self.ops.id}, self.creds)
-        with mock.patch.object(self.manager, "refresh", wraps=self.manager.refresh) as refresh, \
-                mock.patch.object(self.manager, "add_host", side_effect=AssertionError("per-host write")), \
-                mock.patch.object(self.store, "_save", wraps=self.store._save) as save:
-            report = commit(job, self.manager, self.store)
-        self.assertIs(report.status, ImportStatus.SUCCESS)
-        self.assertEqual(refresh.call_count, 1)
-        self.assertEqual(save.call_count, 1)
-
-    def test_report_has_no_secrets_and_is_private(self) -> None:
-        job, report = self.run_import({"alice": self.ops.id})
-        text = render_report(job.plan, job, report, source_name="acme.mxtsessions")
-        self.assertNotIn("s3cret", text)
-        self.assertNotIn("#109#", text)  # no raw session values
-        self.assertIn("alice (3 host(s)) → Ops account", text)
-        self.assertIn("unsupported_type", text)
-        path = save_report(text, self.root / "imports")
-        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
-        self.assertTrue(path.name.startswith("mobaxterm-"))
-
-
-class StoreTargetTests(unittest.TestCase):
-    """Importing into the app store: readable names, no General/_hosts, one transaction."""
-
-    def setUp(self) -> None:
-        from ssh_manager.inventory.manager import StoreConfigManager
-        from ssh_manager.inventory.store import InventoryStore
-
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.store = InventoryStore(self.root / "inventory.db")
@@ -624,54 +432,177 @@ class StoreTargetTests(unittest.TestCase):
         self.store.close()
         self.tmp.cleanup()
 
-    def run_import(self, mapping=None, **options):
-        plan = plan_import(parse_mxtsessions(ACME.encode()), ImportOptions(**options),
+    def plan(self, data=ACME.encode(), excluded=(), **options):
+        return plan_import(parse_mxtsessions(data), ImportOptions(**options), excluded,
                            existing=ExistingInventory.from_manager(self.manager))
-        job = apply_credential_mapping(plan, mapping or {}, {c.id: c for c in self.creds.list()})
-        return plan, job, commit(job, self.manager, self.creds)
 
-    def test_original_names_and_structure(self) -> None:
-        plan, job, report = self.run_import({"alice": self.ops.id})
+    def run_import(self, mapping=None, data=ACME.encode(), default=None, **options):
+        job = apply_credential_mapping(self.plan(data, **options), mapping or {},
+                                       {c.id: c for c in self.creds.list()}, default=default)
+        return job, commit(job, self.manager, self.creds)
+
+    def snapshot(self):
+        """Row counts and a content hash of everything an import could change."""
+
+        conn = self.store.conn
+        groups = conn.execute("SELECT id, parent_id, name FROM groups ORDER BY id").fetchall()
+        hosts = conn.execute("SELECT id, group_id, alias, hostname, port, user, options_json, metadata_json "
+                             "FROM hosts ORDER BY id").fetchall()
+        digest = hashlib.sha256(repr([tuple(r) for r in groups + hosts]).encode()).hexdigest()
+        return len(groups), len(hosts), digest, dict(self.creds._bindings)
+
+    def host(self, path, alias):
+        child = "/".join(path[1:])
+        return next(h for h in self.manager.tree[path[0]][child].hosts if h.alias == alias)
+
+
+class CommitTests(StoreTestCase):
+    def test_round_trip_names_users_bindings_metadata(self) -> None:
+        job, report = self.run_import({"alice": self.ops.id, "bob": None}, default=self.root_cred.id)
         self.assertIs(report.status, ImportStatus.SUCCESS)
         tree = self.manager.tree
-        self.assertEqual([h.alias for h in tree["Acme"][""].hosts], ["acme bastion"])  # directly in the folder
-        self.assertEqual([h.alias for h in tree["Acme"]["Team A"].hosts], ["team-a-gw"])  # hosts + subfolders
-        self.assertEqual({h.alias for h in tree["Acme"]["Team A/Servers"].hosts},
-                         {"web 01", "db (primary)", "backup", "behind-jump", "no user"})
-        self.assertIn("Team B/00 - deep/level 4", tree["Acme"])
-        self.assertIn("\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc", [h.alias for h in tree["Beta"][""].hosts])
-        self.assertNotIn("General", tree["Acme"])
-        self.assertFalse(any("_hosts" in child for child in tree["Acme"]))
-        web = next(h for h in tree["Acme"]["Team A/Servers"].hosts if h.alias == "web 01")
+        self.assertIn("+ Empty container (old)", tree["Acme"])  # empty folders are created
+        self.assertEqual(tree["Acme"]["+ Empty container (old)"].hosts, [])
+        persian = "\u0633\u0631\u0648\u0631 \u0627\u0635\u0644\u06cc"
+        self.assertIn(persian, [h.alias for h in tree["Beta"][""].hosts])
+        web = self.host(("Acme", "Team A", "Servers"), "web 01")
         self.assertEqual(web.options["user"], "ops")
-        self.assertEqual(self.creds.binding_for_host(web.id), self.ops.id)  # bound by the stable id
+        self.assertEqual(web.metadata, {"imported_from": "mobaxterm", "mobaxterm_folder": "Acme\\Team A\\Servers"})
+        self.assertEqual(self.creds.binding_for_host(web.id), self.ops.id)  # bound by the new host id
+        self.assertEqual(self.host(("Acme", "Team A", "Servers"), "behind-jump").options["user"], "bob")  # literal kept
+        self.assertNotIn("user", self.host(("Acme", "Team B", "00 - deep", "level 4"), "deep host").options)
+        self.assertEqual(self.host(("Acme", "Team A", "Servers"), "backup").options["user"], "root")  # default
+        self.assertEqual(self.host(("Acme", "Team A", "Servers"), "backup").options["port"], "2222")
 
-    def test_second_run_adds_nothing(self) -> None:
-        self.run_import()
-        _plan, job, report = self.run_import()
+    def test_bindings_survive_a_later_rename_and_move(self) -> None:
+        self.run_import({"alice": self.ops.id})
+        web = self.host(("Acme", "Team A", "Servers"), "web 01")
+        self.manager.update_host("Acme", "Team A/Servers", "web 01", HostEntry("web one", dict(web.options)))
+        self.manager.move_hosts([("Acme", "Team A/Servers", "web one")], "Beta", "")
+        moved = self.host(("Beta",), "web one")
+        self.assertEqual(moved.id, web.id)
+        self.assertEqual(self.creds.binding_for_host(moved.id), self.ops.id)
+
+    def test_second_run_changes_nothing(self) -> None:
+        self.run_import({"alice": self.ops.id})
+        before = self.snapshot()
+        job, report = self.run_import({"alice": self.ops.id})
         self.assertIs(report.status, ImportStatus.NOTHING)
-        self.assertEqual(job.host_count, 0)
+        self.assertEqual(job.skipped_existing, 9)
+        self.assertEqual(self.snapshot(), before)
 
-    def test_overwrite_keeps_the_host_id(self) -> None:
+    def test_conflict_policies(self) -> None:
         self.run_import()
+        job, report = self.run_import(conflict_policy=ConflictPolicy.RENAME)
+        self.assertEqual(job.renamed, 9)
+        self.assertIn("web 01 (2)", [h.alias for h in self.manager.tree["Acme"]["Team A/Servers"].hosts])
         before = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
-        _plan, job, report = self.run_import({"alice": self.ops.id}, conflict_policy=ConflictPolicy.OVERWRITE,
-                                             skip_duplicates=False)
-        self.assertEqual(job.overwritten, 9)
+        changed = ACME.replace("10.0.0.254", "10.0.0.253").encode()  # the jump host changed in MobaXterm
+        job, report = self.run_import(data=changed, conflict_policy=ConflictPolicy.OVERWRITE)
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        self.assertEqual((job.host_count, job.overwritten), (0, 9))
         after = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
-        self.assertEqual(before, after)
-        self.assertEqual(self.creds.binding_for_host(after["web 01"]), self.ops.id)
+        self.assertEqual(before, after)  # updated in place: same ids, same aliases
+        self.assertEqual(self.host(("Acme", "Team A", "Servers"), "behind-jump").options["proxyjump"],
+                         "alice@10.0.0.253")
+        self.assertEqual(self.host(("Acme", "Team A", "Servers"), "behind-jump (2)").options["proxyjump"],
+                         "alice@10.0.0.254")  # the copy is not the one that matched
+        # A different user is a different host: it is added, never merged.
+        job, report = self.run_import({"alice": self.ops.id}, conflict_policy=ConflictPolicy.OVERWRITE)
+        self.assertEqual(job.host_count, 3)
+        self.assertTrue(any("before-import-overwrite" in p.name for p in self.store.list_backups()))
 
-    def test_binding_failure_and_cancel_roll_back(self) -> None:
-        with mock.patch.object(self.creds, "_save", side_effect=SecureStoreError("disk")):
-            _plan, _job, report = self.run_import({"alice": self.ops.id})
+    def test_alias_taken_by_a_different_host(self) -> None:
+        self.manager.create_parent_group("Acme")
+        self.manager.add_host("Acme", "", HostEntry("acme bastion", {"hostname": "192.0.2.1"}))
+        job, report = self.run_import()
+        aliases = sorted(h.alias for h in self.manager.tree["Acme"][""].hosts)
+        self.assertEqual(aliases, ["acme bastion", "acme bastion (2)"])
+
+    def test_import_under_an_existing_group(self) -> None:
+        self.manager.create_parent_group("Imports")
+        self.manager.create_child_group("Imports", "2026")
+        job, report = self.run_import(destination=Destination.EXISTING_GROUP, target_group=("imports", "2026"))
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        self.assertIn("2026/Acme/Team A/Servers", self.manager.tree["Imports"])
+        self.assertIn("2026/Beta", self.manager.tree["Imports"])
+
+    def test_destination_deleted_meanwhile(self) -> None:
+        self.manager.create_parent_group("Imports")
+        job = apply_credential_mapping(self.plan(destination=Destination.EXISTING_GROUP, target_group=("Imports",)),
+                                       {}, {})
+        self.manager.delete_parent_group("Imports")
+        before = self.snapshot()
+        report = commit(job, self.manager, self.creds)
         self.assertIs(report.status, ImportStatus.FAILED)
-        self.assertEqual(self.manager.tree, {})
-        plan = plan_import(parse_mxtsessions(ACME.encode()), existing=ExistingInventory.from_manager(self.manager))
-        job = apply_credential_mapping(plan, {}, {})
-        report = commit(job, self.manager, self.creds, should_cancel=lambda: True)
+        self.assertIn("no changes were made", report.message)
+        self.assertEqual(self.snapshot(), before)
+        missing = self.plan(destination=Destination.EXISTING_GROUP, target_group=("Nope",))
+        self.assertTrue(missing.destination_missing)
+
+    def test_rollback_on_injected_failure_binding_failure_and_cancel(self) -> None:
+        self.run_import()
+        before = self.snapshot()
+        options = {"conflict_policy": ConflictPolicy.RENAME}
+        with mock.patch.object(self.store, "update_host", side_effect=RuntimeError("boom")), \
+                mock.patch.object(self.store, "add_hosts_bulk", side_effect=RuntimeError("disk I/O error")):
+            job, report = self.run_import(**options)
+        self.assertIs(report.status, ImportStatus.FAILED)
+        self.assertEqual(self.snapshot(), before)
+        with mock.patch.object(self.creds, "_save", side_effect=SecureStoreError("disk")):
+            job, report = self.run_import({"alice": self.ops.id}, **options)
+        self.assertIs(report.status, ImportStatus.FAILED)
+        self.assertEqual(self.snapshot(), before)
+        job = apply_credential_mapping(self.plan(**options), {}, {})
+        calls = {"n": 0}
+
+        def cancel_later():
+            calls["n"] += 1
+            return calls["n"] > 3
+
+        report = commit(job, self.manager, self.creds, should_cancel=cancel_later)
         self.assertIs(report.status, ImportStatus.CANCELLED)
-        self.assertEqual(self.manager.tree, {})
+        self.assertEqual(self.snapshot(), before)
+
+    def test_deleted_credential_fails_cleanly(self) -> None:
+        job = apply_credential_mapping(self.plan(), {"alice": self.ops.id}, {c.id: c for c in self.creds.list()})
+        self.creds.delete(self.ops.id)
+        before = self.snapshot()
+        self.assertIs(commit(job, self.manager, self.creds).status, ImportStatus.FAILED)
+        self.assertEqual(self.snapshot(), before)
+        with self.assertRaises(CredentialMissingError):
+            apply_credential_mapping(self.plan(), {"alice": "gone"}, {})
+
+    def test_one_transaction_one_refresh_one_binding_save(self) -> None:
+        job = apply_credential_mapping(self.plan(), {"alice": self.ops.id}, {c.id: c for c in self.creds.list()})
+        statements = []
+        self.store.conn.set_trace_callback(statements.append)
+        try:
+            with mock.patch.object(self.manager, "refresh", wraps=self.manager.refresh) as refresh, \
+                    mock.patch.object(self.creds, "_save", wraps=self.creds._save) as save:
+                report = commit(job, self.manager, self.creds)
+        finally:
+            self.store.conn.set_trace_callback(None)
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        self.assertEqual(sum(1 for s in statements if s.strip().upper() == "BEGIN IMMEDIATE"), 1)
+        self.assertEqual(sum(1 for s in statements if s.strip().upper() == "COMMIT"), 1)
+        self.assertEqual(refresh.call_count, 1)
+        self.assertEqual(save.call_count, 1)
+
+    def test_report_has_no_secrets_and_is_private(self) -> None:
+        job, report = self.run_import({"alice": self.ops.id})
+        text = render_report(job.plan, job, report, source_name="acme.mxtsessions")
+        self.assertNotIn("s3cret", text)
+        self.assertNotIn("#109#", text)
+        self.assertIn("alice (3 host(s)) → Ops account", text)
+        path = save_report(text, self.root / "imports")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_legacy_inventory_is_refused(self) -> None:
+        from ssh_manager.config import ConfigManager
+
+        with self.assertRaises(TypeError):
+            ExistingInventory.from_manager(ConfigManager(self.root / "folder"))
 
 
 class BindManyTests(unittest.TestCase):
@@ -704,46 +635,20 @@ class BindManyTests(unittest.TestCase):
         self.assertIsNone(self.store.binding_for_host("p::c::a"))
 
 
-class TransactionTests(unittest.TestCase):
-    def test_rollback_only_touches_what_it_created(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            keep = root / "keep.txt"
-            keep.write_text("mine")
-            txn = ImportTransaction()
-            new_dir = root / "new"
-            new_dir.mkdir()
-            txn.created_dirs.append(new_dir)
-            created = new_dir / "file"
-            created.write_text("x")
-            txn.created_files.append(created)
-            txn.overwritten[keep] = b"mine"
-            keep.write_text("changed")
-            self.assertEqual(txn.rollback(), [])
-            self.assertEqual(keep.read_text(), "mine")
-            self.assertFalse(new_dir.exists())
-
-
-class PerformanceTests(unittest.TestCase):
-    def test_large_synthetic_export(self) -> None:
+class PerformanceTests(StoreTestCase):
+    def test_1500_hosts_800_folders_in_one_transaction(self) -> None:
         data = make_export(sessions=1500, folders=800, depth=12)
-        with tempfile.TemporaryDirectory() as tmp:
-            manager = ConfigManager(Path(tmp) / "inv")
-            store = CredentialStore(SecureStore(InMemoryKeyring()), path=Path(tmp) / "c.json")
-            cred = store.add("Ops", "ops", "pw")
-            start = time.perf_counter()
-            result = parse_mxtsessions(data)
-            plan = plan_import(result, existing=ExistingInventory.from_manager(manager))
-            job = apply_credential_mapping(plan, {}, {cred.id: cred}, default=cred.id)
-            with mock.patch.object(manager, "refresh", wraps=manager.refresh) as refresh:
-                report = commit(job, manager, store)
-            elapsed = time.perf_counter() - start
-            self.assertIs(report.status, ImportStatus.SUCCESS)
-            self.assertEqual(refresh.call_count, 1)
-            imported = sum(len(g.hosts) for groups in manager.tree.values() for g in groups.values())
-            self.assertEqual(imported, len(plan.hosts))
-            self.assertGreater(imported, 1400)
-            self.assertLess(elapsed, 10.0, f"{elapsed:.2f}s")
+        start = time.perf_counter()
+        result = parse_mxtsessions(data)
+        plan = plan_import(result, existing=ExistingInventory.from_manager(self.manager))
+        job = apply_credential_mapping(plan, {}, {self.ops.id: self.ops}, default=self.ops.id)
+        report = commit(job, self.manager, self.creds)
+        elapsed = time.perf_counter() - start
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        self.assertEqual(self.store.conn.execute("SELECT COUNT(*) FROM hosts").fetchone()[0], len(plan.hosts))
+        self.assertEqual(self.store.conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0], 800)
+        self.assertGreater(len(plan.hosts), 1400)
+        self.assertLess(elapsed, 2.0, f"{elapsed:.2f}s")
 
 
 if __name__ == "__main__":
