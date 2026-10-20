@@ -827,7 +827,10 @@ def snapshot_density(default: str = "compact") -> str:
     return os.environ.get("SSHM_DENSITY") or default
 
 
-def _make_window(app, base: Path, prefer_dark: bool, density: str = ""):
+def _make_window(app, base: Path, prefer_dark: bool, density: str = "", *, expanded: bool = True):
+    """Main window for ``base``. The app starts with every group collapsed; ``expanded`` opens them
+    (the scenes were composed with the hosts visible)."""
+
     import json
 
     from ssh_manager.gtk_app import SSHManagerWindow
@@ -841,11 +844,13 @@ def _make_window(app, base: Path, prefer_dark: bool, density: str = ""):
     )
     window = SSHManagerWindow(app, base, settings)
     window.host_page.latency.enabled = False  # snapshots never open sockets
+    if expanded:
+        window.tree_view.expand_all_rows()
     _pump()
     return window
 
 
-def make_window_with_mode(app, base: Path, theme_mode: str, density: str = ""):
+def make_window_with_mode(app, base: Path, theme_mode: str, density: str = "", *, expanded: bool = True):
     """Main window for ``base`` with the app theme mode ``system`` / ``light`` / ``dark``."""
 
     import json
@@ -860,6 +865,8 @@ def make_window_with_mode(app, base: Path, theme_mode: str, density: str = ""):
     settings.master_password_disabled = True
     window = SSHManagerWindow(app, base, settings)
     window.host_page.latency.enabled = False
+    if expanded:
+        window.tree_view.expand_all_rows()
     _pump()
     return window
 
@@ -1425,6 +1432,15 @@ def run(out_dir: Path) -> None:
         capture_window(window, out_dir / "comfortable-session-dark.png", *DENSITY_SIZE,
                        on_rendered=report_budget(window, out_dir, "comfortable-session-dark"))
         window.destroy()
+
+    for dark in (False, True):
+        @scenario(f"sidebar-collapsed-{'dark' if dark else 'light'}")
+        def _sidebar_collapsed(dark=dark) -> None:
+            """What every launch looks like: all groups closed (nothing expanded, nothing selected)."""
+
+            window = _make_window(app, base, dark, expanded=False)
+            capture_window(window, out_dir / f"sidebar-collapsed-{'dark' if dark else 'light'}.png", 1280, 800)
+            window.destroy()
 
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:
         @scenario(name)

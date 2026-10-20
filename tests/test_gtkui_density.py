@@ -258,6 +258,7 @@ def _child(density_name: str) -> None:
     }
     snap._write_inventory(base, True, inventory)
     window = snap._make_window(app, base, True, density_name)
+    window.tree_view.expand_all_rows()  # the sidebar starts collapsed; the budget counts rows that fit
     host = window.tree.find_host_by_alias("host-0-00")
     window.tree.select_host(host.parent_group, host.child_group, host.alias)
     tab = window.terminal_tabs.new_terminal(host, autostart=False)

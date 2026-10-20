@@ -57,8 +57,7 @@ class MobaXtermImportController:
         LOGGER.info("MobaXterm import: %s, %d host(s), %d group(s)", report.status.value, report.hosts, report.groups)
         if report.status is ImportStatus.SUCCESS:
             self.win.tree.rebuild()
-            if report.parents:
-                self.win.tree.select_parent_group(report.parents[0])
+            self.win.tree.reveal_imported(report.parents)  # the first level only, never the whole tree
             self.win._notify(_("Imported {hosts} host(s) from MobaXterm.").format(hosts=report.hosts), Level.SUCCESS)
         elif report.status is ImportStatus.FAILED:
             self.win._notify(_("MobaXterm import failed; no changes were made."), Level.ERROR)

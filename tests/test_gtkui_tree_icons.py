@@ -91,6 +91,7 @@ class TreeIconRenderTests(unittest.TestCase):
         self.tree = SessionTreeView()
         self.tree.show()  # an unshown tree keeps a 1 px allocation
         self.tree.populate([prod, legacy, archive])
+        self.tree.expand_all_rows()  # groups start collapsed: open them, then close two again
         self.tree.set_row_collapsed("parent", "legacy", "", True)
         self.tree.set_row_collapsed("parent", "archive", "", True)
         rect = Gdk.Rectangle()

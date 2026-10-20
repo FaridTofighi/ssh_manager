@@ -6,6 +6,37 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Sidebar starts collapsed
+
+- **Every launch:** all groups, top-level and nested, start collapsed; only
+  the top-level rows are visible. Nothing about expansion is saved, and keys
+  left in an old `.ui_state.json` are ignored.
+- **State model inverted:**
+  - `SessionTreeView.expanded_keys` (groups opened this session) replaces
+    `collapsed_keys`.
+  - `populate()` no longer calls `expand_all()`.
+  - Open groups survive refreshes, edits, imports, drag and drop, status
+    updates and workspace changes. A renamed or moved group stays open;
+    deleted groups are forgotten. Re-opening a parent re-opens the subgroups
+    that were open inside it.
+- **Selection:** restoring the selection after a rebuild never expands
+  anything. Creating, moving or duplicating a host or group reveals it.
+  Imports open only the first level of the imported top-level groups.
+- **Search and filters:** they open the ancestors of the matches temporarily;
+  clearing them brings back the previous view. Rows opened by drag hover or
+  type-ahead search close again.
+- **Expand / collapse all:** **Expand All** / **Collapse All** are in the
+  filter popover and the tree's empty-space menu, with Ctrl+Shift+O /
+  Ctrl+Shift+L (Ctrl+Shift+E and C are Split pane and Copy).
+- **Faster:** the store is filled with the model detached and only the needed
+  rows are expanded. For a synthetic 1,500-host / 800-group inventory (2,820
+  rows) the first populate takes **~160 ms instead of ~520 ms**, with zero
+  `expand_row` calls at startup.
+- **Tests:** `tests/test_sidebar_collapsed.py`. Snapshot:
+  `docs/ui-after/sidebar-collapsed-{light,dark}.png`. Tests and snapshot
+  scenes that need visible hosts now open the groups explicitly
+  (`tools/ui_snapshots.py` window helpers take `expanded=`).
+
 ## Passwords, phase 3: recovery and "Save this password for this host?"
 
 Details: `docs/passwords.md` ("Recovery after "Permission denied"").

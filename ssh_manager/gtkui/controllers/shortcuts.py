@@ -84,6 +84,9 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("copy-scp", _("Copy SCP command"), G_HOSTS),
     ActionSpec("rename", _("Rename selected item or tab"), G_HOSTS, ("F2",)),
     ActionSpec("context-menu", _("Open context menu"), G_HOSTS, (), ("<Shift>F10", "Menu")),
+    # Ctrl+Shift+E / C are Split pane / Copy: O(pen) and L for the sidebar groups.
+    ActionSpec("expand-all-groups", _("Expand all groups"), G_HOSTS, ("<Primary><Shift>o",)),
+    ActionSpec("collapse-all-groups", _("Collapse all groups"), G_HOSTS, ("<Primary><Shift>l",)),
     # Sessions
     ActionSpec("close-tab", _("Close session"), G_SESSIONS, ("<Primary>w",)),
     ActionSpec("next-tab", _("Next session"), G_SESSIONS, ("<Primary>Tab", "<Primary>Page_Down")),

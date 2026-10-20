@@ -398,6 +398,18 @@ class SidebarView(Gtk.Box):
 
         box.pack_start(Gtk.Separator(), False, False, Space.XS)
         self._build_smart_group_section(box)
+        box.pack_start(Gtk.Separator(), False, False, Space.XS)
+        groups_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        for label, action, tip in (
+            (_("_Expand All"), "win.expand-all-groups", _("Open every group (Ctrl+Shift+O)")),
+            (_("C_ollapse All"), "win.collapse-all-groups", _("Close every group (Ctrl+Shift+L)")),
+        ):
+            button = Gtk.Button.new_with_mnemonic(label)
+            button.set_action_name(action)
+            button.set_tooltip_text(tip)
+            groups_row.pack_start(button, True, True, 0)
+        self.expand_all_button, self.collapse_all_button = groups_row.get_children()
+        box.pack_start(groups_row, False, False, 0)
         box.show_all()
         popover.add(box)
         popover.connect("show", lambda *_: self.filter_entry.grab_focus())

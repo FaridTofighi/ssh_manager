@@ -79,6 +79,12 @@ class WindowActions:
         self.win.creds.forget_password()
 
     # groups
+    def expand_all_groups(self) -> None:
+        self.win.tree.expand_all_groups()
+
+    def collapse_all_groups(self) -> None:
+        self.win.tree.collapse_all_groups()
+
     def create_parent_group(self) -> None:
         self.win.groups.create_parent_group()
 

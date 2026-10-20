@@ -18,13 +18,21 @@ All geometry comes from the active density preset at paint/measure time. GTK's o
 indentation are off: the renderer indents by depth and clicking the chevron
 (or Left/Right) collapses/expands. The row tooltip spells the status out, so
 color is never the only cue.
+
+Expansion state: :attr:`SessionTreeView.expanded_keys` holds the
+``(kind, parent, child)`` keys of the groups the user opened in **this
+session**. A new view starts empty, so every group is collapsed at startup;
+nothing about it is persisted. :meth:`SessionTreeView.populate` rebuilds the
+store and expands exactly those rows (or, while a search/filter is active,
+a temporary set that never touches ``expanded_keys``). A group whose parent
+is collapsed keeps its key, so re-opening the parent restores it.
 """
 
 from __future__ import annotations
 
 import math
 import time
-from typing import Callable, Dict, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import gi
 
@@ -43,6 +51,8 @@ from ..theme.tokens import Layout, Size  # noqa: E402
 from ..tree_icons import icon_color, pulse_alpha, quantize_alpha, show_status_badge, status_badge, tree_icon_for  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import render_svg_surface, render_tree_icon  # noqa: E402
+
+RowKey = Tuple[str, str, str]  # (kind, parent, child) of a group row
 
 COLUMN_TYPES = (str, str, str, str, str, str, GObject.TYPE_PYOBJECT, str, str, str, int, str, bool, bool)
 PULSE_INTERVAL_MS = 100
@@ -280,7 +290,14 @@ class SessionTreeView(Gtk.TreeView):
         self.set_enable_tree_lines(False)
         self.set_show_expanders(False)
         self.set_level_indentation(0)
-        self.collapsed_keys: Set[Tuple[str, str, str]] = set()
+        # Groups the user opened in this session (never persisted; empty = all collapsed).
+        self.expanded_keys: Set[RowKey] = set()
+        self._tracking = True  # row-expanded / row-collapsed update expanded_keys
+        self._temporary = False  # search/filter view: expansions are not the user's
+        self._passing_keys: Set[RowKey] = set()  # opened by type-ahead search or drag hover
+        self._typeahead_hooked = False
+        self._drag_hover = False
+        self.expand_calls = 0  # rows expanded by populate() (tests, benchmarks)
         self.set_tooltip_column(TreeColumn.TOOLTIP)
         self.set_search_column(TreeColumn.TEXT)
         self.set_enable_search(True)
@@ -294,8 +311,11 @@ class SessionTreeView(Gtk.TreeView):
         # Left/Right expand/collapse win.
         self.connect("button-press-event", self._on_button_press)
         self.connect("key-press-event", self._on_key_press)
-        self.connect("row-collapsed", lambda _v, it, _p: self.collapsed_keys.add(self._row_key(it)))
-        self.connect("row-expanded", lambda _v, it, _p: self.collapsed_keys.discard(self._row_key(it)))
+        self.connect("row-expanded", self._on_row_expanded)
+        self.connect("row-collapsed", self._on_row_collapsed)
+        # Drag hover may open a row (GTK's auto-expand); it closes again unless a drop went there.
+        self.connect("drag-motion", self._on_drag_motion)
+        self.connect("drag-leave", self._on_drag_leave)
         self._pulse_source = 0
         self._pulse_start = time.monotonic()
         self._build_column()
@@ -335,13 +355,20 @@ class SessionTreeView(Gtk.TreeView):
         cell.set_property("gap", Layout.Tree.GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
 
     # ------------------------------------------------------------------ api
-    def populate(self, rows: Sequence[TreeRow]) -> Dict[str, Gtk.TreeIter]:
-        """Replace the model content with ``rows``; return ``{host_key: iter}``."""
+    def populate(self, rows: Sequence[TreeRow], *, temporary: Optional[Iterable[RowKey]] = None
+                 ) -> Dict[str, Gtk.TreeIter]:
+        """Replace the model content with ``rows``; return ``{host_key: iter}``.
+
+        Only the rows in :attr:`expanded_keys` are expanded (keys of groups
+        that no longer exist are dropped). With ``temporary`` (search/filter
+        results) exactly those rows are expanded instead and
+        :attr:`expanded_keys` is left alone, so clearing the search restores
+        the user's view.
+        """
 
         store = self.store
-        collapsed = set(self.collapsed_keys)  # expand_all() below emits row-expanded
-        store.clear()
         host_iters: Dict[str, Gtk.TreeIter] = {}
+        present: Set[RowKey] = set()
 
         def append(parent_iter, row: TreeRow) -> None:
             tree_iter = store.append(
@@ -365,16 +392,32 @@ class SessionTreeView(Gtk.TreeView):
             )
             if row.kind is RowKind.HOST:
                 host_iters[row.key] = tree_iter
+            else:
+                present.add((row.kind.value, row.parent, row.child))
             for child in row.children:
                 append(tree_iter, child)
 
-        for row in rows:
-            append(None, row)
-        self.expand_all()
-        self._restore_collapsed(collapsed)
+        self._tracking = False
+        try:
+            # Detached while filling: no per-row signals or layout work in the view.
+            self.set_model(None)
+            store.clear()
+            for row in rows:
+                append(None, row)
+            self.set_model(store)
+            self._passing_keys.clear()
+            self._temporary = temporary is not None
+            if temporary is None:
+                self.expanded_keys &= present  # deleted / renamed groups
+                wanted: Set[RowKey] = self.expanded_keys
+            else:
+                wanted = set(temporary)
+            self.expand_calls = self._expand_matching(wanted)
+        finally:
+            self._tracking = True
         return host_iters
 
-    def _row_key(self, tree_iter) -> Tuple[str, str, str]:
+    def _row_key(self, tree_iter) -> RowKey:
         model = self.store
         return (
             model.get_value(tree_iter, TreeColumn.KIND) or "",
@@ -382,29 +425,168 @@ class SessionTreeView(Gtk.TreeView):
             model.get_value(tree_iter, TreeColumn.CHILD) or "",
         )
 
-    def _restore_collapsed(self, wanted: Set[Tuple[str, str, str]]) -> None:
-        self.collapsed_keys = set(wanted)
+    def _expand_matching(self, wanted: Set[RowKey], parent_iter=None) -> int:
+        """Expand the rows in ``wanted``, parents before children; a row under a closed parent stays shut."""
+
         if not wanted:
-            return
-        rows = []
-        self.store.foreach(lambda model, path, it: rows.append((path.copy(), self._row_key(it))) and False)
-        # Collapse deepest first so parents keep their own state.
-        for path, key in sorted(rows, key=lambda item: -item[0].get_depth()):
-            if key in wanted:
-                self.collapse_row(path)
-        self.collapsed_keys = wanted
+            return 0
+        model = self.store
+        count = 0
+        tree_iter = model.iter_children(parent_iter)
+        while tree_iter is not None:
+            if model.iter_has_child(tree_iter) and self._row_key(tree_iter) in wanted:
+                self.expand_row(model.get_path(tree_iter), False)
+                count += 1 + self._expand_matching(wanted, tree_iter)
+            tree_iter = model.iter_next(tree_iter)
+        return count
+
+    def _find_path(self, kind: str, parent: str, child: str = "", alias: str = "") -> Optional[Gtk.TreePath]:
+        target = (kind, parent, child)
+        found: List[Gtk.TreePath] = []
+
+        def visit(model, path, tree_iter) -> bool:
+            if self._row_key(tree_iter) == target and (not alias or model.get_value(tree_iter, TreeColumn.ALIAS) == alias):
+                found.append(path.copy())
+                return True
+            return False
+
+        self.store.foreach(visit)
+        return found[0] if found else None
 
     def set_row_collapsed(self, kind: str, parent: str, child: str = "", collapsed: bool = True) -> None:
-        """Collapse/expand a group row by its key (used by tests and snapshots)."""
+        """Collapse/expand a group row by its key (tests, snapshots and the controller)."""
 
-        target = (kind, parent, child)
-        found = []
-        self.store.foreach(lambda model, path, it: found.append(path.copy()) if self._row_key(it) == target else False)
-        for path in found:
-            if collapsed:
-                self.collapse_row(path)
+        path = self._find_path(kind, parent, child)
+        if path is None:
+            return
+        if collapsed:
+            self.collapse_row(path)
+            self.expanded_keys.discard((kind, parent, child))
+        else:
+            self.expand_to_path(path)
+
+    def set_row_expanded(self, kind: str, parent: str, child: str = "", expanded: bool = True) -> None:
+        self.set_row_collapsed(kind, parent, child, collapsed=not expanded)
+
+    def expand_all_rows(self) -> None:
+        """Open every group (and remember it for this session)."""
+
+        self.expand_all()
+
+    def collapse_all_rows(self) -> None:
+        """Close every group; :attr:`expanded_keys` becomes empty."""
+
+        self.collapse_all()
+        self.expanded_keys.clear()
+
+    def reveal_path(self, path: Optional[Gtk.TreePath]) -> None:
+        """Expand the ancestors of ``path`` (a user action: remembered) and scroll to it."""
+
+        if path is None:
+            return
+        if path.get_depth() > 1:
+            parent = path.copy()
+            parent.up()
+            self.expand_to_path(parent)
+        self.scroll_to_cell(path, None, False, 0.0, 0.0)
+
+    def expand_to_row(self, kind: str, parent: str, child: str = "", alias: str = "") -> Optional[Gtk.TreePath]:
+        """Reveal a row by its key: expand all its ancestors and scroll to it. Returns its path."""
+
+        path = self._find_path(kind, parent, child, alias)
+        self.reveal_path(path)
+        return path
+
+    def is_row_visible(self, path: Gtk.TreePath) -> bool:
+        """True when every ancestor of ``path`` is expanded."""
+
+        ancestor = path.copy()
+        while ancestor.get_depth() > 1:
+            ancestor.up()
+            if not self.row_expanded(ancestor):
+                return False
+        return True
+
+    def remap_keys(self, old_parent: str, new_parent: str, old_child: str = "", new_child: str = "") -> None:
+        """A group was renamed or moved: carry its open state (and its subgroups') to the new key.
+
+        ``old_child`` empty = a top-level group (``parent`` renamed). Otherwise
+        the subgroup ``old_child`` (and everything under ``old_child/``) of
+        ``old_parent`` becomes ``new_child`` under ``new_parent``.
+        """
+
+        updated: Set[RowKey] = set()
+        for kind, parent, child in self.expanded_keys:
+            if parent != old_parent:
+                updated.add((kind, parent, child))
+            elif not old_child:
+                updated.add((kind, new_parent, child))
+            elif child == old_child or child.startswith(old_child + "/"):
+                updated.add((kind, new_parent, new_child + child[len(old_child):]))
             else:
-                self.expand_row(path, False)
+                updated.add((kind, parent, child))
+        self.expanded_keys = updated
+
+    # ------------------------------------------------------- expand state
+    def _on_row_expanded(self, _view, tree_iter, path) -> None:
+        if not self._tracking:
+            return
+        key = self._row_key(tree_iter)
+        if self._temporary:
+            return  # search/filter results: not the user's layout
+        if self._drag_hover or self._typeahead_active():
+            if key not in self.expanded_keys:
+                self._passing_keys.add(key)
+            return
+        self.expanded_keys.add(key)
+        # Subgroups that were open before the parent was closed open again.
+        self._tracking = False
+        try:
+            self._expand_matching(self.expanded_keys, tree_iter)
+        finally:
+            self._tracking = True
+
+    def _on_row_collapsed(self, _view, tree_iter, _path) -> None:
+        if not self._tracking or self._temporary:
+            return
+        key = self._row_key(tree_iter)
+        self.expanded_keys.discard(key)
+        self._passing_keys.discard(key)
+
+    def _close_passing_rows(self) -> bool:
+        """Close rows opened only by type-ahead search or drag hover (deepest first)."""
+
+        keys, self._passing_keys = self._passing_keys, set()
+        paths = [p for p in (self._find_path(*key) for key in keys if key not in self.expanded_keys) if p is not None]
+        self._tracking = False
+        try:
+            for path in sorted(paths, key=lambda p: -p.get_depth()):
+                if self.row_expanded(path):
+                    self.collapse_row(path)
+        finally:
+            self._tracking = True
+        return GLib.SOURCE_REMOVE
+
+    def _typeahead_active(self) -> bool:
+        entry = self.get_search_entry()
+        if entry is None:
+            return False
+        window = entry.get_toplevel()
+        if window is None or window is entry or not isinstance(window, Gtk.Window):
+            return False
+        if not self._typeahead_hooked:
+            window.connect("hide", lambda *_: GLib.idle_add(self._close_passing_rows))
+            self._typeahead_hooked = True
+        return bool(window.get_visible())
+
+    def _on_drag_motion(self, *_args) -> bool:
+        self._drag_hover = True
+        return False  # GTK and the drag-and-drop controller still handle it
+
+    def _on_drag_leave(self, *_args) -> None:
+        # Leave also fires before a drop: by the idle callback the drop has rebuilt the tree.
+        self._drag_hover = False
+        GLib.idle_add(self._close_passing_rows)
 
     # ------------------------------------------------------------ pulse
     def _before_draw(self, *_args) -> bool:

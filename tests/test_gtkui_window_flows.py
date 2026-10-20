@@ -514,6 +514,7 @@ class WorkspaceStripTests(unittest.TestCase):
 
     def test_bulk_bar_follows_multi_selection(self) -> None:
         win = self.win
+        win.tree_view.expand_all_rows()  # groups start collapsed; hidden rows cannot be selected
         selection = win.tree_view.get_selection()
         for key in list(win.tree.host_iters)[:2]:
             selection.select_iter(win.tree.host_iters[key])

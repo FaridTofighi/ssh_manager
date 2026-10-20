@@ -110,6 +110,7 @@ class GroupActions:
         self.win._log_event(msg, success)
         if success:
             self.win.tree.rebuild(refresh=True)
+            self.win.tree.select_parent_group(name)
 
     @requires_editable_inventory
     def create_child_group_for_current(self) -> None:
@@ -210,6 +211,7 @@ class GroupActions:
         self.win._log_event(msg, success)
         if success:
             self.win.creds.remap_credential_prefix(f"{current}::", f"{new_name}::")
+            self.win.tree.remap_group_keys(current, new_name)  # an open group stays open
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_parent_group(new_name)
 
@@ -256,6 +258,7 @@ class GroupActions:
                 f"{parent}::{current}::",
                 f"{parent}::{new_name}::",
             )
+            self.win.tree.remap_group_keys(parent, parent, current, new_name)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, new_name)
 

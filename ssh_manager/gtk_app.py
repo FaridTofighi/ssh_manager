@@ -489,6 +489,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "copy-ssh": sessions.copy_ssh_command,
             "copy-scp": sessions.copy_scp_command,
             "rename": hosts.rename_focused,
+            "expand-all-groups": self.tree.expand_all_groups,
+            "collapse-all-groups": self.tree.collapse_all_groups,
             "close-tab": tabs.close_current,
             "next-tab": tabs.next_tab,
             "prev-tab": tabs.prev_tab,

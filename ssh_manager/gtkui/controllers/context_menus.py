@@ -42,6 +42,8 @@ class TreeMenuCallbacks(Protocol):
     def prompt_new_host(self) -> None: ...
     def create_parent_group(self) -> None: ...
     def quick_connect(self) -> None: ...
+    def expand_all_groups(self) -> None: ...
+    def collapse_all_groups(self) -> None: ...
 
 
 def host_menu(
@@ -133,5 +135,11 @@ def blank_menu(cb: TreeMenuCallbacks, *, accels: Dict[str, str] = None) -> MenuS
         ]),
         MenuSection("connect", [
             MenuItemSpec(_("_Quick Connect…"), cb.quick_connect, Icons.CONNECT, accels.get("quick-connect", "")),
+        ]),
+        MenuSection("view", [
+            MenuItemSpec(_("_Expand All Groups"), cb.expand_all_groups, Icons.CHEVRON_DOWN,
+                         accels.get("expand-all-groups", "")),
+            MenuItemSpec(_("C_ollapse All Groups"), cb.collapse_all_groups, Icons.CHEVRON_RIGHT,
+                         accels.get("collapse-all-groups", "")),
         ]),
     ]

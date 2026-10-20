@@ -59,6 +59,29 @@ ssh_manager/
   from opening dialogs. Each one gets the window (`self.win`) to reach shared
   services (`manager`, stores, settings) and its sibling controllers
   (`win.tree`, `win.sessions`, …).
+- **Tree expansion state** lives in `SessionTreeView.expanded_keys`: the
+  `(kind, parent, child)` keys of the groups opened in this session.
+  - **Startup:** a new view starts empty, so **every launch shows all groups
+    collapsed**. The set is never persisted (not in `.ui_state.json`,
+    settings or workspace files), and old keys found there are ignored.
+  - **Rebuilds:** `populate(rows)` fills the store with the model detached,
+    then expands exactly those rows, parents first. Keys of deleted groups are
+    dropped. `TreeController.remap_group_keys` carries an open group across
+    a rename or move.
+  - **Search and filters:** `TreeController.rebuild` passes
+    `populate(rows, temporary=search_reveal_keys(...))`. The ancestors of
+    the matches open without touching `expanded_keys`, so clearing the
+    search restores the user's view.
+  - **Selection:** `restore_selection` never expands anything; a previous
+    selection inside a closed group is simply not re-selected. User actions
+    (`select_host` / `select_*_group`, `reveal=True` by default) open the
+    ancestors via `reveal_path`.
+  - **Imports:** `reveal_imported` opens only the first level of the
+    imported top-level groups.
+  - **Temporary opens:** rows opened by drag hover or GTK's type-ahead search
+    are closed again afterwards.
+  - **Helpers:** `set_row_expanded` / `set_row_collapsed`, `expand_to_row`,
+    `expand_all_rows` and `collapse_all_rows`.
 - **GTK-free modules** hold logic worth testing without a display: tree
   rows, filters, menus, toast rules, UI state, validation and presenters.
 - **`SSHManagerWindow`** creates services and controllers, builds the views,

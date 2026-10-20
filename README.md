@@ -105,7 +105,9 @@ that direct file mode follows `Include` directives.
   session), F2 (rename tab), Ctrl+Shift+D (duplicate session), Ctrl+I (host
   details; in a terminal Ctrl+I is still Tab, use F9 there), Ctrl+B (sidebar),
   Ctrl+Shift+B (broadcast) and F11 (focus mode). Terminal copy and paste are
-  Ctrl+Shift+C / Ctrl+Shift+V.
+  Ctrl+Shift+C / Ctrl+Shift+V. The sidebar starts with every group collapsed;
+  Ctrl+Shift+O expands all groups and Ctrl+Shift+L collapses them again (also
+  in the filter popover and the tree's empty-space menu).
 
 ## Broadcast Input
 

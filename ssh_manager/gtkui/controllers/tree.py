@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
 import gi
 
@@ -20,7 +20,8 @@ from ..views.sidebar import TreePage  # noqa: E402
 from ..widgets.menus import build_context_menu, popup_menu  # noqa: E402
 from .shortcuts import accel_label  # noqa: E402
 from .tree_controller import (  # noqa: E402
-    TreeCallbacks, build_tree_rows, host_tooltip, parse_filter, search_text_for_host, sidebar_page_for,
+    FilterTerms, TreeCallbacks, TreeRow, build_tree_rows, filter_host, host_tooltip, parse_filter, search_text_for_host,
+    sidebar_page_for,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -70,6 +71,7 @@ class TreeController:
             ),
         )
         selected = self.current_item()
+        filtered = bool(query.strip() or terms)
         self.host_lookup.clear()
         self.read_only_keys = set()
         for top in rows:
@@ -79,7 +81,10 @@ class TreeController:
                     self.host_status.setdefault(row.key, "unknown")
                     if row.shared:
                         self.read_only_keys.add(row.key)
-        self.host_iters = self.win.tree_view.populate(rows)
+        # Unfiltered: exactly the groups the user opened this session (none at startup).
+        # Filtered: the ancestors of the matches, temporarily (clearing restores the user's view).
+        temporary = search_reveal_keys(rows, query, terms) if filtered else None
+        self.host_iters = self.win.tree_view.populate(rows, temporary=temporary)
         self.win.creds.prune_bindings()  # app store: bindings of deleted hosts go away
         self.restore_selection(*selected)
         self.win._sidebar.set_page(TreePage(sidebar_page_for(inventories, rows, bool(query or terms))))
@@ -91,13 +96,37 @@ class TreeController:
         self.update_action_state()
 
     def restore_selection(self, kind: str, data: Dict[str, str]) -> None:
+        """Re-select the previous row after a rebuild, only if it is visible: never expands anything."""
+
         row_kind = RowKind.coerce(kind)
         if row_kind is RowKind.HOST:
-            self.select_host(data.get("parent", ""), data.get("child", ""), data.get("alias", ""))
+            self.select_host(data.get("parent", ""), data.get("child", ""), data.get("alias", ""), reveal=False)
         elif row_kind is RowKind.CHILD:
-            self.select_child_group(data.get("parent", ""), data.get("child", ""))
+            self.select_child_group(data.get("parent", ""), data.get("child", ""), reveal=False)
         elif row_kind is RowKind.PARENT:
-            self.select_parent_group(data.get("parent", ""))
+            self.select_parent_group(data.get("parent", ""), reveal=False)
+
+    # ------------------------------------------------------ expand state
+    def expand_all_groups(self) -> None:
+        self.win.tree_view.expand_all_rows()
+
+    def collapse_all_groups(self) -> None:
+        self.win.tree_view.collapse_all_rows()
+
+    def reveal_imported(self, top_groups: Iterable[str]) -> None:
+        """After an import: open only the first level of the imported top-level groups and select the first."""
+
+        names = [name for name in top_groups if name]
+        view = self.win.tree_view
+        for name in names:
+            view.set_row_expanded(RowKind.PARENT.value, name)
+        if names:
+            self.select_parent_group(names[0])
+
+    def remap_group_keys(self, old_parent: str, new_parent: str, old_child: str = "", new_child: str = "") -> None:
+        """A group was renamed or moved: it stays open if it was (call before the rebuild)."""
+
+        self.win.tree_view.remap_keys(old_parent, new_parent, old_child, new_child)
 
     def search_text_for_host(self, host: HostEntry) -> str:
         return search_text_for_host(host, self.win.creds.display_username_for_host(host))
@@ -309,7 +338,8 @@ class TreeController:
         return True
 
     def menu_accels(self) -> Dict[str, str]:
-        return {name: accel_label(name) for name in ("host-connect", "rename", "host-delete", "new-host", "quick-connect")}
+        return {name: accel_label(name) for name in ("host-connect", "rename", "host-delete", "new-host", "quick-connect",
+                                                     "expand-all-groups", "collapse-all-groups")}
 
     def context_menu_spec(self):
         kind_value, data = self.current_item()
@@ -384,13 +414,20 @@ class TreeController:
 
         return traverse(self.win.tree_store, self.win.tree_store.get_iter_first())
 
-    def select_path(self, path: Optional[Gtk.TreePath]) -> None:
+    def select_path(self, path: Optional[Gtk.TreePath], *, reveal: bool = True) -> None:
+        """Select ``path``. ``reveal`` (a user action) opens its ancestors; otherwise a hidden row is skipped."""
+
         if path is None:
             return
-        self.win.tree_view.set_cursor(path)
-        self.win.tree_view.scroll_to_cell(path)
+        view = self.win.tree_view
+        if reveal:
+            view.reveal_path(path)
+        elif not view.is_row_visible(path):
+            return  # e.g. the previous selection inside a group that is now closed
+        view.set_cursor(path)
+        view.scroll_to_cell(path)
 
-    def select_host(self, parent: str, child: str, alias: str) -> None:
+    def select_host(self, parent: str, child: str, alias: str, *, reveal: bool = True) -> None:
         path = self.find_tree_path(
             lambda model, tree_iter: (
                 model.get_value(tree_iter, TreeColumn.KIND) == RowKind.HOST.value
@@ -399,9 +436,9 @@ class TreeController:
                 and model.get_value(tree_iter, TreeColumn.ALIAS) == alias
             )
         )
-        self.select_path(path)
+        self.select_path(path, reveal=reveal)
 
-    def select_child_group(self, parent: str, child: str) -> None:
+    def select_child_group(self, parent: str, child: str, *, reveal: bool = True) -> None:
         path = self.find_tree_path(
             lambda model, tree_iter: (
                 model.get_value(tree_iter, TreeColumn.KIND) == RowKind.CHILD.value
@@ -409,16 +446,16 @@ class TreeController:
                 and model.get_value(tree_iter, TreeColumn.CHILD) == child
             )
         )
-        self.select_path(path)
+        self.select_path(path, reveal=reveal)
 
-    def select_parent_group(self, parent: str) -> None:
+    def select_parent_group(self, parent: str, *, reveal: bool = True) -> None:
         path = self.find_tree_path(
             lambda model, tree_iter: (
                 model.get_value(tree_iter, TreeColumn.KIND) == RowKind.PARENT.value
                 and model.get_value(tree_iter, TreeColumn.PARENT) == parent
             )
         )
-        self.select_path(path)
+        self.select_path(path, reveal=reveal)
 
     def infer_target_group(self) -> Tuple[Optional[str], Optional[str]]:
         kind, data = self.current_item()
@@ -524,3 +561,31 @@ class TreeController:
                 read_only=parent.startswith("[Shared] "),
             )
         return details_presenter.empty_detail()
+
+
+def search_reveal_keys(rows: Iterable[TreeRow], query: str, terms: Optional[FilterTerms]) -> Set[Tuple[str, str, str]]:
+    """Group keys to open (temporarily) so every match of a search/filter is visible.
+
+    A host matches when the query is in its search text (or, with only filter
+    terms, when it passes them); a group matches when the query is in its own
+    search text. Their ancestors are opened, not the matching groups themselves.
+    """
+
+    needle = (query or "").strip().lower()
+    keys: Set[Tuple[str, str, str]] = set()
+
+    def visit(row: TreeRow, ancestors: List[Tuple[str, str, str]]) -> None:
+        if row.kind is RowKind.HOST:
+            matched = (needle in row.search) if needle else bool(terms and row.host and filter_host(row.host, terms))
+        else:
+            matched = bool(needle) and needle in row.search
+        if matched:
+            keys.update(ancestors)
+        if row.children:
+            own = (row.kind.value, row.parent, row.child)
+            for child in row.children:
+                visit(child, ancestors + [own])
+
+    for top in rows:
+        visit(top, [])
+    return keys

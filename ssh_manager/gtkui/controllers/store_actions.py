@@ -88,7 +88,7 @@ class StoreActions:
         LOGGER.info("OpenSSH import: %d added, %d skipped", report.added, report.skipped_existing)
         self.win.tree.rebuild(refresh=False)
         if report.first_group:
-            self.win.tree.select_parent_group(report.first_group)
+            self.win.tree.reveal_imported([report.first_group])  # the first level only
         level = Level.WARNING if report.errors or report.bindings_unmatched else Level.SUCCESS
         self.win._notify(report.summary(), level)
         return report
