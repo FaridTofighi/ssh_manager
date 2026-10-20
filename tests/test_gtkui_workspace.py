@@ -140,12 +140,15 @@ class SpawnPathTests(unittest.TestCase):
     def test_spawn_with_override_password_uses_sshpass(self) -> None:
         tab = self._tab()
         with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass"):
-            tab._spawn("s3cret", password_origin="retry", save_on_success=True)
+            tab._spawn("s3cret", password_origin="retry")
         argv, envv = tab._terminal.spawn_async.call_args[0][2:4]
         self.assertEqual(argv[:2], ["sshpass", "-e"])
         self.assertIn("SSHPASS=s3cret", envv)
+        self.assertNotIn("s3cret", " ".join(argv))  # only in the environment
         self.assertEqual(tab._password_source, "retry")
-        self.assertEqual(tab._password_to_save, "s3cret")
+        # Changed deliberately (Phase 1): a retry password is kept for this attempt only, never staged for saving.
+        self.assertEqual(tab._attempt_password, "s3cret")
+        self.assertFalse(hasattr(tab, "_password_to_save"))
         tab.destroy()
 
     def test_override_without_sshpass_does_not_spawn(self) -> None:

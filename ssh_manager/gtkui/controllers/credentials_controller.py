@@ -10,6 +10,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 
+from ...auth_flow import NO_PASSWORD, PasswordResolution  # noqa: E402
 from ...config import HostEntry  # noqa: E402
 from ...credentials import Credential  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
@@ -154,15 +155,6 @@ class CredentialController:
     def host_connection_params(self, host: HostEntry) -> Tuple[str, int, str]:
         return host_connection_params(host)
 
-    def seed_password_for_host(self, host: HostEntry, password: str) -> None:
-        hostname, port, user = self.host_connection_params(host)
-        if not hostname:
-            return
-        try:
-            self.win._secure_store.set(hostname, port, user, password)
-        except SecureStoreError:
-            pass
-
     def save_detected_password_change(self, host: HostEntry, password: str) -> bool:
         """Persist a password changed inside an active terminal session."""
 
@@ -232,12 +224,41 @@ class CredentialController:
                 self.win._notify(_("Credential '{name}' is unavailable: {error}").format(name=cred.name, error=exc), Level.WARNING)
         return None
 
-    def resolve_host_credentials(self, host: HostEntry) -> HostEntry:
-        resolved = self.host_with_resolved_identity(host)
-        password = self.credential_password_for_host(host)
-        if password:
-            self.seed_password_for_host(resolved, password)
-        return resolved
+    def resolve_password(self, host: HostEntry) -> PasswordResolution:
+        """The password for connecting to ``host`` and its source — read only, never writes a store.
+
+        Order: the bound vault entry (when unlocked) → the bound credential's
+        password → the legacy ``(host, port, user)`` secret (existing users) → none.
+        """
+
+        vault_entry = self.vault_entry_for_host(host)
+        if vault_entry and vault_entry.password:
+            return PasswordResolution(vault_entry.password, "vault", None)
+        cred = self.credential_for_host(host)
+        if cred:
+            try:
+                password = self.win._credential_store.get_password(cred.id)
+            except SecureStoreError as exc:
+                LOGGER.warning("credential password unavailable: %s", type(exc).__name__)
+                self.win._notify(_("Credential '{name}' is unavailable.").format(name=cred.name), Level.WARNING)
+                password = None
+            if password:
+                return PasswordResolution(password, "credential", cred.id)
+        hostname, port, user = self.host_connection_params(self.host_with_resolved_identity(host))
+        if hostname:
+            try:
+                legacy = self.win._secure_store.get(hostname, port, user)
+            except SecureStoreError as exc:
+                LOGGER.warning("stored password unavailable: %s", type(exc).__name__)
+                legacy = None
+            if legacy:
+                return PasswordResolution(legacy, "legacy", None)
+        return NO_PASSWORD
+
+    def resolve_host_credentials(self, host: HostEntry) -> Tuple[HostEntry, PasswordResolution]:
+        """``(host with the credential's username, password resolution)``; nothing is written."""
+
+        return self.host_with_resolved_identity(host), self.resolve_password(host)
 
     def display_username_for_host(self, host: HostEntry) -> str:
         cred = self.credential_for_host(host)

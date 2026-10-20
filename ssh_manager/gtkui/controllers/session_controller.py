@@ -6,6 +6,7 @@ import datetime
 import logging
 import shlex
 import threading
+from functools import partial
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -124,16 +125,17 @@ class SessionController:
                     destructive=True,
                 ):
                     continue
-            resolved = self.win.creds.resolve_host_credentials(host_obj)
+            resolved, _resolution = self.win.creds.resolve_host_credentials(host_obj)
+            provider = partial(self.win.creds.resolve_password, host_obj)  # re-resolved at every (re)connect
             if not isinstance(resolved, HostEntry):
                 self.win._notify(_("Unable to resolve host entry; skipping."), Level.WARNING)
                 continue
             profile = self.win.creds.profile_for_host(resolved)
             if self.win._settings.use_paramiko_vte:
-                self.open_host_paramiko(resolved, profile=profile)
+                self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
             else:
                 self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
-                tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile)
+                tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider)
                 self.bind_tab_status(tab, resolved)
             opened.append(resolved.alias)
 
@@ -145,7 +147,8 @@ class SessionController:
             suffix = f" from {source}" if source else ""
             self.win._notify(_("Opened {count} connections{suffix}.").format(count=len(opened), suffix=suffix), Level.SUCCESS)
 
-    def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None) -> None:
+    def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
+                           password_provider=None) -> None:
         tab = self.win.terminal_tabs.new_terminal(host, autostart=False, profile=profile)
         self.bind_tab_status(tab, host)
         host_cfg = self.build_host_config(host)
@@ -162,7 +165,7 @@ class SessionController:
         connector.add_error_callback(lambda message, tab=tab: self.win._notify_error(message))
         connector.add_warning_callback(lambda message, tab=tab: self.win._notify_warning(message))
         tab.connect("destroy", lambda *_: self.cleanup_paramiko_connector(tab))
-        connector.connect_to_host(host_cfg)
+        connector.connect_to_host(host_cfg, password_provider=password_provider)
 
     def cleanup_paramiko_connector(self, tab) -> None:
         self.paramiko_connectors.pop(tab, None)

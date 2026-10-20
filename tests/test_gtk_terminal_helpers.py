@@ -176,6 +176,7 @@ class GtkTerminalHelperTests(unittest.TestCase):
                 "_password_change_tracker": tracker,
                 "_terminal_tail": lambda self, term: "passwd: all authentication tokens updated successfully.",
                 "_persist_detected_password_change": lambda self, password: persisted.append(password),
+                "_authenticated": True,
                 "_password_prompt_poll_source_id": 99,
                 "_password_change_terminal": None,
                 "_focused_terminal": object(),
@@ -207,6 +208,7 @@ class GtkTerminalHelperTests(unittest.TestCase):
                 "_terminal_tail": lambda self, term: "Permission denied, please try again.",
                 "_handle_auth_failure_retry": lambda self: calls.append("retry") or True,
                 "_password_prompt_poll_source_id": 99,
+                "_authenticated": False,  # before login: the text is ssh's own
             },
         )()
 
@@ -216,7 +218,8 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(calls, ["retry"])
         self.assertEqual(dummy._password_prompt_poll_source_id, 0)
 
-    def test_auth_failure_retry_deletes_stored_password_and_schedules_prompt(self) -> None:
+    def test_auth_failure_retry_never_deletes_and_schedules_prompt(self) -> None:
+        # Changed deliberately (Phase 1): a rejected password may be a shared credential; it is never deleted.
         deleted = []
         actions = []
 
@@ -229,8 +232,9 @@ class GtkTerminalHelperTests(unittest.TestCase):
             (),
             {
                 "_auth_retry_pending": False,
-                "_password_source": "stored",
-                "_password_to_save": "old",
+                "_password_source": "credential",
+                "_PASSWORD_SOURCES": TerminalTab._PASSWORD_SOURCES,
+                "_session_password": None,
                 "_secure_store": Store(),
                 "_credential_components": lambda self: ("example.com", 22, "alice"),
                 "_terminate_current_child": lambda self: actions.append("terminated"),
@@ -245,8 +249,7 @@ class GtkTerminalHelperTests(unittest.TestCase):
 
         self.assertTrue(handled)
         self.assertTrue(dummy._auth_retry_pending)
-        self.assertIsNone(dummy._password_to_save)
-        self.assertEqual(deleted, [("example.com", 22, "alice")])
+        self.assertEqual(deleted, [])
         self.assertIn("terminated", actions)
         self.assertIn("prompt", actions)
 
@@ -262,6 +265,9 @@ class GtkTerminalHelperTests(unittest.TestCase):
                 "_set_status": lambda self, message, connected: calls.append(("status", message, connected)),
                 "_auth_retry_pending": False,
                 "_host": HostEntry(alias="app"),
+                "_authenticated": False,
+                "_check_marker_now": lambda self: False,
+                "_stop_auth_sources": lambda self, keep_retry=False: None,
             },
         )()
 

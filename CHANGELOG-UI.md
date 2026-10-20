@@ -6,6 +6,28 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Passwords, phase 1: correctness (no UI change)
+
+Details: `docs/passwords.md`.
+
+- **No re-seeding:** connecting no longer copies a credential's password into
+  the per-host secret. The connection password is resolved read-only:
+  vault → credential → legacy per-host secret → none (`PasswordResolution`).
+- **No deletes on failure:** a rejected password no longer deletes the
+  stored secret, in the terminal or in the Paramiko connector.
+- **Verified success:** each `ssh` spawn adds a `LocalCommand` sentinel (a
+  marker file in a private runtime directory) that proves authentication.
+  Where `PermitLocalCommand no` forbids it, a heuristic decides. The log names
+  the method.
+- **No silent saves:** a typed password is kept for the tab's session only.
+  The old "save after 2 s connected" path is removed.
+- **`classify_exit`:** only a real authentication failure opens the password
+  prompt. Host-key, network, public-key-only, OTP and "too many failures" do
+  not.
+- **Retry limit:** at most 3 attempts per connect, ≥ 1 s apart. Timers are
+  removed when the tab closes.
+- **Tests:** `tests/test_auth_flow.py`.
+
 ## MobaXterm import, amended for the inventory store
 
 The import writes only into the app inventory: one transaction, no files.

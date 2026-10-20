@@ -206,7 +206,10 @@ class Connector:
         self._warning_callbacks.append(callback)
 
     # ------------------------------------------------------------------ helpers
-    def connect_to_host(self, host_cfg: HostConfig) -> None:
+    def connect_to_host(self, host_cfg: HostConfig, password_provider=None) -> None:
+        """Connect in a worker thread; ``password_provider()`` gives the first password (PasswordResolution)."""
+
+        self._password_provider = password_provider
         if self._worker_thread and self._worker_thread.is_alive():
             raise RuntimeError("Connection already in progress.")
         if self.state_machine.state != ConnectionState.DISCONNECTED:
@@ -238,11 +241,18 @@ class Connector:
             getattr(self.settings, "banner_timeout", host_cfg.timeout),
         )
 
-        try:
-            stored_password = self.secure_store.get(host, port, username)
-        except SecureStoreError as exc:
-            LOGGER.warning("SecureStore get failed: %s", exc)
-            stored_password = None
+        provider = getattr(self, "_password_provider", None)
+        stored_password: Optional[str] = None
+        if provider is not None:  # the same resolution as the terminal (vault → credential → legacy)
+            try:
+                stored_password = provider().password
+            except Exception as exc:  # pragma: no cover - provider problems never block a connect
+                LOGGER.warning("Password resolution failed: %s", type(exc).__name__)
+        else:
+            try:
+                stored_password = self.secure_store.get(host, port, username)
+            except SecureStoreError as exc:
+                LOGGER.warning("SecureStore get failed: %s", exc)
 
         password: Optional[str] = stored_password
         remember_default = getattr(self.settings, "remember_password_default", True)
@@ -275,10 +285,10 @@ class Connector:
             if result.ok:
                 self._set_state(ConnectionState.AUTH_SUCCEEDED)
                 try:
-                    if remember_flag:
+                    # Only a password the user typed, after a verified login, with "remember" ticked.
+                    # A resolved (stored) password is never rewritten, and nothing is ever deleted here.
+                    if remember_flag and not using_stored_password:
                         self.secure_store.set(host, port, username, password)
-                    else:
-                        self.secure_store.delete(host, port, username)
                 except SecureStoreError as exc:
                     LOGGER.warning("SecureStore set/delete failed: %s", exc)
                     self._notify_warning(
@@ -297,12 +307,7 @@ class Connector:
             if result.is_auth_error:
                 self._set_state(ConnectionState.AUTH_FAILED)
                 last_error = "Authentication failed. Please enter your password again."
-
-                if using_stored_password:
-                    try:
-                        self.secure_store.delete(host, port, username)
-                    except SecureStoreError as exc:
-                        LOGGER.warning("SecureStore delete failed: %s", exc)
+                # A rejected password is never deleted: it may be a shared credential.
                 self._zeroize(password)
                 password = None
                 stored_password = None
