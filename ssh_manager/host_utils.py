@@ -7,6 +7,7 @@ import copy
 from typing import Any, List, Optional, Tuple
 
 from .config import HostEntry
+from .protocols import default_port
 from .ssh_command import build_connection_option_args
 
 
@@ -16,12 +17,12 @@ def host_option(host: HostEntry, *names: str) -> Optional[str]:
     return host.option(*names)
 
 
-def _port_number(value: Any) -> int:
+def _port_number(value: Any, default: int = 22) -> int:
     try:
         port = int(str(value).strip())
     except (TypeError, ValueError):
-        return 22
-    return port if 1 <= port <= 65535 else 22
+        return default
+    return port if 1 <= port <= 65535 else default
 
 
 def host_connection_params(host: HostEntry, *, default_user: str | None = None) -> Tuple[str, int, str]:
@@ -29,7 +30,8 @@ def host_connection_params(host: HostEntry, *, default_user: str | None = None) 
 
     hostname = host_option(host, "hostname", "host") or host.alias
     username = host_option(host, "user") or default_user or getpass.getuser()
-    port = _port_number(host_option(host, "port"))
+    # The port when none is set depends on the protocol (22 for SSH/SFTP, 21 for FTP …).
+    port = _port_number(host_option(host, "port"), default_port(getattr(host, "protocol", "ssh")))
     return hostname, port, username
 
 
@@ -69,4 +71,5 @@ def with_user(host: HostEntry, username: str) -> HostEntry:
         child_group=host.child_group,
         source_file=host.source_file,
         id=host.id,  # credential bindings follow the stable id
+        protocol=host.protocol,
     )

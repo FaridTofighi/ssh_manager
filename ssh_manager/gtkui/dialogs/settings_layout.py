@@ -88,6 +88,27 @@ class SettingsPageLayout(Gtk.Box):
         if row is not None:
             self._sidebar.select_row(row)
 
+    def set_page_visible(self, page_id: str, visible: bool) -> None:
+        """Show or hide a page and its navigation row (survives ``show_all``)."""
+
+        row, page = self._rows.get(page_id), self._pages.get(page_id)
+        if row is None or page is None:
+            return
+        for widget in (row, page):
+            widget.set_no_show_all(not visible)
+            if visible:
+                widget.show_all()
+            else:
+                widget.hide()
+        if not visible and self.current_page == page_id:
+            first = next((pid for pid in self._order if self.page_visible(pid)), None)
+            if first is not None:
+                self.show_page(first)
+
+    def page_visible(self, page_id: str) -> bool:
+        row = self._rows.get(page_id)
+        return row is not None and not row.get_no_show_all()
+
     @property
     def current_page(self) -> Optional[str]:
         return self._stack.get_visible_child_name()

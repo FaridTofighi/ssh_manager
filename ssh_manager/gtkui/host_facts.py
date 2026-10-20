@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
+from urllib.parse import quote
 
+from .. import protocols
 from ..host_utils import host_option
 from .constants import RowKind
 from .i18n import _, ngettext
@@ -167,7 +169,7 @@ def auth_summary(
 # ------------------------------------------------------------ connection text
 def _port(host) -> int:
     raw = host_option(host, "port") or ""
-    return int(raw) if raw.isdigit() else 22
+    return int(raw) if raw.isdigit() else protocols.default_port(protocols.protocol_of(host))
 
 
 def address_text(host, user: str) -> str:
@@ -184,10 +186,26 @@ def connection_text(host, user: str) -> str:
 
 
 def ssh_command_text(host, user: str) -> str:
+    """``ssh user@host -p N`` for SSH hosts; ``ftp://user@host:port`` for other protocols (never a password)."""
+
     target = host_option(host, "hostname", "host") or host.alias
+    if not protocols.is_ssh(host):
+        scheme = protocols.protocol_of(host)
+        port = _port(host)
+        netloc = f"{quote(user, safe='')}@{target}" if user else target
+        if port != protocols.default_port(scheme):
+            netloc += f":{port}"
+        return f"{scheme}://{netloc}"
     command = f"ssh {user}@{target}" if user else f"ssh {target}"
     port = _port(host)
     return f"{command} -p {port}" if port != 22 else command
+
+
+def protocol_text(host) -> str:
+    """The protocol's label for the details page ("SFTP (SSH file transfer)" …)."""
+
+    kind = protocols.kind_for(host)
+    return _(kind.label) if kind else protocols.protocol_of(host)
 
 
 def proxy_text(host) -> str:

@@ -11,6 +11,8 @@
   parent case-insensitively; host aliases likewise per group. Uniqueness uses
   a stored ``casefold()`` key (``name_key`` / ``alias_key``) so it holds for
   Unicode too (SQLite's ``NOCASE`` only folds ASCII).
+* Each host has a ``protocol`` (``ssh`` by default; ``ftp``, ``ftps``,
+  ``sftp`` …, see :mod:`ssh_manager.protocols`), added by schema v2.
 * Rolling backups (``backups/inventory-<stamp>-<reason>.db``, newest 5 kept,
   plus ``inventory.db.bak``) on schema migration and before destructive bulk
   operations.
@@ -32,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_NAME = 128
 BACKUP_KEEP = 5
 BUSY_TIMEOUT_S = 2.0
@@ -70,6 +72,14 @@ CREATE TABLE hosts (
 CREATE INDEX hosts_group ON hosts(group_id);
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+
+# v2: the connection protocol of a host (existing hosts are SSH).
+_SCHEMA_V2 = """
+ALTER TABLE hosts ADD COLUMN protocol TEXT NOT NULL DEFAULT 'ssh';
+CREATE INDEX hosts_protocol ON hosts(protocol);
+"""
+DEFAULT_PROTOCOL = "ssh"
+_PROTOCOL_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
 
 
 # --------------------------------------------------------------------- errors
@@ -175,6 +185,7 @@ class HostRow:
     options: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     position: int = 0
+    protocol: str = DEFAULT_PROTOCOL
 
 
 @dataclass
@@ -189,6 +200,20 @@ class NewHost:
     options: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
     id: Optional[str] = None
+    protocol: str = DEFAULT_PROTOCOL
+
+
+def clean_protocol(value: Optional[str]) -> str:
+    """A protocol id (``ssh``, ``ftp`` …): lower-case letters, digits, ``_`` and ``-``, 1–16 characters.
+
+    Unknown ids are kept (a newer version may know them); malformed ones are a
+    :class:`ValidationError`.
+    """
+
+    text = (value or DEFAULT_PROTOCOL).strip().lower()
+    if not (1 <= len(text) <= 16) or not set(text) <= _PROTOCOL_CHARS:
+        raise ValidationError(f"'{value}' is not a valid protocol.")
+    return text
 
 
 def _new_id() -> str:
@@ -201,7 +226,8 @@ def _group(row: sqlite3.Row) -> GroupRow:
 
 def _host(row: sqlite3.Row) -> HostRow:
     return HostRow(row["id"], row["group_id"], row["alias"], row["hostname"], row["port"], row["user"],
-                   json.loads(row["options_json"] or "{}"), json.loads(row["metadata_json"] or "{}"), row["position"])
+                   json.loads(row["options_json"] or "{}"), json.loads(row["metadata_json"] or "{}"), row["position"],
+                   row["protocol"] or DEFAULT_PROTOCOL)
 
 
 class InventoryStore:
@@ -288,11 +314,13 @@ class InventoryStore:
         if backup:
             self.backup(f"schema-v{version}")
         with self.transaction():
-            if version < 1:
-                # One statement at a time: executescript() would COMMIT the open transaction.
-                for statement in (part.strip() for part in _SCHEMA_V1.split(";")):
-                    if statement:
-                        self.conn.execute(statement)
+            # One statement at a time: executescript() would COMMIT the open transaction.
+            steps = [(1, _SCHEMA_V1), (2, _SCHEMA_V2)]
+            for target, script in steps:
+                if version < target:
+                    for statement in (part.strip() for part in script.split(";")):
+                        if statement:
+                            self.conn.execute(statement)
             self.conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     def data_version(self) -> int:
@@ -535,7 +563,7 @@ class InventoryStore:
             def copy_tree(src: str, dst: str) -> None:
                 for host in self.list_hosts(src):
                     new = self.add_host(NewHost(dst, host.alias, host.hostname, host.port, host.user,
-                                                dict(host.options), dict(host.metadata)))
+                                                dict(host.options), dict(host.metadata), protocol=host.protocol))
                     host_map[host.id] = new.id
                 for child in self.children(src):
                     new_child = self.create_group(dst, child.name, note=child.note)
@@ -584,6 +612,7 @@ class InventoryStore:
         port = int(new.port) if new.port is not None and new.port != "" else None
         self._validate_host(alias, hostname, port, user)
         options_json, metadata_json = self._json(new.options, "Option"), self._json(new.metadata, "Metadata")
+        protocol = clean_protocol(new.protocol)
         hid = new.id or _new_id()
         with self.transaction():
             if not self._group_exists(new.group_id):
@@ -591,10 +620,11 @@ class InventoryStore:
             self._check_alias_free(new.group_id, alias)
             now = time.time()
             self._exec("INSERT INTO hosts(id, group_id, alias, alias_key, hostname, port, user, options_json, "
-                       "metadata_json, position, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                       "metadata_json, position, created_at, updated_at, protocol) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (hid, new.group_id, alias, _fold(alias), hostname, port, user, options_json, metadata_json,
-                        0, now, now))
-        return HostRow(hid, new.group_id, alias, hostname, port, user, dict(new.options), dict(new.metadata))
+                        0, now, now, protocol))
+        return HostRow(hid, new.group_id, alias, hostname, port, user, dict(new.options), dict(new.metadata),
+                       protocol=protocol)
 
     def add_hosts_bulk(self, hosts: Iterable[NewHost]) -> List[HostRow]:
         """Insert many hosts in one transaction (all or nothing)."""
@@ -604,7 +634,7 @@ class InventoryStore:
 
     def update_host(self, host_id: str, *, alias: Optional[str] = None, hostname: Optional[str] = None,
                     port: Any = ..., user: Optional[str] = None, options: Optional[Dict[str, Any]] = None,
-                    metadata: Optional[Dict[str, Any]] = None) -> HostRow:
+                    metadata: Optional[Dict[str, Any]] = None, protocol: Optional[str] = None) -> HostRow:
         with self.transaction():
             host = self.get_host(host_id)
             if host is None:
@@ -617,12 +647,13 @@ class InventoryStore:
             self._check_alias_free(host.group_id, new_alias, except_id=host_id)
             new_options = host.options if options is None else options
             new_metadata = host.metadata if metadata is None else metadata
+            new_protocol = host.protocol if protocol is None else clean_protocol(protocol)
             self._exec("UPDATE hosts SET alias=?, alias_key=?, hostname=?, port=?, user=?, options_json=?, "
-                       "metadata_json=?, updated_at=? WHERE id=?",
+                       "metadata_json=?, updated_at=?, protocol=? WHERE id=?",
                        (new_alias, _fold(new_alias), new_hostname, new_port, new_user, self._json(new_options, "Option"),
-                        self._json(new_metadata, "Metadata"), time.time(), host_id))
+                        self._json(new_metadata, "Metadata"), time.time(), new_protocol, host_id))
         return HostRow(host_id, host.group_id, new_alias, new_hostname, new_port, new_user, dict(new_options),
-                       dict(new_metadata), host.position)
+                       dict(new_metadata), host.position, new_protocol)
 
     def move_hosts(self, host_ids: Sequence[str], group_id: str) -> None:
         with self.transaction():

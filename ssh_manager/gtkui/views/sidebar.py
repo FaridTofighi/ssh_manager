@@ -42,6 +42,7 @@ from ..widgets.icons import make_icon  # noqa: E402
 FILTER_HELP = _(
     "Combine <b>key:value</b> terms with <b>AND</b>.\n"
     "Keys: <tt>tag</tt>, <tt>environment</tt>, <tt>owner</tt>, <tt>service</tt>, "
+    "<tt>proto</tt> (<tt>ssh</tt>, <tt>ftp</tt>, <tt>ftps</tt>, <tt>sftp</tt>), "
     "or any SSH option such as <tt>user</tt> or <tt>port</tt>.\n"
     "Example: <tt>tag:prod AND owner:alice</tt>"
 )

@@ -119,6 +119,9 @@ def build_connection_option_args(options: Mapping[str, Any], *, port_flag: str =
 def build_ssh_command(host: HostEntry) -> List[str]:
     """Return a command argv list for launching `ssh` for the given host."""
 
+    protocol = (getattr(host, "protocol", "ssh") or "ssh")
+    if protocol != "ssh":
+        raise ValueError(f"'{host.alias}' is a {protocol} host, not an SSH host.")
     options = host.options
     command: List[str] = ["ssh", *build_connection_option_args(options, port_flag="-p")]
 

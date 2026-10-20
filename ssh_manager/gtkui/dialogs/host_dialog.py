@@ -9,6 +9,13 @@ jumps to the first page with an error instead of closing.
 jump-host field, so editing a host no longer rewrites a ProxyCommand into a
 ProxyJump.
 
+The first field is the **Protocol** (SSH, FTP, FTPS, SFTP — the registry in
+:mod:`ssh_manager.protocols`). It swaps the protocol-specific pages (keys and
+jump hosts, SSH options), shows the protocol's default port as the port
+placeholder, and asks before a switch on an existing host would drop settings
+that only the old protocol uses. Folder inventories are OpenSSH config files:
+SSH only.
+
 The Credentials page also chooses where the host's **password** comes from:
 the bound credential's password (default) or a password specific to this host
 (a private credential, see ``docs/passwords.md``). Nothing is stored here: the
@@ -24,6 +31,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
+from ... import protocols  # noqa: E402
 from ...config import HostEntry  # noqa: E402
 from ...credentials import Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_option  # noqa: E402
@@ -112,8 +120,14 @@ class HostDialog(BaseDialog):
         private_has_password: Optional[bool] = False,
         password_check: Optional[Callable[[], Optional[str]]] = None,
         can_edit: bool = True,
+        protocols_enabled: bool = True,
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
+        self._editing = host is not None
+        self._protocols_enabled = protocols_enabled
+        self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
+        self._port_edited = False  # the user typed a port in this dialog
+        self._suppress_protocol_events = False
         self._alias_validator = alias_validator or validate_alias  # app store: display names
         BaseDialog.__init__(self, parent, title, size=DialogSize.LARGE, height=560)
         self.get_content_area().set_margin_start(0)
@@ -143,6 +157,7 @@ class HostDialog(BaseDialog):
             self._fill_from_host(host)
         elif template_defaults:
             self._fill_from_template(template_defaults)
+        self._port_edited = False  # filled in, not typed
         self._apply_identity_source()
 
         self.add_cancel()
@@ -151,6 +166,70 @@ class HostDialog(BaseDialog):
         self.set_response_validator(lambda r: not is_accept(r) or self.validate())
         self.show_all()
         self._update_password_ui()
+        self._apply_protocol()
+
+    # ---------------------------------------------------------- protocol
+    def selected_protocol(self) -> str:
+        return self.protocol_combo.get_active_id() or protocols.DEFAULT_PROTOCOL
+
+    def _on_port_changed(self, _entry: Gtk.Entry) -> None:
+        if not self._suppress_protocol_events:
+            self._port_edited = True
+
+    def _discarded_by(self, new_protocol: str) -> List[str]:
+        """Settings of the current protocol that ``new_protocol`` does not use (names for the dialog)."""
+
+        new = protocols.get(new_protocol)
+        lost: List[str] = []
+        keeps_ssh = new is not None and (new.supports_keys or new.supports_jump_host)
+        if not keeps_ssh:
+            if self.identity_entry.get_text().strip():
+                lost.append(_("private key"))
+            if self.proxy_entry.get_text().strip():
+                lost.append(_("jump host"))
+            if self._extras_text().strip():
+                lost.append(_("SSH options"))
+        if (new is None or new.family != "transfer") and self._metadata.get("transfer"):
+            lost.append(_("file-transfer settings"))
+        return lost
+
+    def _on_protocol_changed(self, _combo: Gtk.ComboBoxText) -> None:
+        if self._suppress_protocol_events:
+            return
+        new_protocol = self.selected_protocol()
+        lost = self._discarded_by(new_protocol)
+        if self._editing and lost and not confirm(
+            self,
+            _("Change the protocol?"),
+            _("These settings are not used by {protocol} and are removed when you save: {items}.").format(
+                protocol=self.protocol_combo.get_active_text(), items=", ".join(lost)),
+            confirm_label=_("_Change Protocol"),
+            destructive=True,
+        ):
+            self._suppress_protocol_events = True
+            self.protocol_combo.set_active_id(self._protocol)
+            self._suppress_protocol_events = False
+            return
+        old_default = str(protocols.default_port(self._protocol))
+        self._protocol = new_protocol
+        if not self._port_edited and self.port_entry.get_text().strip() == old_default:
+            self._suppress_protocol_events = True
+            self.port_entry.set_text("")  # the new protocol's default (shown as the placeholder)
+            self._suppress_protocol_events = False
+        self._apply_protocol()
+
+    def _apply_protocol(self) -> None:
+        """Placeholder port, help texts and the pages the protocol uses."""
+
+        kind = protocols.get(self._protocol)
+        self.port_entry.set_placeholder_text(str(protocols.default_port(self._protocol)))
+        ssh_like = kind is None or kind.supports_keys or kind.supports_jump_host
+        self.layout.set_page_visible("connection", ssh_like)
+        self.layout.set_page_visible("ssh_options", ssh_like)
+        is_ssh = self._protocol == protocols.DEFAULT_PROTOCOL
+        self._hostname_row.help.set_text(_("Leave empty to connect to the alias itself.") if is_ssh
+                                         else _("Required for {protocol}.").format(
+                                             protocol=kind.badge if kind else self._protocol))
 
     # ------------------------------------------------------------ fields
     def _build_fields(self, meta: Dict[str, object], credential_id: Optional[str], vault_unlocked: bool) -> None:
@@ -159,6 +238,14 @@ class HostDialog(BaseDialog):
         self.user_entry = entry(placeholder=_("ubuntu"))
         self.port_entry = entry(placeholder="22")
         self.port_entry.set_width_chars(6)
+        self.port_entry.connect("changed", self._on_port_changed)
+        self.protocol_combo = Gtk.ComboBoxText()
+        for kind in protocols.all_kinds():
+            self.protocol_combo.append(kind.id, _(kind.label))
+        if protocols.get(self._protocol) is None:  # written by a newer version: keep it, do not offer others
+            self.protocol_combo.append(self._protocol, self._protocol)
+        self.protocol_combo.set_active_id(self._protocol)
+        self.protocol_combo.connect("changed", self._on_protocol_changed)
         self.identity_entry = entry(placeholder="~/.ssh/id_ed25519")
         self.proxy_entry = entry(placeholder=_("jump-host or user@jump:2222"))
         self.tags_entry = entry(placeholder=_("production, web, eu"))
@@ -200,6 +287,10 @@ class HostDialog(BaseDialog):
     def _page_general(self, labels: Gtk.SizeGroup) -> None:
         general = self.layout.new_page("general", _("General"), _("How the host appears in the tree and where it lives."))
         sec = FormSection()
+        self._protocol_row = sec.add(
+            _("Pro_tocol"), self.protocol_combo, label_group=labels,
+            help_text="" if self._protocols_enabled else _("This inventory is an OpenSSH config folder: SSH only."))
+        self.protocol_combo.set_sensitive(self._protocols_enabled)
         self._alias_row = sec.add(_("_Alias"), self.alias_entry, validator=self._alias_validator, label_group=labels,
                                   help_text=_("The name used in the tree and with “ssh <alias>”."))
         self._hostname_row = sec.add(_("_Host name"), self.hostname_entry, validator=validate_hostname, label_group=labels,
@@ -487,8 +578,12 @@ class HostDialog(BaseDialog):
     def validate(self) -> bool:
         """Validate every field; show the first page with an error."""
 
+        general_ok = self._sections["general"].validate()
+        if general_ok and self._protocol != protocols.DEFAULT_PROTOCOL and not self.hostname_entry.get_text().strip():
+            self._hostname_row.set_error(_("Enter the server's host name or address."))
+            general_ok = False
         checks = [
-            ("general", self._sections["general"].validate()),
+            ("general", general_ok),
             ("ssh_options", self._extras_row.validate()),
             ("credentials", self._validate_password()),
         ]
@@ -503,14 +598,13 @@ class HostDialog(BaseDialog):
         alias = self.alias_entry.get_text().strip()
         if not alias:
             return None
+        kind = protocols.get(self._protocol)
+        ssh_like = kind is None or kind.supports_keys or kind.supports_jump_host
         options: Dict[str, str] = {}
-        for key, widget in (
-            ("hostname", self.hostname_entry),
-            ("user", self.user_entry),
-            ("port", self.port_entry),
-            ("identityfile", self.identity_entry),
-            ("proxyjump", self.proxy_entry),
-        ):
+        fields = [("hostname", self.hostname_entry), ("user", self.user_entry), ("port", self.port_entry)]
+        if ssh_like:  # FTP / FTPS have no keys, jump hosts or ssh -o options
+            fields += [("identityfile", self.identity_entry), ("proxyjump", self.proxy_entry)]
+        for key, widget in fields:
             value = widget.get_text().strip()
             if value:
                 options[key] = value
@@ -520,8 +614,9 @@ class HostDialog(BaseDialog):
         cred = next((c for c in self._credential_choices if c.id == self.selected_credential_id()), None)
         if cred:
             options["user"] = cred.username
-        extra_options, _invalid = parse_option_lines(self._extras_text())
-        options.update(extra_options)
+        if ssh_like:
+            extra_options, _invalid = parse_option_lines(self._extras_text())
+            options.update(extra_options)
 
         metadata: Dict[str, object] = {
             "environment": self.environment_entry.get_text().strip(),
@@ -542,12 +637,15 @@ class HostDialog(BaseDialog):
         }
         if not all(perms.values()):
             metadata["permissions"] = perms
+        if kind is not None and kind.family == "transfer" and self._metadata.get("transfer"):
+            metadata["transfer"] = self._metadata["transfer"]  # protocol settings, never ssh options
         return HostEntry(
             alias=alias,
             options=options,
             metadata={k: v for k, v in metadata.items() if v},
             parent_group=parent,
             child_group=child,
+            protocol=self._protocol,
         )
 
     def selected_credential_id(self) -> Optional[str]:

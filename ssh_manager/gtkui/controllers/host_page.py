@@ -17,6 +17,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
+from ... import protocols  # noqa: E402
 from ...host_utils import host_connection_params  # noqa: E402
 from ..constants import Icons, RowKind  # noqa: E402
 from ..tree_icons import tree_icon_for  # noqa: E402
@@ -28,6 +29,7 @@ from ..host_facts import (  # noqa: E402
     format_latency,
     format_relative_time,
     latency_level,
+    protocol_text,
     proxy_text,
     ssh_command_text,
     uses_proxy,
@@ -266,6 +268,7 @@ class HostPageController:
             (_("Group"), f"{host.parent_group} / {host.child_group}", False),
             (_("Jump host"), host.option("proxyjump", "proxy_jump", "jump_host", "proxycommand") or "", True),
             (_("Identity file"), host.option("identityfile") or "", True),
+            (_("Protocol"), protocol_text(host) if not protocols.is_ssh(host) else "", False),
             (_("Authentication"), auth.label + (f" ({auth.detail})" if auth.detail else ""), False),
             (_("Password"), creds.password_summary(host), False),
             (_("Environment"), environment, False),
@@ -287,7 +290,7 @@ class HostPageController:
             title=host.alias,
             environment=environment,
             address=address_text(host, user),
-            icon=Icons.HOST,
+            icon=tree_icon_for(RowKind.HOST, protocol=protocols.protocol_of(host)).name,
             stats=stats,
             primary_label=primary,
             primary_outlined=outlined,

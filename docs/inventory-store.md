@@ -36,9 +36,18 @@ builds the `ssh` command from the host's options.
 groups(id, parent_id → groups ON DELETE CASCADE, name, name_key, position, note, created_at, updated_at)
        UNIQUE(name_key) for top-level groups, UNIQUE(parent_id, name_key) below them
 hosts (id, group_id → groups ON DELETE CASCADE, alias, alias_key, hostname, port, user,
-       options_json, metadata_json, position, created_at, updated_at, UNIQUE(group_id, alias_key))
-meta  (key, value)            schema version in PRAGMA user_version
+       options_json, metadata_json, position, created_at, updated_at, UNIQUE(group_id, alias_key),
+       protocol DEFAULT 'ssh'  -- schema v2, indexed)
+meta  (key, value)            schema version in PRAGMA user_version (2)
 ```
+
+- **Protocols (schema v2):** `hosts.protocol` is `ssh`, `ftp`, `ftps` or
+  `sftp` (see `docs/protocols.md`).
+  - **Migration:** opening a v1 database adds the column (existing hosts
+    become `ssh`) after a `schema-v1` backup.
+  - **Unknown ids:** ids written by a newer version are kept.
+  - **Settings:** non-SSH settings live in `metadata["transfer"]`, never in
+    the options (those become `ssh -o` arguments).
 
 - **Groups:**
   - Groups form a tree of any depth, and a group can hold hosts and

@@ -17,6 +17,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gio, Gtk  # type: ignore  # noqa: E402
 
+from ... import protocols  # noqa: E402
 from ...config import HostEntry  # noqa: E402
 from ...connection_state import ConnectionStateMachine  # noqa: E402
 from ...connector import Connector  # noqa: E402
@@ -24,6 +25,7 @@ from ...host_utils import build_scp_command, host_option  # noqa: E402
 from ...persistence import append_text  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
 from ...ssh_command import build_ssh_command  # noqa: E402
+from ..host_facts import ssh_command_text  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..constants import RowKind  # noqa: E402
 from ..i18n import _  # noqa: E402
@@ -64,6 +66,10 @@ class UIHostConfig:
     options: Dict[str, str] = field(default_factory=dict)
     alias: str = ""  # names the host in the password dialogs
 
+
+
+# The SSH opener; other protocols register theirs from their own UI module.
+protocols.set_opener("ssh", lambda win, host: win.sessions.open_ssh_host(host))
 
 
 class SessionController:
@@ -114,6 +120,19 @@ class SessionController:
             if not host_obj:
                 self.win._notify(_("Selected item is not a host; skipping."), Level.INFO)
                 continue
+            # Each host opens in its own kind of tab (terminal for SSH, file browser for FTP/SFTP …).
+            protocol = protocols.protocol_of(host_obj)
+            kind = protocols.kind_for(host_obj)
+            opener = protocols.opener_for(protocol)
+            if kind is None or opener is None:
+                self.win._notify(_("“{alias}” uses a protocol this version cannot open ({protocol}).").format(
+                    alias=host_obj.alias, protocol=kind.label if kind else protocol), Level.WARNING)
+                continue
+            problems = kind.validate(host_obj) if not kind.terminal else []
+            if problems:
+                self.win._notify(_("Cannot open “{alias}”: {problem}").format(alias=host_obj.alias,
+                                                                              problem=_(problems[0])), Level.WARNING)
+                continue
             self.audit_log("connect", host_obj)
             perms = self.win.creds.permissions_for_host(host_obj)
             if not perms.get("can_connect", True):
@@ -125,20 +144,9 @@ class SessionController:
                     destructive=True,
                 ):
                     continue
-            resolved, _resolution = self.win.creds.resolve_host_credentials(host_obj)
-            provider = partial(self.win.creds.resolve_password, host_obj)  # re-resolved at every (re)connect
-            if not isinstance(resolved, HostEntry):
-                self.win._notify(_("Unable to resolve host entry; skipping."), Level.WARNING)
-                continue
-            profile = self.win.creds.profile_for_host(resolved)
-            if self.win._settings.use_paramiko_vte:
-                self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
-            else:
-                self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
-                tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
-                                                          password_service=self.win.creds)
-                self.bind_tab_status(tab, resolved)
-            opened.append(resolved.alias)
+            alias = opener(self.win, host_obj)
+            if alias:
+                opened.append(alias)
 
         if not opened:
             return
@@ -147,6 +155,24 @@ class SessionController:
         else:
             suffix = f" from {source}" if source else ""
             self.win._notify(_("Opened {count} connections{suffix}.").format(count=len(opened), suffix=suffix), Level.SUCCESS)
+
+    def open_ssh_host(self, host_obj: HostEntry) -> Optional[str]:
+        """The SSH opener (protocol registry): a terminal tab; returns the alias, or ``None``."""
+
+        resolved, _resolution = self.win.creds.resolve_host_credentials(host_obj)
+        provider = partial(self.win.creds.resolve_password, host_obj)  # re-resolved at every (re)connect
+        if not isinstance(resolved, HostEntry):
+            self.win._notify(_("Unable to resolve host entry; skipping."), Level.WARNING)
+            return None
+        profile = self.win.creds.profile_for_host(resolved)
+        if self.win._settings.use_paramiko_vte:
+            self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
+        else:
+            self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
+            tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
+                                                      password_service=self.win.creds)
+            self.bind_tab_status(tab, resolved)
+        return resolved.alias
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:
@@ -232,6 +258,7 @@ class SessionController:
         fields: List[str] = [f"{timestamp} [{action}] host={host_display}"]
         if username:
             fields.append(f"user={username}")
+        fields.append(f"protocol={audit_log_value(protocols.protocol_of(host))}")
         if extra:
             for k, v in extra.items():
                 if v:
@@ -347,6 +374,11 @@ class SessionController:
             self.win._notify_info(_("Select a host to copy its SSH command."))
             return
         resolved = self.win.creds.host_with_resolved_identity(host)
+        if not protocols.is_ssh(resolved):  # an FTP / SFTP host: its address (never a password)
+            user = self.win.creds.display_username_for_host(host)
+            Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(ssh_command_text(resolved, user), -1)
+            self.win._notify(_("Address copied to the clipboard."), Level.SUCCESS)
+            return
         command = shlex.join(build_ssh_command(resolved))
         Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(command, -1)
         self.win._notify(_("SSH command copied to the clipboard."), Level.SUCCESS)
@@ -355,6 +387,10 @@ class SessionController:
         host = self.win.tree.selected_host()
         if not host:
             self.win._notify(_("Select a host to copy SCP command."), Level.INFO)
+            return
+        if not protocols.is_ssh(host):
+            self.win._notify(_("“{alias}” is not an SSH host; there is no SCP command.").format(alias=host.alias),
+                             Level.INFO)
             return
         command = shlex.join(build_scp_command(host))
         try:

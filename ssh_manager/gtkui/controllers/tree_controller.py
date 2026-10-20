@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from ... import protocols
 from ...config import GroupConfig, HostEntry
 from ..constants import RowKind
 from ..tree_icons import tree_icon_for
@@ -64,7 +65,9 @@ def filter_host(host: HostEntry, terms: Sequence[Tuple[str, str]]) -> bool:
     """True when ``host`` satisfies every filter term."""
 
     for key, val in terms:
-        if key in {"tag", "tags"}:
+        if key in {"proto", "protocol"}:  # proto:ftp, protocol:sftp
+            matched = (getattr(host, "protocol", "ssh") or "ssh").lower() == val
+        elif key in {"tag", "tags"}:
             tags = [t.strip().lower() for t in _option(host, "tags").split(",") if t.strip()]
             matched = val in tags
         elif key in {"environment", "owner", "service"}:
@@ -83,6 +86,7 @@ def search_text_for_host(host: HostEntry, display_user: str = "") -> str:
         (display_user or "").lower(),
         _option(host, "tags").lower(),
         _option(host, "proxyjump").lower(),
+        "" if protocols.is_ssh(host) else protocols.protocol_of(host),  # "sftp" finds SFTP hosts
     ]
     return " ".join(filter(None, parts))
 
@@ -118,7 +122,8 @@ class TreeRow:
 
         file_backed = self.file_backed if self.kind is RowKind.CHILD else None
         return tree_icon_for(self.kind, read_only=self.read_only, file_backed_group=file_backed,
-                             has_children=bool(self.children)).name
+                             has_children=bool(self.children),
+                             protocol=protocols.protocol_of(self.host) if self.host is not None else "").name
 
     @property
     def key(self) -> str:
@@ -145,9 +150,12 @@ def host_tooltip(host: HostEntry, user: str, status: str, password: str = "") ->
     target = _option(host, "hostname", "host") or host.alias
     port = _option(host, "port")
     address = f"{user}@{target}" if user else target
-    if port and port != "22":
+    if port and port != str(protocols.default_port(protocols.protocol_of(host))):
         address += f":{port}"
     text = f"{host.alias}\n{address}\n{status_text(status)}"
+    if not protocols.is_ssh(host):
+        kind = protocols.kind_for(host)
+        text += "\n" + _("Protocol: {name}").format(name=_(kind.label) if kind else protocols.protocol_of(host))
     if password:
         text += "\n" + _("Password: {source}").format(source=password)
     return text

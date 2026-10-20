@@ -149,6 +149,7 @@ class StoreConfigManager:
                 parent_group=top,
                 child_group=child,
                 id=row.id,
+                protocol=row.protocol,
             ))
         for children in tree.values():
             for entry in children.values():
@@ -332,7 +333,8 @@ class StoreConfigManager:
     # ----------------------------------------------------------------- host
     def _new_host(self, group_id: str, host: HostEntry) -> NewHost:
         hostname, port, user, rest = host_columns(host.options)
-        return NewHost(group_id, host.alias, hostname, port, user, rest, dict(host.metadata), id=host.id or None)
+        return NewHost(group_id, host.alias, hostname, port, user, rest, dict(host.metadata), id=host.id or None,
+                       protocol=getattr(host, "protocol", "ssh") or "ssh")
 
     def add_host(self, parent_name: str, child_name: str, host: HostEntry) -> Result:
         group_id = self.group_id(parent_name, child_name)
@@ -354,7 +356,8 @@ class StoreConfigManager:
         try:
             hostname, port, user, rest = host_columns(host.options)
             self.store.update_host(host_id, alias=host.alias, hostname=hostname, port=port, user=user,
-                                   options=rest, metadata=dict(host.metadata))
+                                   options=rest, metadata=dict(host.metadata),
+                                   protocol=getattr(host, "protocol", "ssh") or "ssh")
         except InventoryError as exc:
             return False, str(exc)
         host.id = host_id

@@ -18,6 +18,7 @@ from ...inventory.openssh import (  # noqa: E402
     commit_openssh_import,
     import_sources_found,
     include_line_change,
+    non_ssh_hosts,
     plan_openssh_import,
     write_export,
 )
@@ -142,7 +143,13 @@ class StoreActions:
         except (OSError, ValueError) as exc:
             self.win._notify_error(_("Export failed: {error}").format(error=exc))
             return None
-        self.win._notify(_("Exported to {path}.").format(path=_home(path)), Level.SUCCESS)
+        skipped = len(non_ssh_hosts(self.win.manager.tree))
+        message = _("Exported to {path}.").format(path=_home(path))
+        if skipped:
+            message += " " + ngettext("{n} host that is not an SSH host (FTP, SFTP …) was left out.",
+                                      "{n} hosts that are not SSH hosts (FTP, SFTP …) were left out.",
+                                      skipped).format(n=skipped)
+        self.win._notify(message, Level.SUCCESS)
         if offer_include:
             self.offer_include(path, ask=ask)
         return path

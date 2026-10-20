@@ -31,6 +31,9 @@ class HostEntry:
     parent_group: str = ""
     child_group: str = ""
     id: str = ""  # stable host id (app store); "" for file-based inventories
+    # Connection protocol (ssh, ftp, ftps, sftp …; see ssh_manager.protocols). Folder inventories are
+    # OpenSSH config files: always "ssh". Non-SSH settings live in metadata["transfer"], never in options.
+    protocol: str = "ssh"
 
     def option(self, *names: str) -> Optional[str]:
         wanted = {name.lower() for name in names}

@@ -6,6 +6,37 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Connection protocols, phase F0: the foundation
+
+Details: `docs/protocols.md`.
+
+- **Registry** (`ssh_manager/protocols`): `ssh`, `ftp`, `ftps`, `sftp` with
+  labels, badges, icons, default ports and capabilities. Openers are attached
+  by the UI. `open_hosts()` dispatches by protocol; an unknown protocol, or
+  one without an opener yet, is a message, not an exception.
+- **Inventory schema v2:** `hosts.protocol` (default `ssh`, indexed), added
+  after a backup. `HostEntry.protocol` is carried through the store, the
+  manager, duplicate, move and imports. Non-SSH settings live in
+  `metadata["transfer"]`.
+- **No more SSH assumptions:**
+  - **Export:** OpenSSH export skips non-SSH hosts and reports them.
+  - **Commands:** `build_ssh_command` refuses them; Copy SSH command copies
+    a `scheme://user@host:port` URL instead.
+  - **Ports:** default ports follow the protocol.
+  - **Logs and filters:** the audit log records `protocol=`; `proto:` /
+    `protocol:` filter terms and search by protocol name.
+- **UI:**
+  - **Tree:** a new `sshm-transfer` icon and a protocol pill at the right
+    edge of non-SSH host rows (SSH rows unchanged).
+  - **Details and tooltip:** a "Protocol" fact and a tooltip line.
+  - **Host dialog:** **Protocol** is now the first field. It swaps the SSH
+    pages, updates the default port unless one was typed, and confirms
+    before dropping settings. It is disabled for folder inventories.
+- **Not yet:** FTP, FTPS and SFTP hosts can be created and are shown, but
+  they open only from phase F2 (the file browser). Until then they show the
+  "cannot open" message.
+- **Tests:** `tests/test_protocols.py`.
+
 ## Sidebar starts collapsed
 
 - **Every launch:** all groups, top-level and nested, start collapsed; only

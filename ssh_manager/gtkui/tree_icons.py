@@ -9,7 +9,7 @@ Row                       Icon
 group, collapsed          ``sshm-folder``
 group, expanded           ``sshm-folder-open``
 config-file group         ``sshm-file-conf``
-host                      ``sshm-server``
+host                      ``sshm-server`` (FTP / FTPS / SFTP: ``sshm-transfer``)
 ========================  =====================
 
 Every icon is drawn in one color, ``icon_default`` (white on dark, near-black
@@ -30,6 +30,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from .. import protocols
 from .constants import Icons, RowKind
 from .theme.tokens import ConnectionStatus
 
@@ -63,6 +64,7 @@ def tree_icon_for(
     *,
     selected: bool = False,
     has_children: bool = True,
+    protocol: str = "",
 ) -> TreeIcon:
     """Icon for a tree row.
 
@@ -73,7 +75,9 @@ def tree_icon_for(
     del selected  # the icon color is the same in every row state
     row_kind = RowKind.coerce(kind)
     if row_kind is RowKind.HOST:
-        return TreeIcon(Icons.HOST, lock=bool(read_only))
+        kind = protocols.get(protocol) if protocol else None
+        icon = Icons.TRANSFER if kind is not None and kind.family == "transfer" else Icons.HOST
+        return TreeIcon(icon, lock=bool(read_only))
     if file_backed(kind) if file_backed_group is None else file_backed_group:
         return TreeIcon(Icons.FILE_CONF)
     return TreeIcon(Icons.FOLDER_OPEN if expanded and has_children else Icons.FOLDER)

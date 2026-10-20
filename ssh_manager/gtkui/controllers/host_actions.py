@@ -85,6 +85,8 @@ class HostActions:
             private_has_password=private_has_password,
             password_check=self.win.creds.password_store_problem,
             can_edit=self.win.creds.permissions_for_host(host).get("can_edit", True) if host else True,
+            # Only the app-owned inventory stores protocols; folder inventories are OpenSSH config files.
+            protocols_enabled=bool(getattr(self.win.manager, "allows_display_names", False)),
             metadata=host.metadata if host else {},
             vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
             vault_unlocked=self.win._vault.unlocked,

@@ -5,8 +5,10 @@ subclass, so accessibility still reads the row text):
 
 * groups: chevron, folder / open-folder icon (``*.conf`` groups: file icon),
   label (semibold at the top level) and the host count at the right edge;
-* hosts: server icon with the connection-status badge (and a lock when the
-  host is read-only) composited on, then the label.
+* hosts: server icon (file-transfer icon for FTP / FTPS / SFTP) with the
+  connection-status badge (and a lock when the host is read-only) composited
+  on, then the label; non-SSH hosts get a small protocol pill (``FTP``,
+  ``FTPS``, ``SFTP``) at the right edge, where groups show their count.
 
 Icons, colors and overlays come from :mod:`gtkui.tree_icons`; every level has
 one icon column (hosts leave the chevron slot empty), so labels of one level
@@ -41,6 +43,7 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GLib, GObject, Gtk, Pango, PangoCairo  # type: ignore  # noqa: E402
 
+from ... import protocols  # noqa: E402
 from ..constants import RowKind, TreeColumn  # noqa: E402
 from ..controllers.tree_controller import TreeRow  # noqa: E402
 from ..i18n import _  # noqa: E402
@@ -129,6 +132,8 @@ class RelayRowRenderer(Gtk.CellRendererText):
     read_only = GObject.Property(type=bool, default=False)
     file_backed = GObject.Property(type=bool, default=True)
     gap = GObject.Property(type=int, default=0)
+    protocol = GObject.Property(type=str, default="")  # hosts: ssh, ftp, ftps, sftp …
+    badge = GObject.Property(type=str, default="")  # protocol pill text ("" for SSH)
 
     def __init__(self, icon_cache: dict) -> None:
         Gtk.CellRendererText.__init__(self)
@@ -214,6 +219,9 @@ class RelayRowRenderer(Gtk.CellRendererText):
         right_reserved = 0
         if kind is RowKind.HOST:
             right_reserved = COUNT_RIGHT  # the status lives on the icon; the right edge is for counts
+            if self.props.badge:
+                right_reserved += self._paint_badge(cr, widget, self.props.badge, width - COUNT_RIGHT, mid,
+                                                    COUNT_SCALE, selected) + 8
         else:
             count_layout = widget.create_pango_layout(str(self.props.count))
             font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
@@ -242,7 +250,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
         palette = current_palette()
         icon = tree_icon_for(kind, self.props.expanded, self.props.read_only,
                              self.props.file_backed if kind is RowKind.CHILD else None,
-                             selected=selected, has_children=self.props.expandable)
+                             selected=selected, has_children=self.props.expandable, protocol=self.props.protocol)
         color = icon_color(palette, icon, self.props.color)
         badge_name = badge_color = ""
         alpha = 1.0
@@ -258,6 +266,28 @@ class RelayRowRenderer(Gtk.CellRendererText):
         if surface is not None:
             cr.set_source_surface(surface, x, round(mid - size / 2.0))
             cr.paint()
+
+    def _paint_badge(self, cr, widget, text: str, right: float, mid: float, scale: float, selected: bool) -> int:
+        """A small outlined pill with the protocol name, right-aligned at ``right``; returns its width."""
+
+        palette = current_palette()
+        layout = widget.create_pango_layout(text)
+        font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
+        font.set_size(int(font.get_size() * scale * 0.9))
+        font.set_weight(Pango.Weight.SEMIBOLD)
+        layout.set_font_description(font)
+        _ink, logical = layout.get_pixel_extents()
+        pad_x, pad_y = 4, 1
+        w, h = logical.width + 2 * pad_x, logical.height + 2 * pad_y
+        x, y = right - w, mid - h / 2.0
+        cr.set_source_rgba(*self._channels(palette.border_strong))
+        cr.set_line_width(1)
+        _rounded_rect(cr, x + 0.5, y + 0.5, w - 1, h - 1, h / 2.0)
+        cr.stroke()
+        cr.set_source_rgba(*self._channels(palette.accent_text if selected else palette.text_secondary))
+        cr.move_to(x + pad_x, y + pad_y)
+        PangoCairo.show_layout(cr, layout)
+        return int(w)
 
     def _paint_icon(self, cr, name: str, color: str, size: int, x: float, mid: float, scale: int) -> None:
         surface = render_svg_surface(name, color, size, scale, self._icon_cache)
@@ -350,6 +380,9 @@ class SessionTreeView(Gtk.TreeView):
         cell.set_property("color", model.get_value(tree_iter, TreeColumn.COLOR) or "")
         cell.set_property("read_only", bool(model.get_value(tree_iter, TreeColumn.READ_ONLY)))
         cell.set_property("file_backed", bool(model.get_value(tree_iter, TreeColumn.FILE_BACKED)))
+        host = model.get_value(tree_iter, TreeColumn.HOST)
+        cell.set_property("protocol", protocols.protocol_of(host) if host is not None else "")
+        cell.set_property("badge", protocols.badge_for(host) if host is not None else "")
         cell.set_property("expandable", model.iter_has_child(tree_iter))
         cell.set_property("expanded", self.row_expanded(path))
         cell.set_property("gap", Layout.Tree.GROUP_GAP if depth == 0 and indices and indices[0] > 0 else 0)
