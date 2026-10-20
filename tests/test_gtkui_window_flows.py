@@ -94,7 +94,7 @@ class WindowFlowTests(unittest.TestCase):
         win = self.win
         win.tree.select_host("prod", "web.conf", "web-02")
         edited = HostEntry(alias="web-02", options={"hostname": "web-02.example.com"}, parent_group="prod", child_group="web.conf")
-        with mock.patch.object(type(win.hosts), "run_host_dialog", return_value=(edited, None)):
+        with mock.patch.object(type(win.hosts), "run_host_dialog", return_value=(edited, None, None)):
             win.hosts.edit_selected()
         host = win.tree.find_host_by_alias("web-02")
         self.assertEqual(host.option("hostname"), "web-02.example.com")

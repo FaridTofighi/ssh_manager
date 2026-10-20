@@ -1093,7 +1093,7 @@ class TerminalTab(Gtk.Box):
             return GLib.SOURCE_REMOVE
         return True
 
-    _PASSWORD_SOURCES = {"vault", "credential", "legacy", "session", "prompt", "retry", "stored"}
+    _PASSWORD_SOURCES = {"vault", "credential", "host", "legacy", "session", "prompt", "retry", "stored"}
 
     def _handle_auth_failure_retry(self) -> bool:
         """The password was rejected: stop the child and ask again. Stored secrets are never touched."""

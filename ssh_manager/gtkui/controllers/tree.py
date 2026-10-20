@@ -66,6 +66,7 @@ class TreeController:
                 status=lambda key: self.host_status.get(key, "unknown"),
                 color=self.win.colors.item_color_for,
                 read_only=lambda host: not self.win.creds.permissions_for_host(host).get("can_edit", True),
+                password=self.win.creds.password_summary,
             ),
         )
         selected = self.current_item()
@@ -234,7 +235,8 @@ class TreeController:
                 host = self.host_lookup.get(key)
                 if host is not None:  # the tooltip spells the status out (color is not the only cue)
                     user = self.win.creds.display_username_for_host(host)
-                    self.win.tree_store.set_value(tree_iter, TreeColumn.TOOLTIP, host_tooltip(host, user, state))
+                    self.win.tree_store.set_value(tree_iter, TreeColumn.TOOLTIP,
+                                                  host_tooltip(host, user, state, self.win.creds.password_summary(host)))
             except Exception:
                 pass
         if getattr(self.win, "closing", False):

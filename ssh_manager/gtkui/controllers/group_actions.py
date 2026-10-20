@@ -77,13 +77,23 @@ class GroupActions:
         return sum(len(group.hosts) for group in groups.values())
 
     def _copy_duplicate_bindings(self) -> None:
-        """App store: the hosts of a duplicated group keep their credentials (bound by the new ids)."""
+        """App store: the hosts of a duplicated group keep their credentials (bound by the new ids).
+
+        A host-specific password is never copied: the copy is bound to the
+        shared credential it replaced (if any) and the user is told.
+        """
 
         mapping = getattr(self.win.manager, "last_duplicate_map", None) or {}
         store = self.win._credential_store
-        bindings = {new: store.binding_for_host(old) for old, new in mapping.items() if store.binding_for_host(old)}
+        bindings = {new: store.shared_for_copy(old) for old, new in mapping.items() if store.shared_for_copy(old)}
         if bindings:
             self.win.creds.bind_many(bindings)
+        skipped = sum(1 for old in mapping if store.private_for_host(old))
+        if skipped:
+            self.win._notify(ngettext(
+                "{n} host-specific password was not copied; the copy uses its credential, if any.",
+                "{n} host-specific passwords were not copied; the copies use their credentials, if any.",
+                skipped).format(n=skipped), Level.INFO)
 
     @requires_editable_inventory
     def create_parent_group(self) -> None:

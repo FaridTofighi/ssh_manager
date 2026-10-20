@@ -12,7 +12,7 @@ gi.require_version("Gdk", "3.0")
 
 from ...auth_flow import NO_PASSWORD, PasswordResolution  # noqa: E402
 from ...config import HostEntry  # noqa: E402
-from ...credentials import Credential  # noqa: E402
+from ...credentials import KEEP, Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
 from ...secure_store import FileKeyring, KeyringError, SecureStoreError  # noqa: E402
@@ -208,7 +208,7 @@ class CredentialController:
 
         if vault_entry:
             return with_user(host, vault_entry.username)
-        if cred:
+        if cred and cred.username:  # a host-specific credential may leave User to the host / ssh
             return with_user(host, cred.username)
         return host
 
@@ -229,6 +229,8 @@ class CredentialController:
 
         Order: the bound vault entry (when unlocked) → the bound credential's
         password → the legacy ``(host, port, user)`` secret (existing users) → none.
+        A host-specific password is the bound (private) credential; its source
+        is ``"host"`` instead of ``"credential"``.
         """
 
         vault_entry = self.vault_entry_for_host(host)
@@ -243,7 +245,7 @@ class CredentialController:
                 self.win._notify(_("Credential '{name}' is unavailable.").format(name=cred.name), Level.WARNING)
                 password = None
             if password:
-                return PasswordResolution(password, "credential", cred.id)
+                return PasswordResolution(password, "host" if cred.private else "credential", cred.id)
         hostname, port, user = self.host_connection_params(self.host_with_resolved_identity(host))
         if hostname:
             try:
@@ -262,12 +264,89 @@ class CredentialController:
 
     def display_username_for_host(self, host: HostEntry) -> str:
         cred = self.credential_for_host(host)
-        if cred:
+        if cred and cred.username:
             return cred.username
         vault_entry = self.vault_entry_for_host(host)
         if vault_entry:
             return vault_entry.username
         return host_option(host, "user") or ""
+
+    # ------------------------------------------------ host-specific passwords
+    def private_credential_for_host(self, host: HostEntry) -> Optional[Credential]:
+        return self.win._credential_store.private_for_host(self.credential_key(host))
+
+    def password_summary(self, host: HostEntry) -> str:
+        """``credential ‘X’`` / ``host-specific`` / ``""`` — where the host's password comes from (never the value)."""
+
+        cred = self.credential_for_host(host)
+        if not cred:
+            return ""
+        if cred.private:
+            return _("host-specific")
+        return _("credential ‘{name}’").format(name=cred.name)
+
+    def password_store_problem(self) -> Optional[str]:
+        """Why passwords cannot be saved right now (locked password file, keyring error), or ``None``."""
+
+        backend = self.win._secure_store.backend
+        if isinstance(backend, FileKeyring) and backend.locked:
+            return _("Saved passwords are locked. Unlock them with the master password, then try again.")
+        try:
+            self.win._credential_store.get_password("probe")
+        except SecureStoreError as exc:
+            LOGGER.warning("secret store unavailable: %s", type(exc).__name__)
+            return _("The password store is unavailable. Nothing was changed.")
+        return None
+
+    def apply_host_credentials(self, host: HostEntry, cred_id: Optional[str],
+                               choice: Optional[PasswordChoice] = None) -> bool:
+        """Bind ``host`` (already saved) to ``cred_id`` or to its own password, as chosen in the host dialog.
+
+        * Credential's password: bind ``cred_id``; a private credential the host
+          had is deleted with its secret (same save).
+        * Host-specific: create the private credential (``based_on`` the
+          selected shared one, whose username it copies; the shared credential
+          is untouched) or update its password / clear it / its username.
+
+        Also the entry point for Phase 3 ("Save this password for this
+        host?"): ``PasswordChoice(host_specific=True, password=…)``. On
+        :class:`SecureStoreError` nothing is changed and the user is told.
+        """
+
+        store = self.win._credential_store
+        key = self.credential_key(host)
+        try:
+            if choice is None or not choice.host_specific:
+                store.bind_host(key, cred_id)
+                return True
+            shared = store.get(cred_id) if cred_id else None
+            if shared is not None and shared.private:
+                shared = None
+            username = shared.username if shared else (host_option(host, "user") or "")
+            private = store.private_for_host(key)
+            if private is None:
+                store.create_private(key, username, None if choice.clear else choice.password,
+                                     label=host.alias, based_on=shared.id if shared else None)
+                return True
+            store.update_private(
+                key,
+                password=None if choice.clear else (choice.password or KEEP),
+                username=username,
+                based_on=shared.id if shared else None,
+            )
+            return True
+        except SecureStoreError as exc:
+            LOGGER.warning("host password update failed: %s", type(exc).__name__)
+            self.win._notify(_("Could not save the password for ‘{alias}’. Nothing was changed.").format(alias=host.alias),
+                             Level.ERROR)
+            return False
+
+    def binding_for_copy(self, host: HostEntry) -> Tuple[Optional[str], bool]:
+        """``(credential id for a copy of host, whether a host-specific password was left behind)``."""
+
+        store = self.win._credential_store
+        key = self.credential_key(host)
+        return store.shared_for_copy(key), store.private_for_host(key) is not None
 
     def forget_password(self) -> None:
         host = self.win.tree.selected_host()

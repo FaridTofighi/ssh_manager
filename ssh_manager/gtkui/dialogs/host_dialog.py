@@ -8,6 +8,11 @@ jumps to the first page with an error instead of closing.
 ``ProxyCommand`` stays in the SSH options list instead of being shown in the
 jump-host field, so editing a host no longer rewrites a ProxyCommand into a
 ProxyJump.
+
+The Credentials page also chooses where the host's **password** comes from:
+the bound credential's password (default) or a password specific to this host
+(a private credential, see ``docs/passwords.md``). Nothing is stored here: the
+caller applies :meth:`HostDialog.password_choice` after Save; Cancel discards it.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
 from ...config import HostEntry  # noqa: E402
-from ...credentials import Credential  # noqa: E402
+from ...credentials import Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_option  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
 from ...vault import VaultEntry  # noqa: E402
@@ -28,7 +33,10 @@ from ..i18n import _  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 from ..validation import validate_alias, validate_hostname, validate_port  # noqa: E402
 from ..widgets.forms import FormRow, FormSection, entry  # noqa: E402
+from ..widgets.icon_button import set_accessible_name  # noqa: E402
+from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
+from .confirm import confirm  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
 
 # Options edited through dedicated fields (everything else goes to "SSH options").
@@ -63,6 +71,17 @@ def validate_option_lines(text: str) -> Optional[str]:
     return None
 
 
+def _show(widget: Gtk.Widget, visible: bool) -> None:
+    """Show (with its children) or hide a widget that ``show_all`` must leave alone (``no_show_all``)."""
+
+    if visible:
+        widget.set_no_show_all(False)
+        widget.show_all()
+        widget.set_no_show_all(True)
+    else:
+        widget.hide()
+
+
 def _combo(rows: List[Tuple[str, str]], active_id: Optional[str]) -> Gtk.ComboBoxText:
     combo = Gtk.ComboBoxText()
     combo.append("", _("None"))
@@ -89,6 +108,10 @@ class HostDialog(BaseDialog):
         template_defaults: Optional[Dict[str, str]] = None,
         profiles: Optional[Dict[str, SessionProfile]] = None,
         alias_validator: Optional[Callable[[str], Optional[str]]] = None,
+        private_credential: Optional[Credential] = None,
+        private_has_password: Optional[bool] = False,
+        password_check: Optional[Callable[[], Optional[str]]] = None,
+        can_edit: bool = True,
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
         self._alias_validator = alias_validator or validate_alias  # app store: display names
@@ -96,7 +119,15 @@ class HostDialog(BaseDialog):
         self.get_content_area().set_margin_start(0)
         self.get_content_area().set_margin_end(0)
         self.get_content_area().set_margin_top(0)
-        self._credential_choices = list(credentials or [])
+        self._credential_choices = [c for c in (credentials or []) if not c.private]
+        self._private = private_credential  # the host's own password (a private credential), if any
+        self._private_has_password = private_has_password  # None: unknown (store locked)
+        self._password_check = password_check
+        self._can_edit = can_edit
+        self._clear_password = False  # "Clear" pressed: applied on Save
+        self._changing_password = False  # "Change…" pressed: the entry is shown
+        self._suppress_password_events = False
+        self._last_credential_id = selected_credential_id or ""
         self._vault_entries = list(vault_entries or [])
         self._profiles = profiles or {}
         meta = dict(metadata or (host.metadata if host else {}) or {})
@@ -119,6 +150,7 @@ class HostDialog(BaseDialog):
         self.set_initial_focus(self.alias_entry)
         self.set_response_validator(lambda r: not is_accept(r) or self.validate())
         self.show_all()
+        self._update_password_ui()
 
     # ------------------------------------------------------------ fields
     def _build_fields(self, meta: Dict[str, object], credential_id: Optional[str], vault_unlocked: bool) -> None:
@@ -142,7 +174,8 @@ class HostDialog(BaseDialog):
         self.extras_view.set_top_margin(Space.XS)
 
         self._credential_combo = _combo([(c.id, f"{c.name} ({c.username})") for c in self._credential_choices], credential_id)
-        self._credential_combo.connect("changed", lambda *_: self._apply_identity_source())
+        self._credential_combo.connect("changed", self._on_credential_changed)
+        self._build_password_fields()
         self._vault_combo = _combo([(e.id, f"{e.label} ({e.username})") for e in self._vault_entries], str(meta.get("vault_id", "") or ""))
         self._vault_combo.set_sensitive(vault_unlocked and bool(self._vault_entries))
         self._vault_combo.connect("changed", lambda *_: self._apply_identity_source())
@@ -196,6 +229,178 @@ class HostDialog(BaseDialog):
         sec.add(_("Session _profile"), self._profile_combo, label_group=labels)
         creds.append(sec)
         self._sections["credentials"] = sec
+
+        pw = FormSection()
+        choices = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        for widget in (self._pw_shared_radio, self._pw_shared_hint, self._pw_host_radio, self._pw_secret,
+                       self._pw_status_box):
+            choices.pack_start(widget, False, False, 0)
+        self._pw_row = pw.add(_("Password"), choices, label_group=labels,
+                              help_text=_("Where the password for this host comes from. It is never shown or exported."))
+        self._pw_row.label.set_mnemonic_widget(self._pw_shared_radio)
+        set_accessible_name(choices, _("Password"))
+        set_accessible_name(self._pw_secret.entry, _("Host password"))
+        creds.append(pw)
+        self._update_password_ui()
+
+    # ---------------------------------------------------------- password
+    def _build_password_fields(self) -> None:
+        self._pw_shared_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(None, _("Use the _credential’s password"))
+        self._pw_host_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(
+            self._pw_shared_radio, _("Use a password _specific to this host"))
+        self._pw_shared_hint = Gtk.Label()
+        self._pw_shared_hint.set_xalign(0.0)
+        self._pw_shared_hint.set_line_wrap(True)
+        self._pw_shared_hint.get_style_context().add_class("form-help")
+        self._pw_shared_hint.set_no_show_all(True)
+        self._pw_secret = SecretEntry(_("Password for this host"))
+        self._pw_secret.set_margin_start(Space.XL)  # belongs to the radio above it
+        self._pw_secret.entry.connect("changed", lambda *_: self._pw_row.set_error(None))
+        self._pw_status = Gtk.Label()
+        self._pw_status.set_xalign(0.0)
+        self._pw_status.set_line_wrap(True)
+        self._pw_status.set_hexpand(True)
+        self._pw_status.get_style_context().add_class("form-help")
+        self._pw_change_button = Gtk.Button.new_with_mnemonic(_("C_hange…"))
+        self._pw_change_button.set_tooltip_text(_("Type a new password for this host"))
+        self._pw_change_button.connect("clicked", self._on_change_password)
+        self._pw_clear_button = Gtk.Button.new_with_mnemonic(_("C_lear"))
+        self._pw_clear_button.set_tooltip_text(_("Remove the saved password; you will be asked when you connect"))
+        self._pw_clear_button.connect("clicked", self._on_clear_password)
+        self._pw_status_box: Gtk.Box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        self._pw_status_box.set_margin_start(Space.XL)
+        self._pw_status_box.pack_start(self._pw_status, True, True, 0)
+        self._pw_status_box.pack_start(self._pw_change_button, False, False, 0)
+        self._pw_status_box.pack_start(self._pw_clear_button, False, False, 0)
+        for widget in (self._pw_change_button, self._pw_clear_button, self._pw_secret, self._pw_status_box):
+            widget.set_no_show_all(True)  # shown by _update_password_ui
+        if self._private is not None:
+            self._pw_host_radio.set_active(True)
+        self._pw_host_radio.connect("toggled", self._on_password_mode_toggled)
+        if not self._can_edit:
+            tip = _("Editing is disabled for this host by its local permissions.")
+            for widget in (self._pw_shared_radio, self._pw_host_radio, self._pw_secret, self._pw_status_box):
+                widget.set_sensitive(False)
+                widget.set_tooltip_text(tip)
+
+    def _selected_credential(self) -> Optional[Credential]:
+        return next((c for c in self._credential_choices if c.id == self.selected_credential_id()), None)
+
+    def host_specific(self) -> bool:
+        return self._pw_host_radio.get_active()
+
+    def _has_saved_password(self) -> bool:
+        return self._private is not None and self._private_has_password is not False and not self._clear_password
+
+    def _update_password_ui(self) -> None:
+        cred = self._selected_credential()
+        host_mode = self.host_specific()
+        if cred:
+            self._pw_shared_radio.set_label(_("Use the _credential’s password (‘{name}’)").format(name=cred.name))
+        else:
+            self._pw_shared_radio.set_label(_("Use the _credential’s password"))
+        self._pw_shared_radio.set_use_underline(True)
+        missing = self._private is not None and self._private.based_on and cred is None
+        hint = ""
+        if missing:
+            hint = _("The credential this host used before no longer exists; without a host password it has none.")
+        elif cred is None:
+            hint = _("Choose a credential above to use its password.")
+        self._pw_shared_hint.set_text(hint)
+        self._pw_shared_hint.set_visible(bool(hint))
+        if self._can_edit:
+            self._pw_shared_radio.set_sensitive(cred is not None or host_mode)
+
+        saved = self._has_saved_password()
+        show_entry = host_mode and (not saved or self._changing_password)
+        _show(self._pw_secret, show_entry)
+        _show(self._pw_status_box, host_mode)
+        self._pw_change_button.set_visible(host_mode and saved and not self._changing_password)
+        self._pw_clear_button.set_visible(host_mode and saved)
+        if not host_mode:
+            self._pw_row.set_error(None)
+            return
+        if saved and self._private_has_password is None:
+            status = _("Saved password unavailable while the password store is locked.")
+        elif saved and self._changing_password:
+            status = _("Saved — type a new password to replace it, or leave it empty to keep it.")
+        elif saved:
+            status = _("Saved")
+        else:
+            status = _("Not set — you will be asked when you connect")
+        self._pw_status.set_text(status)
+
+    def _on_password_mode_toggled(self, _radio: Gtk.RadioButton) -> None:
+        if self._suppress_password_events:
+            return
+        if not self.host_specific() and self._private is not None:
+            if not confirm(
+                self,
+                _("Use the credential’s password?"),
+                _("The saved password for this host will be deleted when you save."),
+                confirm_label=_("_Use Credential’s Password"),
+                destructive=True,
+            ):
+                self._set_host_mode(True)
+                return
+        self._update_password_ui()
+
+    def _on_credential_changed(self, _combo: Gtk.ComboBoxText) -> None:
+        if self._suppress_password_events:
+            return
+        new_id = self._credential_combo.get_active_id() or ""
+        if self.host_specific() and self._private is not None and new_id != self._last_credential_id:
+            cred = self._selected_credential()
+            if not confirm(
+                self,
+                _("Change the credential?"),
+                (_("The saved password for this host will be deleted and it will use the password of ‘{name}’.")
+                 .format(name=cred.name) if cred else
+                 _("The saved password for this host will be deleted and it will have no credential.")),
+                confirm_label=_("_Change Credential"),
+                destructive=True,
+            ):
+                self._suppress_password_events = True
+                self._credential_combo.set_active_id(self._last_credential_id)
+                self._suppress_password_events = False
+                return
+            self._set_host_mode(False)
+        self._last_credential_id = new_id
+        self._apply_identity_source()
+        self._update_password_ui()
+
+    def _set_host_mode(self, host_mode: bool) -> None:
+        self._suppress_password_events = True
+        (self._pw_host_radio if host_mode else self._pw_shared_radio).set_active(True)
+        self._suppress_password_events = False
+        self._update_password_ui()
+
+    def _on_change_password(self, _button: Gtk.Button) -> None:
+        self._changing_password = True
+        self._update_password_ui()
+        self._pw_secret.entry.grab_focus()
+
+    def _on_clear_password(self, _button: Gtk.Button) -> None:
+        self._clear_password = True
+        self._changing_password = False
+        self._pw_secret.entry.set_text("")
+        self._update_password_ui()
+
+    def password_choice(self) -> PasswordChoice:
+        """What to do with the host's password on Save (nothing is stored by the dialog)."""
+
+        if not self.host_specific():
+            return PasswordChoice(host_specific=False)
+        password = self._pw_secret.entry.get_text() or None
+        return PasswordChoice(host_specific=True, password=password, clear=self._clear_password and not password)
+
+    def _validate_password(self) -> bool:
+        choice = self.password_choice()
+        if not (choice.host_specific and (choice.password or choice.clear)) or self._password_check is None:
+            return True
+        problem = self._password_check()
+        self._pw_row.set_error(problem)
+        return problem is None
 
     def _page_tags(self, labels: Gtk.SizeGroup) -> None:
         tags = self.layout.new_page("tags", _("Tags & Notes"), _("Used by search, filters and smart groups."))
@@ -267,7 +472,7 @@ class HostDialog(BaseDialog):
         self.alias_entry.set_text(alias)
 
     def _apply_identity_source(self) -> None:
-        cred = next((c for c in self._credential_choices if c.id == self.selected_credential_id()), None)
+        cred = self._selected_credential()
         vault_entry = next((e for e in self._vault_entries if e.id == (self._vault_combo.get_active_id() or None)), None)
         source = vault_entry.username if vault_entry else (cred.username if cred else None)
         if source is not None:
@@ -285,6 +490,7 @@ class HostDialog(BaseDialog):
         checks = [
             ("general", self._sections["general"].validate()),
             ("ssh_options", self._extras_row.validate()),
+            ("credentials", self._validate_password()),
         ]
         for page_id, ok in checks:
             if not ok:

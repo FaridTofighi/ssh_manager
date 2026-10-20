@@ -267,6 +267,7 @@ class HostPageController:
             (_("Jump host"), host.option("proxyjump", "proxy_jump", "jump_host", "proxycommand") or "", True),
             (_("Identity file"), host.option("identityfile") or "", True),
             (_("Authentication"), auth.label + (f" ({auth.detail})" if auth.detail else ""), False),
+            (_("Password"), creds.password_summary(host), False),
             (_("Environment"), environment, False),
             (_("Owner"), str(host.metadata.get("owner", "") or ""), False),
             (_("Service"), str(host.metadata.get("service", "") or ""), False),
@@ -381,7 +382,9 @@ class HostPageController:
                 has_password = bool(self.win._secure_store.get(hostname, port, user))
             except Exception:  # locked store, keyring errors
                 has_password = False
-        return auth_summary(host, credential_name=credential.name if credential else "", vault=vault, has_password=has_password)
+        private = bool(credential and credential.private)
+        return auth_summary(host, credential_name=credential.name if credential and not private else "", vault=vault,
+                            has_password=has_password, host_specific=private)
 
     def latency_key(self, host) -> Optional[Tuple[str, int]]:
         if uses_proxy(host):

@@ -1465,6 +1465,44 @@ def run(out_dir: Path) -> None:
         return ConfigViewerDialog(window, path)
 
     _dialog_scenario("dialog-host", host_dialog, (900, 650))
+
+    def host_password_dialog(window, saved: bool = True) -> Gtk.Dialog:
+        """Credentials page with "a password specific to this host" (synthetic credentials, no secret)."""
+
+        from ssh_manager.credentials import Credential
+
+        host = _first_host(window)
+        shared = Credential("snap-shared", "Ops team", "ops")
+        dialog = HostDialog(
+            window,
+            host,
+            credentials=[shared],
+            selected_credential_id=shared.id,
+            private_credential=(Credential("snap-private", "host:web", "ops", private=True, based_on=shared.id)
+                                if saved else None),
+            private_has_password=saved,
+            metadata=host.metadata if host else {},
+            profiles=window._profiles,
+        )
+        if not saved:
+            dialog._pw_host_radio.set_active(True)
+        dialog.layout.show_page("credentials")
+        return dialog
+
+    for dark in (False, True):
+        for saved in (True, False):
+            name = f"dialog-host-password-{'saved' if saved else 'notset'}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _host_password(dark=dark, saved=saved, name=name) -> None:
+                from ssh_manager.gtkui.theme import density
+
+                window = _make_window(app, base, dark)
+                dialog = host_password_dialog(window, saved)
+                _pump()
+                scale = density.active().dialog_scale
+                capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (900, 650)))
+                window.destroy()
     _dialog_scenario("dialog-settings", prefs_dialog, (820, 620))
     _dialog_scenario("dialog-credentials", lambda w: CredentialManagerDialog(w, w._credential_store), (560, 400))
     _dialog_scenario("dialog-vault", lambda w: VaultDialog(w, w._vault), (560, 460))

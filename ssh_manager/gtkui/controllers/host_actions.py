@@ -11,6 +11,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 
 from ...config import HostEntry  # noqa: E402
+from ...credentials import PasswordChoice  # noqa: E402
+from ...secure_store import SecureStoreError  # noqa: E402
 from ...host_utils import host_option  # noqa: E402
 from ...templates import HostTemplate, built_in_templates  # noqa: E402
 from ..dialogs.base import is_accept  # noqa: E402
@@ -45,23 +47,44 @@ class HostActions:
         finally:
             picker.destroy()
 
-    def run_host_dialog(self, dialog: HostDialog, parent: str, child: str) -> Tuple[Optional[HostEntry], Optional[str]]:
-        """Run ``dialog``; return ``(host, credential_id)`` (``host`` is None when cancelled)."""
+    def run_host_dialog(self, dialog: HostDialog, parent: str,
+                        child: str) -> Tuple[Optional[HostEntry], Optional[str], Optional[PasswordChoice]]:
+        """Run ``dialog``; return ``(host, shared credential id, password choice)`` (``host`` None = cancelled)."""
 
         try:
             if not is_accept(dialog.run()):
-                return None, None
-            return dialog.build_host(parent, child), dialog.selected_credential_id()
+                return None, None, None
+            return dialog.build_host(parent, child), dialog.selected_credential_id(), dialog.password_choice()
         finally:
             dialog.destroy()
 
-    def host_dialog(self, host: Optional[HostEntry] = None, **kwargs) -> HostDialog:
-        binding = self.win._credential_store.binding_for_host(self.win.creds.credential_key(host)) if host else None
+    def host_dialog(self, host: Optional[HostEntry] = None, *, for_copy: bool = False, **kwargs) -> HostDialog:
+        """The host dialog; ``for_copy`` (duplicate) starts from the shared credential, never the private one."""
+
+        store = self.win._credential_store
+        key = self.win.creds.credential_key(host) if host else ""
+        private = store.private_for_host(key) if host and not for_copy else None
+        if private is not None:
+            selected = private.based_on if store.get(private.based_on or "") else None
+        elif host:
+            selected = store.shared_for_copy(key)
+        else:
+            selected = None
+        private_has_password: Optional[bool] = None
+        if private is not None:
+            try:
+                private_has_password = store.has_password(private.id)
+            except SecureStoreError as exc:  # locked: the dialog says so and keeps the secret
+                LOGGER.warning("host password status unavailable: %s", type(exc).__name__)
         return HostDialog(
             self.win,
             host,
-            credentials=self.win._credential_store.list(),
-            selected_credential_id=binding,
+            credentials=store.list(),
+            selected_credential_id=selected,
+            private_credential=private,
+            private_has_password=private_has_password,
+            password_check=self.win.creds.password_store_problem,
+            can_edit=self.win.creds.permissions_for_host(host).get("can_edit", True) if host else True,
             metadata=host.metadata if host else {},
             vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
             vault_unlocked=self.win._vault.unlocked,
@@ -87,7 +110,7 @@ class HostActions:
             parent, child, create_child = selection
 
         dialog = self.host_dialog(template_defaults=template.defaults if template else None)
-        host, cred_id = self.run_host_dialog(dialog, parent, child)
+        host, cred_id, choice = self.run_host_dialog(dialog, parent, child)
         if not host:
             return
         if create_child:
@@ -98,7 +121,7 @@ class HostActions:
         success, msg = self.win.manager.add_host(parent, child, host)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.credential_key(host), cred_id)
+            self.win.creds.apply_host_credentials(host, cred_id, choice)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(parent, child, host.alias)
 
@@ -118,7 +141,7 @@ class HostActions:
         host = self.win.tree.selected_host()
         if not host:
             return
-        updated, cred_id = self.run_host_dialog(self.host_dialog(host), host.parent_group, host.child_group)
+        updated, cred_id, choice = self.run_host_dialog(self.host_dialog(host), host.parent_group, host.child_group)
         if not updated:
             return
         if not self.win.creds.check_secrets_policy(updated):
@@ -132,9 +155,10 @@ class HostActions:
         success, msg = self.win.manager.update_host(host.parent_group, host.child_group, host.alias, updated)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.credential_key(updated), cred_id)
-            if self.win.creds.credential_key(updated) != self.win.creds.credential_key(host):
-                self.win.creds.bind_credential(self.win.creds.credential_key(host), None)
+            old_key, new_key = self.win.creds.credential_key(host), self.win.creds.credential_key(updated)
+            if new_key != old_key:  # folder inventory rename: the binding (and a private credential) follows
+                self.win.creds.rebind_credential(old_key, new_key)
+            self.win.creds.apply_host_credentials(updated, cred_id, choice)
             if changed:
                 self.win.sessions.audit_log("edit", updated, extra={"fields": ",".join(changed)})
             self.win.tree.rebuild(refresh=True)
@@ -152,10 +176,10 @@ class HostActions:
         host = self.win.tree.selected_host()
         if not host:
             return
-        dialog = self.host_dialog(host)
+        dialog = self.host_dialog(host, for_copy=True)
         dialog.set_alias(self.win.tree.generate_duplicate_alias(host))
         dialog.set_title(_("Duplicate Host"))
-        clone, cred_id = self.run_host_dialog(dialog, host.parent_group, host.child_group)
+        clone, cred_id, choice = self.run_host_dialog(dialog, host.parent_group, host.child_group)
         if not clone:
             return
         if not self.win.creds.check_secrets_policy(clone):
@@ -163,7 +187,15 @@ class HostActions:
         success, msg = self.win.manager.add_host(host.parent_group, host.child_group, clone)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.credential_key(clone), cred_id)
+            self.win.creds.apply_host_credentials(clone, cred_id, choice)
+            if self.win.creds.private_credential_for_host(host) and not (choice and choice.host_specific):
+                shared = self.win._credential_store.get(cred_id or "")
+                self.win._notify(
+                    _("“{alias}” uses the credential ‘{name}’; the host-specific password was not copied.").format(
+                        alias=clone.alias, name=shared.name) if shared else
+                    _("“{alias}” has no saved password; the host-specific password was not copied.").format(alias=clone.alias),
+                    Level.INFO,
+                )
             self.win.sessions.audit_log("edit", clone, extra={"fields": "duplicate"})
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(clone.parent_group, clone.child_group, clone.alias)
@@ -330,7 +362,7 @@ class HostActions:
 
     @requires_editable_inventory
     def create_host_in_group(self, parent: str, child: str) -> None:
-        host, cred_id = self.run_host_dialog(self.host_dialog(), parent, child)
+        host, cred_id, choice = self.run_host_dialog(self.host_dialog(), parent, child)
         if not host:
             return
         if not self.win.creds.check_secrets_policy(host):
@@ -338,7 +370,7 @@ class HostActions:
         success, msg = self.win.manager.add_host(parent, child, host)
         self.win._log_event(msg, success)
         if success:
-            self.win.creds.bind_credential(self.win.creds.credential_key(host), cred_id)
+            self.win.creds.apply_host_credentials(host, cred_id, choice)
             self.win.sessions.audit_log("edit", host, extra={"fields": "new"})
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(parent, child, host.alias)

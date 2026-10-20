@@ -11,7 +11,8 @@ Each connection resolves its password once per attempt, **read-only**, in this
 order (`PasswordResolution.source`):
 
 1. **vault:** the host's bound vault entry, when the vault is unlocked;
-2. **credential:** the password of the credential bound to the host;
+2. **credential** or **host:** the password of the credential bound to the
+   host. It is `host` when that credential is the host's own (see below);
 3. **legacy:** the per-host secret stored by older versions under
    `(host name, port, user)`;
 4. **none:** nothing is stored.
@@ -23,6 +24,74 @@ credential stays the single source of its password.
 A locked or broken secret store (`SecureStoreError`) is treated as "no
 password". It shows "Credential '…' is unavailable." and logs the error type
 only; the terminal never blocks on it.
+
+## Passwords: credential vs host-specific
+
+In the host dialog, **Credentials → Password** chooses where the host's
+password comes from:
+
+- **Use the credential's password** (default): the password of the
+  credential chosen above. Every host bound to that credential shares it. The
+  option is unavailable until a credential is chosen.
+- **Use a password specific to this host:** the host gets its own password.
+  The shared credential is not changed.
+  - **Status:** "Saved" or "Not set — you will be asked when you connect".
+  - **Change… / Clear:** replace or remove the saved password. An empty entry
+    keeps the saved one.
+  - **Save and Cancel:** nothing is stored before **Save**; **Cancel**
+    discards every change.
+
+A host-specific password is a **private credential**: an ordinary
+`Credential` with `private: true`, bound 1:1 to the host through the usual
+bindings (`credentials.json`, keyed by the host id; by
+`parent::child::alias` in folder inventories). Its secret is stored like any
+credential's (`credential:<id>` in the keyring or encrypted file).
+
+- **Fields:**
+  - `based_on` remembers the shared credential it replaced.
+  - Its username is the shared credential's (or the host's User when none),
+    updated on every Save.
+- **Hidden:** `CredentialStore.list()` leaves it out. The credential manager,
+  the host dialog's credential list and the MobaXterm import never show it.
+  `list(include_private=True)` and `get()` still return it.
+- **API:**
+  - `create_private(host_key, username, password)` binds the host in one
+    save. When the host already has one, it is updated instead.
+  - `update_private`, `private_for_host`, `is_private`, `shared_for_copy`.
+  - **Phase 3** saves a password for a host with
+    `CredentialController.apply_host_credentials(host, shared_id,
+    PasswordChoice(host_specific=True, password=…))`.
+- **Lifecycle (no orphans):** whenever a change of bindings leaves a private
+  credential bound to no host, it and its secret are deleted in the same
+  save. That covers:
+  - host deleted;
+  - re-bound to another credential, or unbound;
+  - "Use the credential's password" chosen again (after a confirmation);
+  - another credential chosen while in host-specific mode (after a
+    confirmation);
+  - group deleted;
+  - bindings of deleted hosts pruned;
+  - another binding renamed onto the host.
+
+  Renames and moves keep it: ids are stable, and folder keys are re-keyed.
+- **Copies:** duplicating a host or a group binds the copy to the **shared**
+  credential the original's password replaced (none if it was deleted). The
+  notification says the host-specific password was not copied.
+- **Display:** host details show "Password: credential ‘X’" or
+  "Password: host-specific", and Auth reads "Host-specific password". The tree
+  tooltip shows the same line. The value is never shown, logged, exported or
+  written to host options or metadata.
+- **Locked store:** with a locked password file or a failing keyring, Save
+  keeps the dialog open with the reason and changes nothing. If saving still
+  fails afterwards, "Could not save the password for ‘…’. Nothing was
+  changed." is shown and every store is rolled back.
+- **Every connection uses it:** terminal tabs, Reconnect, Duplicate Session,
+  remote stats and the Paramiko connector all resolve through
+  `resolve_password`.
+  - **Split panes:** they open a plain `ssh` and ask for the password in the
+    pane, as before.
+  - **Not affected:** there is no SFTP browser, and broadcast only sends
+    keystrokes.
 
 ## What triggers the password dialog
 

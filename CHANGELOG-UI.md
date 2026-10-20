@@ -6,6 +6,41 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Passwords, phase 2: a password specific to one host
+
+Details: `docs/passwords.md` ("Passwords: credential vs host-specific").
+
+- **Host dialog:** Credentials → **Password** offers "Use the credential's
+  password (‘X’)" or "Use a password specific to this host".
+  - **Controls:** a secret entry with show/hide, a status ("Saved" / "Not
+    set — you will be asked when you connect"), **Change…** and **Clear**.
+  - **Save/Cancel:** applied on Save; Cancel discards.
+  - **Confirmations:** switching back, or picking another credential while a
+    host password is saved, asks first.
+  - **Locked store:** keeps the dialog open with the reason.
+  - **Permissions:** disabled when the host's local permissions forbid
+    editing.
+- **Private credentials:** `Credential.private` / `based_on`, persisted in
+  `credentials.json`; older files load unchanged.
+  - **API:** `CredentialStore.create_private`, `update_private`,
+    `private_for_host`, `is_private`, `shared_for_copy`, and
+    `list(include_private=False)`, which hides them everywhere.
+  - **No orphans:** a private credential and its secret are deleted when the
+    host is deleted, re-bound, unbound, removed with its group or pruned. A
+    failed save rolls everything back.
+- **Copies:** duplicated hosts and groups bind the copy to the shared
+  credential, never to the private one, and say so.
+- **Display:**
+  - **Host details:** a "Password" fact ("credential ‘X’" /
+    "host-specific"), and Auth reads "Host-specific password".
+  - **Tree tooltip:** a "Password: …" line.
+- **Resolution:** unchanged order. A private credential resolves with source
+  `host`. The terminal treats it like `credential` (retry prompt, never
+  deleted).
+- **Tests:** `tests/test_host_passwords.py`. Snapshots:
+  `docs/ui-after/dialog-host-password-{saved,notset}-{light,dark}.png`
+  (`tools/ui_snapshots.py`).
+
 ## Passwords, phase 1: correctness (no UI change)
 
 Details: `docs/passwords.md`.

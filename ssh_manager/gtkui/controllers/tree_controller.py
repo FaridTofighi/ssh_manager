@@ -138,15 +138,19 @@ class TreeCallbacks:
     status: Callable[[str], str] = lambda _key: ConnectionStatus.UNKNOWN.value
     color: Callable[..., str] = lambda _parent, _child, _alias="": ""
     read_only: Callable[[HostEntry], bool] = lambda _host: False  # besides shared inventories
+    password: Callable[[HostEntry], str] = lambda _host: ""  # "credential ‘X’" / "host-specific" (never a value)
 
 
-def host_tooltip(host: HostEntry, user: str, status: str) -> str:
+def host_tooltip(host: HostEntry, user: str, status: str, password: str = "") -> str:
     target = _option(host, "hostname", "host") or host.alias
     port = _option(host, "port")
     address = f"{user}@{target}" if user else target
     if port and port != "22":
         address += f":{port}"
-    return f"{host.alias}\n{address}\n{status_text(status)}"
+    text = f"{host.alias}\n{address}\n{status_text(status)}"
+    if password:
+        text += "\n" + _("Password: {source}").format(source=password)
+    return text
 
 
 def _count_tooltip(count: int) -> str:
@@ -262,7 +266,7 @@ def _host_rows(
                 search=search,
                 color=callbacks.color(label_parent, child_name, host.alias),
                 status=status,
-                tooltip=host_tooltip(host, user, status),
+                tooltip=host_tooltip(host, user, status, callbacks.password(host)),
                 shared=shared,
                 read_only=shared or bool(callbacks.read_only(host)),
             )
