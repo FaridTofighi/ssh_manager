@@ -198,3 +198,172 @@ def with_sentinel(argv: List[str], extra: List[str]) -> List[str]:
     if index is None:
         return list(argv)
     return argv[: index + 1] + extra + argv[index + 1:]
+
+
+# ---------------------------------------------------------------- recovery flow
+SOURCE_PROMPTED = ("prompt", "retry")  # a password the user typed in this tab
+
+
+def source_phrase(source: str, credential_name: str = "") -> str:
+    """How the dialogs name a rejected password (never the password itself)."""
+
+    if source == "credential":
+        return f"saved password (credential ‘{credential_name}’)" if credential_name else "saved password (credential)"
+    if source == "host":
+        return "saved password (host-specific password)"
+    if source == "vault":
+        return "saved password (vault entry)"
+    if source in ("legacy", "stored"):
+        return "saved password"
+    if source == "session":
+        return "password entered earlier in this tab"
+    if source in SOURCE_PROMPTED:
+        return "password you entered"
+    return ""
+
+
+@dataclass(frozen=True)
+class PasswordRequest:
+    """Text of the password dialog (first prompt or retry after ``AUTH_FAILED``)."""
+
+    alias: str
+    target: str  # user@host:port
+    attempt: int
+    max_attempts: int = MAX_ATTEMPTS
+    rejected: str = ""  # source_phrase() of the rejected password; "" = first prompt
+
+    @property
+    def title(self) -> str:
+        return f"Password for ‘{self.alias}’"
+
+    @property
+    def message(self) -> str:
+        if self.rejected:
+            return f"‘{self.alias}’ rejected the {self.rejected}. Enter the password for {self.target}."
+        return f"Enter the password for {self.target}."
+
+    @property
+    def attempt_text(self) -> str:
+        return f"Attempt {self.attempt} of {self.max_attempts}"
+
+
+class Decision(str, Enum):
+    SAVE = "save"  # store it as the host's own password (a private credential)
+    DONT_SAVE = "dont_save"  # this tab only (also: Escape / window close)
+    SESSION_ONLY = "session_only"  # the host cannot be edited: this tab only
+
+
+@dataclass(frozen=True)
+class SaveContext:
+    """What saving would mean for the host right now (asked at offer time)."""
+
+    can_save: bool = True  # False: can_edit=false, read-only inventory or secrets policy
+    reason: str = ""  # why saving is not possible (shown in the dialog)
+    vault_label: str = ""  # a vault entry is bound: it overrides, never offer
+    credential_name: str = ""  # the shared credential that stays unchanged
+    has_private: bool = False  # the host already has its own password
+
+
+@dataclass(frozen=True)
+class SaveOffer:
+    """The "Save this password for ‘alias’?" confirmation (text only)."""
+
+    alias: str
+    verified: bool  # sentinel (True) or heuristic (False)
+    context: SaveContext
+
+    @property
+    def title(self) -> str:
+        return f"Save this password for ‘{self.alias}’?"
+
+    @property
+    def message(self) -> str:
+        lead = ("Login succeeded with the password you entered." if self.verified
+                else "Login appears to have succeeded with the password you entered.")
+        if not self.context.can_save:
+            reason = self.context.reason or "This host cannot be edited."
+            return f"{lead} {reason} The password can be used for this session only."
+        effect = ("Saving it replaces the password saved for this host." if self.context.has_private
+                  else "Saving it makes this host use its own password from now on.")
+        unchanged = (f"The credential ‘{self.context.credential_name}’ and other hosts are not changed."
+                     if self.context.credential_name else "Other hosts are not changed.")
+        return f"{lead} {effect} {unchanged}"
+
+
+class FailureAction(str, Enum):
+    PROMPT = "prompt"  # ask again (after RETRY_DELAY_S)
+    EXHAUSTED = "exhausted"  # MAX_ATTEMPTS used: stop, keep Reconnect
+    STOP = "stop"  # not an authentication failure: never ask
+
+
+class PasswordFlow:
+    """Per-tab password recovery state (no GTK, no I/O, no globals).
+
+    attempt → ``AUTH_FAILED`` → prompt (≤ ``MAX_ATTEMPTS`` per connect) →
+    verified success → at most one save offer per tab. Nothing here stores a
+    password; the typed one lives in this object until the tab goes away.
+    """
+
+    def __init__(self, alias: str, max_attempts: int = MAX_ATTEMPTS) -> None:
+        self.alias = alias
+        self.max_attempts = max_attempts
+        self.attempts = 0  # prompts shown in this user-initiated connect
+        self.source = "none"  # where the current attempt's password came from
+        self.typed: Optional[str] = None  # the password typed for the current attempt
+        self.stored: Optional[str] = None  # the resolved password of this connect (to skip re-offering it)
+        self.offered = False  # the save confirmation was shown in this tab (once per tab)
+        self.decision: Optional[Decision] = None
+
+    def __repr__(self) -> str:  # never print the secrets
+        return f"PasswordFlow(alias={self.alias!r}, attempts={self.attempts}, source={self.source!r})"
+
+    def begin_connect(self) -> None:
+        """A user-initiated connect / reconnect: a fresh attempt budget."""
+
+        self.attempts = 0
+
+    def attempt(self, source: str, password: Optional[str], *, stored: Optional[str] = None,
+                resolved: bool = False) -> None:
+        """Record the password sent by the next spawn (``resolved``: ``stored`` is this connect's resolution)."""
+
+        self.source = source
+        self.typed = password if source in SOURCE_PROMPTED else None
+        if resolved:
+            self.stored = stored
+
+    def on_failure(self, outcome: AuthOutcome) -> FailureAction:
+        if outcome is not AuthOutcome.AUTH_FAILED:
+            return FailureAction.STOP
+        if self.attempts >= self.max_attempts:
+            return FailureAction.EXHAUSTED
+        return FailureAction.PROMPT
+
+    def can_prompt(self) -> bool:
+        return self.attempts < self.max_attempts
+
+    def next_request(self, target: str, rejected: str = "") -> PasswordRequest:
+        """Count a prompt and describe it ("Attempt N of 3")."""
+
+        self.attempts += 1
+        return PasswordRequest(self.alias, target, self.attempts, self.max_attempts, rejected)
+
+    def on_authenticated(self, method: str, context: SaveContext) -> Tuple[Optional[SaveOffer], str]:
+        """``(offer or None, notice)`` after a verified (``sentinel``) or probable (``heuristic``) login.
+
+        Only a password typed in this tab is offered, once per tab, and not
+        when it equals the stored one or a vault entry overrides it.
+        """
+
+        self.attempts = 0
+        if self.source not in SOURCE_PROMPTED or not self.typed or self.offered:
+            return None, ""
+        if self.stored is not None and self.typed == self.stored:
+            return None, ""  # it is already saved: say nothing
+        self.offered = True
+        if context.vault_label:
+            return None, (f"‘{self.alias}’ uses the vault entry ‘{context.vault_label}’, which overrides a saved "
+                          "password; update the vault entry to change it.")
+        return SaveOffer(self.alias, method == "sentinel", context), ""
+
+    def decide(self, decision: Decision) -> None:
+        self.decision = decision

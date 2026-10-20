@@ -1503,6 +1503,38 @@ def run(out_dir: Path) -> None:
                 scale = density.active().dialog_scale
                 capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (900, 650)))
                 window.destroy()
+    def password_retry_dialog(window) -> Gtk.Dialog:
+        """After "Permission denied" (synthetic host; no password)."""
+
+        from ssh_manager.auth_flow import PasswordRequest, source_phrase
+        from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog
+
+        request = PasswordRequest("web-01", "alice@10.0.0.10:22", 2, rejected=source_phrase("credential", "Ops team"))
+        return PasswordRequestDialog(window, request, lambda _password: None)
+
+    def password_save_dialog(window) -> Gtk.Dialog:
+        from ssh_manager.auth_flow import SaveContext, SaveOffer
+        from ssh_manager.gtkui.dialogs.password import SavePasswordDialog
+
+        return SavePasswordDialog(window, SaveOffer("web-01", True, SaveContext(credential_name="Ops team")),
+                                  lambda _decision: None)
+
+    for dark in (False, True):
+        for kind, factory, size in (("retry", password_retry_dialog, (420, 200)),
+                                    ("save", password_save_dialog, (420, 215))):
+            name = f"dialog-password-{kind}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _password_dialog(dark=dark, factory=factory, name=name, size=size) -> None:
+                from ssh_manager.gtkui.theme import density
+
+                window = _make_window(app, base, dark)
+                dialog = factory(window)
+                _pump()
+                scale = density.active().dialog_scale
+                capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in size))
+                window.destroy()
+
     _dialog_scenario("dialog-settings", prefs_dialog, (820, 620))
     _dialog_scenario("dialog-credentials", lambda w: CredentialManagerDialog(w, w._credential_store), (560, 400))
     _dialog_scenario("dialog-vault", lambda w: VaultDialog(w, w._vault), (560, 460))

@@ -113,7 +113,7 @@ class AppSettings:
     """Application-wide settings with JSON persistence."""
 
     config_path: Path = field(default_factory=lambda: _default_config_dir() / DEFAULT_CONFIG_FILENAME)
-    remember_password_default: bool = True
+    remember_password_default: bool = True  # unused since passwords are only saved when asked (kept for old files)
     host_key_policy: str = "reject"  # or "auto-add"
     connect_timeout: float = 10.0
     auth_timeout: float = 10.0

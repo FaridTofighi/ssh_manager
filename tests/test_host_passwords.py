@@ -466,7 +466,7 @@ class WindowTests(unittest.TestCase):
         self.win.creds.apply_host_credentials(self.host, self.shared.id, PasswordChoice(True, SECRET))
         captured = {}
 
-        def fake_new_terminal(host, profile=None, password_provider=None):
+        def fake_new_terminal(host, profile=None, password_provider=None, password_service=None):
             captured["tab"] = password_provider()
             return mock.Mock()
 

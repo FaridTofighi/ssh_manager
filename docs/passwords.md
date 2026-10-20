@@ -111,12 +111,96 @@ Nothing else asks for a password. `classify_exit` keeps these apart:
 | `OTP_REQUIRED` | "Verification code:" | no |
 | `OTHER` | "Too many authentication failures", other exits | no |
 
-- **Limits:** at most **3** attempts per connect, at least 1 s apart. Connect
-  and Reconnect start a fresh count. Closing the tab removes every pending
-  timer.
-- **Nothing is saved:** a rejected password never deletes or changes a stored
-  secret. A typed password that worked is kept **in memory for that tab** and
-  reused by its Reconnect. It is never written to disk.
+- **Limits:** at most **3** password prompts per connect, at least 1 s
+  apart. Connect and Reconnect start a fresh count. Closing the tab removes
+  every pending timer.
+- **Nothing is deleted:** a rejected password never deletes or changes a stored
+  secret.
+- **Nothing is saved silently:** a typed password that worked is kept **in
+  memory for that tab** and reused by its Reconnect. It is written only when
+  you answer **Save for this host** (below).
+
+## Recovery after "Permission denied"
+
+The flow is a per-tab state machine (`PasswordFlow` in
+`ssh_manager/auth_flow.py`). The GTK side only shows its texts.
+
+1. **First attempt:** the resolved password (vault, credential, host-specific
+   or legacy). With none stored, the password dialog opens first.
+2. **On `AUTH_FAILED`,** after ≥ 1 s, a non-blocking dialog asks again.
+   - **Title:** "Password for ‘web’".
+   - **Text:** "‘web’ rejected the saved password (credential ‘Ops’). Enter
+     the password for `alice@10.0.0.10:22`." The phrase names the source: a
+     credential, a host-specific password, a vault entry, a saved password, or
+     the password you entered.
+   - **Buttons:** **Retry** / **Cancel**, and "Attempt N of 3".
+   - **Cancel, Escape or an empty entry:** stops the flow. The red banner
+     with **Reconnect** stays.
+3. **Retry:** the typed password goes to the next `sshpass` spawn (through
+   `SSHPASS`, never argv) and is held in memory only.
+4. **After a verified login** (LocalCommand sentinel, or the heuristic) with
+   a typed password, the tab asks **once**: "Save this password for ‘web’?"
+   - **Text:** "Login succeeded with the password you entered. Saving it
+     makes this host use its own password from now on. The credential ‘Ops’
+     and other hosts are not changed." With the heuristic it says "Login
+     appears to have succeeded…".
+   - **Save for this host** (default): stores the password as the host's
+     private credential (`CredentialController.save_host_password`).
+     - **Host looked up again:** by id, or by path in folder inventories, in
+       case it was renamed, moved or deleted while the dialog was open.
+     - **Phase 2 API:** it creates the private credential or updates it. The
+       shared credential is untouched.
+     - **Result:** the tree and details refresh to "Password:
+       host-specific", and "Password saved for ‘web’." is shown.
+   - **Don't save** (also Escape or closing the window): the password stays
+     in this tab only. This tab does not ask again; a later connect starts
+     from the normal resolution order and may ask again.
+
+**When the save dialog does not appear**
+
+- the password came from a store and worked;
+- the typed password equals the stored one (nothing is said);
+- the host has a **vault entry** — it overrides; the log explains that;
+- it was already asked in this tab;
+- `sshpass` is missing (success cannot be verified; the existing warning
+  stays);
+- auxiliary sessions (split panes, Paramiko stats);
+- host-key, network, publickey-only, OTP and "too many authentication
+  failures" outcomes (no password dialog at all).
+
+**Edge cases**
+
+- **Hosts that cannot be edited:** `can_edit=false`, a read-only inventory,
+  or a secrets policy that forbids unencrypted passwords. They show **Use for
+  this session** instead of **Save for this host**; nothing is written.
+- **Save errors** (locked store, master password, keyring error):
+  - the dialog stays open with the reason and **Retry Save**;
+  - the session stays connected;
+  - only the error type is logged.
+- **Host deleted while the dialog was open:** "‘web’ no longer exists; the
+  password was not saved."
+- **Tab closed or window destroyed with a dialog open:** the dialog is
+  dismissed, nothing is done, and every GLib source is removed.
+- **Reconnect with a retry dialog open:** the dialog is closed.
+- **Several tabs failing at once:** each shows its own dialog titled with
+  its alias. The state is per tab, with no shared or global state (a queue
+  is out of scope).
+- **Password changed inside a session** (`passwd`): for a host with its own
+  password, only that password is updated. Other hosts keep the previous
+  behaviour.
+
+**Paramiko backend**
+
+- **Same resolution and dialogs:** the same resolution, the same retry text
+  and attempt count, and at most 3 prompts.
+- **Nothing saved by the connector:** after a login with a typed password,
+  `Connector.add_password_verified_callback` hands it to the tab, which asks
+  the same question.
+- **Removed:** the "Remember password for this host" checkbox, the
+  "Remember passwords by default" preference and
+  `UIHostConfig.remember_password_default`. The `remember_password_default`
+  setting is still read and written for old settings files, but nothing uses
+  it.
 
 ## Why the app uses LocalCommand
 

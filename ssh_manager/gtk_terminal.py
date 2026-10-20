@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import math
@@ -10,7 +11,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Protocol, Tuple
 
 import gi
 
@@ -27,12 +28,18 @@ from ssh_manager.auth_flow import (
     NO_PASSWORD,
     NO_PASSWORD_METHOD_MESSAGE,
     RETRY_DELAY_S,
+    SOURCE_PROMPTED,
     AuthOutcome,
+    Decision,
+    PasswordFlow,
     PasswordResolution,
+    SaveContext,
+    SaveOffer,
     classify_exit,
     new_marker_path,
     probably_authenticated,
     sentinel_options,
+    source_phrase,
     with_sentinel,
 )
 from ssh_manager.config import HostEntry
@@ -49,6 +56,7 @@ from ssh_manager.settings import TerminalAppearanceSettings
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 from ssh_manager.gtkui.constants import Icons
 from ssh_manager.gtkui.dialogs.files import choose_save_file
+from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog, SavePasswordDialog
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
@@ -77,10 +85,22 @@ if TYPE_CHECKING:  # pragma: no cover
 LogFn = Callable[[str, object], None]  # message, success flag or Level
 PasswordUpdateFn = Callable[[HostEntry, str], bool]
 PasswordProvider = Callable[[], PasswordResolution]  # re-resolved at every (re)connect
+
+
+class PasswordService(Protocol):
+    """What a tab needs from the app to name, offer and save a password (``CredentialController``)."""
+
+    def describe_password_source(self, resolution: PasswordResolution) -> str: ...
+
+    def password_save_context(self, host: HostEntry) -> SaveContext: ...
+
+    def save_host_password(self, host: HostEntry, password: str) -> Tuple[str, str]: ...
 LOGGER = logging.getLogger(__name__)
 
 _REMOTE_STATS_SCRIPT = """
+import functools
 import json
+import functools
 import os
 import time
 
@@ -338,10 +358,13 @@ class TerminalTab(Gtk.Box):
         profile: Optional["SessionProfile"] = None,
         appearance: Optional[TerminalAppearanceSettings] = None,
         password_provider: Optional[PasswordProvider] = None,
+        password_service: Optional[PasswordService] = None,
     ) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._init_state(host, log, font_scale, password_store, password_update_handler, autostart, profile, appearance)
         self._password_provider: Optional[PasswordProvider] = password_provider
+        # Names a rejected password, offers and saves a typed one; None = never offer (auxiliary sessions).
+        self._password_service: Optional[PasswordService] = password_service
         self.set_hexpand(True)
         self.set_vexpand(True)
         self._build_infobar()
@@ -354,7 +377,7 @@ class TerminalTab(Gtk.Box):
         self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
         self._panes.add(self._terminal)
         self._terminal.connect("contents-changed", self._on_auth_output)
-        self.connect("destroy", lambda *_a: self._stop_auth_sources())
+        self.connect("destroy", lambda *_a: self._on_tab_destroyed())
         if autostart:
             self._begin_connect()
         else:
@@ -391,7 +414,10 @@ class TerminalTab(Gtk.Box):
         # Passwords live only in memory: the one sent in this attempt, and a typed one that worked in this tab.
         self._attempt_password: Optional[str] = None
         self._session_password: Optional[str] = None
-        self._attempts = 0  # interactive password prompts in this user-initiated connect (max MAX_ATTEMPTS)
+        # Attempts, the typed password and the once-per-tab save offer (per tab: never shared between tabs).
+        self._flow = PasswordFlow(host.alias)
+        self._password_dialog: Optional[PasswordRequestDialog] = None
+        self._save_dialog: Optional[SavePasswordDialog] = None
         self._authenticated = False  # verified: LocalCommand sentinel, or the fallback heuristic
         self._auth_method = "none"  # sentinel | heuristic
         self._marker: Optional[Path] = None
@@ -950,16 +976,67 @@ class TerminalTab(Gtk.Box):
             return None
         return hostname, port, username
 
-    def _prompt_for_password(self) -> Optional[str]:
+    @property
+    def _attempts(self) -> int:
+        """Password prompts shown in this user-initiated connect (max ``MAX_ATTEMPTS``)."""
+
+        return self._flow.attempts
+
+    @_attempts.setter
+    def _attempts(self, value: int) -> None:
+        self._flow.attempts = value
+
+    def _parent_window(self) -> Optional[Gtk.Window]:
         parent = self.get_toplevel()
+        return parent if isinstance(parent, Gtk.Window) else None
+
+    def _ask_password(self, rejected: str = "") -> None:
+        """Open the (non-blocking) password dialog; its answer starts the next attempt.
+
+        ``rejected`` names the password the server refused ("" = first prompt).
+        """
+
         hostname, port, username = host_connection_params(self._host)
-        return prompt_text(
-            parent if isinstance(parent, Gtk.Window) else None,
-            _("SSH Password"),
-            _("Enter the password for {target}.").format(target=f"{username}@{hostname}:{port}"),
-            secret=True,
-            accept_label=_("C_onnect"),
-        )
+        request = self._flow.next_request(f"{username}@{hostname}:{port}", rejected)
+        self._close_password_dialog()
+        self._password_dialog = PasswordRequestDialog(
+            self._parent_window(), request, functools.partial(self._on_password_answer, retry=bool(rejected)))
+
+    def _on_password_answer(self, password: Optional[str], *, retry: bool) -> None:
+        self._password_dialog = None
+        alias = self._host.alias
+        if not password:  # Cancel, Escape or nothing typed: stop (the banner keeps Reconnect)
+            self._log(_("Password entry cancelled for {alias}.").format(alias=alias), Level.INFO)
+            self._set_status("Authentication failed" if retry else "Connection cancelled", False)
+            return
+        if retry:
+            self._log(_("Retrying {alias} with the entered password…").format(alias=alias), Level.INFO)
+        self._spawn(password, password_origin="retry" if retry else "prompt")  # not saved yet
+
+    def _rejected_phrase(self) -> str:
+        """How the retry dialog names the password that was just refused."""
+
+        source = self._password_source
+        if source == self._resolution.source and self._password_service is not None:
+            try:
+                return self._password_service.describe_password_source(self._resolution)
+            except Exception as exc:  # naming is cosmetic; never block the retry
+                LOGGER.warning("password source description failed: %s", type(exc).__name__)
+        return source_phrase(source) or source_phrase("stored")
+
+    def _close_password_dialog(self) -> None:
+        dialog, self._password_dialog = self._password_dialog, None
+        if dialog is not None:
+            dialog.dismiss()
+
+    def _on_tab_destroyed(self) -> None:
+        """Tab closed: dismiss open password dialogs (doing nothing) and remove every GLib source."""
+
+        self._close_password_dialog()
+        dialog, self._save_dialog = self._save_dialog, None
+        if dialog is not None:
+            dialog.dismiss()
+        self._stop_auth_sources()
 
     def _schedule_retry_prompt(self) -> None:
         """Ask again after ≥ 1 s (no lock-out bursts), unless the attempts are used up."""
@@ -978,18 +1055,7 @@ class TerminalTab(Gtk.Box):
         if shutil.which("sshpass") is None:
             self._log(_("Automatic password retry unavailable because sshpass is not installed."), Level.WARNING)
             return GLib.SOURCE_REMOVE
-        self._attempts += 1
-        password = self._prompt_for_password()
-        if password:
-            self._log(_("Retrying {alias} with the entered password…").format(alias=self._host.alias), Level.INFO)
-
-            def _start_retry() -> bool:
-                self._spawn(password, password_origin="retry")  # this session only; nothing is saved
-                return GLib.SOURCE_REMOVE
-
-            GLib.idle_add(_start_retry)
-        else:
-            self._log(_("Password entry cancelled for {alias}.").format(alias=self._host.alias), Level.INFO)
+        self._ask_password(self._rejected_phrase())
         return GLib.SOURCE_REMOVE
 
     def _terminal_tail(self, term: Vte.Terminal, limit: int = 4096) -> str:
@@ -1195,7 +1261,8 @@ class TerminalTab(Gtk.Box):
     def _begin_connect(self) -> None:
         """A user-initiated connect / reconnect: fresh attempt budget."""
 
-        self._attempts = 0
+        self._flow.begin_connect()
+        self._close_password_dialog()  # a reconnect replaces an open retry prompt
         if self._retry_timeout_id:
             GLib.source_remove(self._retry_timeout_id)
             self._retry_timeout_id = 0
@@ -1209,6 +1276,7 @@ class TerminalTab(Gtk.Box):
         if not proceed:
             return
         self._attempt_password = password
+        self._flow.attempt(self._password_source, password)
         argv, envv = self._spawn_command(password)
         self._start_child(argv, envv)
 
@@ -1265,6 +1333,7 @@ class TerminalTab(Gtk.Box):
             return True, self._session_password
         resolution = self._resolve_password()
         self._resolution = resolution
+        self._flow.stored = resolution.password  # a typed password equal to it is never offered again
         stored_password = resolution.password
         if stored_password:
             if helper_available:
@@ -1277,13 +1346,10 @@ class TerminalTab(Gtk.Box):
             self._log(_("Automatic password entry unavailable for {alias} (sshpass not installed).").format(alias=alias), Level.WARNING)
             self._password_source = "manual"
             return True, None
-        self._attempts += 1
-        password = self._prompt_for_password()
-        if password is None:
-            self._log(_("Password entry cancelled for {alias}.").format(alias=alias), Level.INFO)
+        if not self._flow.can_prompt():
             return False, None
-        self._password_source = "prompt"  # this session only (Phase 3 asks before saving)
-        return True, password
+        self._ask_password()  # non-blocking: its answer spawns with password_origin="prompt"
+        return False, None
 
     def _spawn_command(self, password: Optional[str]) -> Tuple[List[str], List[str]]:
         argv = self._ssh_arguments()
@@ -1495,8 +1561,60 @@ class TerminalTab(Gtk.Box):
         self._auth_method = method
         self._attempts = 0
         LOGGER.info("%s authenticated (%s)", self._host.alias, "verified" if method == "sentinel" else "probable")
-        if self._password_source in ("prompt", "retry") and self._attempt_password:
-            self._session_password = self._attempt_password  # this tab only, never written anywhere
+        if self._password_source in SOURCE_PROMPTED and self._attempt_password:
+            self._session_password = self._attempt_password  # this tab; written only if the user says Save
+        self._offer_save(method)
+
+    def offer_save_password(self, password: str, *, verified: bool = True) -> None:
+        """A backend that authenticated by itself (Paramiko) with a typed ``password``: maybe ask to save it."""
+
+        self._password_source = "retry"
+        self._attempt_password = password
+        self._session_password = password
+        self._flow.attempt("retry", password)
+        self._offer_save("sentinel" if verified else "heuristic")
+
+    def _offer_save(self, method: str) -> None:
+        """After a verified login with a typed password: "Save this password for ‘alias’?" (once per tab)."""
+
+        service = self._password_service
+        if service is None:
+            return
+        try:
+            context = service.password_save_context(self._host)
+        except Exception as exc:  # storage problems never break the session
+            LOGGER.warning("password save context unavailable: %s", type(exc).__name__)
+            context = SaveContext(can_save=False, reason=_("Saved passwords are unavailable right now."))
+        offer, notice = self._flow.on_authenticated(method, context)
+        if notice:
+            self._log(_(notice), Level.INFO)
+        if offer is not None and self._attempt_password:
+            self._show_save_dialog(offer, self._attempt_password)
+
+    def _show_save_dialog(self, offer: SaveOffer, password: str) -> None:
+        if self._save_dialog is not None:
+            self._save_dialog.dismiss()
+        self._save_dialog = SavePasswordDialog(
+            self._parent_window(), offer, functools.partial(self._on_save_decision, password=password))
+
+    def _on_save_decision(self, decision: Decision, *, password: str) -> Optional[str]:
+        """Apply the user's answer; an error message keeps the dialog open (Retry Save)."""
+
+        self._flow.decide(decision)
+        if decision is not Decision.SAVE or self._password_service is None:
+            self._save_dialog = None
+            return None
+        try:
+            status, message = self._password_service.save_host_password(self._host, password)
+        except Exception as exc:  # the session stays connected whatever happens here
+            LOGGER.warning("saving the host password failed: %s", type(exc).__name__)
+            status, message = "error", _("Could not save the password. The session stays connected.")
+        if status == "error":
+            self._log(message, Level.WARNING)
+            return message
+        self._save_dialog = None
+        self._log(message, Level.SUCCESS if status == "saved" else Level.WARNING)
+        return None
 
     def _stop_auth_sources(self, keep_retry: bool = False) -> None:
         """Remove every auth-related GLib source (also on destroy) and the marker file."""
@@ -2087,7 +2205,8 @@ class TerminalNotebook(Gtk.Box):
             tab.set_font_scale(scale)
 
     def new_terminal(self, host: HostEntry, *, autostart: bool = True, profile: Optional["SessionProfile"] = None,
-                     password_provider: Optional[PasswordProvider] = None) -> TerminalTab:
+                     password_provider: Optional[PasswordProvider] = None,
+                     password_service: Optional[PasswordService] = None) -> TerminalTab:
         tab = TerminalTab(
             host,
             self._log,
@@ -2098,6 +2217,7 @@ class TerminalNotebook(Gtk.Box):
             profile=profile,
             appearance=self._appearance,
             password_provider=password_provider,
+            password_service=password_service,
         )
         tab.connect("status-changed", self._on_tab_status_changed)
         tab.connect("session-closed", self._on_tab_session_closed)

@@ -41,6 +41,18 @@ class RecordingKeyring(InMemoryKeyring):
         return super().delete_password(service, username)
 
 
+class FakeDialog:
+    """Stands in for PasswordRequestDialog / SavePasswordDialog: records the request, answers on demand."""
+
+    def __init__(self, request, on_done) -> None:
+        self.request = request
+        self.on_done = on_done
+        self.dismissed = False
+
+    def dismiss(self) -> None:
+        self.dismissed = True
+
+
 class ClassifyTests(unittest.TestCase):
     TABLE = [
         (5, "", AuthOutcome.AUTH_FAILED),  # sshpass: wrong password
@@ -213,6 +225,12 @@ class TerminalAuthTests(unittest.TestCase):
         self.addCleanup(tab.destroy)
         return tab
 
+    @staticmethod
+    def finish_spawn(tab, pid=4242):
+        call = tab._terminal.spawn_async.call_args[0]
+        call[9](tab._terminal, pid, None, None)
+        return call[2], call[3]
+
     def spawn(self, tab, *args, pid=4242, **kwargs):
         tab._spawn(*args, **kwargs)
         call = tab._terminal.spawn_async.call_args[0]
@@ -278,17 +296,23 @@ class TerminalAuthTests(unittest.TestCase):
 
     def test_max_three_attempts_then_stop(self) -> None:
         tab = self.tab()
-        tab._begin_connect()
-        with mock.patch("ssh_manager.gtk_terminal.prompt_text", return_value="again"), \
-                mock.patch("ssh_manager.gtk_terminal.GLib.idle_add"):
-            for attempt in range(MAX_ATTEMPTS):
-                tab._spawn("again", password_origin="retry")
-                tab._auth_retry_pending = False
+        dialogs = []
+        with mock.patch("ssh_manager.gtk_terminal.PasswordRequestDialog",
+                        side_effect=lambda parent, request, on_done: dialogs.append(FakeDialog(request, on_done))
+                        or dialogs[-1]):
+            tab._begin_connect()  # attempt with the credential's password (no prompt)
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                self.finish_spawn(tab)
                 self.exit(tab, "Permission denied, please try again.")
                 self.assertTrue(tab._retry_timeout_id, attempt)
                 self.fire_retry(tab)
-            tab._auth_retry_pending = False
+                self.assertEqual(dialogs[-1].request.attempt, attempt)
+                dialogs[-1].on_done("again")  # Retry with a typed password
+            self.finish_spawn(tab)
             self.exit(tab, "Permission denied, please try again.")
+        self.assertEqual(len(dialogs), MAX_ATTEMPTS)
+        self.assertEqual(dialogs[0].request.rejected, "saved password (credential)")
+        self.assertEqual(dialogs[1].request.rejected, "password you entered")
         self.assertEqual(tab._attempts, MAX_ATTEMPTS)
         self.assertFalse(tab._retry_timeout_id)
         self.assertTrue(any("after 3 attempts" in message for message in self.logs))

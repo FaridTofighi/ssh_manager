@@ -24,7 +24,6 @@ class HostCfg:
     port: int = 22
     username: str = "alice"
     timeout: float = 1.0
-    remember_password_default: bool = True
     parent_window: Optional[object] = None
     options: dict = field(default_factory=dict)
 
@@ -42,9 +41,11 @@ class FakePasswordDialog:
     def __init__(self, responses):
         self.responses = iter(responses)
         self.calls: List[str] = []
+        self.requests = []
 
-    def show_for(self, host_cfg, error_message=None):
+    def show_for(self, host_cfg, error_message=None, request=None):
         self.calls.append(error_message or "")
+        self.requests.append(request)
         return next(self.responses)
 
 
@@ -92,14 +93,20 @@ class ConnectorTests(unittest.TestCase):
         connector._try_paramiko = fake_try  # type: ignore[assignment]
 
         success = []
+        verified = []
         connector.add_connect_success_callback(lambda session: success.append(session))
+        connector.add_password_verified_callback(verified.append)
 
         connector.connect_to_host(HostCfg())
         self._wait_for_completion(connector)
 
         self.assertEqual(attempts, ["wrong1", "wrong2", "correct"])
         self.assertEqual(success, ["client"])
-        self.assertEqual(self.store.get("example.com", 22, "alice"), "correct")
+        # Phase 3: nothing is saved by the connector; the UI is told and asks "Save this password?".
+        self.assertIsNone(self.store.get("example.com", 22, "alice"))
+        self.assertEqual(verified, ["correct"])
+        self.assertEqual([r.attempt for r in dialog.requests], [1, 2, 3])
+        self.assertEqual(dialog.requests[1].rejected, "password you entered")
         self.assertEqual(self.state_machine.state, ConnectionState.CONNECTED)
 
     def test_stored_secret_invalid_then_updated(self) -> None:
@@ -117,11 +124,15 @@ class ConnectorTests(unittest.TestCase):
             return TryResult(ok=True, is_auth_error=False, message="", client="client")
 
         connector._try_paramiko = fake_try  # type: ignore[assignment]
+        verified = []
+        connector.add_password_verified_callback(verified.append)
         connector.connect_to_host(HostCfg())
         self._wait_for_completion(connector)
 
         self.assertEqual(attempts, ["old", "newpass"])
-        self.assertEqual(self.store.get("example.com", 22, "alice"), "newpass")
+        self.assertEqual(self.store.get("example.com", 22, "alice"), "old")  # neither rewritten nor deleted
+        self.assertEqual(verified, ["newpass"])
+        self.assertEqual(dialog.requests[0].rejected, "saved password")
         self.assertEqual(self.state_machine.state, ConnectionState.CONNECTED)
 
     def test_cancel_aborts_connection(self) -> None:

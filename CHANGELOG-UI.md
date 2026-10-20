@@ -6,6 +6,46 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Passwords, phase 3: recovery and "Save this password for this host?"
+
+Details: `docs/passwords.md` ("Recovery after "Permission denied"").
+
+- **`PasswordFlow`** (`auth_flow.py`): a per-tab state machine for attempts
+  (≤ 3 per connect), the typed password and a once-per-tab save offer.
+  `PasswordRequest`, `SaveOffer`, `SaveContext`, `Decision` and
+  `source_phrase` hold the texts. No GTK and no I/O.
+- **Retry dialog** (`PasswordRequestDialog`, non-blocking):
+  - **Text:** "‘web’ rejected the saved password (credential ‘Ops’). Enter
+    the password for alice@10.0.0.10:22."
+  - **Controls:** **Retry** / **Cancel** and "Attempt N of 3".
+  - **Stopping:** Cancel, Escape or an empty entry stops the flow.
+  - **First connect:** the same dialog asks for the first password.
+- **Save confirmation** (`SavePasswordDialog`, non-blocking): shown after a
+  verified login with a typed password.
+  - **Save for this host** (default) creates or updates the host's private
+    credential. **Don't save**, or Escape, keeps the password for the tab
+    only.
+  - **Hosts that cannot be edited:** they get **Use for this session**.
+  - **Save errors:** they keep the dialog open with **Retry Save**.
+  - **Never offered:** for a stored password that worked, a typed one equal
+    to it, a vault entry (explained) or when `sshpass` is missing.
+- **`CredentialController`:** `save_host_password` looks the host up again
+  at save time (renamed, moved or deleted hosts are handled).
+  `password_save_context` and `describe_password_source` are added. A
+  password changed inside a session updates only a host's own password.
+- **Tabs:**
+  - **Dialogs:** they are per tab. A reconnect closes an open retry dialog,
+    and closing the tab dismisses both dialogs and removes the GLib sources.
+  - **Prompt:** the blocking first-password prompt is gone.
+- **Paramiko:**
+  - **Same rules:** the same resolution, retry text and 3-prompt limit.
+  - **No saving in the connector:** `add_password_verified_callback` asks
+    the same question instead.
+  - **Removed:** the "Remember password" checkbox, the "Remember passwords
+    by default" preference and `UIHostConfig.remember_password_default`.
+- **Tests:** `tests/test_password_recovery.py`. Snapshots:
+  `docs/ui-after/dialog-password-{retry,save}-{light,dark}.png`.
+
 ## Passwords, phase 2: a password specific to one host
 
 Details: `docs/passwords.md` ("Passwords: credential vs host-specific").

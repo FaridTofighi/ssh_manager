@@ -54,7 +54,6 @@ class PreferencesValues:
     theme_mode: ThemeMode
     terminal_font_scale: float
     ui_font_size: int
-    remember_password_default: bool
     host_key_policy: str
     connect_timeout: float
     auth_timeout: float
@@ -266,9 +265,6 @@ class PreferencesDialog(BaseDialog):
         timeouts.add(_("_Banner"), self._banner_timeout_spin, label_group=self._labels)
 
         behaviour = self._section(page, _("Behavior"))
-        self._remember_check = Gtk.CheckButton.new_with_mnemonic(_("_Remember passwords by default"))
-        self._remember_check.set_active(settings.remember_password_default)
-        behaviour.add_widget(self._remember_check)
         self._paramiko_check = Gtk.CheckButton.new_with_mnemonic(_("Use the _Paramiko + VTE backend (experimental)"))
         self._paramiko_check.set_active(settings.use_paramiko_vte)
         self._paramiko_check.set_tooltip_text(_("Authenticate in-process instead of running the system ssh client."))
@@ -394,7 +390,6 @@ class PreferencesDialog(BaseDialog):
             theme_mode=ThemeMode.coerce(self._theme_combo.get_active_id()),
             terminal_font_scale=float(self._font_spin.get_value()),
             ui_font_size=int(self._ui_font_spin.get_value()),
-            remember_password_default=self._remember_check.get_active(),
             host_key_policy="auto-add" if self._policy_auto.get_active() else "reject",
             connect_timeout=float(self._connect_timeout_spin.get_value()),
             auth_timeout=float(self._auth_timeout_spin.get_value()),

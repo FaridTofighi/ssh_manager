@@ -10,7 +10,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 
-from ...auth_flow import NO_PASSWORD, PasswordResolution  # noqa: E402
+from ...auth_flow import NO_PASSWORD, PasswordResolution, SaveContext, source_phrase  # noqa: E402
 from ...config import HostEntry  # noqa: E402
 from ...credentials import KEEP, Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
@@ -156,7 +156,19 @@ class CredentialController:
         return host_connection_params(host)
 
     def save_detected_password_change(self, host: HostEntry, password: str) -> bool:
-        """Persist a password changed inside an active terminal session."""
+        """Persist a password changed inside an active terminal session.
+
+        A host with its own (private) password gets only that updated; other
+        hosts keep the previous behaviour (per-host secret, bound credential,
+        vault entry).
+        """
+
+        if self.private_credential_for_host(host) is not None:
+            try:
+                return self.win._credential_store.update_private(self.credential_key(host), password=password)
+            except SecureStoreError as exc:
+                LOGGER.warning("host password update failed: %s", type(exc).__name__)
+                return False
 
         resolved = self.host_with_resolved_identity(host)
         hostname, port, user = self.host_connection_params(resolved)
@@ -313,33 +325,130 @@ class CredentialController:
         :class:`SecureStoreError` nothing is changed and the user is told.
         """
 
-        store = self.win._credential_store
-        key = self.credential_key(host)
         try:
-            if choice is None or not choice.host_specific:
-                store.bind_host(key, cred_id)
-                return True
-            shared = store.get(cred_id) if cred_id else None
-            if shared is not None and shared.private:
-                shared = None
-            username = shared.username if shared else (host_option(host, "user") or "")
-            private = store.private_for_host(key)
-            if private is None:
-                store.create_private(key, username, None if choice.clear else choice.password,
-                                     label=host.alias, based_on=shared.id if shared else None)
-                return True
-            store.update_private(
-                key,
-                password=None if choice.clear else (choice.password or KEEP),
-                username=username,
-                based_on=shared.id if shared else None,
-            )
+            self._apply_host_credentials(host, cred_id, choice)
             return True
         except SecureStoreError as exc:
             LOGGER.warning("host password update failed: %s", type(exc).__name__)
             self.win._notify(_("Could not save the password for ‘{alias}’. Nothing was changed.").format(alias=host.alias),
                              Level.ERROR)
             return False
+
+    def _apply_host_credentials(self, host: HostEntry, cred_id: Optional[str],
+                                choice: Optional[PasswordChoice]) -> None:
+        """:meth:`apply_host_credentials` without the notification (raises :class:`SecureStoreError`)."""
+
+        store = self.win._credential_store
+        key = self.credential_key(host)
+        if choice is None or not choice.host_specific:
+            store.bind_host(key, cred_id)
+            return
+        shared = store.get(cred_id) if cred_id else None
+        if shared is not None and shared.private:
+            shared = None
+        username = shared.username if shared else (host_option(host, "user") or "")
+        if store.private_for_host(key) is None:
+            store.create_private(key, username, None if choice.clear else choice.password,
+                                 label=host.alias, based_on=shared.id if shared else None)
+            return
+        store.update_private(
+            key,
+            password=None if choice.clear else (choice.password or KEEP),
+            username=username,
+            based_on=shared.id if shared else None,
+        )
+
+    # ---------------------------------------- recovery: "Save this password?"
+    def describe_password_source(self, resolution: PasswordResolution) -> str:
+        """``saved password (credential ‘X’)`` … for the retry dialog (never the password)."""
+
+        name = ""
+        if resolution.source == "credential" and resolution.credential_id:
+            cred = self.win._credential_store.get(resolution.credential_id)
+            name = cred.name if cred else ""
+        return source_phrase(resolution.source, name)
+
+    def find_current_host(self, host: HostEntry) -> Optional[HostEntry]:
+        """The host as the inventory has it now (by id, else by group path + alias), or ``None`` when gone."""
+
+        for groups in self.win.manager.tree.values():
+            for group in groups.values():
+                for candidate in group.hosts:
+                    if host.id:
+                        if candidate.id == host.id:
+                            return candidate
+                    elif (candidate.parent_group, candidate.child_group, candidate.alias) == (
+                            host.parent_group, host.child_group, host.alias):
+                        return candidate
+        return None
+
+    def _save_blocker(self, host: HostEntry) -> str:
+        """Why a password cannot be saved for ``host`` ("" = it can)."""
+
+        if getattr(self.win.manager, "read_only", False):
+            return _("The inventory is read-only.")
+        if not self.permissions_for_host(host).get("can_edit", True) or self.host_is_read_only(host):
+            return _("Editing this host is disabled by its permissions.")
+        backend = self.win._secure_store.backend
+        policy = (self.win._settings.secrets_policy_with_defaults()
+                  if hasattr(self.win._settings, "secrets_policy_with_defaults") else {})
+        if (isinstance(backend, FileKeyring) and not backend.encrypted
+                and not bool(policy.get("allow_plaintext_host_passwords", True))):
+            return _("The secrets policy does not allow saving passwords without a master password.")
+        return ""
+
+    def password_save_context(self, host: HostEntry) -> SaveContext:
+        """What "Save this password for this host?" would do for ``host`` now."""
+
+        current = self.find_current_host(host) or host
+        vault_entry = self.vault_entry_for_host(current)
+        cred = self.credential_for_host(current)
+        blocker = self._save_blocker(current)
+        shared_name = ""
+        if cred is not None and not cred.private:
+            shared_name = cred.name
+        elif cred is not None and cred.based_on:
+            based = self.win._credential_store.get(cred.based_on)
+            shared_name = based.name if based else ""
+        return SaveContext(
+            can_save=not blocker,
+            reason=blocker,
+            vault_label=vault_entry.label if vault_entry else ("vault" if current.metadata.get("vault_id") else ""),
+            credential_name=shared_name,
+            has_private=bool(cred and cred.private),
+        )
+
+    def save_host_password(self, host: HostEntry, password: str) -> Tuple[str, str]:
+        """Save ``password`` as ``host``'s own password; ``(status, message)`` with status ``saved|gone|blocked|error``.
+
+        The host is looked up again (it may have been renamed, moved or deleted
+        while the dialog was open). The shared credential and other hosts are
+        never changed. Nothing is logged but the error type.
+        """
+
+        current = self.find_current_host(host)
+        if current is None:
+            return "gone", _("‘{alias}’ no longer exists; the password was not saved.").format(alias=host.alias)
+        blocker = self._save_blocker(current)
+        if blocker:
+            return "blocked", blocker
+        store = self.win._credential_store
+        binding = store.binding_for_host(self.credential_key(current))
+        shared_id = store.shared_for_copy(self.credential_key(current)) if binding else None
+        try:
+            self._apply_host_credentials(current, shared_id, PasswordChoice(host_specific=True, password=password))
+        except SecureStoreError as exc:
+            LOGGER.warning("saving the host password failed: %s", type(exc).__name__)
+            problem = self.password_store_problem()
+            return "error", problem or _("Could not save the password. The session stays connected.")
+        try:  # "Password: host-specific" in the tree tooltip and the details
+            self.win.tree.rebuild(refresh=False)
+            host_page = getattr(self.win, "host_page", None)
+            if host_page is not None:
+                host_page.refresh()
+        except Exception as exc:  # pragma: no cover - display refresh is best effort
+            LOGGER.debug("display refresh after password save failed: %s", type(exc).__name__)
+        return "saved", _("Password saved for ‘{alias}’.").format(alias=current.alias)
 
     def binding_for_copy(self, host: HostEntry) -> Tuple[Optional[str], bool]:
         """``(credential id for a copy of host, whether a host-specific password was left behind)``."""

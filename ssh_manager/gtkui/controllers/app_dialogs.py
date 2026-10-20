@@ -92,7 +92,6 @@ class AppDialogs:
         self.win.host_page.set_latency_enabled(values.latency_probe)
         settings = self.win._settings
         master_toggled = values.master_password_disabled != settings.master_password_disabled
-        settings.remember_password_default = values.remember_password_default
         settings.host_key_policy = values.host_key_policy
         settings.connect_timeout = values.connect_timeout
         settings.auth_timeout = values.auth_timeout

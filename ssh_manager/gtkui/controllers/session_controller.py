@@ -60,9 +60,9 @@ class UIHostConfig:
     port: int
     username: str
     timeout: float
-    remember_password_default: bool
     parent_window: Gtk.Window
     options: Dict[str, str] = field(default_factory=dict)
+    alias: str = ""  # names the host in the password dialogs
 
 
 
@@ -135,7 +135,8 @@ class SessionController:
                 self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
             else:
                 self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
-                tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider)
+                tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
+                                                          password_service=self.win.creds)
                 self.bind_tab_status(tab, resolved)
             opened.append(resolved.alias)
 
@@ -149,7 +150,8 @@ class SessionController:
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:
-        tab = self.win.terminal_tabs.new_terminal(host, autostart=False, profile=profile)
+        tab = self.win.terminal_tabs.new_terminal(host, autostart=False, profile=profile,
+                                                  password_provider=password_provider, password_service=self.win.creds)
         self.bind_tab_status(tab, host)
         host_cfg = self.build_host_config(host)
         state_machine = ConnectionStateMachine()
@@ -164,8 +166,11 @@ class SessionController:
         connector.add_aborted_callback(lambda reason, tab=tab: self.on_paramiko_aborted(tab, reason))
         connector.add_error_callback(lambda message, tab=tab: self.win._notify_error(message))
         connector.add_warning_callback(lambda message, tab=tab: self.win._notify_warning(message))
+        # A typed password that logged in: the tab asks "Save this password for this host?" (nothing auto-saved).
+        connector.add_password_verified_callback(tab.offer_save_password)
         tab.connect("destroy", lambda *_: self.cleanup_paramiko_connector(tab))
-        connector.connect_to_host(host_cfg, password_provider=password_provider)
+        connector.connect_to_host(host_cfg, password_provider=password_provider,
+                                  describe_source=self.win.creds.describe_password_source)
 
     def cleanup_paramiko_connector(self, tab) -> None:
         self.paramiko_connectors.pop(tab, None)
@@ -200,9 +205,9 @@ class SessionController:
             port=port,
             username=username,
             timeout=self.win._settings.connect_timeout,
-            remember_password_default=self.win._settings.remember_password_default,
             parent_window=self.win,
             options=dict(host.options),
+            alias=host.alias,
         )
 
     def notify_connection_success(self, host: HostEntry) -> None:

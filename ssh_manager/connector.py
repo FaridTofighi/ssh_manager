@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 import paramiko
 from gi.repository import GLib  # type: ignore
 
+from .auth_flow import MAX_ATTEMPTS, PasswordRequest, PasswordResolution, source_phrase
 from .connection_state import ConnectionState, ConnectionStateMachine
 from .secure_store import SecureStore, SecureStoreError
 
@@ -25,12 +26,10 @@ class HostConfig(Protocol):
     port: int
     username: str
     timeout: float
-    remember_password_default: bool
     parent_window: Optional[object]
 
 
 class Settings(Protocol):
-    remember_password_default: bool
     host_key_policy: str
     allowed_ciphers: list[str]
     allowed_kex: list[str]
@@ -186,6 +185,7 @@ class Connector:
         self._aborted_callbacks: List[Callable[[str], None]] = []
         self._error_callbacks: List[Callable[[str], None]] = []
         self._warning_callbacks: List[Callable[[str], None]] = []
+        self._verified_callbacks: List[Callable[[str], None]] = []
         self._main_thread = threading.main_thread()
         self._worker_thread: Optional[threading.Thread] = None
         self._current_client: Optional[paramiko.SSHClient] = None
@@ -205,11 +205,26 @@ class Connector:
     def add_warning_callback(self, callback: Callable[[str], None]) -> None:
         self._warning_callbacks.append(callback)
 
+    def add_password_verified_callback(self, callback: Callable[[str], None]) -> None:
+        """``callback(password)`` on the main thread after a login with a password the user typed.
+
+        Nothing is saved by the connector: the callback asks "Save this
+        password for this host?" (and is not called for a stored password).
+        """
+
+        self._verified_callbacks.append(callback)
+
     # ------------------------------------------------------------------ helpers
-    def connect_to_host(self, host_cfg: HostConfig, password_provider=None) -> None:
-        """Connect in a worker thread; ``password_provider()`` gives the first password (PasswordResolution)."""
+    def connect_to_host(self, host_cfg: HostConfig, password_provider=None,
+                        describe_source: Optional[Callable[[PasswordResolution], str]] = None) -> None:
+        """Connect in a worker thread; ``password_provider()`` gives the first password (PasswordResolution).
+
+        ``describe_source(resolution)`` names a rejected stored password in the
+        retry dialog ("saved password (credential ‘X’)").
+        """
 
         self._password_provider = password_provider
+        self._describe_source = describe_source
         if self._worker_thread and self._worker_thread.is_alive():
             raise RuntimeError("Connection already in progress.")
         if self.state_machine.state != ConnectionState.DISCONNECTED:
@@ -243,59 +258,60 @@ class Connector:
 
         provider = getattr(self, "_password_provider", None)
         stored_password: Optional[str] = None
+        resolution: Optional[PasswordResolution] = None
         if provider is not None:  # the same resolution as the terminal (vault → credential → legacy)
             try:
-                stored_password = provider().password
+                resolution = provider()
+                stored_password = resolution.password
             except Exception as exc:  # pragma: no cover - provider problems never block a connect
                 LOGGER.warning("Password resolution failed: %s", type(exc).__name__)
         else:
             try:
                 stored_password = self.secure_store.get(host, port, username)
             except SecureStoreError as exc:
-                LOGGER.warning("SecureStore get failed: %s", exc)
+                LOGGER.warning("SecureStore get failed: %s", type(exc).__name__)
 
+        alias = str(getattr(host_cfg, "alias", "") or host)
+        target = f"{username}@{host}:{port}"
         password: Optional[str] = stored_password
-        remember_default = getattr(self.settings, "remember_password_default", True)
-        remember_flag = True if stored_password is not None else remember_default
-        last_error: Optional[str] = None
+        rejected = ""  # how the retry dialog names the refused password
+        prompts = 0
+        describe: Optional[Callable[[PasswordResolution], str]] = getattr(self, "_describe_source", None)
 
         while True:
+            typed = False
             if password is None:
-                def prompt() -> Tuple[Optional[str], bool]:
-                    return self.password_dialog.show_for(
-                        host_cfg,
-                        error_message=last_error,
-                    )
+                if prompts >= MAX_ATTEMPTS:
+                    message = f"Authentication failed for {alias} after {MAX_ATTEMPTS} attempts."
+                    self._notify_error(message)
+                    self._set_state(ConnectionState.ABORTED)
+                    self._cleanup()
+                    self._emit_aborted(message)
+                    return
+                prompts += 1
+                request = PasswordRequest(alias, target, prompts, MAX_ATTEMPTS, rejected)
 
-                pwd, remember = self._call_on_main_thread(prompt)
-                if pwd is None:
+                def prompt(request: PasswordRequest = request) -> Tuple[Optional[str], bool]:
+                    return self.password_dialog.show_for(host_cfg, error_message=None, request=request)
+
+                pwd, _remember = self._call_on_main_thread(prompt)  # "remember" is ignored: asked after login
+                if not pwd:
                     self._set_state(ConnectionState.ABORTED)
                     self._cleanup()
                     self._emit_aborted("User cancelled authentication.")
                     return
                 password = pwd
-                remember_flag = remember
-                last_error = None
-
-            using_stored_password = stored_password is not None and password == stored_password
+                typed = True
 
             self._set_state(ConnectionState.AUTHENTICATING)
             result = self._try_paramiko(host_cfg, password, timeouts)
 
             if result.ok:
                 self._set_state(ConnectionState.AUTH_SUCCEEDED)
-                try:
-                    # Only a password the user typed, after a verified login, with "remember" ticked.
-                    # A resolved (stored) password is never rewritten, and nothing is ever deleted here.
-                    if remember_flag and not using_stored_password:
-                        self.secure_store.set(host, port, username, password)
-                except SecureStoreError as exc:
-                    LOGGER.warning("SecureStore set/delete failed: %s", exc)
-                    self._notify_warning(
-                        "Login succeeded but password could not be persisted."
-                    )
-
-                self._zeroize(password)
+                # Nothing is saved here. A typed password (not the stored one) is handed to the UI,
+                # which asks "Save this password for this host?".
+                if typed and password != stored_password:
+                    self._emit_verified(password)
                 password = None
 
                 self._current_client = result.client
@@ -306,11 +322,18 @@ class Connector:
 
             if result.is_auth_error:
                 self._set_state(ConnectionState.AUTH_FAILED)
-                last_error = "Authentication failed. Please enter your password again."
                 # A rejected password is never deleted: it may be a shared credential.
+                if typed:
+                    rejected = source_phrase("retry")
+                elif resolution is not None and describe is not None:
+                    try:
+                        rejected = describe(resolution)
+                    except Exception:  # pragma: no cover - naming is cosmetic
+                        rejected = source_phrase("stored")
+                else:
+                    rejected = source_phrase(resolution.source if resolution else "stored")
                 self._zeroize(password)
                 password = None
-                stored_password = None
                 continue
 
             # non-auth errors
@@ -467,6 +490,12 @@ class Connector:
         def notify() -> None:
             for cb in list(self._success_callbacks):
                 cb(client)
+        self._queue_main(notify)
+
+    def _emit_verified(self, password: str) -> None:
+        def notify() -> None:
+            for cb in list(self._verified_callbacks):
+                cb(password)
         self._queue_main(notify)
 
     def _emit_aborted(self, reason: str) -> None:
