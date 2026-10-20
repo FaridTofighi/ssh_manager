@@ -43,6 +43,8 @@ from ..validation import validate_alias, validate_hostname, validate_port  # noq
 from ..widgets.forms import FormRow, FormSection, entry  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
+from ...transfer.settings import TransferSettings, default_port_for  # noqa: E402
+from .transfer_page import TransferPage  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 from .confirm import confirm  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
@@ -121,10 +123,12 @@ class HostDialog(BaseDialog):
         password_check: Optional[Callable[[], Optional[str]]] = None,
         can_edit: bool = True,
         protocols_enabled: bool = True,
+        transfer_backend_factory: Optional[Callable[[HostEntry, Optional[str]], object]] = None,
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
         self._editing = host is not None
         self._protocols_enabled = protocols_enabled
+        self._transfer_backend_factory = transfer_backend_factory  # (host, credential id) -> backend
         self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
         self._port_edited = False  # the user typed a port in this dialog
         self._suppress_protocol_events = False
@@ -222,10 +226,21 @@ class HostDialog(BaseDialog):
         """Placeholder port, help texts and the pages the protocol uses."""
 
         kind = protocols.get(self._protocol)
-        self.port_entry.set_placeholder_text(str(protocols.default_port(self._protocol)))
+        transfer = kind is not None and kind.family == "transfer"
+        page = getattr(self, "transfer_page", None)
+        if transfer and page is not None:  # implicit FTPS defaults to 990
+            port = default_port_for(self._protocol, TransferSettings(tls_mode=page.tls_mode_id()))
+        else:
+            port = protocols.default_port(self._protocol)
+        self.port_entry.set_placeholder_text(str(port))
         ssh_like = kind is None or kind.supports_keys or kind.supports_jump_host
         self.layout.set_page_visible("connection", ssh_like)
         self.layout.set_page_visible("ssh_options", ssh_like)
+        self.layout.set_page_visible("transfer", transfer)
+        if page is not None:
+            page.set_protocol(self._protocol)
+            anonymous = transfer and page.anonymous_active()
+            self._credential_combo.set_sensitive(not anonymous)
         is_ssh = self._protocol == protocols.DEFAULT_PROTOCOL
         self._hostname_row.help.set_text(_("Leave empty to connect to the alias itself.") if is_ssh
                                          else _("Required for {protocol}.").format(
@@ -280,9 +295,38 @@ class HostDialog(BaseDialog):
 
     def _build_pages(self) -> None:
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
-        for build in (self._page_general, self._page_connection, self._page_credentials,
+        for build in (self._page_general, self._page_connection, self._page_transfer, self._page_credentials,
                       self._page_tags, self._page_ssh_options, self._page_permissions):
             build(labels)
+
+    def _page_transfer(self, labels: Gtk.SizeGroup) -> None:
+        page = self.layout.new_page("transfer", _("File transfer"),
+                                    _("FTP, FTPS and SFTP: security, connection, folders and transfers."))
+        settings, warnings = TransferSettings.from_json(self._metadata.get("transfer"))
+        self._transfer_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
+        self._transfer_error.set_xalign(0.0)
+        self._transfer_error.set_line_wrap(True)
+        self._transfer_error.get_style_context().add_class("form-error")
+        self._transfer_error.set_no_show_all(not warnings)
+        page.append(self._transfer_error)
+        self.transfer_page = TransferPage(self, settings, labels, on_default_port=self._apply_protocol,
+                                          on_anonymous=self._on_anonymous)
+        self.transfer_page.append_to(page)
+        self.transfer_page.test_button.connect("clicked", lambda *_: self._test_connection())
+        self.connect("destroy", lambda *_: self.transfer_page.close())
+
+    def _on_anonymous(self, anonymous: bool) -> None:
+        self._credential_combo.set_sensitive(not anonymous)
+        self._apply_identity_source()
+
+    def _test_connection(self) -> None:
+        factory = self._transfer_backend_factory
+        if factory is None:
+            self.transfer_page.test_result.set_text(_("Testing is not available here."))
+            return
+        host = self.build_host("", "")
+        self.transfer_page.test_connection(lambda: factory(host, self.selected_credential_id())
+                                           if host is not None and host.option("hostname") else None)
 
     def _page_general(self, labels: Gtk.SizeGroup) -> None:
         general = self.layout.new_page("general", _("General"), _("How the host appears in the tree and where it lives."))
@@ -575,6 +619,15 @@ class HostDialog(BaseDialog):
         buf = self.extras_view.get_buffer()
         return buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
 
+    def _validate_transfer(self) -> bool:
+        kind = protocols.get(self._protocol)
+        if kind is None or kind.family != "transfer":
+            return True
+        problems = self.transfer_page.problems()
+        self._transfer_error.set_text("\n".join(_(p) for p in problems))
+        self._transfer_error.set_visible(bool(problems))
+        return not problems
+
     def validate(self) -> bool:
         """Validate every field; show the first page with an error."""
 
@@ -586,6 +639,7 @@ class HostDialog(BaseDialog):
             ("general", general_ok),
             ("ssh_options", self._extras_row.validate()),
             ("credentials", self._validate_password()),
+            ("transfer", self._validate_transfer()),
         ]
         for page_id, ok in checks:
             if not ok:
@@ -637,8 +691,8 @@ class HostDialog(BaseDialog):
         }
         if not all(perms.values()):
             metadata["permissions"] = perms
-        if kind is not None and kind.family == "transfer" and self._metadata.get("transfer"):
-            metadata["transfer"] = self._metadata["transfer"]  # protocol settings, never ssh options
+        if kind is not None and kind.family == "transfer":
+            metadata["transfer"] = self.transfer_page.settings().to_json()  # protocol settings, never ssh options
         return HostEntry(
             alias=alias,
             options=options,
@@ -649,4 +703,7 @@ class HostDialog(BaseDialog):
         )
 
     def selected_credential_id(self) -> Optional[str]:
+        page = getattr(self, "transfer_page", None)
+        if page is not None and self._protocol in ("ftp", "ftps") and page.anonymous_active():
+            return None  # anonymous FTP needs no credential
         return self._credential_combo.get_active_id() or None

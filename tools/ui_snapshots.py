@@ -1505,6 +1505,31 @@ def run(out_dir: Path) -> None:
         dialog.layout.show_page("credentials")
         return dialog
 
+    def host_transfer_dialog(window) -> Gtk.Dialog:
+        """The File transfer page of an FTPS host (synthetic address)."""
+
+        from ssh_manager.config import HostEntry
+
+        host = HostEntry("files-01", {"hostname": "10.0.0.20", "user": "alice"}, protocol="ftps",
+                         metadata={"transfer": {"v": 1, "initial_remote_dir": "/srv/data"}})
+        dialog = HostDialog(window, host, credentials=window._credential_store.list(), metadata=host.metadata,
+                            profiles=window._profiles)
+        dialog.layout.show_page("transfer")
+        return dialog
+
+    for dark in (False, True):
+        @scenario(f"dialog-host-transfer-{'dark' if dark else 'light'}")
+        def _host_transfer(dark=dark) -> None:
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = host_transfer_dialog(window)
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"dialog-host-transfer-{'dark' if dark else 'light'}.png",
+                           *(int(round(v * scale)) for v in (900, 650)))
+            window.destroy()
+
     for dark in (False, True):
         for saved in (True, False):
             name = f"dialog-host-password-{'saved' if saved else 'notset'}-{'dark' if dark else 'light'}"

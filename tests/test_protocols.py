@@ -282,7 +282,8 @@ class HostDialogTests(unittest.TestCase):
         host = HostEntry("files", {"hostname": "10.0.0.20"}, metadata={"transfer": {"v": 1, "passive": True}},
                          protocol="ftp")
         dialog = self.dialog(host, metadata=host.metadata)
-        self.assertEqual(dialog.build_host("Acme", "").metadata["transfer"], {"v": 1, "passive": True})
+        saved = dialog.build_host("Acme", "").metadata["transfer"]  # normalized by the File transfer page
+        self.assertEqual((saved["v"], saved["passive"]), (1, True))
         with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=True) as ask:
             dialog.protocol_combo.set_active_id("ssh")
         self.assertIn("file-transfer settings", ask.call_args[0][2])

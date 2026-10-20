@@ -87,6 +87,8 @@ class HostActions:
             can_edit=self.win.creds.permissions_for_host(host).get("can_edit", True) if host else True,
             # Only the app-owned inventory stores protocols; folder inventories are OpenSSH config files.
             protocols_enabled=bool(getattr(self.win.manager, "allows_display_names", False)),
+            transfer_backend_factory=lambda candidate, cred_id, original=host: self.transfer_backend(
+                candidate, cred_id, original),
             metadata=host.metadata if host else {},
             vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
             vault_unlocked=self.win._vault.unlocked,
@@ -94,6 +96,22 @@ class HostActions:
             alias_validator=validators_for(self.win.manager)["alias"],
             **kwargs,
         )
+
+    def transfer_backend(self, host: HostEntry, cred_id: Optional[str], original: Optional[HostEntry] = None):
+        """A not-connected backend for the host dialog's "Test connection" (credential or host password)."""
+
+        from ...transfer.factory import make_backend
+
+        store = self.win._credential_store
+        user, password = host.option("user") or "", ""
+        if cred_id:
+            credential = store.get(cred_id)
+            user = credential.username if credential and credential.username else user
+            password = store.get_password(cred_id) or ""
+        elif original is not None:
+            password = self.win.creds.resolve_password(original).password or ""
+        return make_backend(host, user, password,
+                            host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
 
     @requires_editable_inventory
     def prompt_new_host(self, template: Optional[HostTemplate] = None) -> None:

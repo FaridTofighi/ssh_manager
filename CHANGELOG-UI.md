@@ -6,6 +6,50 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## File transfer, phase F1: backends and host settings
+
+Details: `docs/file-transfer.md`.
+
+- **`ssh_manager/transfer`:** a `RemoteFileBackend` interface with
+  `RemoteEntry`, cancellation and an error hierarchy (user message plus
+  technical detail, never a password).
+- **FTP / FTPS** (`ftplib` + `ssl`):
+  - **TLS modes:** explicit `AUTH TLS` and implicit TLS.
+  - **Data channel:** reuses the control connection's TLS session, so it
+    works with servers that require it. The PASV address is ignored (no
+    bounce); active mode has a peer check and a port range.
+  - **Text handling:** UTF-8 negotiation, `surrogateescape` names, CR/LF
+    command guard, `PASS` masked in the protocol log.
+  - **Listings and transfers:** MLSD / LIST parsers, REST resume,
+    MDTM/MFMT, `SITE CHMOD`.
+  - **Robustness:** reconnect on `421` / dropped connection; tolerant of a
+    missing `226`.
+  - **Certificates:** system, custom CA, pinned (first-use trust, changed
+    certificates refused) or insecure.
+- **SFTP** (`paramiko`):
+  - **Host keys:** SSH host-key rules (unknown keys confirmed and appended
+    to `known_hosts`, changed keys refused).
+  - **Authentication:** key with passphrase, agent, password and
+    single-prompt keyboard-interactive.
+  - **Operations:** streamed listings, `posix_rename`, chmod, symlinks,
+    `utime`, resume.
+- **`TransferSettings`** in `metadata["transfer"]` (versioned, unknown keys
+  kept, invalid values fall back with a warning).
+- **Host dialog:** a new **File transfer** page (security, connection,
+  folders, transfers, advanced) shown for FTP / FTPS / SFTP.
+  - **Inline validation:** for example, a custom CA without a file.
+  - **Insecure TLS:** asks for confirmation every time it is turned on.
+  - **Anonymous FTP:** disables the credential.
+  - **Test connection:** runs in the background and saves nothing.
+- **Tests:**
+  - **Files:** `tests/test_transfer_backends.py` (pure parsers and settings,
+    plus integration against real sockets) and `tests/test_transfer_dialog.py`.
+  - **Fake servers:** `tests/fake_ftp.py` (FTP/FTPS, can require TLS
+    session reuse) and `tests/fake_sftp.py`.
+  - **Snapshots:** `docs/ui-after/dialog-host-transfer-{light,dark}.png`.
+- **Next (F2):** the file-browser tab opens these hosts, with the Phase 1–3
+  password retry / save flow at connect time.
+
 ## Connection protocols, phase F0: the foundation
 
 Details: `docs/protocols.md`.
