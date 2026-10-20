@@ -302,6 +302,14 @@ class RemoteFileBackend(ABC):
     @abstractmethod
     def server_info(self) -> ServerInfo: ...
 
+    def is_dir(self, path: str) -> bool:
+        """Whether ``path`` is a folder, following a symlink (to open a link: folder or file?)."""
+
+        try:
+            return self.stat(path).kind is EntryKind.DIR
+        except NotFound:
+            return False
+
     def exists(self, path: str) -> bool:
         try:
             self.stat(path)

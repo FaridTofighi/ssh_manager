@@ -508,6 +508,10 @@ class FtpBackend(RemoteFileBackend):
         finally:
             reader.close()
 
+    def is_dir(self, path: str) -> bool:
+        check_remote_path(path)
+        return self._is_dir(path)  # CWD follows links
+
     def _is_dir(self, path: str) -> bool:
         client = self._require()
         try:

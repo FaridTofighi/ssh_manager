@@ -400,18 +400,20 @@ def tab_menu_spec(
     close_right: Callable[[], None],
     has_others: bool,
     has_right: bool,
+    terminal: bool = True,
 ):
-    """Context menu for a session tab."""
+    """Context menu for a session tab (split and transcript only for terminals)."""
 
     return [
         MenuSection("session", [
             MenuItemSpec(_("_Reconnect"), reconnect, Icons.RECONNECT, "Shift+Ctrl+R"),
             MenuItemSpec(_("_Duplicate Session"), duplicate, Icons.DUPLICATE, "Shift+Ctrl+D"),
-            MenuItemSpec(_("Close Split Pane") if is_split else _("_Split Pane"), split, Icons.SPLIT, "Shift+Ctrl+E"),
+            MenuItemSpec(_("Close Split Pane") if is_split else _("_Split Pane"), split, Icons.SPLIT, "Shift+Ctrl+E",
+                         visible=terminal),
         ]),
         MenuSection("edit", [
             MenuItemSpec(_("Re_name…"), rename, Icons.EDIT, "F2"),
-            MenuItemSpec(_("_Save Transcript…"), save, Icons.SAVE, "Shift+Ctrl+S"),
+            MenuItemSpec(_("_Save Transcript…"), save, Icons.SAVE, "Shift+Ctrl+S", visible=terminal),
         ]),
         MenuSection("close", [
             MenuItemSpec(_("_Close"), close, Icons.CLOSE, "Ctrl+W"),

@@ -19,7 +19,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 
-from gi.repository import Gdk, GLib, GObject, Gtk, Vte, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
 
 from ssh_manager.auth_flow import (
     AUTH_FAILURE_RE,
@@ -73,6 +73,7 @@ from ssh_manager.gtkui.views.workspace import (
     tab_menu_spec,
 )
 from ssh_manager.gtkui.pane_activation import ActivePane
+from ssh_manager.gtkui.session_page import SessionPage
 from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, pane_labels, session_tab_labels
 from ssh_manager.gtkui.widgets.pane_frame import PaneFooter, PaneFrame
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
@@ -337,15 +338,12 @@ class TerminalPaneContainer(Gtk.Box):
         self.show_all()
 
 
-class TerminalTab(Gtk.Box):
-    """Single SSH session embedded inside a Vte.Terminal."""
+class TerminalTab(SessionPage):
+    """Single SSH session embedded inside a Vte.Terminal (its signals come from :class:`SessionPage`)."""
 
     __gtype_name__ = "TerminalTab"
-    __gsignals__ = {
-        "session-closed": (GObject.SignalFlags.RUN_LAST, None, (str, bool)),
-        "status-changed": (GObject.SignalFlags.RUN_LAST, None, (str, bool)),
-        "close-requested": (GObject.SignalFlags.RUN_LAST, None, ()),
-    }
+    is_terminal = True
+    kind = "terminal"
 
     def __init__(
         self,
@@ -2219,6 +2217,12 @@ class TerminalNotebook(Gtk.Box):
             password_provider=password_provider,
             password_service=password_service,
         )
+        self.add_page(tab)
+        return tab
+
+    def add_page(self, tab: SessionPage) -> SessionPage:
+        """Add any session page (terminal, file browser …) to the tabs / tile grid."""
+
         tab.connect("status-changed", self._on_tab_status_changed)
         tab.connect("session-closed", self._on_tab_session_closed)
         tab.connect("close-requested", self._on_tab_close_requested)
@@ -2411,7 +2415,7 @@ class TerminalNotebook(Gtk.Box):
         if self._tile_mode:
             return list(self._tabs)
         pages = [self._notebook.get_nth_page(i) for i in range(self._notebook.get_n_pages())]
-        return [page for page in pages if isinstance(page, TerminalTab)]
+        return [page for page in pages if isinstance(page, SessionPage)]
 
     def _sync_tab_order(self) -> None:
         ordered = self._ordered_tabs()
@@ -2511,8 +2515,8 @@ class TerminalNotebook(Gtk.Box):
         if active == self._broadcast_mode:
             self._sync_toolbar()
             return
-        if active and len(self._tabs) < 2:
-            self._log(_("Broadcast needs at least two open sessions."), Level.INFO)
+        if active and len(self._terminal_tabs()) < 2:  # file browsers never take part
+            self._log(_("Broadcast needs at least two open terminal sessions."), Level.INFO)
             self._sync_toolbar()
             return
         self._broadcast_mode = active
@@ -2530,8 +2534,12 @@ class TerminalNotebook(Gtk.Box):
     def toggle_broadcast(self) -> None:
         self.set_broadcast_mode(not self._broadcast_mode)
 
+    def _terminal_tabs(self) -> List[SessionPage]:
+        return [tab for tab in self._tabs if tab.is_terminal]
+
     def _update_broadcast_ui(self) -> None:
-        targets = [t for t in self._tabs if self._broadcast_included.get(t, True) and self._tab_status.get(t, False)]
+        targets = [t for t in self._terminal_tabs()
+                   if self._broadcast_included.get(t, True) and self._tab_status.get(t, False)]
         self._broadcast_strip.set_target_count(len(targets))
         self._broadcast_strip.set_reveal_child(self._broadcast_mode)
         for tab in self._tabs:
@@ -2548,7 +2556,8 @@ class TerminalNotebook(Gtk.Box):
             self._on_tab_activated(source)  # typing into a pane makes it the broadcast source
         if not self._broadcast_mode or not data:
             return
-        for target in broadcast_target_tabs(self._tabs, source, self._broadcast_included, self._tab_status):
+        for target in broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included,
+                                            self._tab_status):
             target.feed_input(data)
 
     def _create_tile_wrapper(self, tab: TerminalTab) -> TileFrame:
@@ -2679,7 +2688,7 @@ class TerminalNotebook(Gtk.Box):
         if index < 0:
             return None
         child = self._notebook.get_nth_page(index)
-        if isinstance(child, TerminalTab):
+        if isinstance(child, SessionPage):
             self._last_current_tab = child
             return child
         return None
@@ -2688,7 +2697,7 @@ class TerminalNotebook(Gtk.Box):
         self.close_tab(tab)
 
     def _on_switch_page(self, _notebook: Gtk.Notebook, page: Gtk.Widget, _num: int) -> None:
-        if isinstance(page, TerminalTab):
+        if isinstance(page, SessionPage):
             self._last_current_tab = page
         for tab, label in self._tab_labels.items():
             label.set_current(tab is page)
@@ -2809,6 +2818,7 @@ class TerminalNotebook(Gtk.Box):
             close_right=lambda: self.close_to_right(tab),
             has_others=len(self._tabs) > 1,
             has_right=0 <= index < len(ordered) - 1,
+            terminal=tab.is_terminal,
         )
         popup_menu(build_context_menu(spec, attach_to=self), event)
 
@@ -2874,11 +2884,13 @@ class TerminalNotebook(Gtk.Box):
         bar = self._toolbar
         tab = self._current_tab()
         has_tab = tab is not None
+        terminal = bool(tab is not None and tab.is_terminal)  # file browsers: no split, transcript, stats …
         multiple = len(self._tabs) > 1
-        for widget in (bar.split, bar.save, bar.plain_copy, bar.stats, bar.reconnect, bar.more):
-            widget.set_sensitive(has_tab)
+        for widget in (bar.split, bar.save, bar.plain_copy, bar.stats, bar.more):
+            widget.set_sensitive(terminal)
+        bar.reconnect.set_sensitive(has_tab)
         bar.tile.set_sensitive(multiple)
-        bar.broadcast.set_sensitive(multiple)
+        bar.broadcast.set_sensitive(len(self._terminal_tabs()) > 1)
         self._set_toggle(bar.split, bool(tab and tab.is_split))
         self._set_toggle(bar.plain_copy, bool(tab and tab.strip_ansi_on_copy))
         self._set_toggle(bar.stats, bool(tab and tab.stats_visible))

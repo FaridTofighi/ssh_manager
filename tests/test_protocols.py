@@ -55,12 +55,17 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(protocols.SSH.validate(HostEntry("alias-only")), [])
 
     def test_openers(self) -> None:
-        calls = []
-        self.assertIsNone(protocols.opener_for("ftp"))
-        protocols.set_opener("ftp", lambda win, host: calls.append(host.alias) or host.alias)
-        self.addCleanup(protocols.set_opener, "ftp", None)
-        self.assertTrue(protocols.can_open(ftp_host()))
-        self.assertEqual(protocols.opener_for("FTP")(None, ftp_host()), "files")
+        # A protocol of its own: ftp / ftps / sftp have the file browser's opener (phase F2).
+        kind = protocols.register(protocols.ConnectionKind("demo", "Demo", "DEMO", "sshm-monitor", 7))
+        self.addCleanup(protocols._KINDS.pop, "demo", None)
+        host = ftp_host(protocol="demo")
+        self.assertIsNone(protocols.opener_for("demo"))
+        self.assertFalse(protocols.can_open(host))
+        protocols.set_opener("demo", lambda win, h: h.alias)
+        self.addCleanup(protocols.set_opener, "demo", None)
+        self.assertTrue(protocols.can_open(host))
+        self.assertEqual(protocols.opener_for("DEMO")(None, host), "files")
+        self.assertIs(protocols.get("demo"), kind)
 
     def test_a_new_protocol_needs_only_registration(self) -> None:
         kind = protocols.register(protocols.ConnectionKind("vnc", "VNC", "VNC", "sshm-monitor", 5900))
@@ -319,16 +324,16 @@ class WindowTests(unittest.TestCase):
 
     def test_dispatch_by_protocol(self) -> None:
         web = self.win.tree.find_host_by_alias("web-01")
+        # Phase F2: SFTP hosts open a file browser (no network here: the tab class is replaced).
         with mock.patch.object(self.win.terminal_tabs, "new_terminal", return_value=mock.Mock()) as new_terminal, \
+                mock.patch.object(self.win.terminal_tabs, "add_page") as add_page, \
+                mock.patch("ssh_manager.gtkui.file_browser.tab.FileBrowserTab") as browser, \
                 mock.patch.object(self.win.sessions, "bind_tab_status"):
             self.win.sessions.open_hosts([web, self.files])
         self.assertEqual(new_terminal.call_count, 1)  # only the SSH host got a terminal
-        self.assertTrue(any("cannot open" in note and "SFTP" in note for note in self.notes), self.notes)
-        opened = []
-        protocols.set_opener("sftp", lambda win, host: opened.append(host.alias) or host.alias)
-        self.addCleanup(protocols.set_opener, "sftp", None)
-        self.win.sessions.open_hosts([self.files])
-        self.assertEqual(opened, ["files"])
+        self.assertEqual(browser.call_args[0][0].alias, "files")
+        add_page.assert_called_once_with(browser.return_value)
+        self.assertFalse(any("cannot open" in note for note in self.notes), self.notes)
 
     def test_unknown_protocol_is_a_message_not_an_exception(self) -> None:
         future = ftp_host("future", protocol="rdp")

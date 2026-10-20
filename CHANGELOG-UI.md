@@ -6,6 +6,62 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## File transfer, phase F2: the file-browser tab
+
+Details: `docs/file-transfer.md` ("The file browser").
+
+- **Opening:** FTP, FTPS and SFTP hosts open a **file-browser tab** with a
+  local and a remote pane.
+  - **Pane controls:** a toolbar, breadcrumb path bar (Ctrl+L), live filter
+    (Ctrl+F) and a sortable, filterable list (folders first, natural order,
+    hidden files toggle, owner column for the server).
+  - **Listings:** streamed in batches with a delayed spinner, cancelled by a
+    newer navigation, and capped at 20,000 rendered rows.
+  - **Footer:** counts and the selection size.
+  - **Keyboard:** see the docs.
+- **Operations:** new folder, inline rename, delete (confirmation), copy
+  path or remote URL (no password), properties (folder size on demand,
+  chmod editor).
+  - **Open:** to a private temp folder, with upload-on-save after a
+    confirmation.
+  - **Bookmarks and history:** per-host bookmarks, recent folders, and
+    remembered last folders.
+  - **Simple transfers:** sequential file uploads and downloads, Ctrl+C /
+    Ctrl+V across the panes.
+- **Connecting:** the same password resolution, retry dialog and "Save this
+  password?" offer as SSH.
+  - **Plain FTP:** asks once per host and shows a "Not encrypted" badge.
+  - **Trust:** "Trust this certificate?" with its details (pinned); a
+    changed certificate defaults to Cancel; SFTP host keys are confirmed.
+  - **Recovery:** the reconnect banner, plus keepalive with
+    lost-connection detection.
+- **Read-only hosts:** browse and download only.
+- **Safety:**
+  - **Names:** remote names are plain text, escaped in tooltips and bidi
+    isolated.
+  - **Downloads:** names are made safe and contained in the destination
+    (`transfer/names.py`).
+  - **Opened files:** temp files are 0600 in a 0700 folder and removed when
+    the tab closes.
+  - **Tab close:** every GLib source is removed.
+- **Notebook:** a `SessionPage` base class (`gtkui/session_page.py`) and
+  `TerminalNotebook.add_page()`. File tabs take no part in broadcast, and
+  split, transcripts, stats and zoom are disabled for them. The tab menu
+  hides Split and Save Transcript.
+- **Preferences model:** `AppSettings.file_transfer` (download folder,
+  conflict policy, concurrency, plain-FTP warning, open behaviour, temp
+  cleanup, speed limit, hidden files, remember folders, protocol log). The
+  page comes in F4.
+- **New modules:** `transfer/browse.py` (sorting, filtering, paths,
+  breadcrumbs, URLs, history), `transfer/local.py` (the local file system
+  as a backend), `transfer/copy.py` (streaming copy with `.part` + rename),
+  `transfer/names.py`, `transfer/state.py`.
+- **Tests:**
+  - **File:** `tests/test_file_browser.py`, covering the pure helpers, the
+    pane and the tab with an in-memory backend (`tests/fake_backend.py`), a
+    real FTP tab against `tests/fake_ftp.py`, and the window integration.
+  - **Snapshots:** `docs/ui-after/file-browser-{light,dark}-{comfortable,compact}.png`.
+
 ## File transfer, phase F1: backends and host settings
 
 Details: `docs/file-transfer.md`.

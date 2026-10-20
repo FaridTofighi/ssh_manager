@@ -116,7 +116,92 @@ technical detail for the expander. Neither contains a password.
 - **Missing `226`:** a server that closes the data connection without one
   does not hang the transfer.
 
+## The file browser (FTP, FTPS, SFTP tabs)
+
+Double-click an FTP, FTPS or SFTP host to open a **file-browser tab**:
+- `gtkui/file_browser/tab.py`, a `SessionPage` like the terminal;
+- it sits in the same strip, tile grid and status bar.
+- **SSH-only features stay off for these tabs:** split, broadcast,
+  transcripts, remote stats, zoom and copy-as-plain-text. The toolbar and
+  tab menu hide or disable them.
+- **Layout:** the local pane (this computer) and the remote pane (the
+  server) side by side. "Show only the server's files" hides the local side.
+  - **Toolbar:** Back, Forward, Up, Home, Refresh, New folder, Rename,
+    Delete, Show hidden.
+  - **Path bar:** breadcrumbs; Ctrl+L types a location (completing loaded
+    folder names). An invalid location shows an error and keeps the old
+    folder.
+  - **Also in each pane:** a live filter (Ctrl+F, `*` / `?` wildcards) and a
+    footer ("N items · M selected · size").
+- **The list:**
+  - **Columns:** Name, Size, Modified (full time in the tooltip),
+    Permissions (`rwxr-xr-x (755)`), Owner (remote).
+  - **Sorting:** click a header; folders first, natural, case-insensitive
+    order.
+  - **Selection:** multi-select with rubber band, plus type-ahead.
+  - **Large folders:** listings stream in batches; a spinner appears after
+    300 ms; the rendered rows are capped (20,000) with "refine the filter".
+    A newer navigation cancels an older one.
+- **Keyboard:**
+
+  | Keys | Action |
+  |---|---|
+  | Enter | Open |
+  | Backspace / Alt+Up | Up |
+  | Alt+Left / Alt+Right | Back / Forward |
+  | F2 | Rename (inline) |
+  | Delete | Delete (confirmation lists the items) |
+  | F5 | Refresh |
+  | F7 | New folder |
+  | Ctrl+A | Select all |
+  | Ctrl+C, then Ctrl+V on the other side | Copy across |
+
+- **Operations** (context menu): Open, Download / Upload, New folder,
+  Rename, Copy path, Properties, Copy remote URL (never with a password),
+  Delete.
+  - **Properties:** a folder's size on demand, and permissions with an octal
+    entry plus check boxes when `chmod` is supported.
+  - **Open (remote file):** downloads into a private temporary folder (0700,
+    file 0600) and opens it with the default application. When the file is
+    saved, the browser offers to upload it back (to `.part`, then rename).
+    The folder is removed when the tab closes.
+- **Bookmarks and history:**
+  - **Bookmarks:** per host, in the bookmarks menu, with the recent server
+    folders.
+  - **Last folders:** the last local and remote folders are remembered per
+    host in `$XDG_DATA_HOME/ssh-manager/file-browser.json` (0600). Turn this
+    off in Preferences.
+- **Read-only hosts** (local permission "Allow editing" off): browse and
+  download only. Upload, new folder, rename and delete are disabled, and say
+  why.
+- **Connecting:**
+  - **Passwords:** the same rules as SSH (vault → credential → host-specific
+    → saved). A rejected password opens the same retry dialog (at most 3).
+    A typed password that worked is offered once: "Save this password for
+    this host?".
+  - **Plain FTP with a password:** asks once per host and keeps a "Not
+    encrypted" badge.
+  - **Certificates and host keys:** an untrusted FTPS certificate or an
+    unknown SFTP host key is shown for confirmation. A changed certificate
+    defaults to Cancel; a changed host key is refused.
+  - **Lost connection:** shows the red banner with **Reconnect**.
+- **Closing a tab:** cancels listings and transfers, removes its timers,
+  closes the connection in the background and deletes its temporary files.
+- **Remote names are untrusted:**
+  - **Display:** shown as plain text (escaped in tooltips) and wrapped in
+    Unicode isolates, so right-to-left names never reorder the row.
+  - **Downloads:** names are made safe (`transfer/names.py`). A name like
+    `../../x` lands as `.._.._x` inside the destination folder, never
+    outside it.
+
 ## Known limits (so far)
+
+- **Transfers in this phase:** sequential, files only. Folders, the transfer
+  queue, conflicts and drag and drop come in phase F3.
+- **Not yet:** column widths and visibility are not remembered per host yet.
+  A recursive delete runs in the background without a progress dialog.
+- **Skipped (optional in the brief):** "Open in terminal" for hosts that also
+  have an SSH entry.
 
 - **Integration test servers:** they are small fakes in `tests/`
   (`fake_ftp.py`, `fake_sftp.py`). `pyftpdlib` is not needed. Setting

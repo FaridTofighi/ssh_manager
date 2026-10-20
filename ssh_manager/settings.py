@@ -108,6 +108,45 @@ class TerminalAppearanceSettings:
         )
 
 
+CONFLICT_POLICIES = ("ask", "overwrite", "overwrite_newer", "skip", "rename", "resume")
+
+
+@dataclass
+class FileTransferPreferences:
+    """Preferences → File transfer (FTP / FTPS / SFTP tabs and the transfer queue)."""
+
+    download_dir: str = ""  # "" = ~/Downloads (or home)
+    conflict_policy: str = "ask"
+    concurrency: int = 3  # global cap of running transfers (per host: its max_connections)
+    warn_plain_ftp: bool = True
+    open_with_default_app: bool = True  # "Open" a remote file with the desktop's default application
+    clean_temp_on_exit: bool = True
+    bandwidth_limit_kbps: int = 0  # global; 0 = unlimited
+    show_hidden: bool = False
+    remember_last_dirs: bool = True
+    protocol_log: bool = False  # connection log pane (passwords always masked)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "FileTransferPreferences":
+        prefs = cls()
+        for key, default in vars(cls()).items():
+            value = data.get(key, default)
+            if isinstance(default, bool):
+                value = value if isinstance(value, bool) else default
+            elif isinstance(default, int):
+                value = value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else default
+            elif isinstance(default, str):
+                value = value if isinstance(value, str) else default
+            setattr(prefs, key, value)
+        if prefs.conflict_policy not in CONFLICT_POLICIES:
+            prefs.conflict_policy = "ask"
+        prefs.concurrency = min(max(prefs.concurrency, 1), 16)
+        return prefs
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(vars(self))
+
+
 @dataclass
 class AppSettings:
     """Application-wide settings with JSON persistence."""
@@ -130,6 +169,7 @@ class AppSettings:
     git_watch_path: str = ""
     git_watch_interval: int = 600
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
+    file_transfer: FileTransferPreferences = field(default_factory=FileTransferPreferences)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "AppSettings":
@@ -220,6 +260,8 @@ class AppSettings:
         )
         appearance = data.get("terminal_appearance")
         instance.terminal_appearance = TerminalAppearanceSettings.from_dict(appearance if isinstance(appearance, dict) else {})
+        transfer = data.get("file_transfer")
+        instance.file_transfer = FileTransferPreferences.from_dict(transfer if isinstance(transfer, dict) else {})
 
         timeouts = data.get("timeouts")
         if isinstance(timeouts, dict):
@@ -255,6 +297,7 @@ class AppSettings:
             "git_watch_path": self.git_watch_path,
             "git_watch_interval": self.git_watch_interval,
             "terminal_appearance": self.terminal_appearance.to_dict(),
+            "file_transfer": self.file_transfer.to_dict(),
         }
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)

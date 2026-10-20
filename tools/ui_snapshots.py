@@ -1576,6 +1576,46 @@ def run(out_dir: Path) -> None:
                 capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in size))
                 window.destroy()
 
+    def _file_browser_scene(window) -> None:
+        """An SFTP host's file-browser tab (in-memory backend, synthetic names and sizes)."""
+
+        import tempfile
+
+        from ssh_manager.config import HostEntry
+        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
+        from ssh_manager.transfer.state import BrowserState
+        from tests.fake_backend import FakeBackend
+
+        files = {f"/srv/data/{name}": b"x" * size for name, size in (
+            ("backup-2024-03-01.tar.gz", 48_200_000), ("deploy.sh", 2_048), ("README.md", 6_100),
+            ("reports/q1-summary.pdf", 410_000), ("نتایج.csv", 12_500), ("config.yaml", 980))}
+        backend = FakeBackend(files, ["/srv/data/logs", "/srv/data/releases"], home="/srv/data")
+        local = Path(tempfile.mkdtemp(prefix="sshm-snap-"))
+        for name, size in (("notes.txt", 1_200), ("photo.jpg", 2_400_000), ("site.tar.gz", 9_800_000)):
+            (local / name).write_bytes(b"0" * size)
+        (local / "Documents").mkdir()
+        host = HostEntry("files-01", {"hostname": "10.0.0.20", "user": "alice"}, protocol="sftp",
+                         parent_group="staging", child_group="")
+        tab = FileBrowserTab(host, lambda *a: None, backend_factory=lambda h, u, p: backend,
+                             state=BrowserState(local / ".state.json"), local_home=str(local))
+        window.terminal_tabs.add_page(tab)
+        for _ in range(60):
+            _pump(20)
+            if tab.remote_pane.entries and tab.local_pane.entries:
+                break
+        tab.remote_pane.select_name("deploy.sh")
+
+    for dark in (False, True):
+        for dens in ("comfortable", "compact"):
+            name = f"file-browser-{'dark' if dark else 'light'}-{dens}"
+
+            @scenario(name)
+            def _file_browser(dark=dark, dens=dens, name=name) -> None:
+                window = _make_window(app, base, dark, dens)
+                _file_browser_scene(window)
+                capture_window(window, out_dir / f"{name}.png", 1280, 800)
+                window.destroy()
+
     _dialog_scenario("dialog-settings", prefs_dialog, (820, 620))
     _dialog_scenario("dialog-credentials", lambda w: CredentialManagerDialog(w, w._credential_store), (560, 400))
     _dialog_scenario("dialog-vault", lambda w: VaultDialog(w, w._vault), (560, 460))

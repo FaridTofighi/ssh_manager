@@ -68,8 +68,10 @@ class UIHostConfig:
 
 
 
-# The SSH opener; other protocols register theirs from their own UI module.
+# Openers by protocol: a terminal for SSH, the file browser for the FTP family.
 protocols.set_opener("ssh", lambda win, host: win.sessions.open_ssh_host(host))
+for _transfer_protocol in ("ftp", "ftps", "sftp"):
+    protocols.set_opener(_transfer_protocol, lambda win, host: win.sessions.open_transfer_host(host))
 
 
 class SessionController:
@@ -172,6 +174,21 @@ class SessionController:
             tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
                                                       password_service=self.win.creds)
             self.bind_tab_status(tab, resolved)
+        return resolved.alias
+
+    def open_transfer_host(self, host_obj: HostEntry) -> Optional[str]:
+        """The FTP / FTPS / SFTP opener: a file-browser tab; returns the alias."""
+
+        from ..file_browser.tab import FileBrowserTab
+
+        creds = self.win.creds
+        resolved = creds.host_with_resolved_identity(host_obj)
+        read_only = not creds.permissions_for_host(host_obj).get("can_edit", True) or creds.host_is_read_only(host_obj)
+        self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
+        tab = FileBrowserTab(resolved, self.win._log_event, password_provider=partial(creds.resolve_password, host_obj),
+                             password_service=creds, app_settings=self.win._settings, read_only=read_only)
+        self.win.terminal_tabs.add_page(tab)
+        self.bind_tab_status(tab, resolved)
         return resolved.alias
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,

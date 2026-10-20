@@ -441,6 +441,14 @@ class SftpBackend(RemoteFileBackend):
         check_remote_path(path)
         self._do(lambda c: c.utime(path, (mtime, mtime)))
 
+    def is_dir(self, path: str) -> bool:
+        check_remote_path(path)
+        try:
+            attributes = self._do(lambda c: c.stat(path))  # stat follows links (lstat would not)
+        except NotFound:
+            return False
+        return attributes.st_mode is not None and statmod.S_ISDIR(attributes.st_mode)
+
     def readlink(self, path: str) -> str:
         check_remote_path(path)
         return self._do(lambda c: c.readlink(path)) or ""
