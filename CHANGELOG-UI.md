@@ -6,6 +6,57 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## File transfer, phase F3: transfer queue and drag and drop
+
+Details: `docs/file-transfer.md` ("Transfers", "Drag and drop").
+
+- **Engine** (`transfer/engine.py`):
+  - **Jobs:** upload, download, server-to-server copy (streaming relay),
+    same-server move (rename) and local copy.
+  - **Planner:** recursive, keeps empty folders, skips or follows symlinks,
+    detects loops, caps depth at 64, and makes every local name safe.
+  - **Queue:** per-endpoint connection pools (`max_connections`), a global
+    cap, pause / resume (continues the `.part` file), cancel, and retry with
+    backoff for dropped connections.
+  - **Conflicts:** overwrite, overwrite if newer, skip, keep both, resume,
+    or ask with "apply to all".
+  - **Integrity:** size checks; `.part` + rename for uploads and downloads;
+    partial files removed on cancel or failure.
+  - **Speed and progress:** token-bucket speed limits per host, per tab and
+    global; smoothed speed and ETA; progress at most 10 Hz.
+- **Transfers panel:**
+  - **Rows:** direction, name, progress, size, speed, ETA, status / error,
+    with pause / resume / cancel / retry / reveal / remove.
+  - **Toolbar:** pause all, resume all, clear finished, speed limit.
+  - **Status bar:** "N transfers · speed".
+  - **Notifications:** for big jobs (desktop notification when the window
+    is not active).
+- **Conflict dialog:** both sides' size and date, the choices, "Apply to
+  all", and "Cancel the transfer".
+- **Drag and drop:**
+  - **Between panes:** upload / download, and move or copy (Ctrl) inside a
+    pane or onto folder rows.
+  - **Across tabs:** server to server.
+  - **From the desktop:** files from the desktop's file manager are
+    uploaded (`text/uri-list`).
+  - **Feedback:** spring-loaded folders (800 ms), a drop highlight and a
+    count badge.
+  - **Validation:** payloads are validated on drop (only listed paths, live
+    panes); read-only hosts, folder-into-itself and malformed data are
+    refused.
+- **Closing:** closing a tab or quitting with running transfers asks first
+  (`SessionPage.confirm_close`).
+- **`copy_file`:** `keep_partial` may be decided when the copy stops (pause
+  vs cancel).
+- **Tests:**
+  - **Files:** `tests/test_transfer_engine.py` (names with malicious
+    listings, planner, queue, conflicts, retries, pause / resume / cancel,
+    connection limits, move and relay, throttled progress, limiter, DnD
+    rules) and `tests/test_transfer_ui.py` (panel, conflict dialog, drops,
+    rejections, relay, conflicts from worker threads, close confirmation,
+    status summary, synthetic drag-data-received).
+  - **Snapshots:** `docs/ui-after/file-browser-transfers-{light,dark}.png`.
+
 ## File transfer, phase F2: the file-browser tab
 
 Details: `docs/file-transfer.md` ("The file browser").

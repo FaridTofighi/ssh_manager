@@ -2274,6 +2274,8 @@ class TerminalNotebook(Gtk.Box):
         target = tab or self._current_tab()
         if not target or target not in self._tabs:
             return
+        if not target.confirm_close():  # e.g. "3 transfers are in progress. Cancel them and close?"
+            return
         self._detach_tab(target)
         self._tabs.remove(target)
         if target in self._open_order:

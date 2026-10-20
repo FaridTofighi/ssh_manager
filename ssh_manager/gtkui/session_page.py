@@ -172,3 +172,8 @@ class SessionPage(Gtk.Box):
 
     def reconnect(self) -> None:
         pass
+
+    def confirm_close(self) -> bool:
+        """Whether the tab may close now (a file browser asks while transfers run)."""
+
+        return True

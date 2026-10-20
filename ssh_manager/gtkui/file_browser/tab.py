@@ -29,6 +29,7 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -48,6 +49,10 @@ from ...transfer.backend import (  # noqa: E402
 )
 from ...transfer.browse import remote_url  # noqa: E402
 from ...transfer.copy import copy_file  # noqa: E402
+from ...transfer.dnd import DropAction, into_itself, resolve_drop  # noqa: E402
+from ...transfer.engine import (  # noqa: E402
+    FINISHED, Conflict, ConflictInfo, Direction, Endpoint, State, TransferJob, TransferQueue, summarize,
+)
 from ...transfer.local import LocalBackend  # noqa: E402
 from ...transfer.names import UnsafePath, contained_path  # noqa: E402
 from ...transfer.settings import TransferSettings, default_port_for  # noqa: E402
@@ -65,6 +70,7 @@ from ..widgets.icon_button import IconMenuButton, IconToggleButton, set_accessib
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.menus import build_menu  # noqa: E402
 from .pane import FilePane  # noqa: E402
+from .transfers import ConflictDialog, TransferPanel  # noqa: E402
 from .worker import Worker  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
@@ -112,6 +118,17 @@ class FileBrowserTab(SessionPage):
         self.worker = Worker(f"remote-{host.alias}"[:15])
         self.local_worker = Worker("local")
         self.local_backend = LocalBackend(local_home)
+        self.local_endpoint = Endpoint("local", lambda: LocalBackend(local_home), local=True,
+                                       max_connections=4)
+        self._endpoint: Optional[Endpoint] = None
+        self._connected_password = ""
+        self._finished: set = set()
+        self._conflict_lock = threading.Lock()
+        concurrency = int(getattr(self.prefs, "concurrency", 3) or 3)
+        self.queue = TransferQueue(concurrency=concurrency, limit_kbps=int(getattr(self.prefs, "bandwidth_limit_kbps",
+                                                                                   0) or 0),
+                                   ask=self._ask_conflict)
+        self.queue.listeners.append(lambda job: GLib.idle_add(self._on_job_update, job))
         self._build(read_only)
         self.connect("destroy", lambda *_: self._on_destroy())
         for warning in warnings:
@@ -148,6 +165,9 @@ class FileBrowserTab(SessionPage):
         self.bookmarks_button = IconMenuButton("user-bookmarks-symbolic", _("Bookmarks and recent folders"))
         self.bookmarks_button.connect("toggled", self._on_bookmarks_toggled)
         header.pack_end(self.remote_only, False, False, 0)
+        self.transfers_toggle = IconToggleButton(Icons.SAVE, _("Transfers"),
+                                                 lambda active: self.panel.set_reveal_child(active))
+        header.pack_end(self.transfers_toggle, False, False, 0)
         header.pack_end(self.bookmarks_button, False, False, 0)
         self.pack_start(header, False, False, 0)
         self._update_security_badge()
@@ -162,17 +182,32 @@ class FileBrowserTab(SessionPage):
         for pane, other in ((self.local_pane, self.remote_pane), (self.remote_pane, self.local_pane)):
             pane.on_open_file = functools.partial(self._open_file, pane)
             pane.on_open_entry = functools.partial(self._open_link, pane)
-            pane.on_transfer = functools.partial(self.transfer, pane, other)
+            pane.on_transfer = functools.partial(self._transfer_selection, pane, other)
             pane.on_paste = functools.partial(self._paste_into, pane)
             pane.on_error = self._on_pane_error
             pane.on_navigated = functools.partial(self._remember_dir, pane)
             pane.on_properties = functools.partial(self._properties, pane)
+            pane.on_drop = functools.partial(self._on_drop, pane)
+            pane.owner = self
+            pane.enable_dnd()
         self.remote_pane.extra_menu = self._remote_extra_menu
         self.paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self.paned.set_wide_handle(True)
         self.paned.pack1(self.local_pane, True, False)
         self.paned.pack2(self.remote_pane, True, False)
         self.pack_start(self.paned, True, True, 0)
+        self.panel = TransferPanel()
+        self.panel.on_pause = self.queue.pause
+        self.panel.on_resume = self.queue.resume
+        self.panel.on_cancel = self.queue.cancel
+        self.panel.on_retry = self._on_retry
+        self.panel.on_reveal = self._reveal
+        self.panel.on_clear = self.queue.clear_finished
+        self.panel.on_limit = self.queue.set_limit
+        self.pack_start(self.panel, False, False, 0)
+        # desktop files dropped in: a stand-in source pane for "this computer"
+        self._desktop_pane = FilePane("local", self.local_worker, lambda: self.local_backend)
+        self._desktop_pane.owner = self
 
         self._statusbar = SessionStatusBar()
         self._statusbar.size_label.set_tooltip_text("")
@@ -315,6 +350,10 @@ class FileBrowserTab(SessionPage):
         if old is not None and old is not backend:
             self.worker.submit(old.close)
         self.server = info
+        self._connected_password = password  # extra transfer connections log in the same way
+        if self._endpoint is not None:
+            self.worker.submit(self._endpoint.close)
+            self._endpoint = None
         self._update_security_badge()
         detail = info.tls_version or (_("SFTP") if self.protocol == "sftp" else "")
         self._set_status(ConnectionStatus.CONNECTED, _("Connected") + (f" · {detail}" if detail else ""))
@@ -627,57 +666,198 @@ class FileBrowserTab(SessionPage):
         dialog.present()
 
     # --------------------------------------------------------- transfers
-    def transfer(self, source: FilePane, target: FilePane, entries: List[RemoteEntry],
-                 destination: Optional[str] = None) -> None:
-        """Copy ``entries`` from ``source`` into ``target``'s current folder (simple sequential copy).
+    def _remote_endpoint(self) -> Optional[Endpoint]:
+        """Connections for transfers (``max_connections``; FTP needs one per running transfer)."""
 
-        Phase F3 replaces this with the transfer queue (folders, conflicts,
-        progress); remote names are already made safe for the local disk.
+        if self.backend is None:
+            return None
+        if self._endpoint is None:
+            password = self._connected_password
+            self._endpoint = Endpoint(self._host.alias, lambda: self._make_backend(password),
+                                      max_connections=self.settings.max_connections,
+                                      limit_kbps=self.settings.bandwidth_limit_kbps)
+        return self._endpoint
+
+    def _second_endpoint(self) -> Optional[Endpoint]:
+        """Another pool to the same server (a same-server copy reads and writes at once)."""
+
+        if self.backend is None:
+            return None
+        password = self._connected_password
+        return Endpoint(self._host.alias, lambda: self._make_backend(password), max_connections=1)
+
+    def _transfer_selection(self, source: FilePane, target: FilePane, entries: List[RemoteEntry]) -> None:
+        """Download / Upload (context menu): into the other pane's current folder."""
+
+        self.transfer(source, target, entries)
+
+    def endpoint_for(self, pane: FilePane) -> Optional[Endpoint]:
+        return self.local_endpoint if pane.side == "local" else self._remote_endpoint()
+
+    def transfer(self, source: FilePane, target: FilePane, entries: List[RemoteEntry],
+                 destination: Optional[str] = None, *, move: bool = False) -> Optional[TransferJob]:
+        """Queue ``entries`` from ``source`` (any tab's pane) into ``target`` (a pane of this tab).
+
+        Upload / download / local copy follow from the sides; ``move`` within
+        one server renames; a remote pane of another tab is copied server to
+        server through a local streaming relay. Folders are planned
+        recursively; downloaded names are made safe.
         """
 
-        if self.backend is None or target.current_path is None:
-            return
+        directory = destination or target.current_path
+        if directory is None or not entries:
+            return None
         if target.side == "remote" and target.read_only:
             self._log(_("This host is read-only: uploads are disabled."), Level.WARNING)
-            return
-        files = [e for e in entries if e.kind is EntryKind.FILE]
-        skipped = len(entries) - len(files)
-        if skipped:
-            self._log(_("Folders and links are transferred by the transfer queue; {n} item(s) skipped.").format(
-                n=skipped), Level.INFO)
-        if not files:
-            return
-        directory = destination or target.current_path
-        src_backend, dst_backend = source.backend(), target.backend()
-        if src_backend is None or dst_backend is None:
-            return
-        token = CancelToken()
-        self._tokens.append(token)
-        atomic = self.settings.upload_atomic
+            return None
+        if into_itself([e.path for e in entries if e.kind is EntryKind.DIR], directory) and source.side == target.side:
+            self._log(_("A folder cannot be copied or moved into itself."), Level.WARNING)
+            return None
+        other_tab = source.owner if source.owner is not None else self
+        source_endpoint = other_tab.endpoint_for(source) if hasattr(other_tab, "endpoint_for") else None
+        target_endpoint = self.endpoint_for(target)
+        if source_endpoint is None or target_endpoint is None:
+            self._log(_("Not connected: the transfer was not started."), Level.WARNING)
+            return None
+        if source.side == "local" and target.side == "remote":
+            direction = Direction.UPLOAD
+        elif source.side == "remote" and target.side == "local":
+            direction = Direction.DOWNLOAD
+        elif source.side == "local":
+            direction = Direction.LOCAL_COPY
+        elif other_tab is self and move:
+            direction = Direction.REMOTE_MOVE
+        else:
+            direction = Direction.REMOTE_COPY
+            if other_tab is self:
+                target_endpoint = self._second_endpoint() or target_endpoint
+        prefs_policy = getattr(self.prefs, "conflict_policy", "ask")
+        settings = self.settings
+        job = TransferJob(
+            direction, list(entries), directory, source_endpoint, target_endpoint,
+            conflict=Conflict(prefs_policy) if prefs_policy in Conflict._value2member_map_ else Conflict.ASK,
+            atomic=settings.upload_atomic if target.side == "remote" else True,
+            preserve_mtime=settings.preserve_mtime, follow_symlinks=settings.follow_symlinks,
+            ascii_for=settings.is_ascii_name if self.protocol in ("ftp", "ftps") and settings.transfer_mode == "auto"
+            else None,
+        )
+        self.panel.set_reveal_child(True)
+        self.transfers_toggle.set_active(True)
+        return self.queue.add(job)
 
-        def work() -> int:
-            for entry in files:
-                token.raise_if_cancelled()
-                if target.side == "local":
-                    path = str(contained_path(Path(directory), entry.name))
+    def _on_drop(self, target: FilePane, source: Optional[FilePane], entries: List[RemoteEntry], folder: str,
+                 copy: bool) -> bool:
+        """A validated drop on ``target`` (``source`` is None for files from the desktop)."""
+
+        if source is None:  # desktop files: always copied, from this computer
+            source = self._desktop_pane
+        same_pane = source is target
+        same_server = source.side == target.side == "remote" and source.owner is target.owner
+        action = resolve_drop(source.side, target.side, same_pane=same_pane, same_server=same_server,
+                              copy_modifier=copy, target_is_file=False, read_only_target=target.read_only)
+        if action is DropAction.REJECT:
+            self._log(_("Files cannot be dropped here."), Level.WARNING)
+            return False
+        if action is DropAction.MOVE and source.side == "local":
+            return self._local_move(entries, folder, target)
+        job = self.transfer(source, target, entries, folder, move=action is DropAction.MOVE)
+        return job is not None
+
+    def _local_move(self, entries: List[RemoteEntry], folder: str, pane: FilePane) -> bool:
+        if into_itself([e.path for e in entries if e.kind is EntryKind.DIR], folder):
+            self._log(_("A folder cannot be moved into itself."), Level.WARNING)
+            return False
+        local = self.local_backend
+
+        def work() -> None:
+            for entry in entries:
+                local.rename(entry.path, os.path.join(folder, os.path.basename(entry.path)))
+
+        self.local_worker.submit(work, lambda _r: pane.refresh(), self._report)
+        return True
+
+    def _on_job_update(self, job: TransferJob) -> bool:
+        if self._closed:
+            return GLib.SOURCE_REMOVE
+        self.panel.update(job)
+        running, rate = summarize(self.queue.jobs)
+        summary = self.panel.summary_text() if running else ""
+        self._statusbar.size_label.set_text(summary)
+        self.transfers_toggle.set_tooltip_text(summary or _("Transfers"))
+        if job.state in FINISHED and job.id not in self._finished:
+            self._finished.add(job.id)
+            self._job_finished(job)
+        return GLib.SOURCE_REMOVE
+
+    def _job_finished(self, job: TransferJob) -> None:
+        changed = self.local_pane if job.target.local else self.remote_pane  # where the files landed
+        if changed.current_path is not None:
+            changed.refresh()
+        files = sum(1 for item in job.items if not item.is_dir)
+        big = files >= 20 or job.total >= 100 * 1000 * 1000
+        if job.state is State.DONE and big:
+            self._log(_("{title}: {n} files transferred.").format(title=job.title, n=files), Level.SUCCESS)
+        elif job.state is State.FAILED:
+            self._log(_("{title}: {error}").format(title=job.title, error=job.error), Level.ERROR)
+        if job.warnings:
+            LOGGER.info("transfer %s: %d warning(s)", job.id, len(job.warnings))
+        window = self._window()
+        if big and window is not None and not window.is_active():
+            app = window.get_application()
+            if app is not None:  # the user is elsewhere: a desktop notification
+                note = Gio.Notification.new(_("Transfer finished") if job.state is State.DONE
+                                            else _("Transfer failed"))
+                note.set_body(job.title)
+                app.send_notification(f"sshm-transfer-{job.id}", note)
+
+    def _ask_conflict(self, job: TransferJob, info: ConflictInfo):
+        """Called from a transfer thread: show the conflict dialog on the GTK thread and wait for it."""
+
+        with self._conflict_lock:  # one question at a time; "apply to all" answers the others
+            if job.conflict is not Conflict.ASK:
+                return job.conflict, False
+            if self._closed or job.cancel.cancelled:
+                return Conflict.SKIP, True
+            done = threading.Event()
+            answer: Dict[str, Any] = {}
+
+            def show() -> bool:
+                if self._closed:
+                    answer["value"] = (None, False)
                 else:
-                    path = target.child_path(entry.name) if destination is None else os.path.join(directory,
-                                                                                                    entry.name)
-                copy_file(src_backend, entry.path, dst_backend, path, size=entry.size, cancel=token,
-                          atomic=atomic if target.side == "remote" else True)
-            return len(files)
+                    answer["value"] = ConflictDialog(self._window(), info).ask()
+                done.set()
+                return GLib.SOURCE_REMOVE
 
-        def finished(count: int) -> None:
-            self._set_status(ConnectionStatus.CONNECTED, _("Transferred {n} file(s).").format(n=count))
-            target.refresh()
+            GLib.idle_add(show)
+            while not done.wait(0.2):
+                if self._closed or job.cancel.cancelled:
+                    return Conflict.SKIP, True
+            decision, apply_all = answer["value"]
+            if decision is None:  # "Cancel the transfer"
+                self.queue.cancel(job)
+                return Conflict.SKIP, True
+            return decision, apply_all
 
-        def failed(exc: BaseException) -> None:
-            self._report(exc)
-            self._set_status(ConnectionStatus.CONNECTED, _("Transfer failed."))
-            target.refresh()
+    def _on_retry(self, job: TransferJob) -> None:
+        self.queue.retry(job)
 
-        self._set_status(ConnectionStatus.CONNECTED, _("Transferring {n} file(s)…").format(n=len(files)))
-        self.worker.submit(work, finished, failed)
+    def _reveal(self, job: TransferJob) -> None:
+        if job.target.local:
+            Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(job.destination).get_uri(), None)
+
+    def running_transfers(self) -> int:
+        return len(self.queue.running())
+
+    def confirm_close(self) -> bool:
+        """Closing with transfers running asks first (the notebook calls this)."""
+
+        count = self.running_transfers()
+        if not count:
+            return True
+        return confirm(self._window(), _("Cancel the transfers?"),
+                       _("{n} transfers are in progress. Cancel them and close?").format(n=count),
+                       confirm_label=_("Cancel Transfers and _Close"), destructive=True)
 
     def _paste_into(self, pane: FilePane) -> None:
         entries = FilePane.clipboard
@@ -705,6 +885,11 @@ class FileBrowserTab(SessionPage):
         for monitor in self._monitors.values():
             monitor.cancel()
         self._monitors.clear()
+        self.queue.shutdown()  # cancels running transfers (partial files removed)
+        self._desktop_pane.destroy()
+        if self._endpoint is not None:
+            endpoint = self._endpoint
+            self.worker.submit(endpoint.close)
         backend, self.backend = self.backend, None
         if backend is not None:
             self.worker.submit(backend.close)

@@ -752,6 +752,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # -------------------------------------------------------------- signals
     def _on_delete_event(self, *_args) -> bool:
+        running = sum(getattr(tab, "running_transfers", lambda: 0)() for tab in self.terminal_tabs.tabs())
+        if running and not self._confirm(
+            _("Cancel the transfers?"),
+            detail=_("{n} transfers are in progress. Cancel them and quit?").format(n=running),
+            confirm_label=_("Cancel Transfers and _Quit"),
+        ):
+            return True  # keep the window open
         self._save_ui_state()
         self.closing = True
         return False

@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import os
 import posixpath
-from typing import Any, Callable, Dict, List, Optional
+import uuid
+import weakref
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import gi
 
@@ -32,6 +34,10 @@ from ...transfer.browse import (  # noqa: E402
     breadcrumbs, filter_entries, format_mtime, format_perms, human_size, isolate, local_breadcrumbs,
     normalize_remote, parent_of, sort_entries, History,
 )
+from ...transfer.dnd import (  # noqa: E402
+    PAYLOAD_TARGET, URI_TARGET, decode_payload, encode_payload, parse_uri_list, validate_payload,
+)
+from ...transfer.local import LocalBackend  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..dialogs.prompt import prompt_text  # noqa: E402
@@ -46,6 +52,9 @@ from .worker import Worker  # noqa: E402
 MAX_ROWS = 20000  # rendered rows; more entries are kept and filterable
 BATCH = 500  # rows delivered to the UI at a time while listing
 SPINNER_DELAY_MS = 300
+SPRING_MS = 800  # hover over a folder while dragging to open it
+_INFO_PAYLOAD, _INFO_URIS = 1, 2
+PANES: "weakref.WeakValueDictionary[str, FilePane]" = weakref.WeakValueDictionary()  # drag sources by token
 
 (COL_GICON, COL_NAME, COL_SIZE, COL_MTIME, COL_PERMS, COL_OWNER, COL_ENTRY, COL_TOOLTIP) = range(8)
 
@@ -97,6 +106,11 @@ class FilePane(Gtk.Box):
         self._editing_path: Optional[str] = None
         self.connected = side == "local"
         self.destroyed = False
+        self.token = uuid.uuid4().hex  # names this pane in drag payloads
+        self.owner: Any = None  # the tab
+        # (source pane or None for desktop files, entries, target folder, copy modifier) -> accepted
+        self.on_drop: Callable[[Optional["FilePane"], List[RemoteEntry], str, bool], bool] = \
+            lambda _s, _e, _t, _c: False
         # Callbacks (the tab wires them).
         self.on_open_file: Callable[[RemoteEntry], None] = lambda _e: None
         self.on_transfer: Callable[[List[RemoteEntry]], None] = lambda _e: None
@@ -251,6 +265,8 @@ class FilePane(Gtk.Box):
     def _on_destroy(self) -> None:
         self.destroyed = True
         self._cancel()
+        self._cancel_spring()
+        PANES.pop(self.token, None)
 
     def _add_name_column(self) -> None:
         column = Gtk.TreeViewColumn(_("Name"))
@@ -733,3 +749,143 @@ class FilePane(Gtk.Box):
     def can_chmod(self) -> bool:
         backend = self.backend()
         return bool(backend and F_CHMOD in backend.features() and not self.read_only)
+
+    # ------------------------------------------------------- drag and drop
+    def enable_dnd(self) -> None:
+        """Drag entries out (payload; local files also as ``text/uri-list``) and accept drops in.
+
+        ``on_drop(source pane or None, entries, target folder, copy modifier)``
+        decides what happens; a drop is validated first (payload paths must be
+        listed in the source pane; URIs must be existing local files).
+        """
+
+        targets = [Gtk.TargetEntry.new(PAYLOAD_TARGET, Gtk.TargetFlags.SAME_APP, _INFO_PAYLOAD),
+                   Gtk.TargetEntry.new(URI_TARGET, 0, _INFO_URIS)]
+        actions = Gdk.DragAction.COPY | Gdk.DragAction.MOVE
+        self.view.enable_model_drag_source(Gdk.ModifierType.BUTTON1_MASK, targets, actions)
+        self.view.enable_model_drag_dest(targets, actions)
+        self.view.connect("drag-begin", self._on_drag_begin)
+        self.view.connect("drag-data-get", self._on_drag_data_get)
+        self.view.connect("drag-data-delete", lambda widget, _ctx: widget.stop_emission_by_name("drag-data-delete"))
+        self.view.connect("drag-motion", self._on_drag_motion)
+        self.view.connect("drag-leave", self._on_drag_leave)
+        self.view.connect("drag-drop", self._on_drag_drop)
+        self.view.connect("drag-data-received", self._on_drag_data_received)
+        PANES[self.token] = self
+
+    def _on_drag_begin(self, _view, context) -> None:
+        count = len(self.selected_entries())
+        label = Gtk.Label(label=ngettext("{n} item", "{n} items", count).format(n=count))
+        label.get_style_context().add_class("drag-badge")
+        label.show()
+        Gtk.drag_set_icon_widget(context, label, 0, 0)
+
+    def _on_drag_data_get(self, view, _context, data, info, _time) -> None:
+        view.stop_emission_by_name("drag-data-get")  # never GtkTreeView's row-reordering data
+        entries = self.selected_entries()
+        if info == _INFO_PAYLOAD:
+            data.set(data.get_target(), 8, encode_payload(self.token, self.side, [e.path for e in entries]))
+        elif info == _INFO_URIS and self.side == "local":
+            data.set_uris([Gio.File.new_for_path(e.path).get_uri() for e in entries])
+
+    def _drop_folder(self, x: int, y: int) -> Tuple[Optional[str], bool]:
+        """``(target folder, onto a file)`` for a drop at ``(x, y)``: a folder row or the current folder."""
+
+        hit = self.view.get_dest_row_at_pos(x, y)
+        if hit is not None:
+            entry = self.store[hit[0]][COL_ENTRY]
+            if entry.kind is EntryKind.DIR:
+                return entry.path, False
+        return self.current_path, False
+
+    def _on_drag_motion(self, view, context, x: int, y: int, time_: int) -> bool:
+        view.stop_emission_by_name("drag-motion")
+        if not self.connected or self.current_path is None or (self.side == "remote" and self.read_only):
+            Gdk.drag_status(context, 0, time_)
+            return True
+        hit = view.get_dest_row_at_pos(x, y)
+        folder_path = None
+        if hit is not None and self.store[hit[0]][COL_ENTRY].kind is EntryKind.DIR:
+            view.set_drag_dest_row(hit[0], Gtk.TreeViewDropPosition.INTO_OR_BEFORE)
+            folder_path = self.store[hit[0]][COL_ENTRY].path
+        else:
+            view.set_drag_dest_row(None, Gtk.TreeViewDropPosition.BEFORE)
+        self._spring(folder_path)
+        has_state, modifiers = Gtk.get_current_event_state()
+        copy = bool(has_state and modifiers & Gdk.ModifierType.CONTROL_MASK)  # Ctrl: copy instead of move
+        same_pane = Gtk.drag_get_source_widget(context) is view
+        action = Gdk.DragAction.MOVE if same_pane and not copy else Gdk.DragAction.COPY
+        Gdk.drag_status(context, action, time_)
+        return True
+
+    def _spring(self, folder: Optional[str]) -> None:
+        """Hovering a folder for 800 ms while dragging opens it (spring-loaded folders)."""
+
+        if folder == getattr(self, "_spring_folder", None):
+            return
+        self._cancel_spring()
+        self._spring_folder = folder
+        if folder is not None:
+            self._spring_source = GLib.timeout_add(SPRING_MS, self._spring_open, folder)
+
+    def _spring_open(self, folder: str) -> bool:
+        self._spring_source = 0
+        if not self.destroyed and folder == self._spring_folder:
+            self.load(folder)
+        return GLib.SOURCE_REMOVE
+
+    def _cancel_spring(self) -> None:
+        source = getattr(self, "_spring_source", 0)
+        if source:
+            GLib.source_remove(source)
+        self._spring_source = 0
+        self._spring_folder = None
+
+    def _on_drag_leave(self, view, _context, _time) -> None:
+        self._cancel_spring()
+        view.set_drag_dest_row(None, Gtk.TreeViewDropPosition.BEFORE)
+
+    def _on_drag_drop(self, view, context, _x, _y, time_: int) -> bool:
+        view.stop_emission_by_name("drag-drop")
+        self._cancel_spring()
+        names = [str(target) for target in context.list_targets()]
+        wanted = PAYLOAD_TARGET if PAYLOAD_TARGET in names else (URI_TARGET if URI_TARGET in names else None)
+        if wanted is None:
+            Gtk.drag_finish(context, False, False, time_)
+            return True
+        view.drag_get_data(context, Gdk.Atom.intern(wanted, False), time_)
+        return True
+
+    def _on_drag_data_received(self, view, context, x: int, y: int, data, info: int, time_: int) -> None:
+        view.stop_emission_by_name("drag-data-received")  # never GtkTreeView's row insertion
+        ok = self.accept_drop(data.get_data() if info == _INFO_PAYLOAD else None,
+                              data.get_uris() if info == _INFO_URIS else None, self._drop_folder(x, y)[0],
+                              copy=bool(context.get_selected_action() & Gdk.DragAction.COPY))
+        Gtk.drag_finish(context, ok, False, time_)
+
+    def accept_drop(self, payload: Optional[bytes], uris: Optional[List[str]], target_folder: Optional[str], *,
+                    copy: bool) -> bool:
+        """Validate a drop and hand it to ``on_drop``; ``False`` (and nothing happens) when invalid."""
+
+        if target_folder is None or not self.connected or (self.side == "remote" and self.read_only):
+            return False
+        if payload is not None:
+            decoded = decode_payload(payload)
+            source = PANES.get(decoded.token) if decoded is not None else None
+            if decoded is None or source is None or source.destroyed or source.side != decoded.side:
+                return False
+            listed = {entry.path: entry for entry in source.entries}
+            if not validate_payload(decoded, list(listed)):
+                return False  # a path that is not listed in the source pane right now
+            return self.on_drop(source, [listed[path] for path in decoded.paths], target_folder, copy)
+        paths = parse_uri_list("\n".join(uris or []))
+        if not paths:
+            return False
+        local = LocalBackend()
+        entries = []
+        for path in paths:
+            try:
+                entries.append(local.stat(path))
+            except BackendError:
+                continue
+        return bool(entries) and self.on_drop(None, entries, target_folder, True)

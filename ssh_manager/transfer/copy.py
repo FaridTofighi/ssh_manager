@@ -12,7 +12,7 @@ from __future__ import annotations
 import posixpath
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from .backend import NEVER_CANCELLED, BackendError, CancelToken, Cancelled, RemoteFileBackend
 
@@ -38,10 +38,17 @@ def part_path(path: str) -> str:
 def copy_file(source: RemoteFileBackend, source_path: str, target: RemoteFileBackend, target_path: str, *,
               size: Optional[int] = None, cancel: CancelToken = NEVER_CANCELLED,
               progress: Optional[Progress] = None, chunk: int = DEFAULT_CHUNK, atomic: bool = False,
-              resume_from: int = 0, keep_partial: bool = False, ascii: bool = False,
+              resume_from: int = 0, keep_partial: Union[bool, Callable[[], bool]] = False, ascii: bool = False,
               throttle: Optional[Callable[[int], None]] = None,
               local_join: Callable[[str], str] = part_path) -> CopyResult:
-    """Copy one file; returns the bytes written. Raises :class:`BackendError` / :class:`Cancelled`."""
+    """Copy one file; returns the bytes written. Raises :class:`BackendError` / :class:`Cancelled`.
+
+    ``keep_partial`` may be a callable, asked when the copy stops (a pause
+    keeps the partial file for a resume, a cancel removes it).
+    """
+
+    def keep() -> bool:
+        return bool(keep_partial()) if callable(keep_partial) else bool(keep_partial)
 
     started = time.monotonic()
     destination = local_join(target_path) if atomic else target_path
@@ -71,10 +78,10 @@ def copy_file(source: RemoteFileBackend, source_path: str, target: RemoteFileBac
     finally:
         _close(writer, raise_errors=ok)
         _close(reader, raise_errors=ok)
-        if not ok and not keep_partial:
+        if not ok and not keep():
             _remove(target, destination)
     if size is not None and not ascii and written != size:
-        if not keep_partial:
+        if not keep():
             _remove(target, destination)
         raise BackendError("The copy is incomplete (the size does not match).",
                            f"expected {size} bytes, wrote {written}")

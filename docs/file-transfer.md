@@ -194,17 +194,112 @@ Double-click an FTP, FTPS or SFTP host to open a **file-browser tab**:
     `../../x` lands as `.._.._x` inside the destination folder, never
     outside it.
 
-## Known limits (so far)
+## Transfers
 
-- **Transfers in this phase:** sequential, files only. Folders, the transfer
-  queue, conflicts and drag and drop come in phase F3.
-- **Not yet:** column widths and visibility are not remembered per host yet.
-  A recursive delete runs in the background without a progress dialog.
+Every upload, download and copy is a **job** in the tab's **Transfers**
+panel (`transfer/engine.py`, `gtkui/file_browser/transfers.py`).
+
+- **Planning:** a job is planned in the background ("Scanning… N files").
+  - **Folders:** copied recursively, and empty folders are kept.
+  - **Symbolic links:** skipped (reported) unless "Follow symbolic links" is
+    on. Loops are caught (device + inode locally, visited paths remotely),
+    and the depth is capped at 64.
+- **Running:**
+  - **Limits:** at most the host's "Parallel connections" at a time (FTP
+    opens one connection per transfer), within the global cap from
+    Preferences.
+  - **States:** queued → running → paused / done / failed / cancelled /
+    skipped.
+  - **Progress:** bytes, a smoothed speed and an ETA, updated at most 10
+    times a second.
+  - **Row actions:** pause, resume, cancel, retry the failed files, reveal
+    the destination, remove.
+  - **Panel actions:** pause all, resume all, clear finished, and a speed
+    limit in KB/s.
+- **Retries:** a dropped connection or timeout is retried twice (1 s, then
+  3 s). Other errors fail the file with its reason. "Retry" re-queues only
+  the failed files.
+- **Conflicts:** when a name exists, the dialog shows both sides' size and
+  date. The choices:
+  - **Overwrite**;
+  - **Overwrite if newer**;
+  - **Skip**;
+  - **Keep both** (`name (1).ext`);
+  - **Resume** (when the existing file is shorter and the server can
+    resume).
+
+  "Apply to all" answers the rest of the job. The default policy is in
+  Preferences ("Ask" by default).
+- **Integrity:**
+  - **Uploads:** go to `name.part` and are renamed when complete (setting
+    "Upload to a .part file").
+  - **Downloads:** always go to `name.part` in the destination, then
+    `os.replace`.
+  - **Checks:** the size is checked after every file, and the modification
+    time is set when "Keep modification times" is on.
+  - **Cancel and failure:** a cancel or failure removes the partial file.
+  - **Pause:** keeps the `.part` file, and **resume** continues it where it
+    stopped (when the server supports resuming).
+- **Untrusted names:** every name from the server is made safe before it
+  touches the disk (`transfer/names.py`).
+  - **Neutralized:** `..`, absolute paths, drive letters, path separators,
+    NUL / control characters, bidi tricks, and trailing dots and spaces.
+  - **Long names:** shortened with a hash.
+  - **Windows reserved names:** reported.
+  - **Containment:** the resulting path is checked to stay inside the
+    destination, symlinks included. `../../.bashrc` becomes `.._.._.bashrc`
+    in the chosen folder.
+- **Speed:** token buckets per host ("Speed limit" in the host settings),
+  per tab (panel) and globally (Preferences). Data is streamed in 256 KiB
+  chunks in constant memory.
+- **Closing:**
+  - **A tab:** closing it with transfers running asks "N transfers are in
+    progress. Cancel them and close?".
+  - **The window:** quitting asks too.
+- **Notifications:** a big job (≥ 20 files or ≥ 100 MB) finishing shows a
+  message, and a desktop notification when the window is not active.
+  Failures always show one.
+- **Status bar:** shows "2 transfers · 14.2 MB/s"; the header's Transfers
+  button opens the panel.
+
+## Drag and drop
+
+| From | To | Result |
+|---|---|---|
+| Local pane (or the desktop's file manager) | Remote pane or a remote folder row | Upload |
+| Remote pane | Local pane or a local folder row | Download |
+| A pane | A folder row in the same pane | Move (hold **Ctrl** to copy) |
+| Remote pane of tab A | Remote pane of tab B (another server) | Server-to-server copy, streamed through this computer (no temporary file) |
+| Remote pane | Remote pane of the same connection | Move by rename (Ctrl: copy through a second connection) |
+| Remote pane | The desktop / another application | Not supported: use **Download** |
+
+- **Drop feedback:**
+  - **Folder rows:** highlighted; hovering one for 800 ms opens it
+    (spring-loaded).
+  - **Scrolling:** the list scrolls near its edges.
+  - **Drag icon:** shows the item count.
+  - **Esc:** cancels the drag.
+- **Rejected drops:**
+  - **Forbidden targets:** a read-only host, or a folder into itself or a
+    descendant.
+  - **Payload checks:** paths not listed in the source pane (the
+    `application/x-sshmanager-entries` payload is validated on drop, never
+    trusted).
+  - **External sources:** URIs that are not existing local files.
+- **Keyboard alternative:** **Ctrl+C** in one pane and **Ctrl+V** in the
+  other, or the context menu's **Upload** / **Download**.
+
+## Known limits
+
+- **Remote to desktop:** dragging from the remote pane to another
+  application is not supported (it would need XDS). Use **Download**.
+- **Window-level summary:** the transfer summary is per tab (its status
+  bar); there is no window-wide indicator yet.
+- **Columns:** widths and visibility are not remembered per host yet.
+- **Recursive delete:** runs in the background without a progress dialog.
 - **Skipped (optional in the brief):** "Open in terminal" for hosts that also
   have an SSH entry.
-
-- **Integration test servers:** they are small fakes in `tests/`
-  (`fake_ftp.py`, `fake_sftp.py`). `pyftpdlib` is not needed. Setting
-  `SSHM_SKIP_INTEGRATION=1` skips the socket tests.
-- **SFTP jump hosts:** use `ProxyJump` / `ProxyCommand` through an `ssh -W`
-  command, like the Paramiko SSH backend.
+- **SFTP checksums:** after a transfer, sizes are checked; there are no
+  checksums.
+- **Integration test servers:** small fakes in `tests/`. `pyftpdlib` is not
+  needed, and `SSHM_SKIP_INTEGRATION=1` skips the socket tests.

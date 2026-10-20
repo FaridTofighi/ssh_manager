@@ -1605,6 +1605,39 @@ def run(out_dir: Path) -> None:
                 break
         tab.remote_pane.select_name("deploy.sh")
 
+    def _show_transfers(window) -> None:
+        """Three synthetic jobs in the panel: running, paused, failed."""
+
+        from ssh_manager.transfer.backend import RemoteEntry
+        from ssh_manager.transfer.engine import Direction, Endpoint, State, TransferItem, TransferJob
+        from ssh_manager.transfer.local import LocalBackend
+
+        tab = window.terminal_tabs.current_tab()
+        local = Endpoint("local", LocalBackend, local=True)
+        remote = Endpoint("remote", LocalBackend)
+        specs = [(Direction.DOWNLOAD, "backup-2024-03-01.tar.gz", 48_200_000, 19_600_000, State.RUNNING, ""),
+                 (Direction.UPLOAD, "site", 9_800_000, 2_100_000, State.PAUSED, ""),
+                 (Direction.UPLOAD, "photo.jpg", 2_400_000, 0, State.FAILED, "Permission denied.")]
+        for direction, name, size, done, state, error in specs:
+            job = TransferJob(direction, [RemoteEntry(name, f"/srv/data/{name}")], "/srv/data", local, remote)
+            item = TransferItem(f"/x/{name}", f"/srv/data/{name}", size=size, done=done)
+            item.state, item.error = (State.FAILED, error) if state is State.FAILED else (state, "")
+            job.items, job.state, job.rate = [item], state, 3_400_000.0 if state is State.RUNNING else 0.0
+            tab.panel.update(job)
+        tab.transfers_toggle.set_active(True)
+        _pump(30)
+
+    for dark in (False, True):
+        name = f"file-browser-transfers-{'dark' if dark else 'light'}"
+
+        @scenario(name)
+        def _file_browser_transfers(dark=dark, name=name) -> None:
+            window = _make_window(app, base, dark, "compact")
+            _file_browser_scene(window)
+            _show_transfers(window)
+            capture_window(window, out_dir / f"{name}.png", 1280, 800)
+            window.destroy()
+
     for dark in (False, True):
         for dens in ("comfortable", "compact"):
             name = f"file-browser-{'dark' if dark else 'light'}-{dens}"
