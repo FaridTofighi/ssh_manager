@@ -147,6 +147,39 @@ class FileTransferPreferences:
         return dict(vars(self))
 
 
+RDP_ENGINE_PREFERENCES = ("auto", "embedded", "external")
+
+
+@dataclass
+class RemoteDesktopPreferences:
+    """Preferences → Remote Desktop (RDP sessions through FreeRDP; ``docs/rdp.md``)."""
+
+    preferred_engine: str = "auto"  # auto | embedded | external
+    binary_path: str = ""  # a FreeRDP client to use instead of the one found on PATH
+    max_sessions: int = 8  # RDP sessions running at the same time
+    release_shortcut: str = "<Control><Alt>Control_R"  # gives the keyboard back to this app (embedded engines)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RemoteDesktopPreferences":
+        prefs = cls()
+        engine = data.get("preferred_engine")
+        if engine in RDP_ENGINE_PREFERENCES:
+            prefs.preferred_engine = engine
+        path = data.get("binary_path")
+        if isinstance(path, str) and len(path) <= 4096 and not any(ord(ch) < 32 for ch in path):
+            prefs.binary_path = path.strip()
+        count = data.get("max_sessions")
+        if isinstance(count, int) and not isinstance(count, bool):
+            prefs.max_sessions = min(max(count, 1), 64)
+        shortcut = data.get("release_shortcut")
+        if isinstance(shortcut, str) and 0 < len(shortcut) <= 64:
+            prefs.release_shortcut = shortcut
+        return prefs
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(vars(self))
+
+
 @dataclass
 class AppSettings:
     """Application-wide settings with JSON persistence."""
@@ -170,6 +203,7 @@ class AppSettings:
     git_watch_interval: int = 600
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
     file_transfer: FileTransferPreferences = field(default_factory=FileTransferPreferences)
+    remote_desktop: RemoteDesktopPreferences = field(default_factory=RemoteDesktopPreferences)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "AppSettings":
@@ -262,6 +296,8 @@ class AppSettings:
         instance.terminal_appearance = TerminalAppearanceSettings.from_dict(appearance if isinstance(appearance, dict) else {})
         transfer = data.get("file_transfer")
         instance.file_transfer = FileTransferPreferences.from_dict(transfer if isinstance(transfer, dict) else {})
+        desktop = data.get("remote_desktop")
+        instance.remote_desktop = RemoteDesktopPreferences.from_dict(desktop if isinstance(desktop, dict) else {})
 
         timeouts = data.get("timeouts")
         if isinstance(timeouts, dict):
@@ -298,6 +334,7 @@ class AppSettings:
             "git_watch_interval": self.git_watch_interval,
             "terminal_appearance": self.terminal_appearance.to_dict(),
             "file_transfer": self.file_transfer.to_dict(),
+            "remote_desktop": self.remote_desktop.to_dict(),
         }
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)

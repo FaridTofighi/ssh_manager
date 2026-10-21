@@ -62,6 +62,7 @@ the registry.
 | Quick Connect | `[user@]host[:port]` stays SSH; `ssh://`, `sftp://`, `ftp://` and `ftps://` URLs open the matching tab (`protocols/urls.py`) |
 | MobaXterm import | Types 6 / 7 become `ftp` / `sftp` hosts; the protocol is part of "the same host" |
 | SSH host menu | **Browse Files (SFTP)** opens an SFTP view of the SSH host (same id, credential, key and jump host; nothing stored) |
+| RDP | `rdp` (port 3389, `sshm-desktop` icon, `RDP` pill, `proto:rdp`): Remote Desktop pages in the host dialog, settings in `metadata["rdp"]`; see `docs/rdp.md` |
 
 ## Quick Connect URLs
 

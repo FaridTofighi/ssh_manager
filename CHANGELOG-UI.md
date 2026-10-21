@@ -6,6 +6,39 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Remote Desktop, phase R0: RDP hosts, settings, connection test, engines
+
+Details: `docs/rdp.md`.
+
+- **RDP hosts:**
+  - The protocol is `rdp`, port 3389.
+  - Each host gets a desktop icon in the tree, an `RDP` pill and the
+    `proto:rdp` filter.
+  - OpenSSH export leaves RDP hosts out.
+- **Host dialog:** four pages, shown only for RDP hosts.
+  - **Remote Desktop:** sign-in, security, certificate and **Test
+    Connection**.
+  - **Display & Input:** size, colors, scaling, performance preset and
+    keyboard layout (Persian 0x429 included).
+  - **Devices:** clipboard, shared folders, printers, sound, USB and smart
+    cards.
+  - **RDP Connection:** reconnect, RD Gateway, SSH tunnel, programs and
+    advanced options.
+  - **Gating:** options the engine cannot do are disabled, with the reason
+    in the tooltip.
+  - **Confirmations:** risky choices (no certificate check, standard RDP
+    security, sharing the home folder, any extra option) ask first.
+- **Test Connection:** shows reachability, latency, the security the server
+  selects and its certificate, and whether that matches a pinned one. It
+  never sends a password.
+- **Settings → Remote Desktop:** engine preference, the FreeRDP client and
+  the number of sessions at once. **Diagnostics…** lists every FreeRDP
+  client, engine and capability, with **Copy** and install hints.
+- **Shared trust store:** the FTPS certificate pins moved to
+  `ssh_manager/trust.py` and are shared with RDP (RDP keys are scoped).
+- **Opening an RDP host:** says that sessions come in the next phase, or
+  how to install FreeRDP when none was found.
+
 ## File transfer, phase F4: integrations and diagnostics
 
 Details: `docs/file-transfer.md` ("Preferences", "Diagnostics"),

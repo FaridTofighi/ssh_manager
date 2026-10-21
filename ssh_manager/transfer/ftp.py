@@ -40,6 +40,7 @@ from .backend import (
     UntrustedCertificate, Unsupported, check_remote_path, join, redact,
 )
 from .listing import parse_list_line, parse_mlsd_line
+from ..trust import certificate_info as _certificate_info
 from .pins import PinStore, fingerprint, normalize_fingerprint, pin_key
 from .settings import TransferSettings
 
@@ -732,22 +733,6 @@ def _printable(text: str) -> str:
 
     cleaned = "".join(ch if ch.isprintable() or ch == "\n" else " " for ch in (text or ""))
     return cleaned.strip()[:2000]
-
-
-def _certificate_info(der: bytes) -> CertificateInfo:
-    if not der:
-        return CertificateInfo()
-    sha = fingerprint(der)
-    try:
-        from cryptography import x509  # paramiko's dependency
-
-        cert = x509.load_der_x509_certificate(der)
-        before = getattr(cert, "not_valid_before_utc", None) or cert.not_valid_before
-        after = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after
-        return CertificateInfo(cert.subject.rfc4514_string(), cert.issuer.rfc4514_string(),
-                                before.strftime("%Y-%m-%d %H:%M UTC"), after.strftime("%Y-%m-%d %H:%M UTC"), sha)
-    except Exception:
-        return CertificateInfo(sha256=sha)
 
 
 def backend_for(host: Any, user: str, password: str, *, settings: Optional[TransferSettings] = None,

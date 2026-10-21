@@ -62,6 +62,7 @@ class Icons:
     HOST = "sshm-server"
     SERVER = "sshm-server"
     TRANSFER = "sshm-transfer"  # FTP / FTPS / SFTP hosts
+    DESKTOP = "sshm-desktop"  # RDP hosts
     # Overlays composited onto tree icons.
     BADGE_DOT = "sshm-badge-dot"
     BADGE_RING = "sshm-badge-ring"

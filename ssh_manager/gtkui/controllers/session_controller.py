@@ -72,6 +72,7 @@ class UIHostConfig:
 
 # Openers by protocol: a terminal for SSH, the file browser for the FTP family.
 protocols.set_opener("ssh", lambda win, host: win.sessions.open_ssh_host(host))
+protocols.set_opener("rdp", lambda win, host: win.sessions.open_rdp_host(host))
 for _transfer_protocol in ("ftp", "ftps", "sftp"):
     protocols.set_opener(_transfer_protocol, lambda win, host: win.sessions.open_transfer_host(host))
 
@@ -196,6 +197,29 @@ class SessionController:
         if bind_status:
             self.bind_tab_status(tab, resolved)
         return resolved.alias
+
+    # ------------------------------------------------------------- RDP
+    def refresh_rdp_engines(self) -> None:
+        """Look for FreeRDP clients again (off the GTK thread); dialogs read the cached report."""
+
+        from ...rdp.engines import discover_async
+
+        prefs = self.win._settings.remote_desktop
+        discover_async(lambda _report: None, preference=prefs.preferred_engine, override=prefs.binary_path)
+
+    def open_rdp_host(self, host_obj: HostEntry) -> Optional[str]:
+        """The RDP opener. Sessions arrive in the next phase (R1); until then it explains, never fails."""
+
+        from ...rdp.engines import cached_report, install_hint
+
+        report = cached_report()
+        if report is not None and not report.any_available:
+            self.win._notify(_("“{alias}” cannot be opened: no FreeRDP client was found. {hint}").format(
+                alias=host_obj.alias, hint=install_hint(report.platform)), Level.WARNING)
+            return None
+        self.win._notify(_("Remote Desktop sessions are not available yet in this version; “{alias}” is saved and "
+                           "its connection can be tested in the host dialog.").format(alias=host_obj.alias), Level.INFO)
+        return None
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:

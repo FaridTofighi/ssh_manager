@@ -1530,10 +1530,94 @@ def run(out_dir: Path) -> None:
                            *(int(round(v * scale)) for v in (900, 650)))
             window.destroy()
 
+    def _rdp_report():
+        """A synthetic engine report: FreeRDP 3.15 found, no gtk-frdp, X11 (never the real computer's)."""
+
+        from ssh_manager.rdp.engines import (ClientBinary, EngineReport, Platform, build_engines, choose_engine,
+                                             parse_help_options)
+
+        options = parse_help_options((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
+        clients = [ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)]
+        platform = Platform("x11", True, "", False, "debian")
+        built = build_engines(clients, platform)
+        chosen, note = choose_engine(built)
+        return EngineReport(platform, clients, built, chosen, note)
+
+    def host_rdp_dialog(window, page: str) -> Gtk.Dialog:
+        """An RDP host's pages (synthetic address, domain and shared folder)."""
+
+        from ssh_manager.config import HostEntry
+        from ssh_manager.rdp import engines
+
+        engines.store_report(_rdp_report())
+        host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "CORP\\alice"}, protocol="rdp",
+                         metadata={"rdp": {"v": 1, "domain": "CORP", "keyboard_layout": "fa-IR",
+                                           "drives": [{"name": "work", "path": "/tmp", "read_only": True}],
+                                           "gateway": {"host": "gw.acme.test", "port": 443}}})
+        dialog = HostDialog(window, host, credentials=window._credential_store.list(), metadata=host.metadata,
+                            profiles=window._profiles, rdp_ssh_hosts=[("ssh-1", "bastion (10.0.0.1)")])
+        dialog.layout.show_page(page)
+        return dialog
+
+    for dark in (False, True):
+        for page in ("rdp", "rdp_display", "rdp_devices", "rdp_connection"):
+            name = f"dialog-host-{page.replace('_', '-')}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _host_rdp(dark=dark, page=page, name=name) -> None:
+                from ssh_manager.gtkui.theme import density
+
+                window = _make_window(app, base, dark)
+                dialog = host_rdp_dialog(window, page)
+                _pump()
+                scale = density.active().dialog_scale
+                capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (900, 650)))
+                window.destroy()
+
+    @scenario("dialog-host-rdp-compact")
+    def _host_rdp_compact() -> None:
+        from ssh_manager.gtkui.theme import density
+
+        window = _make_window(app, base, False, "compact")
+        dialog = host_rdp_dialog(window, "rdp")
+        _pump()
+        scale = density.active().dialog_scale
+        capture_dialog(dialog, out_dir / "dialog-host-rdp-compact.png", *(int(round(v * scale)) for v in (900, 650)))
+        window.destroy()
+
+    for dark in (False, True):
+        name = f"dialog-rdp-diagnostics-{'dark' if dark else 'light'}"
+
+        @scenario(name)
+        def _rdp_diagnostics(dark=dark, name=name) -> None:
+            from ssh_manager.gtkui.dialogs.rdp_diagnostics import RdpDiagnosticsDialog
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = RdpDiagnosticsDialog(window, report=_rdp_report())
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (560, 480)))
+            window.destroy()
+
     def settings_transfer_dialog(window) -> Gtk.Dialog:
         dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
         dialog.layout.show_page("file_transfer")
         return dialog
+
+    for dark in (False, True):
+        @scenario(f"dialog-settings-remote-desktop-{'dark' if dark else 'light'}")
+        def _settings_rdp(dark=dark) -> None:
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
+            dialog.layout.show_page("remote_desktop")
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"dialog-settings-remote-desktop-{'dark' if dark else 'light'}.png",
+                           *(int(round(v * scale)) for v in (820, 620)))
+            window.destroy()
 
     for dark in (False, True):
         @scenario(f"dialog-settings-file-transfer-{'dark' if dark else 'light'}")

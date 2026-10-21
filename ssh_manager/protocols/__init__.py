@@ -138,3 +138,14 @@ SFTP = register(ConnectionKind(
     "sftp", "SFTP (SSH file transfer)", "SFTP", "sshm-transfer", 22,
     supports_keys=True, supports_jump_host=True, family="transfer",
 ))
+
+
+def _rdp_defaults() -> Dict[str, Any]:
+    from ..rdp.settings import RdpSettings
+
+    return RdpSettings().to_json()
+
+
+RDP = register(ConnectionKind(
+    "rdp", "RDP", "RDP", "sshm-desktop", 3389, family="desktop", defaults=_rdp_defaults,
+))

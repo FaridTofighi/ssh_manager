@@ -288,6 +288,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._apply_ui_state()
         self.tree.rebuild(refresh=True)
         self.inventory.refresh_git_watch()
+        self.sessions.refresh_rdp_engines()  # FreeRDP clients, in the background (RDP hosts)
         self.creds.warn_if_password_file_locked()
         # Another window/instance changed the store: reload (PRAGMA data_version).
         self._external_poll = GLib.timeout_add_seconds(2, self._check_external_changes)

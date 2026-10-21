@@ -109,6 +109,11 @@ class AppDialogs:
         settings.terminal_appearance = values.terminal_appearance
         if values.file_transfer is not None:
             settings.file_transfer = values.file_transfer
+        if values.remote_desktop is not None:
+            changed = values.remote_desktop != settings.remote_desktop
+            settings.remote_desktop = values.remote_desktop
+            if changed:
+                self.win.sessions.refresh_rdp_engines()
         settings.save()
         self.win._save_ui_state()
         if master_toggled:

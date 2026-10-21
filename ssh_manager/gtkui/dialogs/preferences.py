@@ -18,7 +18,9 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
-from ...settings import AppSettings, FileTransferPreferences, TerminalAppearanceSettings  # noqa: E402
+from ...settings import (  # noqa: E402
+    AppSettings, FileTransferPreferences, RemoteDesktopPreferences, TerminalAppearanceSettings,
+)
 from ..i18n import _  # noqa: E402
 from ..tab_labels import TabLabelMode  # noqa: E402
 from ..theme.density import DEFAULT_DENSITY, Density  # noqa: E402
@@ -28,7 +30,7 @@ from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.forms import FormSection, entry  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
-from .files import choose_folder, choose_save_file  # noqa: E402
+from .files import choose_folder, choose_open_file, choose_save_file  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
 
 TAB_LABEL_CHOICES = [
@@ -82,6 +84,7 @@ class PreferencesValues:
     density: Density = DEFAULT_DENSITY
     tab_label_mode: TabLabelMode = TabLabelMode.NAME
     file_transfer: Optional[FileTransferPreferences] = None
+    remote_desktop: Optional[RemoteDesktopPreferences] = None
 
     @property
     def prefer_dark(self) -> bool:
@@ -168,6 +171,7 @@ class PreferencesDialog(BaseDialog):
         self._build_secrets()
         self._build_master_password()
         self._build_file_transfer()
+        self._build_remote_desktop()
         self._build_git()
         self._build_audit()
         if inventory:
@@ -385,6 +389,45 @@ class PreferencesDialog(BaseDialog):
         note.get_style_context().add_class("form-help")
         safety.add_widget(note)
 
+    def _build_remote_desktop(self) -> None:
+        prefs = self._settings.remote_desktop
+        page = self.layout.new_page("remote_desktop", _("Remote Desktop"),
+                                    _("RDP sessions run through FreeRDP, which is installed separately."))
+        engine = self._section(page, _("Engine"))
+        self._rdp_engine_combo = _combo([("auto", _("Automatic (embedded when possible)")),
+                                         ("embedded", _("Embedded in the tab")),
+                                         ("external", _("External window"))], prefs.preferred_engine)
+        engine.add(_("_Show sessions"), self._rdp_engine_combo, label_group=self._labels,
+                   help_text=_("Embedded needs gtk-frdp, or FreeRDP on X11. A host can choose its own engine."))
+        row, self._rdp_binary_entry = _path_row(prefs.binary_path, self._choose_rdp_binary)
+        self._rdp_binary_entry.set_placeholder_text(_("Found automatically"))
+        set_accessible_name(self._rdp_binary_entry, _("FreeRDP client"))
+        engine.add(_("FreeRDP _client"), row, label_group=self._labels,
+                   help_text=_("Only when the right client is not on PATH (xfreerdp3, xfreerdp, sdl-freerdp…)."))
+        self._rdp_sessions_spin = _spin(1, 64, 1, float(prefs.max_sessions))
+        engine.add(_("_Sessions at once"), self._rdp_sessions_spin, label_group=self._labels)
+        diagnostics = Gtk.Button.new_with_mnemonic(_("_Diagnostics…"))
+        diagnostics.set_tooltip_text(_("Which FreeRDP clients and engines were found, and why others are not used"))
+        diagnostics.connect("clicked", lambda *_: self.open_rdp_diagnostics())
+        diagnostics.set_halign(Gtk.Align.START)
+        engine.add_widget(diagnostics)
+
+    def open_rdp_diagnostics(self):
+        from .rdp_diagnostics import RdpDiagnosticsDialog
+
+        dialog = RdpDiagnosticsDialog(self, preference=self._rdp_engine_combo.get_active_id() or "auto",
+                                      override=self._rdp_binary_entry.get_text().strip())
+        dialog.connect("response", lambda d, _r: d.destroy())
+        return dialog
+
+    def remote_desktop_values(self) -> RemoteDesktopPreferences:
+        return RemoteDesktopPreferences.from_dict({
+            "preferred_engine": self._rdp_engine_combo.get_active_id() or "auto",
+            "binary_path": self._rdp_binary_entry.get_text().strip(),
+            "max_sessions": int(self._rdp_sessions_spin.get_value()),
+            "release_shortcut": self._settings.remote_desktop.release_shortcut,
+        })
+
     def file_transfer_values(self) -> FileTransferPreferences:
         return FileTransferPreferences.from_dict({
             "download_dir": self._download_dir_entry.get_text().strip(),
@@ -486,6 +529,7 @@ class PreferencesDialog(BaseDialog):
             density=Density.coerce(self._density_combo.get_active_id()),
             tab_label_mode=TabLabelMode.coerce(self._tab_label_combo.get_active_id()),
             file_transfer=self.file_transfer_values(),
+            remote_desktop=self.remote_desktop_values(),
         )
 
     def _appearance_from_controls(self) -> TerminalAppearanceSettings:
@@ -558,6 +602,12 @@ class PreferencesDialog(BaseDialog):
     def _choose_audit_path(self, path_entry: Gtk.Entry) -> None:
         current = path_entry.get_text()
         filename = choose_save_file(self, _("Audit Log File"), current_file=current, current_name="audit.log")
+        if filename:
+            path_entry.set_text(filename)
+
+    def _choose_rdp_binary(self, path_entry: Gtk.Entry) -> None:
+        current = path_entry.get_text() or "/usr/bin"
+        filename = choose_open_file(self, _("FreeRDP Client"), current_folder=os.path.dirname(current) or "/usr/bin")
         if filename:
             path_entry.set_text(filename)
 

@@ -97,6 +97,11 @@ that direct file mode follows `Include` directives.
   drag and drop and a connection log; SSH hosts have **Browse Files (SFTP)**
   in their menu. Settings → File Transfer holds the defaults. See
   `docs/file-transfer.md` and `docs/protocols.md`.
+- **Remote Desktop (RDP)**: hosts can be RDP (host dialog → Protocol) with
+  their own sign-in, security, certificate, display, device and gateway
+  settings and a **Test Connection** that shows the server's security and
+  certificate. Sessions use FreeRDP, installed separately; Settings →
+  Remote Desktop → Diagnostics shows what was found. See `docs/rdp.md`.
 - **Import from MobaXterm**: app menu → Import → From MobaXterm
   (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP and SFTP
   sessions and their folders become groups and hosts; you choose which SSH
@@ -164,6 +169,7 @@ authentication.
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
+- `docs/rdp.md` — Remote Desktop: engines, install, capabilities, settings, the connection test, secrets
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)
