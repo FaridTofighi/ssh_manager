@@ -13,9 +13,17 @@ Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
 | `rdp/engines.py` | Which FreeRDP clients exist, their versions and options, the engines and their capabilities |
 | `trust.py` | Trusted certificates shared with FTPS (`TrustStore`; RDP keys are scoped `rdp:`) |
 
-Status: **phase R0**. Hosts, settings, the probe, engine discovery,
-Preferences and Diagnostics exist; opening an RDP host says that sessions
-are not available yet (or, with no FreeRDP client, how to install one).
+Status: **phase R1**. RDP hosts open in a session tab; the remote desktop
+runs in FreeRDP's own window (the external-window engine) and the tab is a
+session card. Embedding the desktop in the tab follows in R2.
+
+| Module | Role (R1) |
+|---|---|
+| `rdp/command.py` | The version-aware argv builder and the secret payload |
+| `rdp/process.py` | Spawning, output, stopping, the child registry and the stale-child reaper |
+| `rdp/outcome.py` | What an exit means (exit codes, `ERRCONNECT_*`, `ERRINFO_*`, certificate lines) |
+| `rdp/trust_flow.py` | Certificate trust decided before FreeRDP starts |
+| `gtkui/rdp/tab.py`, `gtkui/rdp/runtime.py` | The session card and the window's FreeRDP runtime |
 
 ## Engines
 
@@ -187,3 +195,115 @@ types and timeouts.
   certificate trust before launching (`/cert:fingerprint:sha256:…`).
 - A client with neither channel is never given a password: the user types
   it in FreeRDP's own prompt, and the app says so.
+
+## Sessions (R1)
+
+### One connection
+
+1. **Engine:** the host's engine, else the preference, else the first one
+   available. In R1 an embedded engine falls back to the external window
+   (the connection log says so).
+2. **Password:** the stored one (vault → credential → host password), or
+   the password dialog when nothing is stored or "Ask for the password every
+   time" is on.
+3. **Probe:** reachability, the security the server selects and its
+   certificate (as in "Test connection"). An unreachable server or a
+   refused security request ends here, before FreeRDP starts.
+4. **Trust:** see the table below.
+5. **Launch:** `build_launch()` makes the plan and `RdpProcess` starts it.
+   - **The password:** 3.x gets everything, `/p:` included, through
+     `/args-from:stdin`, and the pipe is closed at once. 2.x gets
+     `/from-stdin:force` and only the password on stdin. A test client
+     records its argv, environment, stdin and `/proc/self/cmdline` to prove
+     the password is only ever on stdin.
+   - **Logging:** `/log-level:WARN` plus
+     `/log-filters:com.freerdp.gdi:INFO,com.freerdp.core:INFO`, so the two
+     lines below are printed without the noise of everything else.
+6. **Connected:** decided by FreeRDP's log or by a fallback (next section).
+7. **End:** `classify_rdp_exit()` decides what happened; see "Outcomes".
+
+### Verified success
+
+`PostConnect` runs only after the connection is active (both versions'
+`rdp_client_connect` wait for activation), and every client calls `gdi_init`
+there, which logs **"Local framebuffer format"** at INFO on `com.freerdp.gdi`.
+That line marks the session "Connected (verified)". Without it (a client
+that logs differently), a client alive for 10 s without an error line counts
+as "Probably connected" (the log says which).
+
+"Save this password for this host?" is offered only after a **log-verified
+NLA** sign-in with a password typed in this tab: with TLS or standard RDP
+security the sign-in happens on the remote screen, so a running session
+does not prove the password was right.
+
+### Certificate trust
+
+FreeRDP would ask about an unknown certificate on its own console, which
+nobody sees. So the app decides first, then starts FreeRDP with
+`/cert:deny,fingerprint:sha256:aa:bb:…` (the colon form both 2.11 and 3.15
+accept). If the server shows another certificate at launch, FreeRDP stops
+("certificate not trusted, aborting") and the tab reports it.
+
+| Policy | No pin yet | Pin matches | Pin differs |
+|---|---|---|---|
+| Ask the first time (default) | Trust once / Trust and remember / Cancel | connect | CHANGED warning, Cancel is the default |
+| Trust the first certificate | remember, connect | connect | CHANGED warning |
+| Only the pinned certificate | asks to pin | connect | CHANGED warning |
+| Refuse unknown certificates | refuse | connect | refuse |
+| Do not check | asked on every connection, `/cert:ignore`, "Certificate not verified" in the tab | | |
+
+Pins are in the shared `TrustStore` under `rdp:<host id>|<host>:<port>`. A
+changed certificate is never accepted silently. Both outcomes were checked
+with the real 3.15 client against the test server in `tests/fake_rdp.py`:
+the right pin is accepted and the connection fails later at NLA; a wrong pin
+is refused.
+
+### Outcomes
+
+From FreeRDP's sources (`xfreerdp.h` exit codes, `errconnect.c`,
+`errinfo.c`, `tls.c`):
+
+| Outcome | Examples | Password dialog? |
+|---|---|---|
+| Disconnected | closed, signed out, idle or time limit, someone else connected, an administrator ended it | no |
+| Sign-in failed | `ERRCONNECT_LOGON_FAILURE`, `WRONG_PASSWORD`, `AUTHENTICATION_FAILED`, exit 132 / 134 / 154 | **yes**: at most 3 attempts, at least 1 s apart |
+| Account problem | locked out, disabled, expired, password expired or must change, no right to sign in remotely, access denied | no; each has its own message |
+| Certificate rejected | "certificate not trusted, aborting", "REMOTE HOST IDENTIFICATION HAS CHANGED" | no |
+| Network / DNS / TLS | `CONNECT_TRANSPORT_FAILED`, `DNS_NAME_NOT_FOUND`, `TLS_CONNECT_FAILED`, `KDC_UNREACHABLE` | no |
+| Security mismatch | `SECURITY_NEGO_CONNECT_FAILED`, exit 133 | no; suggests another security mode |
+| Engine problem | exit 128 (options refused), pre- or post-connect failures | no |
+
+FreeRDP 3.15 logs "Command line parsing failed at … [0]" even for options
+it accepted; such lines are ignored.
+
+### Processes
+
+- **Own group:** every client runs in its own process group (session), with
+  `close_fds` and never through a shell.
+- **Output:** stdout and stderr are read on threads. Lines are capped at
+  4 KiB, ANSI sequences are removed, every secret of the launch is replaced
+  by `***`, and the last 400 lines are kept for the connection log.
+- **Stopping:** **Disconnect**, closing the tab (which asks while
+  connected) and quitting (which asks once for all sessions) send SIGTERM
+  to the group, then SIGKILL after 2 s.
+- **Child registry:** `$XDG_RUNTIME_DIR/ssh-manager/rdp-children.json`
+  (0600) records each child. If the app was killed, the next start stops a
+  recorded group only if that pid still runs the same client with the same
+  start time, and only if the app instance that started it is gone.
+- **Limit:** at most "Sessions at once" (Preferences → Remote Desktop, 8 by
+  default) run together.
+
+### Known limits (R1)
+
+- **Embedding:** the remote desktop runs in its own window; embedding
+  arrives in R2.
+- **Focus Window:** needs `xdotool` or `wmctrl` on X11. Wayland lets no
+  program raise another program's window; the button then says why.
+- **FreeRDP 2.x:** cannot receive a separate gateway password safely (use
+  "same credentials" or FreeRDP 3), and cannot limit the clipboard to one
+  direction (the clipboard is turned off instead).
+- **Shared folders:** FreeRDP's command line cannot share a folder
+  read-only, so a folder marked read-only is **not shared** (with a note);
+  it is never shared read-write.
+- **Gateway passwords:** a separate gateway password containing a comma or
+  a quote cannot be passed to FreeRDP 3; FreeRDP then asks for it itself.

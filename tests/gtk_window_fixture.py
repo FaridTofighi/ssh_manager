@@ -60,8 +60,11 @@ class WindowSandbox:
                 "HOME": str(self.root / "home"),
                 "XDG_CONFIG_HOME": str(self.root / "config"),
                 "XDG_DATA_HOME": str(self.root / "data"),
+                "XDG_STATE_HOME": str(self.root / "state"),
+                "XDG_RUNTIME_DIR": str(self.root / "run"),  # RDP child registry: never the real one
             },
         )
+        (self.root / "run").mkdir(mode=0o700)
         self.env.start()
         self.base = self.root / "inventory"
         for rel, text in SAMPLE.items():

@@ -150,6 +150,7 @@ class FileBrowserTab(SessionPage):
         self._banner_label.set_xalign(0.0)
         self._banner_label.set_line_wrap(True)
         self._banner.get_content_area().pack_start(self._banner_label, True, True, 0)
+        self._banner_label.show()  # the bar itself is no-show-all: its contents must be shown explicitly
         self._reconnect_button = self._banner.add_button(_("_Reconnect"), _RESPONSE_RECONNECT)
         self._banner.add_button(_("_Close Session"), _RESPONSE_CLOSE)
         self._banner.connect("response", self._on_banner_response)

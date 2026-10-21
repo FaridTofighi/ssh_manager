@@ -1765,6 +1765,46 @@ def run(out_dir: Path) -> None:
             capture_window(window, out_dir / f"{name}.png", 1280, 800)
             window.destroy()
 
+    def _rdp_session_scene(window, state: str) -> None:
+        """An RDP session card (external FreeRDP window) in one state; nothing is started."""
+
+        from ssh_manager.config import HostEntry
+        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
+        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
+        from ssh_manager.gtkui.theme.tokens import ConnectionStatus
+        from ssh_manager.trust import TrustStore
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="sshm-snap-rdp-"))
+        host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "CORP\\alice"}, protocol="rdp",
+                         parent_group="staging", child_group="", metadata={"rdp": {"v": 1}})
+        runtime = RdpRuntime(trust_store=TrustStore(tmp / "pins.json"), reap=False)
+        tab = RdpSessionTab(host, lambda *a: None, runtime=runtime, autostart=False)
+        window.terminal_tabs.add_page(tab)
+        tab.facts["engine"].set_text("External window · xfreerdp3 3.15.0")
+        tab.facts["security"].set_text("Network Level Authentication (CredSSP + TLS)")
+        if state == "connected":
+            tab.facts["certificate"].set_text("Trusted · AA:BB:CC:DD:EE:FF:00:11…")
+            tab.facts["elapsed"].set_text("0:12:07")
+            tab._set_status(ConnectionStatus.CONNECTED, "Connected · the remote desktop is in its own window")
+        elif state == "failed":
+            tab._set_status(ConnectionStatus.FAILED, "The account is locked out. Ask an administrator to unlock it; "
+                            "trying again now keeps it locked.", banner=True, error=True)
+        else:
+            tab._set_status(ConnectionStatus.CONNECTING, "Checking the server…")
+        _pump(30)
+
+    for dark in (False, True):
+        for state in ("connecting", "connected", "failed"):
+            name = f"rdp-session-{state}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _rdp_session(dark=dark, state=state, name=name) -> None:
+                window = _make_window(app, base, dark, "compact")
+                _rdp_session_scene(window, state)
+                capture_window(window, out_dir / f"{name}.png", 1280, 800)
+                window.destroy()
+
     for dark in (False, True):
         for dens in ("comfortable", "compact"):
             name = f"file-browser-{'dark' if dark else 'light'}-{dens}"

@@ -6,6 +6,36 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Remote Desktop, phase R1: sessions through FreeRDP (external window)
+
+Details: `docs/rdp.md` ("Sessions").
+
+- **Opening an RDP host:** a session tab, shown as a card while FreeRDP
+  draws the desktop in its own window.
+  - **The card:** server, engine, security, certificate, screen size, time
+    connected, the connection log (with **Copy Log**), **Focus Window**,
+    **Disconnect** and **Reconnect**.
+  - **Status:** the tree's status dot, notifications and a banner with
+    **Reconnect** / **Close Session** on failures.
+- **Passwords:** stored password, or the dialog. Only a wrong password asks
+  again (at most 3 times). Locked, disabled or expired accounts,
+  certificates and network problems get their own messages.
+  - **Save offer:** after a log-verified NLA sign-in, the app offers "Save
+    this password for this host?".
+  - **No exposure:** the password reaches FreeRDP only through its stdin
+    pipe, never argv, the environment or the logs.
+- **Certificates:** checked by the app before FreeRDP starts.
+  - **First use:** asks once, offering Trust Once / Trust and Remember.
+  - **Changed certificate:** blocked behind a warning whose default is
+    Cancel.
+  - **"Do not check":** confirmed on every connection and flagged in the
+    tab.
+- **Cleanup:** closing a connected tab asks first; quitting asks once for
+  all remote desktops. FreeRDP's whole process group is stopped, and
+  children left behind by a crash are stopped at the next start.
+- **Fix:** the file browser's error banner now shows its text (the label
+  was never made visible).
+
 ## Remote Desktop, phase R0: RDP hosts, settings, connection test, engines
 
 Details: `docs/rdp.md`.

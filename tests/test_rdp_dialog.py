@@ -240,17 +240,15 @@ class WindowTests(unittest.TestCase):
         self.sandbox = WindowSandbox(store=True)
         self.addCleanup(self.sandbox.close)
         self.win = self.sandbox.window
+        self.win.sessions.rdp_discovery.join(10)  # its own discovery must finish before a test sets a report
         self.addCleanup(engines.store_report, None)
         self.notes = []
         patcher = mock.patch.object(self.win, "_notify", side_effect=lambda msg, *a, **k: self.notes.append(msg))
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_opening_explains_instead_of_failing(self) -> None:
-        host = rdp_host()
-        engines.store_report(report())
-        self.win.sessions.open_hosts([host])
-        self.assertTrue(any("not available yet" in note for note in self.notes), self.notes)
+    def test_opening_without_freerdp_explains(self) -> None:
+        host = rdp_host()  # opening with a client is covered by tests/test_rdp_session.py (no network there)
         engines.store_report(EngineReport(Platform(distro="ubuntu"), [], build_engines([], Platform()), None))
         self.win.sessions.open_hosts([host])
         self.assertTrue(any("apt install" in note for note in self.notes), self.notes)

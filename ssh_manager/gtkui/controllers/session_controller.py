@@ -84,6 +84,16 @@ class SessionController:
         self.win = win
         self.paramiko_connectors: Dict[object, Connector] = {}
         self.audit_lock = threading.Lock()
+        self._rdp_runtime = None  # created on first use (child registry, limits, trust store)
+        self.rdp_discovery: Optional[threading.Thread] = None  # the running FreeRDP discovery, if any
+
+    @property
+    def rdp_runtime(self):
+        from ..rdp.runtime import RdpRuntime
+
+        if self._rdp_runtime is None:
+            self._rdp_runtime = RdpRuntime(max_sessions=self.win._settings.remote_desktop.max_sessions)
+        return self._rdp_runtime
 
     def bind_tab_status(self, tab, host: HostEntry) -> None:
         host_key = self.win.creds.host_key(host)
@@ -205,21 +215,29 @@ class SessionController:
         from ...rdp.engines import discover_async
 
         prefs = self.win._settings.remote_desktop
-        discover_async(lambda _report: None, preference=prefs.preferred_engine, override=prefs.binary_path)
+        self.rdp_discovery = discover_async(lambda _report: None, preference=prefs.preferred_engine,
+                                            override=prefs.binary_path)
+        self.rdp_runtime.set_limit(prefs.max_sessions)
 
     def open_rdp_host(self, host_obj: HostEntry) -> Optional[str]:
-        """The RDP opener. Sessions arrive in the next phase (R1); until then it explains, never fails."""
+        """The RDP opener: a session tab (it explains a missing FreeRDP itself, never a traceback)."""
 
         from ...rdp.engines import cached_report, install_hint
+        from ..rdp.tab import RdpSessionTab
 
         report = cached_report()
         if report is not None and not report.any_available:
             self.win._notify(_("“{alias}” cannot be opened: no FreeRDP client was found. {hint}").format(
                 alias=host_obj.alias, hint=install_hint(report.platform)), Level.WARNING)
             return None
-        self.win._notify(_("Remote Desktop sessions are not available yet in this version; “{alias}” is saved and "
-                           "its connection can be tested in the host dialog.").format(alias=host_obj.alias), Level.INFO)
-        return None
+        creds = self.win.creds
+        resolved = creds.host_with_resolved_identity(host_obj)
+        self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
+        tab = RdpSessionTab(resolved, self.win._log_event, runtime=self.rdp_runtime, app_settings=self.win._settings,
+                            password_provider=partial(creds.resolve_password, host_obj), password_service=creds)
+        self.win.terminal_tabs.add_page(tab)
+        self.bind_tab_status(tab, resolved)
+        return resolved.alias
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:

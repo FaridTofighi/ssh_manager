@@ -753,6 +753,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # -------------------------------------------------------------- signals
     def _on_delete_event(self, *_args) -> bool:
+        desktops = sum(1 for tab in self.terminal_tabs.tabs() if getattr(tab, "rdp_connected", lambda: False)())
+        if desktops and not self._confirm(
+            _("Disconnect the remote desktops?"),
+            detail=_("{n} remote desktop sessions are open. Disconnect them and quit?").format(n=desktops),
+            confirm_label=_("Disconnect and _Quit"),
+        ):
+            return True  # keep the window open
         running = sum(getattr(tab, "running_transfers", lambda: 0)() for tab in self.terminal_tabs.tabs())
         if running and not self._confirm(
             _("Cancel the transfers?"),
@@ -774,3 +781,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._toasts.shutdown()
         self.inventory.shutdown()
         self.host_page.shutdown()
+        runtime = getattr(self.sessions, "_rdp_runtime", None)
+        if runtime is not None:
+            runtime.stop_all()  # no FreeRDP client outlives the window
