@@ -127,6 +127,22 @@ class SecretTests(unittest.TestCase):
         self.assertEqual((plan.channel, plan.stdin_payload, plan.password_sent), ("none", b"", False))
         self.assertIn("type it in the remote sign-in screen", " ".join(plan.notes))
 
+    def test_short_passwords_never_block_a_launch(self) -> None:
+        """Regression: the leak check once matched '32' in /bpp:32 and 'pw' in the client's path."""
+
+        for password in ("32", "bin", "pw", "a", "x", "/", ":"):
+            client = ClientBinary("xfreerdp", f"/opt/{password}bin/xfreerdp", (2, 11, 7), "2.11.7", V2.options)
+            self.assertTrue(build(client, password=password).password_sent, password)
+            self.assertTrue(build(password=password).password_sent, password)
+
+    def test_leak_check_catches_password_positions(self) -> None:
+        from ssh_manager.rdp.command import _leaks
+
+        self.assertTrue(_leaks(["/p:hunter2"], ["hunter2"]))
+        self.assertTrue(_leaks(["/gateway:g:gw,u:bob,p:hunter2"], ["hunter2"]))
+        self.assertTrue(_leaks(["/gp:hunter2"], ["hunter2"]))
+        self.assertFalse(_leaks(["/bpp:32", "/size:1920x1080"], ["32"]))
+
     def test_unsafe_passwords(self) -> None:
         for bad in ("line\nbreak", "cr\rhere", "nul\x00", "x" * 600):
             with self.assertRaises(LaunchError):

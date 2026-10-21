@@ -97,7 +97,7 @@ class SessionTabTests(unittest.TestCase):
         self.client_path = fake_freerdp.install(self.dir, "xfreerdp3")
         client = ClientBinary("xfreerdp3", str(self.client_path), (3, 15, 0), "3.15.0",
                               parse_help_options((FIXTURES / "help-3.15.txt").read_text()))
-        platform = Platform("wayland", False, "", False, "debian")  # external window engine
+        platform = Platform("wayland", False, "", "", False, "debian")  # external window engine
         built = build_engines([client], platform)
         self.report = EngineReport(platform, [client], built, engines.choose_engine(built)[0])
         self.trust = TrustStore(self.dir / "pins.json")
@@ -304,7 +304,7 @@ class WindowTests(unittest.TestCase):
         client_path = fake_freerdp.install(Path(tmp.name), "xfreerdp3")
         client = ClientBinary("xfreerdp3", str(client_path), (3, 15, 0), "3.15.0",
                               parse_help_options((FIXTURES / "help-3.15.txt").read_text()))
-        platform = Platform("wayland", False, "", False, "debian")
+        platform = Platform("wayland", False, "", "", False, "debian")
         built = build_engines([client], platform)
         sandbox = WindowSandbox(store=True)
         win = sandbox.window

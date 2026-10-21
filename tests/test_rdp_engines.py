@@ -16,8 +16,8 @@ from ssh_manager.rdp.engines import (
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"
 HELP3 = (FIXTURES / "help-3.15.txt").read_text()
 HELP2 = (FIXTURES / "help-2.11.txt").read_text()
-X11 = Platform("x11", True, "", False, "debian")
-WAYLAND = Platform("wayland", False, "", False, "fedora")
+X11 = Platform("x11", True, "", "", False, "debian")
+WAYLAND = Platform("wayland", False, "", "", False, "fedora")
 
 
 def fake_client(directory: Path, name: str, version: str = "3.15.0", help_file: str = "help-3.15.txt",
@@ -128,7 +128,7 @@ class EngineTests(unittest.TestCase):
             self.assertTrue(external.supports(capability), capability)
         self.assertFalse(external.supports("screenshot") or external.supports("send_keys"))
         self.assertEqual(set(external.capabilities), set(CAPABILITIES))
-        frdp = {e.id: e for e in build_engines([], Platform("wayland", False, "0.1", False, ""))}["frdp"]
+        frdp = {e.id: e for e in build_engines([], Platform("wayland", False, "0.1", "", False, ""))}["frdp"]
         self.assertTrue(frdp.available and frdp.embedded)
 
     def test_build_specific_capabilities(self) -> None:

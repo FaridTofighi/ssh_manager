@@ -1538,7 +1538,7 @@ def run(out_dir: Path) -> None:
 
         options = parse_help_options((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
         clients = [ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)]
-        platform = Platform("x11", True, "", False, "debian")
+        platform = Platform("x11", True, "", "", False, "debian")
         built = build_engines(clients, platform)
         chosen, note = choose_engine(built)
         return EngineReport(platform, clients, built, chosen, note)
@@ -1790,12 +1790,32 @@ def run(out_dir: Path) -> None:
         elif state == "failed":
             tab._set_status(ConnectionStatus.FAILED, "The account is locked out. Ask an administrator to unlock it; "
                             "trying again now keeps it locked.", banner=True, error=True)
+        elif state == "reconnecting":
+            tab._reconnecting = True
+            tab._set_status(ConnectionStatus.CONNECTING, "Connection lost: The connection to the server failed. "
+                            "Reconnecting… (attempt 2 of 5)")
+        elif state == "embedded":
+            from ssh_manager.rdp.engines import ENGINE_LABELS, Engine, binary_capabilities, ClientBinary
+            from ssh_manager.rdp.engines import parse_help_options as parse
+
+            options = parse((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
+            client = ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)
+            tab.engine = Engine("xfreerdp-embed", ENGINE_LABELS["xfreerdp-embed"], True, binary=client,
+                                capabilities=binary_capabilities(client, embedded=True))
+            from ssh_manager.gtkui.rdp.display import Surface
+
+            tab._surface_factory = lambda _engine: Surface()  # offscreen rendering has no X window for a Gtk.Socket
+            tab._install_surface(tab.engine)
+            tab._embedded_child = 1  # no FreeRDP here: the empty remote area with the toolbar
+            tab.facts["certificate"].set_text("Trusted · AA:BB:CC:DD:EE:FF:00:11…")
+            tab._statusbar.size_label.set_text("1280×744")
+            tab._set_status(ConnectionStatus.CONNECTED, "Connected")
         else:
             tab._set_status(ConnectionStatus.CONNECTING, "Checking the server…")
         _pump(30)
 
     for dark in (False, True):
-        for state in ("connecting", "connected", "failed"):
+        for state in ("connecting", "connected", "failed", "reconnecting", "embedded"):
             name = f"rdp-session-{state}-{'dark' if dark else 'light'}"
 
             @scenario(name)

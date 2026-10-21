@@ -13,9 +13,9 @@ Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
 | `rdp/engines.py` | Which FreeRDP clients exist, their versions and options, the engines and their capabilities |
 | `trust.py` | Trusted certificates shared with FTPS (`TrustStore`; RDP keys are scoped `rdp:`) |
 
-Status: **phase R1**. RDP hosts open in a session tab; the remote desktop
-runs in FreeRDP's own window (the external-window engine) and the tab is a
-session card. Embedding the desktop in the tab follows in R2.
+Status: **phase R2**. With gtk-frdp, or FreeRDP on X11, the remote desktop
+is shown inside the tab under a toolbar; elsewhere, or if embedding fails,
+it runs in FreeRDP's own window and the tab is a session card.
 
 | Module | Role (R1) |
 |---|---|
@@ -295,8 +295,6 @@ it accepted; such lines are ignored.
 
 ### Known limits (R1)
 
-- **Embedding:** the remote desktop runs in its own window; embedding
-  arrives in R2.
 - **Focus Window:** needs `xdotool` or `wmctrl` on X11. Wayland lets no
   program raise another program's window; the button then says why.
 - **FreeRDP 2.x:** cannot receive a separate gateway password safely (use
@@ -307,3 +305,121 @@ it accepted; such lines are ignored.
   it is never shared read-write.
 - **Gateway passwords:** a separate gateway password containing a comma or
   a quote cannot be passed to FreeRDP 3; FreeRDP then asks for it itself.
+
+## The remote screen in the tab (R2)
+
+### FreeRDP in the tab (X11)
+
+- **No XEmbed:** FreeRDP's `/parent-window:<XID>` creates its window and
+  `XReparentWindow`s it into the given window (`xf_window.c`). It does not
+  speak XEmbed, so `Gtk.Socket`'s `plug-added` never fires.
+- **Finding the window:** FreeRDP creates its window in `PostConnect`,
+  after the sign-in. So once the session is connected, the tab looks for a
+  child of its socket with `XQueryTree` (ctypes over libX11, no new
+  dependency), every 200 ms for up to 10 s.
+- **Resizing:** size changes are debounced (250 ms) and passed to FreeRDP's
+  window with `XResizeWindow`, in device pixels (HiDPI) and rounded to even
+  sizes. FreeRDP then asks the server for the new size
+  (`/dynamic-resolution`). Nothing is resized before the tab has its real
+  size, so the server never sees a tiny transient size.
+- **Full screen:** `-toggle-fullscreen` keeps FreeRDP from switching its own
+  window to full screen; Ctrl+Alt+Enter and the toolbar make the tab full
+  screen instead.
+- **Fallback:** if no FreeRDP window appears within 10 s of connecting (a
+  window manager or compositor that interferes), the tab notes it, switches
+  to an external window and remembers the failure for this engine and
+  session type (`$XDG_STATE_HOME/ssh-manager/rdp-embed.json`).
+
+### gtk-frdp
+
+- **API:** the adapter uses gtk-frdp 0.2's `Frdp.Display`: the `username`,
+  `password`, `domain` and `scaling` properties, `open_host`, `close`,
+  `is_open`, `set_scaling`, and the `rdp-connected`, `rdp-disconnected`,
+  `rdp-error`, `rdp-auth-failure` and
+  `rdp-needs-certificate-verification` signals.
+- **Checked at discovery:** the installed typelib must have every one of
+  those members; an older or different build is listed as unavailable,
+  naming what it lacks.
+- **Password:** it is a property set just before `open_host` and cleared
+  right after; it never appears on a command line.
+- **Certificates:** they are answered from the app's own decision. The
+  certificate approved before connecting is accepted "for this session
+  only" (`2`) and any other is refused (`0`); FreeRDP's own known-hosts
+  file is never used.
+- **What it cannot do:** gtk-frdp connects with its own FreeRDP settings
+  (no command line), so shared folders, devices, the gateway and RemoteApp
+  are unavailable with it (the host dialog says so). It is not packaged by
+  Debian 13, so it was checked against its source and a stand-in class with
+  its members, not against a real build.
+
+### Toolbar
+
+A thin bar above the remote screen. It hides after 3 s, comes back on the
+handle (or F10 while the remote does not have the keyboard), and can be
+pinned. It sits above the screen rather than over it, because a native X
+window always covers what GTK draws.
+
+| Button | What it does |
+|---|---|
+| Send Ctrl+Alt+Del | Disabled for FreeRDP in the tab (no outside input); Ctrl+Alt+End inside the session does the same |
+| Full screen | The window full screen and in focus mode; Ctrl+Alt+Enter |
+| Scale mode | Fit the window / actual size / smart sizing: reconnects with the new options |
+| Resolution | Fit the window or a fixed size: reconnects |
+| Keyboard | Shows whether keys go to the remote and how to get them back; toggles grabbing (reconnects) |
+| Clipboard | Both ways, one way or off: reconnects |
+| Screenshot | Saves a PNG (a file dialog that asks before overwriting) |
+| Open the shared folder | The first shared folder in the file manager |
+| Connection info | Server, engine, security, certificate, size, colors, how the connection was verified, shared devices |
+| Reconnect / Disconnect / Pin | — |
+
+FreeRDP cannot change these options while it runs. Toolbar changes apply
+to this session only, by reconnecting; the host's settings are unchanged.
+
+### Keyboard
+
+- **Grab:** while the remote screen has the focus, keys go to the remote
+  computer. With FreeRDP the client grabs them itself, and Right Ctrl gives
+  the keyboard back (FreeRDP's key, not configurable). gtk-frdp grabs on its
+  own as well, and the toolbar shows its state.
+- **State tracking:** `rdp/keyboard.py` models it as a state machine: focus
+  in grabs, focus out or a tab switch releases and lets go of every modifier
+  still down, and the configured release shortcut
+  (`<Control><Alt>Control_R`) always works. App shortcuts (switch tab, Quick
+  Connect, full screen) stay reserved only while nothing is grabbed.
+- **Stuck keys:** FreeRDP's X11 client releases pressed keys on FocusOut
+  itself.
+
+### Clipboard
+
+`rdp/clipboard.py` decides per transfer: the direction allowed by the host
+(both, to the remote, from the remote, off), the kind (text, image; files
+only where the engine can copy them, otherwise use a shared folder) and a
+size limit. The log may say "clipboard text, 1234 bytes", never the
+contents. FreeRDP 3 enforces the direction with
+`/clipboard:direction-to:…`; FreeRDP 2 cannot, so a one-way setting turns
+the clipboard off there.
+
+### Reconnecting
+
+`rdp/reconnect.py`:
+
+| End of a session | Reconnect |
+|---|---|
+| Network dropped after a working session (auto-reconnect on) | automatic: 2, 4, 8 … s, at most 60 s, `reconnect_max` times (0 = up to 20) |
+| Idle timeout, time limit, someone else connected, an administrator disconnected | **asks**: Reconnect in the banner |
+| You disconnected, signed out | never |
+| Sign-in, account, certificate, security problems | never automatic |
+
+While reconnecting, the card shows "Reconnecting… (attempt n of m)" with
+**Stop Reconnecting**. If the network is down (`Gio.NetworkMonitor`),
+attempts wait for it and are not counted. A certificate trusted "once"
+stays trusted for the tab's later attempts.
+
+### Known limits (R2)
+
+- **Floating toolbar:** not possible over a native X window, so it is a
+  collapsible bar.
+- **Thumbnails in the tile view:** not shown; the session card stands in.
+- **Lower frame rate for hidden tabs:** FreeRDP has no runtime control
+  for it.
+- **gtk-frdp:** not testable here without a packaged build (see above).

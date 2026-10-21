@@ -43,7 +43,7 @@ def pump_until(predicate, timeout=5.0) -> bool:
     return predicate()
 
 
-def report(options=None, platform=Platform("wayland", False, "", False, "debian")) -> EngineReport:
+def report(options=None, platform=Platform("wayland", False, "", "", False, "debian")) -> EngineReport:
     help_options = parse_help_options((FIXTURES / "help-3.15.txt").read_text())
     if options is not None:
         help_options = frozenset(options)

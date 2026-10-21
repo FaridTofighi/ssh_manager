@@ -25,7 +25,7 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
 BINARIES = ("xfreerdp3", "xfreerdp", "sdl-freerdp3", "sdl-freerdp", "wlfreerdp3", "wlfreerdp")
 EMBEDDABLE = ("xfreerdp3", "xfreerdp")  # clients with /parent-window (X11 window embedding)
@@ -162,12 +162,14 @@ class Platform:
     session_type: str = ""  # "x11" | "wayland" | ""
     gdk_x11: bool = False  # GTK runs on the X11 backend (X11 or XWayland)
     frdp_version: str = ""  # gtk-frdp typelib version, "" = not installed
+    frdp_problem: str = ""  # why an installed gtk-frdp cannot be used ("" = usable)
     flatpak: bool = False
     distro: str = ""  # os-release ID (and ID_LIKE)
 
 
 def detect_platform(env: Optional[Mapping[str, str]] = None, *, gdk_x11: Optional[bool] = None,
-                    frdp_version: Optional[str] = None, os_release: Optional[str] = None) -> Platform:
+                    frdp_version: Optional[str] = None, os_release: Optional[str] = None,
+                    frdp_problem: Optional[str] = None) -> Platform:
     """The session type, GTK backend, gtk-frdp and distribution (each overridable for tests)."""
 
     env = os.environ if env is None else env
@@ -185,7 +187,8 @@ def detect_platform(env: Optional[Mapping[str, str]] = None, *, gdk_x11: Optiona
             os_release = ""
     fields_ = dict(re.findall(r'^([A-Z_]+)="?([^"\n]*)"?$', os_release, re.MULTILINE))
     distro = " ".join(part for part in (fields_.get("ID", ""), fields_.get("ID_LIKE", "")) if part).lower()
-    return Platform(session, bool(gdk_x11), frdp_version or "", os.path.exists("/.flatpak-info"), distro)
+    problem = frdp_check(frdp_version) if frdp_version and frdp_problem is None else (frdp_problem or "")
+    return Platform(session, bool(gdk_x11), frdp_version or "", problem, os.path.exists("/.flatpak-info"), distro)
 
 
 def _gdk_is_x11() -> bool:
@@ -200,6 +203,46 @@ def _gdk_is_x11() -> bool:
         return display is not None and isinstance(display, GdkX11.X11Display)
     except (ImportError, ValueError, AttributeError):
         return False
+
+
+# What the gtk-frdp adapter uses (gtk-frdp 0.2, src/frdp-display.{h,c}); checked on the installed typelib.
+FRDP_REQUIRED_METHODS = ("open_host", "close", "is_open", "set_scaling")
+FRDP_REQUIRED_PROPERTIES = ("username", "password", "domain", "scaling")
+FRDP_REQUIRED_SIGNALS = ("rdp-connected", "rdp-disconnected", "rdp-error", "rdp-auth-failure",
+                         "rdp-needs-certificate-verification")
+
+
+def frdp_missing(display_class: Any) -> List[str]:
+    """Members the adapter needs that ``display_class`` (``Frdp.Display``) lacks ("" names = all there)."""
+
+    missing = [f"method {name}" for name in FRDP_REQUIRED_METHODS if not callable(getattr(display_class, name, None))]
+    try:
+        from gi.repository import GObject  # type: ignore
+
+        props = {spec.name for spec in display_class.list_properties()}
+        missing += [f"property {name}" for name in FRDP_REQUIRED_PROPERTIES if name not in props]
+        missing += [f"signal {name}" for name in FRDP_REQUIRED_SIGNALS
+                    if not GObject.signal_lookup(name, display_class)]
+    except Exception as exc:  # not a GObject class at all
+        missing.append(f"introspection ({type(exc).__name__})")
+    return missing
+
+
+def frdp_check(version: str) -> str:
+    """Load the ``Frdp`` typelib and return why it cannot be used ("" = usable)."""
+
+    try:
+        import gi
+
+        gi.require_version("Frdp", version)
+        from gi.repository import Frdp  # type: ignore
+    except (ImportError, ValueError) as exc:
+        return f"gtk-frdp {version} could not be loaded ({type(exc).__name__})."
+    display = getattr(Frdp, "Display", None)
+    if display is None:
+        return f"gtk-frdp {version} has no Display widget."
+    missing = frdp_missing(display)
+    return f"gtk-frdp {version} lacks {', '.join(missing)}." if missing else ""
 
 
 def frdp_typelib_version() -> str:
@@ -245,8 +288,11 @@ def binary_capabilities(binary: ClientBinary, *, embedded: bool) -> Dict[str, bo
     return caps
 
 
+# gtk-frdp 0.2: it connects in-process with its own FreeRDP settings (no command line), so host options for
+# devices, gateways, RemoteApp … do not apply; it resizes ("allow-resize"), scales ("scaling"), shares the
+# clipboard, grabs the keyboard itself (is_keyboard_grabbed) and can render a pixbuf (get_pixbuf).
 FRDP_CAPABILITIES = {name: name in ("embedded", "dynamic_resize", "fullscreen", "clipboard", "keyboard_grab",
-                                    "smart_sizing") for name in CAPABILITIES}  # confirmed against the typelib in R2
+                                    "smart_sizing", "screenshot") for name in CAPABILITIES}
 
 
 def build_engines(binaries: Sequence[ClientBinary], platform: Platform) -> List[Engine]:
@@ -254,7 +300,9 @@ def build_engines(binaries: Sequence[ClientBinary], platform: Platform) -> List[
 
     usable = [b for b in binaries if b.usable]
     engines: List[Engine] = []
-    if platform.frdp_version:
+    if platform.frdp_version and platform.frdp_problem:
+        engines.append(Engine("frdp", ENGINE_LABELS["frdp"], False, platform.frdp_problem))
+    elif platform.frdp_version:
         engines.append(Engine("frdp", ENGINE_LABELS["frdp"], True, capabilities=dict(FRDP_CAPABILITIES)))
     else:
         engines.append(Engine("frdp", ENGINE_LABELS["frdp"], False, "gtk-frdp (the Frdp typelib) is not installed."))
@@ -359,7 +407,7 @@ class EngineReport:
         lines = ["SSH Manager — Remote Desktop diagnostics",
                  f"Session: {p.session_type or 'unknown'} · GTK backend: {'X11' if p.gdk_x11 else 'Wayland/other'}"
                  + (" · Flatpak" if p.flatpak else ""),
-                 f"gtk-frdp: {p.frdp_version or 'not installed'}",
+                 f"gtk-frdp: {p.frdp_version or 'not installed'}" + (f" ({p.frdp_problem})" if p.frdp_problem else ""),
                  f"Preference: {self.preference}", "", "FreeRDP clients:"]
         if not self.binaries:
             lines.append("  none found on PATH")

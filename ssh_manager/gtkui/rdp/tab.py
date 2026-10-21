@@ -1,53 +1,67 @@
-"""An RDP session tab. In phase R1 the remote desktop runs in FreeRDP's own window, so the tab is a
-**session card**: status, server, engine, security, size, time connected, the connection log, and
-**Focus Window**, **Disconnect** and **Reconnect**.
+"""An RDP session tab: the remote desktop inside the tab where the platform allows it, else a session card.
 
-One connection attempt goes like this (``docs/rdp.md``):
+Engines (``docs/rdp.md``): **gtk-frdp** (the ``Frdp.Display`` widget), **FreeRDP
+in the tab** (``/parent-window`` into a ``Gtk.Socket``, X11 only) or an
+**external window**. The external window, a failed embedding (no FreeRDP
+window within :data:`~ssh_manager.gtkui.rdp.display.EMBED_TIMEOUT_S` seconds of
+connecting — remembered per engine and session type) and every state that is
+not "connected" show the **session card**: status, server, engine, security,
+certificate, size, time connected, the connection log, **Focus Window**,
+**Disconnect** and **Reconnect**.
+
+One connection attempt:
 
 1. **Password:** the stored one (vault → credential → host password), or the
    password dialog ("Ask every time", or nothing stored).
-2. **Probe** (worker thread): is the server reachable, which security does it
-   select, and what certificate does it present?
+2. **Probe** (worker thread): reachable? which security? which certificate?
 3. **Trust** (:mod:`ssh_manager.rdp.trust_flow`): a pinned certificate
    connects, a new one asks (once / remember), a changed one warns (Cancel is
    the default), "Do not check" asks every time.
-4. **Launch** (:mod:`ssh_manager.rdp.command` / :mod:`ssh_manager.rdp.process`):
-   the password reaches FreeRDP only through its stdin pipe.
-5. **Verified success:** FreeRDP's "Local framebuffer format" log line (the
-   session is active), or after :data:`HEURISTIC_S` seconds without errors.
-   Only a log-verified NLA login offers "Save this password for this host?".
-6. **End:** the exit is classified; only "wrong password" asks again (at most
-   three times, at least a second apart). Account, network, certificate and
-   security problems show their own message and keep **Reconnect**.
+4. **Launch:** FreeRDP gets the password only through its stdin pipe
+   (:mod:`ssh_manager.rdp.command`); gtk-frdp gets it as a GObject property.
+5. **Connected:** FreeRDP's "Local framebuffer format" line (or gtk-frdp's
+   ``rdp-connected``), else :data:`HEURISTIC_S` s without errors. Only a
+   verified NLA login offers "Save this password for this host?".
+6. **End:** only "wrong password" asks again (≤ 3, ≥ 1 s apart). A dropped
+   network reconnects on its own with backoff; an idle timeout or a takeover
+   asks first; a sign-out never reconnects (:mod:`ssh_manager.rdp.reconnect`).
 
-Threads never touch GTK: results come back through ``GLib.idle_add``, and
-every timeout source is removed when the tab is destroyed. Closing the tab
-stops FreeRDP's process group.
+The toolbar (:class:`RdpToolbar`) changes scale, resolution, clipboard and
+keyboard for *this session* (FreeRDP cannot change them while running, so it
+reconnects), goes full screen, saves screenshots and shows connection info.
+
+Threads never touch GTK: results come back through ``GLib.idle_add``; every
+timeout source is removed when the tab is destroyed; closing the tab stops
+FreeRDP's process group.
 """
 
 from __future__ import annotations
 
 import functools
 import logging
+import os
 import threading
 import time
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gio, GLib, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ...auth_flow import (  # noqa: E402
     NO_PASSWORD, RETRY_DELAY_S, AuthOutcome, Decision, FailureAction, PasswordFlow, PasswordResolution, SaveContext,
     SaveOffer, source_phrase,
 )
 from ...host_utils import host_connection_params  # noqa: E402
+from ...rdp.clipboard import ClipboardPolicy  # noqa: E402
 from ...rdp.command import LaunchError, build_launch  # noqa: E402
-from ...rdp.engines import Engine, EngineReport, cached_report, choose_engine, install_hint  # noqa: E402
+from ...rdp.engines import CAPABILITY_LABELS, Engine, EngineReport, cached_report, choose_engine, install_hint  # noqa: E402
+from ...rdp.keyboard import Effect, KeyboardGrab, release_hint  # noqa: E402
 from ...rdp.outcome import Kind, RdpOutcome, classify_rdp_exit, connected_line  # noqa: E402
 from ...rdp.probe import ProbeResult, probe  # noqa: E402
 from ...rdp.process import RdpProcess  # noqa: E402
+from ...rdp.reconnect import Plan, ReconnectScheduler, plan_for  # noqa: E402
 from ...rdp.settings import RdpSettings, resolve_identity  # noqa: E402
 from ...rdp.trust_flow import Action, decide  # noqa: E402
 from ...rdp.window_focus import focus_pid, focus_tool  # noqa: E402
@@ -63,7 +77,9 @@ from ..theme.tokens import ConnectionStatus, Level, Size, Space  # noqa: E402
 from ..views.statusbar import SessionStatusBar  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
+from .display import FrdpSurface, SocketSurface, Surface  # noqa: E402
 from .runtime import RdpRuntime  # noqa: E402
+from .toolbar import RdpToolbar  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 HEURISTIC_S = 10  # no "connected" log line: alive this long without an error = probably connected
@@ -86,7 +102,9 @@ class RdpSessionTab(SessionPage):
                  password_provider: Optional[Callable[[], PasswordResolution]] = None, password_service: Any = None,
                  report_provider: Callable[[], Optional[EngineReport]] = cached_report,
                  probe_fn: Optional[Callable[..., ProbeResult]] = None,
-                 process_factory: Optional[Callable[..., RdpProcess]] = None, autostart: bool = True) -> None:
+                 process_factory: Optional[Callable[..., RdpProcess]] = None,
+                 surface_factory: Optional[Callable[[Engine], Optional[Surface]]] = None,
+                 autostart: bool = True) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.get_style_context().add_class("rdp-session")
         self._host = host
@@ -100,27 +118,38 @@ class RdpSessionTab(SessionPage):
         self._report_provider = report_provider
         self._probe = probe_fn or (lambda *args, **kwargs: probe(*args, **kwargs))  # looked up when used
         self._process_factory = process_factory or (lambda *args, **kwargs: RdpProcess(*args, **kwargs))
-        self.settings, warnings = RdpSettings.for_host(host)
+        self._surface_factory = surface_factory or self._default_surface
+        self.settings, warnings = RdpSettings.for_host(host)  # a copy: toolbar changes last for this session
         self.connection_log = ConnectionLog(host.alias)
         self._flow = PasswordFlow(host.alias)
         self._resolution: PasswordResolution = NO_PASSWORD
         self._typed_password: Optional[str] = None
         self._attempt_password: Optional[str] = None
         self.process: Optional[RdpProcess] = None
+        self.surface: Optional[Surface] = None
         self.engine: Optional[Engine] = None
         self.security = ""  # what the probe saw the server select
         self.certificate_checked = True
-        self.connected_method = ""  # "log" | "heuristic" | ""
+        self.connected_method = ""  # "log" | "signal" | "heuristic" | ""
         self.last_outcome: Optional[RdpOutcome] = None
+        self.scheduler = ReconnectScheduler(self.settings.reconnect_max if self.settings.auto_reconnect else 1)
+        self.on_fullscreen: Optional[Callable[[bool], None]] = None  # set by the window (focus mode)
+        self._session_pins: List[str] = []  # certificates trusted for this tab only ("Trust once")
+        self._force_external = False
+        self._embedded_child = 0
         self._connected = False
         self._connected_at = 0.0
         self._reconnect_after_exit = False
+        self._reconnecting = False
+        self._network_handler = 0
         self._sources: List[int] = []
         self._dialogs: List[Gtk.Widget] = []
         self._closed = False
         self._log_flush_pending = False
+        self.keyboard = KeyboardGrab(enabled=self.settings.grab_keyboard)
         self.connection_log.listeners.append(self._on_log_line)
         self._build()
+        self.connect("unmap", lambda *_: self._keyboard_event(self.keyboard.tab_switch()))
         self.connect("destroy", lambda *_: self._on_destroy())
         for warning in warnings:
             self._log(_("{alias}: {warning}").format(alias=host.alias, warning=_(warning)), Level.WARNING)
@@ -143,6 +172,23 @@ class RdpSessionTab(SessionPage):
         self._banner.set_no_show_all(True)
         self.pack_start(self._banner, False, False, 0)
 
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.NONE)  # a native X child cannot fade anyway
+        self.stack.add_named(self._build_card(), "card")
+        self.display_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.toolbar = RdpToolbar()
+        self._wire_toolbar()
+        self.display_box.pack_start(self.toolbar, False, False, 0)
+        self.stack.add_named(self.display_box, "display")
+        self.stack.set_visible_child_name("card")
+        self.pack_start(self.stack, True, True, 0)
+
+        self._statusbar = SessionStatusBar()
+        self._statusbar.size_label.set_tooltip_text(_("Remote screen size"))
+        self.pack_start(self._statusbar, False, False, 0)
+        self._set_status(ConnectionStatus.CONNECTING, _("Starting…"))
+
+    def _build_card(self) -> Gtk.Widget:
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
@@ -162,10 +208,13 @@ class RdpSessionTab(SessionPage):
         self.status_label.set_max_width_chars(60)
         self.status_label.set_justify(Gtk.Justification.CENTER)
         card.pack_start(self.status_label, False, False, 0)
+        self.reconnect_spinner = Gtk.Spinner()
+        self.reconnect_spinner.set_no_show_all(True)
+        card.pack_start(self.reconnect_spinner, False, False, 0)
 
         grid = Gtk.Grid(column_spacing=Space.M, row_spacing=Space.XS)
         grid.set_halign(Gtk.Align.CENTER)
-        self.facts = {}
+        self.facts: Dict[str, Gtk.Label] = {}
         for row, (key, label) in enumerate((("server", _("Server")), ("engine", _("Engine")),
                                             ("security", _("Security")), ("certificate", _("Certificate")),
                                             ("size", _("Screen")), ("elapsed", _("Connected for")))):
@@ -193,7 +242,10 @@ class RdpSessionTab(SessionPage):
         self.disconnect_button.connect("clicked", lambda *_: self.disconnect())
         self.reconnect_button = Gtk.Button.new_with_mnemonic(_("_Reconnect"))
         self.reconnect_button.connect("clicked", lambda *_: self.reconnect())
-        for button in (self.focus_button, self.disconnect_button, self.reconnect_button):
+        self.cancel_button = Gtk.Button.new_with_mnemonic(_("_Stop Reconnecting"))
+        self.cancel_button.connect("clicked", lambda *_: self.cancel_reconnect())
+        self.cancel_button.set_no_show_all(True)
+        for button in (self.focus_button, self.disconnect_button, self.reconnect_button, self.cancel_button):
             buttons.pack_start(button, False, False, 0)
         card.pack_start(buttons, False, False, 0)
 
@@ -219,13 +271,20 @@ class RdpSessionTab(SessionPage):
         self.log_expander.connect("notify::expanded", lambda *_: self._flush_log())
         card.pack_start(self.log_expander, False, False, 0)
         scroller.add(card)
-        self.pack_start(scroller, True, True, 0)
+        return scroller
 
-        self._statusbar = SessionStatusBar()
-        self._statusbar.size_label.set_tooltip_text(_("Remote screen size"))
-        self.pack_start(self._statusbar, False, False, 0)
-        self._set_status(ConnectionStatus.CONNECTING, _("Starting…"))
-        self._sync_buttons()
+    def _wire_toolbar(self) -> None:
+        bar = self.toolbar
+        bar.on_fullscreen = self.set_fullscreen
+        bar.on_scale = self.set_scale_mode
+        bar.on_resolution = self.set_resolution
+        bar.on_keyboard = self.toggle_keyboard
+        bar.on_clipboard = self.set_clipboard
+        bar.on_screenshot = self.save_screenshot
+        bar.on_reconnect = lambda: self.reconnect()
+        bar.on_disconnect = self.disconnect
+        bar.on_open_drives = self.open_shared_folder
+        bar.info_lines = self.info_lines
 
     def _size_text(self) -> str:
         s = self.settings
@@ -233,11 +292,18 @@ class RdpSessionTab(SessionPage):
             return _("Full screen")
         if s.size_mode == "fixed":
             return f"{s.width} × {s.height}"
-        return _("{w} × {h}, follows the window").format(w=s.width, h=s.height)
+        return _("Follows the window") if self._embedded() else \
+            _("{w} × {h}, follows the window").format(w=s.width, h=s.height)
 
     def _window(self) -> Optional[Gtk.Window]:
         toplevel = self.get_toplevel()
         return toplevel if isinstance(toplevel, Gtk.Window) else None
+
+    def _embedded(self) -> bool:
+        return self.engine is not None and self.engine.embedded
+
+    def _prefs(self) -> Any:
+        return getattr(self._app_settings, "remote_desktop", None)
 
     # ------------------------------------------------------------ status
     def _set_status(self, state: ConnectionStatus, message: str, *, banner: bool = False,
@@ -245,25 +311,62 @@ class RdpSessionTab(SessionPage):
         self._status = state
         self._statusbar.set_status(state, message)
         self.status_label.set_text(message)
+        self.toolbar.set_status(message)
         if not self._closed:
             if banner:
                 self._banner_label.set_text(message)
                 self._banner.set_message_type(Gtk.MessageType.ERROR if error else Gtk.MessageType.INFO)
                 self._banner.show()
             self._banner.set_revealed(banner)
+            show_display = state is ConnectionStatus.CONNECTED and self.surface is not None and \
+                (self._embedded_child or isinstance(self.surface, FrdpSurface))
+            self.stack.set_visible_child_name("display" if show_display else "card")
             self.emit("status-changed", self._host.alias, state is ConnectionStatus.CONNECTED)
         self._sync_buttons()
 
     def _sync_buttons(self) -> None:
-        running = self.process is not None and self.process.running
+        running = self.rdp_connected()
         tool = focus_tool()
+        external = not self._embedded()
+        self.focus_button.set_visible(external)
         self.focus_button.set_sensitive(running and bool(tool))
         self.focus_button.set_tooltip_text(
             _("Bring the remote desktop window to the front") if tool else
             _("Not possible here: Wayland does not let programs raise other windows, and on X11 it needs "
               "xdotool or wmctrl."))
         self.disconnect_button.set_sensitive(running)
-        self.reconnect_button.set_sensitive(self._status is not ConnectionStatus.CONNECTING or running)
+        self.reconnect_button.set_sensitive(not self._reconnecting)
+        self.cancel_button.set_visible(self._reconnecting)
+        self.reconnect_spinner.set_visible(self._reconnecting)
+        (self.reconnect_spinner.start if self._reconnecting else self.reconnect_spinner.stop)()
+        self._sync_toolbar()
+
+    def _sync_toolbar(self) -> None:
+        engine = self.engine
+        reasons: Dict[str, str] = {}
+
+        def missing(capability: str, key: str = "") -> None:
+            if engine is None or not engine.supports(capability):
+                reasons[key or capability] = _("{feature} is not available with {engine}.").format(
+                    feature=_(CAPABILITY_LABELS.get(capability, capability)),
+                    engine=_(engine.label) if engine else _("this engine"))
+
+        missing("send_keys")
+        if engine is not None and engine.id == "xfreerdp-embed":
+            reasons["send_keys"] = _("FreeRDP cannot receive keys from another program; while the remote screen has "
+                                     "the keyboard, Ctrl+Alt+End sends Ctrl+Alt+Del.")
+        missing("screenshot")
+        missing("clipboard")
+        missing("smart_sizing", "scale")
+        if not self.settings.drives:
+            reasons["drives"] = _("This host shares no folder (Devices page of the host dialog).")
+        self.toolbar.set_capabilities(reasons)
+        engine_id = engine.id if engine else "external"
+        hint = _(release_hint(engine_id, getattr(self._prefs(), "release_shortcut", None)))
+        grabbed = self.keyboard.grabbed
+        if isinstance(self.surface, FrdpSurface):
+            grabbed = self.surface.keyboard_grabbed()
+        self.toolbar.set_keyboard_state(grabbed, hint)
 
     def _on_banner_response(self, _bar, response: int) -> None:
         if response == _RESPONSE_RECONNECT:
@@ -273,35 +376,64 @@ class RdpSessionTab(SessionPage):
 
     # ------------------------------------------------------- public API
     def focus_terminal(self) -> None:
-        if self.process is not None and self.process.running:
+        if isinstance(self.surface, SocketSurface) and self._embedded_child:
+            self.surface.socket.grab_focus()
+        elif isinstance(self.surface, FrdpSurface):
+            self.surface.display.grab_focus()
+        elif self.rdp_connected():
             self.focus_window()
         else:
             self.reconnect_button.grab_focus()
 
     def focus_window(self) -> bool:
         tool = focus_tool()
-        if self.process is None or not tool:
+        if self.process is None or not tool or self._embedded():
             return False
         pid = self.process.pid
         threading.Thread(target=focus_pid, args=(pid, tool), daemon=True, name="sshm-rdp-focus").start()
         return True
 
     def disconnect(self) -> None:
+        self.cancel_reconnect()
         if self.process is not None and self.process.running:
             self.connection_log.append("Disconnect requested")
             self.process.stop(user=True)
+        elif isinstance(self.surface, FrdpSurface):
+            self.connection_log.append("Disconnect requested")
+            self._user_stop = True
+            self.surface.close()
 
     def reconnect(self) -> None:
+        self._reconnect_clicked()
+
+    def _reconnect_clicked(self) -> None:
+        self.cancel_reconnect()
+        self.scheduler.reset()
         if self.process is not None and self.process.running:
             self._reconnect_after_exit = True
             self.process.stop(user=True)
+            return
+        if isinstance(self.surface, FrdpSurface) and self._connected:
+            self._reconnect_after_exit = True
+            self.surface.close()
             return
         if self.status is ConnectionStatus.CONNECTING and not self._banner.get_revealed():
             return
         self._begin_connect()
 
+    def cancel_reconnect(self) -> None:
+        if not self._reconnecting:
+            return
+        self._reconnecting = False
+        self.scheduler.cancel()
+        self._stop_network_wait()
+        self.connection_log.append("Reconnecting cancelled")
+        self._set_status(ConnectionStatus.UNKNOWN, _("Reconnecting cancelled."), banner=True)
+
     def rdp_connected(self) -> bool:
-        return self.process is not None and self.process.running
+        if self.process is not None and self.process.running:
+            return True
+        return isinstance(self.surface, FrdpSurface) and self._connected
 
     def confirm_close(self) -> bool:
         if not self.rdp_connected():
@@ -318,6 +450,112 @@ class RdpSessionTab(SessionPage):
         Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
         return text
 
+    def info_lines(self) -> List[tuple]:
+        engine = self.engine
+        s = self.settings
+        devices = [name for name, on in ((_("clipboard"), s.clipboard != "off"), (_("printers"), s.printers),
+                                         (_("sound"), s.audio_out == "local"), (_("microphone"), s.audio_in),
+                                         (_("smart cards"), s.smartcard), (_("USB"), bool(s.usb)),
+                                         (_("shared folders"), bool(s.drives) or s.home_drive)) if on]
+        size = self._statusbar.size_label.get_text() or self._size_text()
+        return [(_("Server"), self.facts["server"].get_text()),
+                (_("Engine"), engine.label if engine else "—"),
+                (_("Security"), self.facts["security"].get_text()),
+                (_("Certificate"), self.facts["certificate"].get_text()),
+                (_("Screen"), size), (_("Colors"), f"{s.color_depth} bit"),
+                (_("Connected"), self.connected_method and _("yes ({method})").format(method=self.connected_method)),
+                (_("Devices"), ", ".join(devices) or _("none"))]
+
+    # ------------------------------------------------- toolbar actions
+    def set_fullscreen(self, active: bool) -> None:
+        window = self._window()
+        if window is not None:
+            (window.fullscreen if active else window.unfullscreen)()
+        if self.on_fullscreen is not None:
+            self.on_fullscreen(active)
+        self.toolbar.set_fullscreen(active)
+        if active:
+            self.toolbar.conceal()
+
+    def _apply_and_reconnect(self, description: str) -> None:
+        self.connection_log.append(f"Changed for this session: {description}")
+        self.facts["size"].set_text(self._size_text())
+        self._sync_toolbar()
+        if self.rdp_connected():
+            self._reconnect_clicked()
+
+    def set_scale_mode(self, mode: str) -> None:
+        s = self.settings
+        if mode == "fit":
+            s.size_mode, s.smart_sizing = "window", False
+        elif mode == "actual":
+            s.size_mode, s.smart_sizing = "fixed", False
+        else:
+            s.size_mode = "fixed" if s.size_mode == "window" else s.size_mode
+            s.smart_sizing = True
+        self._apply_and_reconnect(f"scale {mode}")
+
+    def set_resolution(self, size: Optional[tuple]) -> None:
+        s = self.settings
+        if size is None:
+            s.size_mode = "window"
+        else:
+            s.size_mode, s.width, s.height = "fixed", int(size[0]), int(size[1])
+        self._apply_and_reconnect("resolution " + (f"{size[0]}x{size[1]}" if size else "fit"))
+
+    def set_clipboard(self, mode: str) -> None:
+        self.settings.clipboard = mode
+        self._apply_and_reconnect(f"clipboard {mode}")
+
+    def toggle_keyboard(self) -> None:
+        if isinstance(self.surface, FrdpSurface):
+            self._sync_toolbar()  # gtk-frdp grabs on its own; the toolbar shows its state
+            return
+        self.settings.grab_keyboard = not self.settings.grab_keyboard
+        self._keyboard_event(self.keyboard.toggle())
+        self._apply_and_reconnect("keyboard grab " + ("on" if self.settings.grab_keyboard else "off"))
+
+    def clipboard_policy(self) -> ClipboardPolicy:
+        return ClipboardPolicy(self.settings.clipboard, files_supported=False)
+
+    def save_screenshot(self, path: Optional[str] = None) -> Optional[str]:
+        pixbuf = self.surface.screenshot() if self.surface is not None else None
+        if pixbuf is None:
+            self._log(_("No screenshot: the remote screen is not shown in the tab."), Level.WARNING)
+            return None
+        if path is None:
+            chooser = Gtk.FileChooserNative.new(_("Save Screenshot"), self._window(), Gtk.FileChooserAction.SAVE,
+                                                _("_Save"), _("_Cancel"))
+            chooser.set_do_overwrite_confirmation(True)
+            chooser.set_current_name(f"{self._host.alias}-{time.strftime('%Y%m%d-%H%M%S')}.png")
+            try:
+                if chooser.run() != Gtk.ResponseType.ACCEPT:
+                    return None
+                path = chooser.get_filename()
+            finally:
+                chooser.destroy()
+        if not path:
+            return None
+        try:
+            pixbuf.savev(path, "png", [], [])
+        except GLib.Error as exc:
+            self._log(_("The screenshot could not be saved: {error}").format(error=exc.message), Level.ERROR)
+            return None
+        self._log(_("Screenshot saved."), Level.SUCCESS)
+        return path
+
+    def open_shared_folder(self) -> bool:
+        folder = next((d for d in self.settings.drives if os.path.isdir(os.path.expanduser(d.path))), None)
+        if folder is None:
+            return False
+        uri = Gio.File.new_for_path(os.path.expanduser(folder.path)).get_uri()
+        try:
+            Gio.AppInfo.launch_default_for_uri(uri, None)
+        except GLib.Error as exc:
+            self._log(_("The folder could not be opened: {error}").format(error=exc.message), Level.WARNING)
+            return False
+        return True
+
     # -------------------------------------------------------- connecting
     def _begin_connect(self) -> bool:
         if self._closed:
@@ -326,25 +564,32 @@ class RdpSessionTab(SessionPage):
         self._start(None, "stored")
         return GLib.SOURCE_REMOVE
 
+    def _session_type(self, report: EngineReport) -> str:
+        return report.platform.session_type or ("x11" if report.platform.gdk_x11 else "unknown")
+
     def _choose_engine(self) -> Optional[Engine]:
         report = self._report_provider()
         if report is None:
             self._fail(_("FreeRDP is still being looked for; try again in a moment."), "no report")
             return None
-        prefs = getattr(self._app_settings, "remote_desktop", None)
+        prefs = self._prefs()
         engine, note = choose_engine(report.engines, getattr(prefs, "preferred_engine", "auto"),
                                      self.settings.engine)
         if engine is None:
             self._fail(_("No FreeRDP client was found. {hint}").format(hint=install_hint(report.platform)),
                        "no engine")
             return None
-        if engine.embedded:  # phase R1: every engine runs FreeRDP in its own window
-            external = next((e for e in report.engines if e.id == "external" and e.available), None)
+        external = next((e for e in report.engines if e.id == "external" and e.available), None)
+        if engine.embedded and (self._force_external or
+                                self._runtime.embed_failed(engine.id, self._session_type(report))):
             if external is None:
-                self._fail(_("Only an embedded engine is available, which this version cannot use yet."), "engine")
+                self._fail(_("Embedding the remote desktop failed before, and no FreeRDP client for an external "
+                             "window was found."), "engine")
                 return None
-            self.connection_log.append(f"{engine.label} is not available yet; using the external window")
+            self.connection_log.append(f"{engine.label} failed here before; using the external window")
             engine = external
+        if engine.embedded and not self.get_realized():
+            engine = external or engine  # not in a window yet: nothing to embed into
         if note:
             self.connection_log.append(note)
         return engine
@@ -352,10 +597,13 @@ class RdpSessionTab(SessionPage):
     def _start(self, typed: Optional[str], origin: str) -> None:
         self._banner.set_revealed(False)
         engine = self._choose_engine()
-        if engine is None or engine.binary is None:
+        if engine is None:
+            return
+        if engine.binary is None and engine.id != "frdp":
             return
         self.engine = engine
-        self.facts["engine"].set_text(f"{engine.label} · {engine.binary.name} {engine.binary.version_text}")
+        binary = engine.binary
+        self.facts["engine"].set_text(engine.label + (f" · {binary.name} {binary.version_text}" if binary else ""))
         if typed is None:
             if self.settings.prompt_for_credentials and not self._typed_password:
                 self._ask_password()
@@ -382,7 +630,7 @@ class RdpSessionTab(SessionPage):
         self._set_status(ConnectionStatus.CONNECTING, _("Checking the server…"))
         hostname, port, _user = host_connection_params(self._host)
         settings = self.settings
-        pins = tuple(settings.pinned_sha256) + tuple(p for p in (self._stored_pin(),) if p)
+        pins = tuple(self._pins())
 
         def work() -> None:
             try:
@@ -393,6 +641,9 @@ class RdpSessionTab(SessionPage):
             GLib.idle_add(self._after_probe, result)
 
         threading.Thread(target=work, daemon=True, name="sshm-rdp-probe").start()
+
+    def _pins(self) -> List[str]:
+        return list(self.settings.pinned_sha256) + [p for p in (self._stored_pin(),) if p] + self._session_pins
 
     def _pin_key(self) -> str:
         hostname, port, _user = host_connection_params(self._host)
@@ -421,7 +672,7 @@ class RdpSessionTab(SessionPage):
         if not result.reachable:
             self._runtime.limiter.release(self)
             self._fail(_("The server could not be reached: {error}").format(error=result.error or _("no answer")),
-                       "probe: unreachable", kind=Kind.NETWORK)
+                       "probe: unreachable", kind=Kind.NETWORK, outcome_connected=False)
             return GLib.SOURCE_REMOVE
         security = "rdp" if (self.settings.security == "rdp" or result.security == "rdp") else result.security
         self.security = security
@@ -431,8 +682,7 @@ class RdpSessionTab(SessionPage):
             self._fail(_("The server refused the security request: {error}").format(error=result.error),
                        result.failure, kind=Kind.SECURITY_MISMATCH)
             return GLib.SOURCE_REMOVE
-        pins = list(self.settings.pinned_sha256) + [p for p in (self._stored_pin(),) if p]
-        decision = decide(self.settings.cert_policy, result.certificate, pins, security=security)
+        decision = decide(self.settings.cert_policy, result.certificate, self._pins(), security=security)
         cert = result.certificate
         alias = self._host.alias
         fingerprints: List[str] = []
@@ -448,6 +698,8 @@ class RdpSessionTab(SessionPage):
                 return self._cancelled(_("The certificate was not trusted."))
             if choice == "remember":
                 self._remember(decision.fingerprint, cert.subject)
+            else:
+                self._session_pins.append(decision.fingerprint)
             fingerprints = [decision.fingerprint]
         elif decision.action is Action.CHANGED and cert is not None:
             if not trust_certificate(self._window(), alias, cert, changed=True, expected=decision.expected):
@@ -463,6 +715,8 @@ class RdpSessionTab(SessionPage):
             if not confirm_unchecked_certificate(self._window(), alias):
                 return self._cancelled(_("Connection cancelled."))
             ignore = True
+            if cert is not None and cert.sha256:
+                fingerprints = [cert.sha256]  # gtk-frdp: accept the certificate the user chose not to check
         elif decision.action is Action.UNREADABLE:
             self._runtime.limiter.release(self)
             self._fail(_("The server's certificate could not be read: {error}").format(
@@ -472,24 +726,116 @@ class RdpSessionTab(SessionPage):
         self.facts["certificate"].set_text(
             _("Not verified") if ignore else (_("Not used (standard RDP security)") if security == "rdp"
                                               else _("Trusted · {fp}").format(fp=fingerprints[0][:23] + "…")))
-        self._launch(fingerprints, ignore)
+        if self.engine is not None and self.engine.id == "frdp":
+            self._launch_frdp(fingerprints, ignore)
+        else:
+            self._launch(fingerprints, ignore)
         return GLib.SOURCE_REMOVE
 
     def _cancelled(self, message: str, *, error: bool = False) -> bool:
         self._runtime.limiter.release(self)
+        self._reconnecting = False
         self._set_status(ConnectionStatus.FAILED if error else ConnectionStatus.UNKNOWN, message, banner=True,
                          error=error)
         return GLib.SOURCE_REMOVE
 
+    # ------------------------------------------------------- surfaces
+    def _default_surface(self, engine: Engine) -> Optional[Surface]:
+        if engine.id == "xfreerdp-embed":
+            return SocketSurface()
+        if engine.id == "frdp":
+            try:
+                report = self._report_provider()
+                gi.require_version("Frdp", report.platform.frdp_version if report else "0.2")
+                from gi.repository import Frdp  # type: ignore
+
+                return FrdpSurface(Frdp.Display)
+            except (ImportError, ValueError, AttributeError) as exc:
+                LOGGER.warning("gtk-frdp could not be loaded: %s", type(exc).__name__)
+        return None
+
+    def _install_surface(self, engine: Engine) -> Optional[Surface]:
+        self._remove_surface()
+        surface = self._surface_factory(engine)
+        if surface is None:
+            return None
+        self.surface = surface
+        self.display_box.pack_start(surface, True, True, 0)
+        surface.show_all()
+        if isinstance(surface, SocketSurface):
+            surface.on_embedded = self._on_embedded
+            surface.on_timeout = self._on_embed_timeout
+        target = surface.socket if isinstance(surface, SocketSurface) else getattr(surface, "display", None)
+        if target is not None:
+            target.connect("focus-in-event", self._on_surface_focus_in)
+            target.connect("focus-out-event", self._on_surface_focus_out)
+        return surface
+
+    def _on_surface_focus_in(self, *_args) -> bool:
+        self._keyboard_event(self.keyboard.focus_in())
+        return False
+
+    def _on_surface_focus_out(self, *_args) -> bool:
+        self._keyboard_event(self.keyboard.focus_out())
+        return False
+
+    def _keyboard_event(self, effects: List[Effect]) -> None:
+        """The grab indicator follows the focus; the engine itself grabs and releases the keys (docs/rdp.md)."""
+
+        if Effect.RELEASE_MODIFIERS in effects:
+            self.connection_log.append("Focus left the remote screen: modifier keys released")
+        if not self._closed and effects:
+            self._sync_toolbar()
+
+    def _remove_surface(self) -> None:
+        surface, self.surface = self.surface, None
+        self._embedded_child = 0
+        if surface is not None:
+            self.display_box.remove(surface)
+            surface.destroy()
+
+    def _on_embedded(self, child: int) -> None:
+        self._embedded_child = child
+        self.connection_log.append("The remote screen is shown in the tab")
+        self.facts["size"].set_text(self._size_text())
+        self._set_status(self._status, self.status_label.get_text())  # switch to the display
+        self.focus_terminal()
+
+    def _on_embed_timeout(self) -> None:
+        """No FreeRDP window in the tab: remember it and continue in an external window."""
+
+        report = self._report_provider()
+        engine = self.engine
+        if engine is not None and report is not None:
+            self._runtime.note_embed_failure(engine.id, self._session_type(report))
+        self.connection_log.append("FreeRDP's window did not appear in the tab; switching to an external window")
+        self._log(_("“{alias}”: the remote desktop could not be shown in the tab; it opens in its own window "
+                    "instead.").format(alias=self._host.alias), Level.WARNING)
+        self._force_external = True
+        self._reconnect_clicked()
+
+    # ---------------------------------------------------------- launch
     def _launch(self, fingerprints: List[str], ignore: bool) -> None:
         engine = self.engine
         assert engine is not None and engine.binary is not None
         hostname, port, user = host_connection_params(self._host)
         identity = resolve_identity(self._host.option("user") or "", self.settings)
+        parent = None
+        window_size = None
+        if engine.id == "xfreerdp-embed":
+            surface = self._install_surface(engine)
+            if isinstance(surface, SocketSurface):
+                allocation = self.stack.get_allocation()
+                scale = max(1, self.get_scale_factor())
+                window_size = (max(200, allocation.width * scale), max(200, allocation.height * scale))
+                parent = surface.xid()
+        else:
+            self._remove_surface()
         try:
             plan = build_launch(hostname=hostname, port=port, settings=self.settings, identity=identity,
                                 password=self._attempt_password, client=engine.binary, title=self._host.alias,
-                                accepted_fingerprints=fingerprints, ignore_certificate=ignore)
+                                accepted_fingerprints=fingerprints if not ignore else [], ignore_certificate=ignore,
+                                parent_window=parent, window_size=window_size)
         except LaunchError as exc:
             self._runtime.limiter.release(self)
             self._fail(_("Cannot start the session: {error}").format(error=_(str(exc))), "launch")
@@ -516,6 +862,53 @@ class RdpSessionTab(SessionPage):
         self._sources.append(GLib.timeout_add_seconds(1, self._tick))
         self._sync_buttons()
 
+    def _launch_frdp(self, fingerprints: List[str], ignore: bool) -> None:
+        engine = self.engine
+        assert engine is not None
+        surface = self._install_surface(engine)
+        if not isinstance(surface, FrdpSurface):
+            self._runtime.limiter.release(self)
+            self._force_external = True
+            self.connection_log.append("gtk-frdp could not be used; switching to an external window")
+            self._begin_connect()
+            return
+        hostname, port, _user = host_connection_params(self._host)
+        identity = resolve_identity(self._host.option("user") or "", self.settings)
+        surface.accepted = list(fingerprints)
+        surface.on_connected = lambda: self._mark_connected("signal")
+        surface.on_disconnected = lambda: self._frdp_finished(None)
+        surface.on_error = lambda message: self._frdp_finished(("error", message))
+        surface.on_auth_failure = lambda message: self._frdp_finished(("auth", message))
+        surface.on_certificate_refused = lambda _fp: self._frdp_finished(("cert", ""))
+        self._connected = False
+        self.connected_method = ""
+        self._user_stop = False
+        self._set_status(ConnectionStatus.CONNECTING, _("Connecting…"))
+        self.connection_log.append(f"Starting gtk-frdp (password as a property, never a command line)")
+        surface.open(hostname, port, identity.user, self._attempt_password, identity.domain,
+                     self.settings.smart_sizing or self.settings.size_mode == "window")
+
+    def _frdp_finished(self, problem: Optional[tuple]) -> None:
+        if self._closed:
+            return
+        self._runtime.limiter.release(self)
+        if problem is None:
+            reason = "user_disconnect" if getattr(self, "_user_stop", False) else "closed"
+            outcome = RdpOutcome(Kind.OK_DISCONNECT, reason, "The session ended.", "rdp-disconnected",
+                                 self._connected)
+        elif problem[0] == "auth":
+            outcome = RdpOutcome(Kind.AUTH_FAILED, "auth", "The user name or password is not correct.",
+                                 "rdp-auth-failure", self._connected)
+        elif problem[0] == "cert":
+            outcome = RdpOutcome(Kind.CERT_REJECTED, "certificate",
+                                 "The server's certificate was not the trusted one, so the connection was stopped.",
+                                 "certificate", self._connected)
+        else:
+            outcome = RdpOutcome(Kind.NETWORK if self._connected else Kind.OTHER, "error",
+                                 problem[1] or "The connection failed.", "rdp-error", self._connected)
+        self._remove_surface()
+        self._handle_outcome(outcome)
+
     # ------------------------------------------------------------ output
     def _on_output(self, line: str) -> None:
         """Worker thread: log the (already masked) line; a "connected" line goes to the GTK thread."""
@@ -525,28 +918,37 @@ class RdpSessionTab(SessionPage):
             GLib.idle_add(self._mark_connected, "log")
 
     def _tick(self) -> bool:
-        process = self.process
-        if self._closed or process is None or not process.running:
+        if self._closed or not self.rdp_connected():
             return GLib.SOURCE_REMOVE
+        process = self.process
         if self._connected:
             seconds = int(time.monotonic() - self._connected_at)
             self.facts["elapsed"].set_text(f"{seconds // 3600}:{seconds // 60 % 60:02d}:{seconds % 60:02d}")
-        elif process.alive_s() >= HEURISTIC_S and not any("[ERROR]" in line for line in process.output()):
+        elif process is not None and process.alive_s() >= HEURISTIC_S and \
+                not any("[ERROR]" in line for line in process.output()):
             self._mark_connected("heuristic")
         return GLib.SOURCE_CONTINUE
 
     def _mark_connected(self, method: str) -> bool:
-        if self._closed or self._connected or self.process is None:
+        if self._closed or self._connected or (self.process is None and not isinstance(self.surface, FrdpSurface)):
             return GLib.SOURCE_REMOVE
         self._connected = True
+        self._reconnecting = False
+        self.scheduler.succeeded()
+        self._stop_network_wait()
         self._connected_at = time.monotonic()
         self.connected_method = method
-        self.connection_log.append("Connected (verified by FreeRDP's log)" if method == "log"
-                                   else f"Probably connected (no error for {HEURISTIC_S} s; FreeRDP did not log "
-                                        "the connection)")
+        self.connection_log.append({"log": "Connected (verified by FreeRDP's log)",
+                                    "signal": "Connected (gtk-frdp reported it)"}.get(
+            method, f"Probably connected (no error for {HEURISTIC_S} s; FreeRDP did not log the connection)"))
+        if isinstance(self.surface, FrdpSurface):
+            self._sources.append(GLib.timeout_add_seconds(1, self._tick))
         state = _("Connected") if self.certificate_checked else _("Connected · certificate not verified")
-        self._set_status(ConnectionStatus.CONNECTED, state + " · " + _("the remote desktop is in its own window"))
-        verified_login = method == "log" and self.security in ("nla", "nla_ext")
+        where = "" if self._embedded() else " · " + _("the remote desktop is in its own window")
+        self._set_status(ConnectionStatus.CONNECTED, state + where)
+        if isinstance(self.surface, SocketSurface):
+            self.surface.start_watch()
+        verified_login = method in ("log", "signal") and self.security in ("nla", "nla_ext")
         if self._attempt_password and self._flow.source in ("prompt", "retry"):
             self._typed_password = self._attempt_password  # Reconnect keeps using it
             if verified_login:
@@ -565,38 +967,96 @@ class RdpSessionTab(SessionPage):
         version = self.engine.binary.major if self.engine and self.engine.binary else 3
         outcome = classify_rdp_exit(code, process.output(), version, connected=self._connected,
                                     stopped_by_user=process.stopped_by_user)
-        self.last_outcome = outcome
         self.process = None
-        self.connection_log.append(f"Ended: {outcome.kind.value} ({outcome.technical})")
+        self._remove_surface()
         if self._closed:
             return GLib.SOURCE_REMOVE
+        self._handle_outcome(outcome)
+        return GLib.SOURCE_REMOVE
+
+    def _handle_outcome(self, outcome: RdpOutcome) -> None:
+        self.last_outcome = outcome
+        self.connection_log.append(f"Ended: {outcome.kind.value} ({outcome.technical})")
+        was_connected = self._connected
+        self._connected = False
         if self._reconnect_after_exit:
             self._reconnect_after_exit = False
             self._begin_connect()
-            return GLib.SOURCE_REMOVE
-        if outcome.retry_password and not self._connected:
+            return
+        if outcome.retry_password and not was_connected:
             self._typed_password = None
             action = self._flow.on_failure(AuthOutcome.AUTH_FAILED)
             if action is FailureAction.PROMPT:
                 self._set_status(ConnectionStatus.FAILED, _(outcome.message))
                 self._sources.append(GLib.timeout_add_seconds(RETRY_DELAY_S, self._ask_after_delay))
-                return GLib.SOURCE_REMOVE
+                return
             self._fail(_("Sign-in failed after {n} attempts. Use Reconnect to try again.").format(
                 n=self._flow.max_attempts), outcome.technical, kind=Kind.AUTH_FAILED)
-            return GLib.SOURCE_REMOVE
+            self.emit("session-closed", self._host.alias, False)
+            return
+        plan = plan_for(outcome, enabled=self.settings.auto_reconnect)
+        if plan is Plan.AUTO and (was_connected or self._reconnecting):
+            if self._schedule_reconnect(outcome):
+                return
         if outcome.kind is Kind.OK_DISCONNECT:
-            self._set_status(ConnectionStatus.UNKNOWN, _("Disconnected: {reason}").format(reason=_(outcome.message)),
-                             banner=outcome.reason != "user_disconnect")
+            text = _("Disconnected: {reason}").format(reason=_(outcome.message))
+            if plan is Plan.ASK:
+                text += " " + _("Use Reconnect to connect again.")
+            self._set_status(ConnectionStatus.UNKNOWN, text, banner=outcome.reason != "user_disconnect")
         else:
             self._fail(_(outcome.message), outcome.technical, kind=outcome.kind)
-        self._connected = False
-        self.emit("session-closed", self._host.alias, not outcome.is_error)  # (alias, exited normally)
+        self._reconnecting = False
+        self._sync_buttons()
+        self.emit("session-closed", self._host.alias, not outcome.is_error)
+
+    # --------------------------------------------------------- reconnect
+    def _schedule_reconnect(self, outcome: RdpOutcome) -> bool:
+        delay = self.scheduler.next_delay()
+        if delay is None:
+            self.connection_log.append("Reconnect attempts used up")
+            self._reconnecting = False
+            return False
+        self._reconnecting = True
+        self.connection_log.append(f"Reconnecting in {delay:.0f} s ({self.scheduler.progress()})")
+        self._set_status(ConnectionStatus.CONNECTING, _("Connection lost: {reason} Reconnecting… (attempt {n} of {m})")
+                         .format(reason=_(outcome.message), n=self.scheduler.attempts, m=self.scheduler.limit))
+        self._sources.append(GLib.timeout_add(int(delay * 1000), self._reconnect_due))
+        return True
+
+    def _reconnect_due(self) -> bool:
+        if self._closed or not self._reconnecting:
+            return GLib.SOURCE_REMOVE
+        monitor = Gio.NetworkMonitor.get_default()
+        if monitor is not None and not monitor.get_network_available():
+            self.connection_log.append("The network is down; waiting for it before reconnecting")
+            self.scheduler.attempts = max(0, self.scheduler.attempts - 1)  # waiting is not an attempt
+            if not self._network_handler:
+                self._network_handler = monitor.connect("network-changed", self._on_network_changed)
+            return GLib.SOURCE_REMOVE
+        self._begin_connect()
         return GLib.SOURCE_REMOVE
 
-    def _fail(self, message: str, technical: str = "", *, kind: Kind = Kind.OTHER) -> None:
+    def _on_network_changed(self, monitor, available: bool) -> None:
+        if not available or self._closed or not self._reconnecting:
+            return
+        self._stop_network_wait()
+        self._begin_connect()
+
+    def _stop_network_wait(self) -> None:
+        if self._network_handler:
+            monitor = Gio.NetworkMonitor.get_default()
+            if monitor is not None:
+                monitor.disconnect(self._network_handler)
+            self._network_handler = 0
+
+    def _fail(self, message: str, technical: str = "", *, kind: Kind = Kind.OTHER,
+              outcome_connected: bool = False) -> None:
         if technical:
             self.connection_log.append(f"Failed: {technical}")
-        self.last_outcome = RdpOutcome(kind, technical or "failed", message, technical)
+        self.last_outcome = RdpOutcome(kind, technical or "failed", message, technical, outcome_connected)
+        if self._reconnecting and kind is Kind.NETWORK and self._schedule_reconnect(self.last_outcome):
+            return
+        self._reconnecting = False
         self._set_status(ConnectionStatus.FAILED, message, banner=True, error=True)
 
     # --------------------------------------------------------- password
@@ -625,6 +1085,7 @@ class RdpSessionTab(SessionPage):
         if self._closed:
             return
         if not password:
+            self._reconnecting = False
             self._set_status(ConnectionStatus.FAILED if retry else ConnectionStatus.UNKNOWN,
                              _("Sign-in failed") if retry else _("Connection cancelled"), banner=True, error=retry)
             return
@@ -682,6 +1143,8 @@ class RdpSessionTab(SessionPage):
     # -------------------------------------------------------- lifecycle
     def _on_destroy(self) -> None:
         self._closed = True
+        self._reconnecting = False
+        self._stop_network_wait()
         context = GLib.MainContext.default()
         for source in self._sources:
             if context.find_source_by_id(source) is not None:  # finished sources are already gone
@@ -697,6 +1160,8 @@ class RdpSessionTab(SessionPage):
         process = self.process
         if process is not None and process.running:
             process.stop(user=True)  # the whole process group; SIGKILL after the grace period
+        if isinstance(self.surface, FrdpSurface):
+            self.surface.close()
         self._runtime.limiter.release(self)
         self._typed_password = self._attempt_password = None
 

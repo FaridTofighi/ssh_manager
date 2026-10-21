@@ -174,9 +174,26 @@ def build_launch(*, hostname: str, port: int, settings: RdpSettings, identity: R
             o.notes.append(f"{client.name} cannot receive a password without showing it to other programs; "
                            "type it in the remote sign-in screen.")
         argv = [client.path] + list(o.items)
-    if any(secret and secret in arg for secret in secrets for arg in argv):  # last line of defence
+    if _leaks(argv[1:], secrets):  # last line of defence
         raise LaunchError("Refusing to start: a secret would appear on the command line.")
     return LaunchPlan(argv, payload, channel or "none", o.display(), {}, o.notes, sent, tuple(secrets))
+
+
+def _leaks(arguments: Sequence[str], secrets: Sequence[str]) -> bool:
+    """A secret in a password position of an option (``/p:``, ``/gp:``, ``,p:``, ``:p:``).
+
+    Not a plain substring test: a short password such as ``32`` or ``bin`` would "match" ``/bpp:32`` or the
+    client's path and block every connection.
+    """
+
+    for secret in secrets:
+        if not secret:
+            continue
+        for argument in arguments:
+            for marker in ("/p:", "/gp:", ",p:", ":p:", "/assistance:", "/pth:"):
+                if marker + secret in argument:
+                    return True
+    return False
 
 
 # ----------------------------------------------------------------- groups
@@ -212,6 +229,7 @@ def _display(o: _Options, s: RdpSettings, v3: bool, window_size: Optional[Tuple[
              parent_window: Optional[int]) -> None:
     if parent_window is not None:
         o.add(f"/parent-window:{int(parent_window)}")
+        o.add("-toggle-fullscreen")  # Ctrl+Alt+Enter is the tab's full screen, not FreeRDP's own window's
     if s.size_mode == "fullscreen":
         o.add("/f")
         if s.multimon:

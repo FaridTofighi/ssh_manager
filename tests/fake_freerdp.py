@@ -44,6 +44,50 @@ if record_path:
 for line in script.get("lines", []):
     print(line, flush=True)
     time.sleep(script.get("gap", 0))
+if script.get("embed"):
+    # like xfreerdp's /parent-window: create a window, XReparentWindow it, report ConfigureNotify sizes
+    import ctypes, ctypes.util
+    args = data.decode("utf-8", "replace").split("\n") + sys.argv[1:]
+    parent = next((int(a.split(":", 1)[1]) for a in args if a.startswith("/parent-window:")), 0)
+    size = next((a.split(":", 1)[1] for a in args if a.startswith("/size:")), "640x480")
+    width, height = (int(v) for v in size.split("x"))
+    x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XCreateSimpleWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+                                        ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_ulong]
+    x11.XCreateSimpleWindow.restype = ctypes.c_ulong
+    for name in ("XMapWindow", "XSelectInput", "XReparentWindow"):
+        getattr(x11, name).argtypes = [ctypes.c_void_p, ctypes.c_ulong] + ([ctypes.c_long] if name == "XSelectInput"
+                                                                            else [ctypes.c_ulong, ctypes.c_int, ctypes.c_int]
+                                                                            if name == "XReparentWindow" else [])
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XPending.argtypes = [ctypes.c_void_p]
+    x11.XNextEvent.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    display = x11.XOpenDisplay(None)
+    window = x11.XCreateSimpleWindow(display, x11.XDefaultRootWindow(display), 0, 0, width, height, 0, 0, 0x2E7D32)
+    x11.XSelectInput(display, window, 1 << 17)  # StructureNotifyMask
+    if not script.get("no_reparent"):
+        x11.XReparentWindow(display, window, parent, 0, 0)
+    x11.XMapWindow(display, window)
+    x11.XFlush(display)
+    print("embedded into %d at %dx%d" % (parent, width, height), flush=True)
+    event = (ctypes.c_long * 24)()
+    deadline = time.time() + script.get("sleep", 30)
+    last = (width, height)
+    while time.time() < deadline:
+        while x11.XPending(display):
+            x11.XNextEvent(display, event)
+            raw = ctypes.cast(event, ctypes.POINTER(ctypes.c_int))
+            if raw[0] == 22:  # ConfigureNotify: int type, ulong serial, int send_event, ptr, 2 windows, x, y, w, h
+                w, h = raw[14], raw[15]
+                if (w, h) != last:
+                    last = (w, h)
+                    print("configure %d %d" % (w, h), flush=True)
+        time.sleep(0.02)
+    sys.exit(script.get("exit", 0))
 for line in script.get("stderr", []):
     print(line, file=sys.stderr, flush=True)
 time.sleep(script.get("sleep", 0))

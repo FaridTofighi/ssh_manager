@@ -6,6 +6,35 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Remote Desktop, phase R2: the remote screen in the tab, toolbar, reconnecting
+
+Details: `docs/rdp.md` ("The remote screen in the tab").
+
+- **Embedded engines:** FreeRDP in a `Gtk.Socket` on X11, or gtk-frdp's
+  widget (members verified by introspection), shows the remote desktop
+  inside the tab.
+  - **Resizing:** the remote desktop follows the tab's size (debounced,
+    HiDPI-aware, never a transient tiny size).
+  - **Fallback:** if FreeRDP's window does not appear within 10 s, the tab
+    switches to an external window and remembers that this engine fails on
+    this session type.
+- **Toolbar** above the remote screen (auto-hide, pin, F10): Send
+  Ctrl+Alt+Del (where possible), full screen (Ctrl+Alt+Enter, focus mode),
+  scale mode, resolution, keyboard, clipboard, screenshot, open the shared
+  folder, connection info, reconnect and disconnect. Option changes apply
+  to this session only, by reconnecting; unavailable actions say why.
+- **Reconnecting:** a dropped network reconnects automatically, with
+  backoff (2–60 s, a limited number of attempts, waiting while the network
+  is down), and the card offers **Stop Reconnecting**. An idle timeout or a
+  session taken over by someone else asks first; a sign-out never
+  reconnects.
+- **Keyboard and clipboard:** the grab indicator follows the focus, and
+  the release key is shown in the tooltip. Clipboard direction, kinds and
+  size limits are enforced, and contents are never logged.
+- **Fix:** the launch check refused short passwords that happened to
+  appear in the command line (for example `32` in `/bpp:32`, or a letter of
+  the client's path); it now looks only at password positions.
+
 ## Remote Desktop, phase R1: sessions through FreeRDP (external window)
 
 Details: `docs/rdp.md` ("Sessions").
