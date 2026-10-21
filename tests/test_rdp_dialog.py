@@ -99,6 +99,9 @@ class HostDialogTests(unittest.TestCase):
             self.assertEqual(data["gateway"]["host"], "gw.acme.test")
             self.assertEqual(len(data["drives"]), 2)
             self.assertEqual(len({d["name"] for d in data["drives"]}), 2)
+            self.assertFalse(dialog.validate())  # a gateway and an SSH tunnel together are refused
+            self.assertIn("either an RD Gateway or an SSH tunnel", dialog._rdp_error.get_text())
+            pages.via_ssh.set_active_id("")
             self.assertTrue(dialog.validate())
 
     def test_validation_jumps_to_the_rdp_page_and_hides_secrets(self) -> None:
@@ -111,7 +114,7 @@ class HostDialogTests(unittest.TestCase):
         dialog.rdp_pages.size_mode.set_active_id("fixed")
         dialog.rdp_pages.width.set_value(100)  # the spin clamps to 200
         self.assertTrue(dialog.validate())
-        dialog.rdp_pages.drive_store.append(["bad name!", "relative/path", False])
+        dialog.rdp_pages.drive_store.append(["bad name!", "relative/path", False, False])
         self.assertFalse(dialog.validate())
 
     def test_presets_and_custom(self) -> None:
@@ -179,6 +182,42 @@ class HostDialogTests(unittest.TestCase):
         empty = self.dialog(HostEntry("x", {}, protocol="rdp")).rdp_pages
         empty.test_connection()
         self.assertFalse(empty.last_test[0])
+
+    def test_sensitive_folders_and_restricted_admin_ask_first(self) -> None:
+        pages = self.dialog(rdp_host()).rdp_pages
+        with tempfile.TemporaryDirectory() as home:
+            secret = Path(home) / ".ssh"
+            secret.mkdir()
+            with mock.patch.dict(os.environ, {"HOME": home}):
+                with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
+                    pages.add_drive(str(secret))
+                self.assertEqual(len(pages.drive_store), 0)
+                self.assertIn("~/.ssh", ask.call_args.args[1])
+                with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=True):
+                    pages.add_drive(str(secret))
+                folder = pages.settings().drives[0]
+                self.assertTrue(folder.allow_sensitive)
+                self.assertEqual(pages.problems(), [])
+        with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
+            pages.restricted_admin.set_active(True)
+        ask.assert_called_once()
+        self.assertFalse(pages.restricted_admin.get_active())
+
+    def test_gateway_credential_and_vm_id(self) -> None:
+        from ssh_manager.credentials import Credential
+
+        credentials = [Credential("c-gw", "Gateway", "bob")]
+        dialog = self.dialog(rdp_host(gateway={"host": "gw.acme.test", "use_same_credentials": False}),
+                             credentials=credentials)
+        pages = dialog.rdp_pages
+        self.assertTrue(pages.gw_credential.get_sensitive())
+        pages.gw_credential.set_active_id("c-gw")
+        pages.vm_id.set_text("1f3e7f8c-0d4b-4b63-9e57-2f0a5d6b8c11")
+        data = dialog.build_host("Acme", "").metadata["rdp"]
+        self.assertEqual((data["gateway"]["credential_id"], data["hyperv_vm_id"]),
+                         ("c-gw", "1f3e7f8c-0d4b-4b63-9e57-2f0a5d6b8c11"))
+        pages.gw_same.set_active(True)
+        self.assertFalse(pages.gw_credential.get_sensitive())
 
     def test_switching_away_from_rdp_warns(self) -> None:
         dialog = self.dialog(rdp_host(domain="CORP"))

@@ -320,5 +320,26 @@ def probe(host: str, port: int = 3389, *, timeout: float = DEFAULT_TIMEOUT, pinn
     return result
 
 
-__all__ = ["probe", "ProbeResult", "Negotiation", "connection_request", "parse_connection_confirm",
+def probe_tls(host: str, port: int = 443, *, timeout: float = DEFAULT_TIMEOUT, pinned: Tuple[str, ...] = (),
+              connect: Connect = _connect) -> ProbeResult:
+    """An RD Gateway (HTTPS): reachability and its certificate (TLS without verification, display only)."""
+
+    result = ProbeResult(host, port)
+    started = time.monotonic()
+    try:
+        sock = connect(host, port, timeout)
+    except (OSError, socket.timeout) as exc:
+        result.error = "timed out" if isinstance(exc, socket.timeout) else (exc.strerror or type(exc).__name__)
+        return result
+    result.reachable, result.latency_ms = True, (time.monotonic() - started) * 1000.0
+    result.security, result.security_label = "tls", "TLS (RD Gateway)"
+    cert, version, error = _read_certificate(sock, host, timeout)
+    result.certificate, result.tls_version, result.error = cert, version, error
+    if cert is not None and cert.sha256:
+        pins = {normalize_fingerprint(p) for p in pinned if normalize_fingerprint(p)}
+        result.pin_status = ("match" if cert.sha256 in pins else "mismatch") if pins else "none"
+    return result
+
+
+__all__ = ["probe", "probe_tls", "ProbeResult", "Negotiation", "connection_request", "parse_connection_confirm",
            "security_name", "PROTOCOL_RDP", "PROTOCOL_SSL", "PROTOCOL_HYBRID", "PROTOCOL_HYBRID_EX"]

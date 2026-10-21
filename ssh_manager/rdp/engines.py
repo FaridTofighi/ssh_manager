@@ -434,7 +434,11 @@ class EngineReport:
 
 def discover(*, preference: str = "auto", override: str = "", path_env: Optional[str] = None,
              run: Runner = _run, platform: Optional[Platform] = None) -> EngineReport:
-    """Find clients, inspect them, build the engines and choose one (blocking: run it off the GTK thread)."""
+    """Find clients, inspect them, build the engines and choose one (blocking: run it off the GTK thread).
+
+    :func:`detect_platform` asks GDK and GObject Introspection, which may only be used on the GTK thread:
+    callers in a worker pass ``platform`` detected beforehand (see :func:`discover_async`).
+    """
 
     platform = platform or detect_platform()
     binaries = [inspect_binary(name, path, run) for name, path in find_binaries(path_env, override)]
@@ -463,6 +467,9 @@ def store_report(report: Optional[EngineReport]) -> None:
 
 def discover_async(callback: Callable[[EngineReport], None], **kwargs) -> threading.Thread:
     """:func:`discover` in a daemon thread; the result is cached, then passed to ``callback`` (on that thread)."""
+
+    if kwargs.get("platform") is None and threading.current_thread() is threading.main_thread():
+        kwargs["platform"] = detect_platform()  # GDK / GI: here, on the GTK thread — never in the worker
 
     def work() -> None:
         try:

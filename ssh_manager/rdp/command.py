@@ -35,6 +35,19 @@ MAX_VALUE = 1024
 SECRET_MASK = "***"
 LOG_ARGS = ("/log-level:WARN", "/log-filters:com.freerdp.gdi:INFO,com.freerdp.core:INFO")
 NETWORK_PRESETS = {"auto": "auto", "lan": "lan", "broadband": "broadband-high", "wan": "wan", "modem": "modem"}
+# "Automatic" with a measured round trip (the probe's TCP connect time): the preset it maps to.
+LATENCY_PRESETS = ((5.0, "lan"), (40.0, "broadband"), (150.0, "wan"))
+
+
+def preset_for_latency(latency_ms: Optional[float]) -> str:
+    """``lan`` (< 5 ms), ``broadband`` (< 40 ms), ``wan`` (< 150 ms), else ``modem``; ``auto`` when unknown."""
+
+    if latency_ms is None or latency_ms <= 0:
+        return "auto"
+    for limit, preset in LATENCY_PRESETS:
+        if latency_ms < limit:
+            return preset
+    return "modem"
 _USB_SELECTOR = re.compile(r"^(auto|id:[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}|addr:\d{1,3}:\d{1,3})$")
 _HOST_BAD = re.compile(r"[\s\x00-\x1f\x7f\"'`\\/,;@]")
 
@@ -114,7 +127,8 @@ def build_launch(*, hostname: str, port: int, settings: RdpSettings, identity: R
                  password: Optional[str], client: ClientBinary, title: str = "",
                  accepted_fingerprints: Sequence[str] = (), ignore_certificate: bool = False,
                  parent_window: Optional[int] = None, window_size: Optional[Tuple[int, int]] = None,
-                 gateway_password: Optional[str] = None, server_name: str = "") -> LaunchPlan:
+                 gateway_password: Optional[str] = None, server_name: str = "",
+                 latency_ms: Optional[float] = None, cert_tofu: bool = False) -> LaunchPlan:
     """The launch plan for one connection attempt (raises :class:`LaunchError` for unusable values)."""
 
     if not client.usable:
@@ -134,9 +148,9 @@ def build_launch(*, hostname: str, port: int, settings: RdpSettings, identity: R
         o.add("/server-name:" + _clean(server_name, "server name", allow_comma=False, limit=253))
     o.items.extend(LOG_ARGS)
 
-    _security(o, settings, v3, accepted_fingerprints, ignore_certificate)
+    _security(o, settings, v3, accepted_fingerprints, ignore_certificate, cert_tofu)
     _display(o, settings, v3, window_size, parent_window)
-    _performance(o, settings, v3)
+    _performance(o, settings, v3, latency_ms)
     _input(o, settings, v3)
     _redirection(o, settings, v3)
     gateway_secret = _connection(o, settings, v3, gateway_password)
@@ -197,7 +211,8 @@ def _leaks(arguments: Sequence[str], secrets: Sequence[str]) -> bool:
 
 
 # ----------------------------------------------------------------- groups
-def _security(o: _Options, s: RdpSettings, v3: bool, fingerprints: Sequence[str], ignore: bool) -> None:
+def _security(o: _Options, s: RdpSettings, v3: bool, fingerprints: Sequence[str], ignore: bool,
+              tofu: bool = False) -> None:
     sec = {"nla": "nla", "nla_ext": "ext", "tls": "tls", "rdp": "rdp"}.get(s.security)
     if s.security == "auto" and not s.nla_fallback:
         sec = "nla"
@@ -213,12 +228,16 @@ def _security(o: _Options, s: RdpSettings, v3: bool, fingerprints: Sequence[str]
             hexdigits = "".join(ch for ch in fp.lower() if ch in "0123456789abcdef")
             if len(hexdigits) == 64:
                 prints.append("fingerprint:sha256:" + ":".join(hexdigits[i:i + 2] for i in range(0, 64, 2)))
-        if prints:
+        if tofu:  # behind an RD Gateway the server cannot be probed first: FreeRDP's trust on first use
+            o.add("/cert:" + ",".join(["tofu"] + prints))
+        elif prints:
             o.add("/cert:" + ",".join(["deny"] + prints))
         elif s.security != "rdp":
             o.add("/cert:deny" if o.known("cert") else "/cert-deny")  # never a hidden console prompt
     if s.admin_session:
         o.add("/admin")
+    if s.hyperv_vm_id:
+        o.add("/vmconnect:" + _clean(s.hyperv_vm_id, "Hyper-V VM id", allow_comma=False, limit=64))
     if s.restricted_admin:
         o.add("/restricted-admin")
     if s.remote_credential_guard:
@@ -253,8 +272,12 @@ def _display(o: _Options, s: RdpSettings, v3: bool, window_size: Optional[Tuple[
         o.add(f"/scale-device:{int(s.device_scale_factor)}")
 
 
-def _performance(o: _Options, s: RdpSettings, v3: bool) -> None:
-    network = NETWORK_PRESETS.get(s.preset)
+def _performance(o: _Options, s: RdpSettings, v3: bool, latency_ms: Optional[float] = None) -> None:
+    preset = s.preset
+    if preset == "auto" and latency_ms:
+        preset = preset_for_latency(latency_ms)
+        o.notes.append(f"Automatic performance: {preset} (measured {latency_ms:.0f} ms).")
+    network = NETWORK_PRESETS.get(preset)
     if network:
         o.add("/network:" + network)
     else:  # custom: the toggles themselves
@@ -307,16 +330,18 @@ def _redirection(o: _Options, s: RdpSettings, v3: bool) -> None:
         else:
             o.add("-clipboard")
             o.notes.append("FreeRDP 2 cannot limit the clipboard to one direction; the clipboard is off.")
+    from .drives import check_folder
+
     for folder in s.drives:
-        path = os.path.realpath(os.path.expanduser(folder.path))
         if folder.read_only:
             o.notes.append(f"FreeRDP cannot share '{folder.name}' read-only; it was not shared.")
             continue
-        if not os.path.isabs(path) or not os.path.isdir(path):
-            o.notes.append(f"The folder for '{folder.name}' does not exist; it was not shared.")
+        check = check_folder(folder.path, allow_sensitive=folder.allow_sensitive)
+        if not check.ok:
+            o.notes.append(f"'{folder.name}' was not shared: {check.problem}")
             continue
         name = _clean(folder.name, "share name", allow_comma=False, limit=32)
-        o.add(f"/drive:{name},{_clean(path, 'shared folder', allow_comma=False, limit=4096)}")
+        o.add(f"/drive:{name},{_clean(check.path, 'shared folder', allow_comma=False, limit=4096)}")
     if s.home_drive:
         o.add("+home-drive")
     if s.printers:

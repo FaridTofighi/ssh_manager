@@ -180,8 +180,9 @@ class ValidationTests(unittest.TestCase):
                 build(settings=RdpSettings(drives=[SharedFolder("bad,name", tmp)]))
             comma = Path(tmp) / "a,b"
             comma.mkdir()
-            with self.assertRaises(LaunchError):
-                build(settings=RdpSettings(drives=[SharedFolder("x", str(comma))]))
+            plan = build(settings=RdpSettings(drives=[SharedFolder("x", str(comma))]))  # left out, never split
+            self.assertFalse(any(a.startswith("/drive:") for a in args_of(plan)))
+            self.assertIn("comma", " ".join(plan.notes))
         forbidden = build(settings=RdpSettings(extra_args="/p:x /v:evil:1"))
         self.assertNotIn("/v:evil:1", args_of(forbidden))
         self.assertIn("extra options are not valid", " ".join(forbidden.notes))

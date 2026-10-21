@@ -13,7 +13,7 @@ Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
 | `rdp/engines.py` | Which FreeRDP clients exist, their versions and options, the engines and their capabilities |
 | `trust.py` | Trusted certificates shared with FTPS (`TrustStore`; RDP keys are scoped `rdp:`) |
 
-Status: **phase R2**. With gtk-frdp, or FreeRDP on X11, the remote desktop
+Status: **phase R3**. With gtk-frdp, or FreeRDP on X11, the remote desktop
 is shown inside the tab under a toolbar; elsewhere, or if embedding fails,
 it runs in FreeRDP's own window and the tab is a session card.
 
@@ -423,3 +423,128 @@ stays trusted for the tab's later attempts.
 - **Lower frame rate for hidden tabs:** FreeRDP has no runtime control
   for it.
 - **gtk-frdp:** not testable here without a packaged build (see above).
+
+## Devices, gateway, tunnel, presets (R3)
+
+### Shared folders
+
+`rdp/drives.py` checks every folder in the host dialog and again right before each launch:
+
+- **Resolving:** the path is resolved to its real location (`~` expanded,
+  symbolic links followed). It must be an existing folder, and its path
+  must not contain a comma (FreeRDP's separator).
+- **Sensitive places:** the file system root, `/etc`, `/root`, `/boot`,
+  `/proc`, `/sys`, `/dev`, `/var/lib`, `/usr` itself, the home folder,
+  `~/.ssh`, `~/.gnupg`, `~/.password-store`, the keyrings, `~/.aws`,
+  `~/.kube`, `~/.docker` and SSH Manager's own configuration and data
+  folders. Any folder that *is*, *is inside* or *contains* one of them
+  counts, and so does a symbolic link that leads into one. Ordinary folders
+  in the home folder and `/usr/share` are fine.
+- **Confirmation:** a sensitive folder is shared only after a red
+  confirmation for that folder (stored as `allow_sensitive`). Without it the
+  launch leaves the folder out, with a note.
+- **Read-only:** a folder marked read-only is not shared, because FreeRDP
+  cannot share read-only (see R1).
+- **Opening:** the toolbar's **Shared folders** menu opens any of them on
+  this computer.
+
+### Printers, sound, microphone, USB, smart cards
+
+These options are passed only when the client's `/help` lists them;
+otherwise the dialog disables them and says why. They are off by default.
+USB and smart-card redirection hand the device to the remote computer while
+connected (the tooltips say so).
+
+### RD Gateway
+
+- **Credentials:** "Use the same credentials as the server" sends only
+  `g:host:port`; FreeRDP 3 then sets `GatewayUseSameCredentials`. Otherwise
+  the gateway user, domain and the password of a chosen saved credential go
+  into `/gateway:…,u:…,d:…,p:…`. That password travels only through the
+  stdin pipe, like the server's.
+- **Transport:** automatic, HTTP or RPC.
+- **Certificates:** the gateway's certificate is probed (a TLS handshake
+  only) and goes through the same trust flow, with its own pins (scope
+  `rdp-gw`).
+- **The server behind the gateway:** it usually cannot be reached directly,
+  so it is not probed. With "Ask the first time", "Trust the first
+  certificate" or "Only the pinned certificate" and no pin yet, FreeRDP's
+  own trust-on-first-use is used for it (`/cert:tofu`): it refuses a
+  changed certificate later. The card says "server: trusted on first use by
+  FreeRDP". "Refuse unknown certificates" needs a pinned server
+  certificate.
+- **Test Connection:** checks the gateway (reachable, certificate).
+- **Limits:** an RD Gateway and an SSH tunnel cannot be combined.
+
+### Through an SSH host (tunnel)
+
+"Through" on the RDP Connection page names an SSH host of the inventory:
+
+1. **Login:** the app logs in to it with the SFTP code's connection steps
+   (`SftpBackend.open_transport`): the same jump host (`ProxyJump` /
+   `ProxyCommand`), known_hosts rules, and key / agent / saved-password
+   order as everywhere else. An unknown host key asks with the usual
+   dialog; a rejected login says so ("did not accept the login").
+2. **Listener:** `rdp/tunnel.py` listens on **127.0.0.1** only, on a port
+   the kernel chooses (no `SO_REUSEADDR`). It accepts only loopback clients
+   and **one connection at a time**, and forwards each over a
+   `direct-tcpip` channel to the server.
+3. **Probe:** the server is probed **through** the tunnel, and its
+   certificate is pinned for the real host name.
+4. **Launch:** FreeRDP connects to `/v:127.0.0.1:<port>` with
+   `/server-name:<real host>`, so TLS and Kerberos names are checked against
+   the real server. Verification is not weakened.
+5. **Lifetime:** the tunnel lives as long as the session. It closes with
+   the tab, on Disconnect, and before every new attempt (a reconnect opens a
+   new one). If it fails while connecting, the message says it was the
+   tunnel.
+
+The tests run it against a paramiko SSH server that forwards to a test RDP
+server.
+
+### Performance presets
+
+| Preset | `/network:` | Wallpaper | Themes | Font smoothing | Menu animations | Window drag | Composition |
+|---|---|---|---|---|---|---|---|
+| LAN | `lan` | on | on | on | on | on | on |
+| Broadband | `broadband-high` | on | on | on | off | on | off |
+| WAN | `wan` | off | on | on | off | off | off |
+| Slow link | `modem` | off | off | off | off | off | off |
+| Automatic | from the measured latency, else `auto` | | | | | | |
+| Custom | — (the toggles themselves) | | | | | | |
+
+"Automatic" uses the probe's connect time:
+
+| Measured latency | Preset |
+|---|---|
+| under 5 ms | LAN |
+| under 40 ms | Broadband |
+| under 150 ms | WAN |
+| slower | Slow link |
+| unknown (through a tunnel or a gateway) | FreeRDP's own detection (`/network:auto`) |
+
+The note in the connection log says which preset was chosen.
+
+### Programs and advanced options
+
+- **Programs:** start program and working folder (`/shell:`,
+  `/shell-dir:`), and RemoteApp (`/app:program:…,name:…,cmd:…` in 3.x;
+  `/app:` `/app-name:` `/app-cmd:` in 2.x).
+- **Sessions:** console (admin) session (`/admin`), and restricted admin
+  mode (`/restricted-admin`, asks first: the session then acts as the
+  computer, not as you, on the network).
+- **Load-balance information:** checked and limited to 256 characters.
+- **Hyper-V console:** the VM's GUID (`/vmconnect:<id>`; set the port to
+  2179).
+
+### Known limits (R3)
+
+- **SSH tunnel login:** the SSH host's password comes from its saved
+  credential; the tunnel does not open a password prompt of its own (keys
+  and the agent work as usual).
+- **Test Connection with a tunnel:** it checks the server directly; through
+  the tunnel it is checked when connecting.
+- **Behind an RD Gateway:** the server cannot be checked before FreeRDP
+  starts (see above).
+- **Audio devices:** no device picker; the engine's default device is
+  used.

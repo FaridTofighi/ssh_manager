@@ -331,7 +331,8 @@ class HostDialog(BaseDialog):
 
     def _page_rdp(self, labels: Gtk.SizeGroup) -> None:
         settings, warnings = RdpSettings.from_json(self._metadata.get("rdp"))
-        self.rdp_pages = RdpPages(self, settings, labels, ssh_hosts=self._rdp_ssh_hosts, target=self._rdp_target)
+        self.rdp_pages = RdpPages(self, settings, labels, ssh_hosts=self._rdp_ssh_hosts, target=self._rdp_target,
+                                  credentials=[(c.id, f"{c.name} ({c.username})") for c in self._credential_choices])
         self._rdp_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
         self._rdp_error.set_xalign(0.0)
         self._rdp_error.set_line_wrap(True)

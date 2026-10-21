@@ -6,6 +6,34 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Remote Desktop, phase R3: shared folders, RD Gateway, SSH tunnel, presets
+
+Details: `docs/rdp.md` ("Devices, gateway, tunnel, presets").
+
+- **Shared folders:** real paths, symbolic links followed. Sensitive places
+  (`/`, `/etc`, the home folder, `~/.ssh`, `~/.gnupg`, keyrings, the app's
+  own folders) are shared only after a red confirmation, and are checked
+  again at every launch. The toolbar's **Shared folders** menu opens them
+  on this computer.
+- **RD Gateway:** a gateway credential whose password goes only through
+  FreeRDP's stdin pipe. The gateway certificate goes through the trust flow
+  with its own pins. FreeRDP's trust on first use covers the server behind
+  the gateway, which cannot be checked first. Test Connection checks the
+  gateway.
+- **SSH tunnel:** "Through" an SSH host of the inventory.
+  - **Forwarding:** a loopback-only forward on a kernel-chosen port, one
+    client at a time.
+  - **Login:** same jump host, known_hosts and key / agent / password rules
+    as SSH.
+  - **Certificates:** the server is probed and pinned through the tunnel;
+    FreeRDP uses `/server-name:` so names are checked against the real
+    host.
+  - **Lifetime:** the tunnel is closed with the session.
+- **Presets:** "Automatic" picks LAN, Broadband, WAN or Slow link from the
+  measured latency (documented table).
+- **Advanced:** Hyper-V console (`/vmconnect`); turning on restricted admin
+  mode asks first.
+
 ## Remote Desktop, phase R2: the remote screen in the tab, toolbar, reconnecting
 
 Details: `docs/rdp.md` ("The remote screen in the tab").

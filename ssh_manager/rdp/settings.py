@@ -69,6 +69,7 @@ PRESET_TOGGLES["auto"] = dict(PRESET_TOGGLES["broadband"])
 # Folders that are never shared without a red "I understand" confirmation (R3 enforces it at launch).
 SENSITIVE_DIRS = ("/", "/etc", "~/.ssh", "~/.gnupg")
 
+_GUID = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
 _NAME_OK = re.compile(r"^[A-Za-z0-9_.\-]{1,32}$")  # a drive share name
 _DOMAIN_BAD = re.compile(r'[\x00-\x1f\x7f"/\\\[\]:;|=,+*?<>@]')
 _TEXT_MAX = 256
@@ -155,9 +156,11 @@ class SharedFolder:
     name: str
     path: str
     read_only: bool = False
+    allow_sensitive: bool = False  # the user confirmed the red warning for a private / system folder
 
     def to_json(self) -> Dict[str, Any]:
-        return {"name": self.name, "path": self.path, "read_only": self.read_only}
+        return {"name": self.name, "path": self.path, "read_only": self.read_only,
+                "allow_sensitive": self.allow_sensitive}
 
 
 @dataclass
@@ -168,6 +171,7 @@ class Gateway:
     domain: str = ""
     use_same_credentials: bool = True
     transport: str = "auto"
+    credential_id: str = ""  # a saved credential for the gateway (its password goes through the secret channel)
 
     @property
     def enabled(self) -> bool:
@@ -175,7 +179,8 @@ class Gateway:
 
     def to_json(self) -> Dict[str, Any]:
         return {"host": self.host, "port": self.port, "user": self.user, "domain": self.domain,
-                "use_same_credentials": self.use_same_credentials, "transport": self.transport}
+                "use_same_credentials": self.use_same_credentials, "transport": self.transport,
+                "credential_id": self.credential_id}
 
 
 @dataclass
@@ -254,6 +259,7 @@ class RdpSettings:
     initial_program: str = ""
     working_dir: str = ""
     remote_app: RemoteApp = field(default_factory=RemoteApp)
+    hyperv_vm_id: str = ""  # Hyper-V console (/vmconnect, port 2179): the VM's GUID
     extra_args: str = ""
     extra_args_unchecked: bool = False  # "I know what I'm doing": free-form flags (never the forbidden ones)
     engine: str = ""  # "" = the preference; or "frdp" / "xfreerdp-embed" / "external"
@@ -378,24 +384,26 @@ class RdpSettings:
             problems.append("The gateway host name is not valid.")
         if len(self.load_balance_info) > 256:
             problems.append("The load-balance information is too long (256 characters at most).")
+        if self.gateway.enabled and self.via_ssh:
+            problems.append("Use either an RD Gateway or an SSH tunnel, not both.")
+        if self.hyperv_vm_id and not _GUID.match(self.hyperv_vm_id):
+            problems.append("The Hyper-V VM id must be a GUID like 1f3e7f8c-0d4b-4b63-9e57-2f0a5d6b8c11.")
         problems += extra_args_problems(self.extra_args, self.extra_args_unchecked)
         return problems
 
 
 # ---------------------------------------------------------------- helpers
 def shared_folder_problems(folder: SharedFolder) -> List[str]:
-    """Inline checks of one shared folder (existence, absolute path, name)."""
+    """Inline checks of one shared folder: name, absolute existing folder, sensitive places (``drives``)."""
+
+    from .drives import check_folder
 
     problems: List[str] = []
     if not _NAME_OK.match(folder.name or ""):
         problems.append(f"Shared folder name '{folder.name}' must be 1–32 letters, digits, '.', '_' or '-'.")
-    path = os.path.expanduser(folder.path or "")
-    if not os.path.isabs(path):
-        problems.append(f"The folder for '{folder.name}' must be an absolute path.")
-    elif not os.path.isdir(path):
-        problems.append(f"The folder for '{folder.name}' does not exist or is not a folder.")
-    if any(ch in (folder.path or "") for ch in ",\n\r\x00"):
-        problems.append(f"The folder for '{folder.name}' contains a comma or a control character.")
+    check = check_folder(folder.path, allow_sensitive=folder.allow_sensitive)
+    if check.problem:
+        problems.append(f"'{folder.name}': {check.problem}")
     return problems
 
 
@@ -469,13 +477,14 @@ def _coerce(key: str, value: Any, default: Any) -> Any:
             if not isinstance(item, dict) or not isinstance(item.get("name"), str) or \
                     not isinstance(item.get("path"), str):
                 return None
-            folders.append(SharedFolder(item["name"][:64], item["path"][:4096], bool(item.get("read_only", False))))
+            folders.append(SharedFolder(item["name"][:64], item["path"][:4096], bool(item.get("read_only", False)),
+                                        bool(item.get("allow_sensitive", False))))
         return folders
     if key == "gateway":
         if not isinstance(value, dict):
             return None
         gateway = Gateway()
-        for name in ("host", "user", "domain", "transport"):
+        for name in ("host", "user", "domain", "transport", "credential_id"):
             if isinstance(value.get(name), str):
                 setattr(gateway, name, value[name].strip()[:_TEXT_MAX])
         if isinstance(value.get("port"), int) and not isinstance(value.get("port"), bool):

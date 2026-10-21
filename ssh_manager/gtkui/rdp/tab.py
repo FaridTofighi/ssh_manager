@@ -59,7 +59,9 @@ from ...rdp.command import LaunchError, build_launch  # noqa: E402
 from ...rdp.engines import CAPABILITY_LABELS, Engine, EngineReport, cached_report, choose_engine, install_hint  # noqa: E402
 from ...rdp.keyboard import Effect, KeyboardGrab, release_hint  # noqa: E402
 from ...rdp.outcome import Kind, RdpOutcome, classify_rdp_exit, connected_line  # noqa: E402
-from ...rdp.probe import ProbeResult, probe  # noqa: E402
+from ...rdp.probe import ProbeResult, probe, probe_tls  # noqa: E402
+from ...rdp.tunnel import open_tunnel  # noqa: E402
+from ...transfer.backend import AuthError, BackendError, UnknownHostKey  # noqa: E402
 from ...rdp.process import RdpProcess  # noqa: E402
 from ...rdp.reconnect import Plan, ReconnectScheduler, plan_for  # noqa: E402
 from ...rdp.settings import RdpSettings, resolve_identity  # noqa: E402
@@ -104,6 +106,9 @@ class RdpSessionTab(SessionPage):
                  probe_fn: Optional[Callable[..., ProbeResult]] = None,
                  process_factory: Optional[Callable[..., RdpProcess]] = None,
                  surface_factory: Optional[Callable[[Engine], Optional[Surface]]] = None,
+                 tls_probe_fn: Optional[Callable[..., ProbeResult]] = None,
+                 tunnel_factory: Optional[Callable[[str], Any]] = None,
+                 gateway_password_provider: Optional[Callable[[str], Optional[str]]] = None,
                  autostart: bool = True) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.get_style_context().add_class("rdp-session")
@@ -119,6 +124,11 @@ class RdpSessionTab(SessionPage):
         self._probe = probe_fn or (lambda *args, **kwargs: probe(*args, **kwargs))  # looked up when used
         self._process_factory = process_factory or (lambda *args, **kwargs: RdpProcess(*args, **kwargs))
         self._surface_factory = surface_factory or self._default_surface
+        self._tls_probe = tls_probe_fn or (lambda *args, **kwargs: probe_tls(*args, **kwargs))
+        self._tunnel_factory = tunnel_factory  # SSH host id -> an SftpBackend for that host (not connected)
+        self._gateway_password_provider = gateway_password_provider  # credential id -> password
+        self.tunnel: Any = None
+        self._latency: Optional[float] = None
         self.settings, warnings = RdpSettings.for_host(host)  # a copy: toolbar changes last for this session
         self.connection_log = ConnectionLog(host.alias)
         self._flow = PasswordFlow(host.alias)
@@ -285,6 +295,7 @@ class RdpSessionTab(SessionPage):
         bar.on_disconnect = self.disconnect
         bar.on_open_drives = self.open_shared_folder
         bar.info_lines = self.info_lines
+        bar.drive_names = lambda: [d.name for d in self.settings.drives]
 
     def _size_text(self) -> str:
         s = self.settings
@@ -458,7 +469,12 @@ class RdpSessionTab(SessionPage):
                                          (_("smart cards"), s.smartcard), (_("USB"), bool(s.usb)),
                                          (_("shared folders"), bool(s.drives) or s.home_drive)) if on]
         size = self._statusbar.size_label.get_text() or self._size_text()
-        return [(_("Server"), self.facts["server"].get_text()),
+        route = _("direct")
+        if self.settings.gateway.enabled:
+            route = _("through the RD Gateway {host}").format(host=self.settings.gateway.host)
+        elif self.tunnel is not None:
+            route = _("through an SSH tunnel (127.0.0.1:{port})").format(port=self.tunnel.port)
+        return [(_("Server"), self.facts["server"].get_text()), (_("Route"), route),
                 (_("Engine"), engine.label if engine else "—"),
                 (_("Security"), self.facts["security"].get_text()),
                 (_("Certificate"), self.facts["certificate"].get_text()),
@@ -544,8 +560,9 @@ class RdpSessionTab(SessionPage):
         self._log(_("Screenshot saved."), Level.SUCCESS)
         return path
 
-    def open_shared_folder(self) -> bool:
-        folder = next((d for d in self.settings.drives if os.path.isdir(os.path.expanduser(d.path))), None)
+    def open_shared_folder(self, name: Optional[str] = None) -> bool:
+        folder = next((d for d in self.settings.drives if (name is None or d.name == name)
+                       and os.path.isdir(os.path.expanduser(d.path))), None)
         if folder is None:
             return False
         uri = Gio.File.new_for_path(os.path.expanduser(folder.path)).get_uri()
@@ -627,20 +644,11 @@ class RdpSessionTab(SessionPage):
             self._fail(_("At most {n} remote desktop sessions can run at once (Preferences → Remote Desktop).")
                        .format(n=self._runtime.limiter.limit), "session limit")
             return
-        self._set_status(ConnectionStatus.CONNECTING, _("Checking the server…"))
-        hostname, port, _user = host_connection_params(self._host)
-        settings = self.settings
-        pins = tuple(self._pins())
-
-        def work() -> None:
-            try:
-                result = self._probe(hostname, port, timeout=float(settings.connect_timeout_s), pinned=pins,
-                                     configured_security=settings.security)
-            except Exception as exc:  # never let a worker die silently
-                result = ProbeResult(hostname, port, error=f"probe failed: {type(exc).__name__}")
-            GLib.idle_add(self._after_probe, result)
-
-        threading.Thread(target=work, daemon=True, name="sshm-rdp-probe").start()
+        self._close_tunnel()
+        if self.settings.via_ssh and not self.settings.gateway.enabled:
+            self._open_tunnel()
+            return
+        self._probe_now()
 
     def _pins(self) -> List[str]:
         return list(self.settings.pinned_sha256) + [p for p in (self._stored_pin(),) if p] + self._session_pins
@@ -655,18 +663,182 @@ class RdpSessionTab(SessionPage):
         except Exception:
             return ""
 
-    def _remember(self, fingerprint: str, subject: str) -> None:
+    def _remember(self, fingerprint: str, subject: str, key: Optional[str] = None) -> None:
         try:
-            self._runtime.trust.set(self._pin_key(), fingerprint, subject)
+            self._runtime.trust.set(key or self._pin_key(), fingerprint, subject)
             self.connection_log.append(f"Certificate remembered: {fingerprint}")
         except (OSError, ValueError) as exc:
             self._log(_("Could not remember the certificate: {error}").format(error=type(exc).__name__),
                       Level.WARNING)
 
-    def _after_probe(self, result: ProbeResult) -> bool:
+    # ------------------------------------------------- tunnel and probe
+    def _target(self) -> tuple:
+        """Where FreeRDP and the probe connect: the server, or the SSH tunnel's loopback port."""
+
+        if self.tunnel is not None:
+            return "127.0.0.1", self.tunnel.port
+        hostname, port, _user = host_connection_params(self._host)
+        return hostname, port
+
+    def _open_tunnel(self) -> None:
+        if self._tunnel_factory is None:
+            self._runtime.limiter.release(self)
+            self._fail(_("This window cannot open SSH tunnels."), "tunnel", kind=Kind.NETWORK)
+            return
+        hostname, port, _user = host_connection_params(self._host)
+        self._set_status(ConnectionStatus.CONNECTING, _("Opening the SSH tunnel…"))
+        factory = self._tunnel_factory
+        via = self.settings.via_ssh
+
+        def work() -> None:
+            try:
+                backend = factory(via)
+                tunnel = open_tunnel(backend, hostname, port, log=self.connection_log)
+            except UnknownHostKey as exc:
+                GLib.idle_add(self._tunnel_host_key, exc)
+                return
+            except Exception as exc:  # BackendError, LookupError …: explained, never a traceback
+                GLib.idle_add(self._tunnel_failed, exc)
+                return
+            GLib.idle_add(self._tunnel_ready, tunnel)
+
+        threading.Thread(target=work, daemon=True, name="sshm-rdp-tunnel-open").start()
+
+    def _tunnel_host_key(self, exc: Any) -> bool:
         if self._closed:
             self._runtime.limiter.release(self)
             return GLib.SOURCE_REMOVE
+        from ..dialogs.trust import trust_host_key
+
+        label = _("{host} (SSH tunnel)").format(host=exc.hostname)
+        if not trust_host_key(self._window(), label, exc.key_type, exc.fingerprint):
+            return self._cancelled(_("The SSH host's key was not accepted."))
+        try:
+            factory = self._tunnel_factory
+            assert factory is not None
+            known = getattr(factory(self.settings.via_ssh), "accept_host_key")
+            known(exc, remember=True)
+        except Exception as error:
+            self._runtime.limiter.release(self)
+            self._fail(_("Could not remember the SSH host key: {error}").format(error=type(error).__name__),
+                       "tunnel host key", kind=Kind.NETWORK)
+            return GLib.SOURCE_REMOVE
+        self._open_tunnel()
+        return GLib.SOURCE_REMOVE
+
+    def _tunnel_failed(self, exc: BaseException) -> bool:
+        self._runtime.limiter.release(self)
+        if self._closed:
+            return GLib.SOURCE_REMOVE
+        if isinstance(exc, AuthError):
+            message = _("The SSH host for the tunnel did not accept the login.")
+        elif isinstance(exc, LookupError):
+            message = _("The SSH host for the tunnel no longer exists; choose another one on the RDP Connection page.")
+        elif isinstance(exc, BackendError):
+            message = _("The SSH tunnel failed: {error}").format(error=_(exc.message))
+        else:
+            message = _("The SSH tunnel failed: {error}").format(error=type(exc).__name__)
+        self._fail(message, "tunnel: " + (getattr(exc, "technical", "") or type(exc).__name__), kind=Kind.NETWORK)
+        return GLib.SOURCE_REMOVE
+
+    def _tunnel_ready(self, tunnel: Any) -> bool:
+        if self._closed:
+            tunnel.close()
+            self._runtime.limiter.release(self)
+            return GLib.SOURCE_REMOVE
+        self.tunnel = tunnel
+        self._probe_now()
+        return GLib.SOURCE_REMOVE
+
+    def _close_tunnel(self) -> None:
+        tunnel, self.tunnel = self.tunnel, None
+        if tunnel is not None:
+            tunnel.close()
+
+    def _probe_now(self) -> None:
+        self._set_status(ConnectionStatus.CONNECTING, _("Checking the server…"))
+        settings = self.settings
+        connect_host, connect_port = self._target()
+        pins = tuple(self._pins())
+        gateway = settings.gateway
+
+        def work() -> None:
+            result: Optional[ProbeResult] = None
+            gateway_result: Optional[ProbeResult] = None
+            try:
+                if gateway.enabled:  # the server sits behind the gateway: only the gateway can be checked first
+                    gateway_result = self._tls_probe(gateway.host, gateway.port,
+                                                     timeout=float(settings.connect_timeout_s),
+                                                     pinned=tuple(self._gateway_pins()))
+                else:
+                    result = self._probe(connect_host, connect_port, timeout=float(settings.connect_timeout_s),
+                                         pinned=pins, configured_security=settings.security)
+            except Exception as exc:  # never let a worker die silently
+                result = ProbeResult(connect_host, connect_port, error=f"probe failed: {type(exc).__name__}")
+            GLib.idle_add(self._after_probe, result, gateway_result)
+
+        threading.Thread(target=work, daemon=True, name="sshm-rdp-probe").start()
+
+    def _gateway_key(self) -> str:
+        gateway = self.settings.gateway
+        return pin_key(getattr(self._host, "id", "") or self._host.alias, gateway.host, gateway.port, scope="rdp-gw")
+
+    def _gateway_pins(self) -> List[str]:
+        try:
+            stored = self._runtime.trust.get(self._gateway_key())
+        except Exception:
+            stored = ""
+        return [p for p in (stored,) if p] + self._session_pins
+
+    def _trust(self, decision: Any, cert: Any, label: str, key: str) -> Optional[str]:
+        """Show the trust dialogs a decision needs; the accepted fingerprint, or ``None`` (refused / cancelled).
+
+        ``CONFIRM_IGNORE`` returns ``"ignore"``; ``NO_TLS`` returns ``""``.
+        """
+
+        action = decision.action
+        if action is Action.CONNECT:
+            return decision.fingerprint
+        if action is Action.REMEMBER and cert is not None:
+            self._remember(decision.fingerprint, cert.subject, key)
+            return decision.fingerprint
+        if action is Action.ASK and cert is not None:
+            choice = rdp_trust_choice(self._window(), label, cert)
+            if choice == "cancel":
+                self._cancelled(_("The certificate was not trusted."))
+                return None
+            if choice == "remember":
+                self._remember(decision.fingerprint, cert.subject, key)
+            else:
+                self._session_pins.append(decision.fingerprint)
+            return decision.fingerprint
+        if action is Action.CHANGED and cert is not None:
+            if not trust_certificate(self._window(), label, cert, changed=True, expected=decision.expected):
+                self._cancelled(_("The server's certificate has changed; not connected."), error=True)
+                return None
+            self._remember(decision.fingerprint, cert.subject, key)
+            return decision.fingerprint
+        if action is Action.REFUSE:
+            self._runtime.limiter.release(self)
+            self._fail(_("The server's certificate is not a trusted one, and this host refuses unknown "
+                         "certificates."), "certificate refused", kind=Kind.CERT_REJECTED)
+            return None
+        if action is Action.CONFIRM_IGNORE:
+            if not confirm_unchecked_certificate(self._window(), label):
+                self._cancelled(_("Connection cancelled."))
+                return None
+            return "ignore"
+        if action is Action.NO_TLS:
+            return ""
+        return None  # UNREADABLE is handled by the caller
+
+    def _after_probe(self, result: Optional[ProbeResult], gateway: Optional[ProbeResult] = None) -> bool:
+        if self._closed:
+            self._runtime.limiter.release(self)
+            return GLib.SOURCE_REMOVE
+        if gateway is not None:
+            return self._after_gateway_probe(gateway)
+        assert result is not None
         for line in result.lines():
             self.connection_log.append("probe: " + line)
         if not result.reachable:
@@ -674,6 +846,7 @@ class RdpSessionTab(SessionPage):
             self._fail(_("The server could not be reached: {error}").format(error=result.error or _("no answer")),
                        "probe: unreachable", kind=Kind.NETWORK, outcome_connected=False)
             return GLib.SOURCE_REMOVE
+        self._latency = result.latency_ms if self.tunnel is None else None  # through a tunnel it means nothing
         security = "rdp" if (self.settings.security == "rdp" or result.security == "rdp") else result.security
         self.security = security
         self.facts["security"].set_text(result.security_label or _("unknown"))
@@ -683,45 +856,16 @@ class RdpSessionTab(SessionPage):
                        result.failure, kind=Kind.SECURITY_MISMATCH)
             return GLib.SOURCE_REMOVE
         decision = decide(self.settings.cert_policy, result.certificate, self._pins(), security=security)
-        cert = result.certificate
-        alias = self._host.alias
-        fingerprints: List[str] = []
-        ignore = False
-        if decision.action is Action.CONNECT:
-            fingerprints = [decision.fingerprint]
-        elif decision.action is Action.REMEMBER and cert is not None:
-            self._remember(decision.fingerprint, cert.subject)
-            fingerprints = [decision.fingerprint]
-        elif decision.action is Action.ASK and cert is not None:
-            choice = rdp_trust_choice(self._window(), alias, cert)
-            if choice == "cancel":
-                return self._cancelled(_("The certificate was not trusted."))
-            if choice == "remember":
-                self._remember(decision.fingerprint, cert.subject)
-            else:
-                self._session_pins.append(decision.fingerprint)
-            fingerprints = [decision.fingerprint]
-        elif decision.action is Action.CHANGED and cert is not None:
-            if not trust_certificate(self._window(), alias, cert, changed=True, expected=decision.expected):
-                return self._cancelled(_("The server's certificate has changed; not connected."), error=True)
-            self._remember(decision.fingerprint, cert.subject)
-            fingerprints = [decision.fingerprint]
-        elif decision.action is Action.REFUSE:
-            self._runtime.limiter.release(self)
-            self._fail(_("The server's certificate is not a trusted one, and this host refuses unknown "
-                         "certificates."), "certificate refused", kind=Kind.CERT_REJECTED)
-            return GLib.SOURCE_REMOVE
-        elif decision.action is Action.CONFIRM_IGNORE:
-            if not confirm_unchecked_certificate(self._window(), alias):
-                return self._cancelled(_("Connection cancelled."))
-            ignore = True
-            if cert is not None and cert.sha256:
-                fingerprints = [cert.sha256]  # gtk-frdp: accept the certificate the user chose not to check
-        elif decision.action is Action.UNREADABLE:
+        if decision.action is Action.UNREADABLE:
             self._runtime.limiter.release(self)
             self._fail(_("The server's certificate could not be read: {error}").format(
                 error=result.error or _("no TLS answer")), "certificate unreadable", kind=Kind.TLS)
             return GLib.SOURCE_REMOVE
+        accepted = self._trust(decision, result.certificate, self._host.alias, self._pin_key())
+        if accepted is None:
+            return GLib.SOURCE_REMOVE
+        ignore = accepted == "ignore"
+        fingerprints = [result.certificate.sha256] if ignore and result.certificate else             ([accepted] if accepted else [])
         self.certificate_checked = not ignore and security != "rdp"
         self.facts["certificate"].set_text(
             _("Not verified") if ignore else (_("Not used (standard RDP security)") if security == "rdp"
@@ -732,8 +876,48 @@ class RdpSessionTab(SessionPage):
             self._launch(fingerprints, ignore)
         return GLib.SOURCE_REMOVE
 
+    def _after_gateway_probe(self, gateway: ProbeResult) -> bool:
+        for line in gateway.lines():
+            self.connection_log.append("gateway probe: " + line)
+        if not gateway.reachable:
+            self._runtime.limiter.release(self)
+            self._fail(_("The RD Gateway could not be reached: {error}").format(error=gateway.error or _("no answer")),
+                       "gateway unreachable", kind=Kind.NETWORK)
+            return GLib.SOURCE_REMOVE
+        policy = self.settings.cert_policy
+        decision = decide(policy, gateway.certificate, self._gateway_pins())
+        if decision.action is Action.UNREADABLE:
+            self._runtime.limiter.release(self)
+            self._fail(_("The RD Gateway's certificate could not be read: {error}").format(
+                error=gateway.error or _("no TLS answer")), "gateway certificate unreadable", kind=Kind.TLS)
+            return GLib.SOURCE_REMOVE
+        label = _("{host} (RD Gateway)").format(host=self.settings.gateway.host)
+        accepted = self._trust(decision, gateway.certificate, label, self._gateway_key())
+        if accepted is None:
+            return GLib.SOURCE_REMOVE
+        self.security = ""  # the server's security is negotiated through the gateway, unseen by the app
+        self.facts["security"].set_text(_("Through the RD Gateway"))
+        if accepted == "ignore":
+            self.certificate_checked = False
+            self.facts["certificate"].set_text(_("Not verified"))
+            self._launch([], True)
+            return GLib.SOURCE_REMOVE
+        server_pins = self._pins()
+        tofu = policy in ("ask", "tofu", "pinned") and not server_pins
+        if policy == "deny" and not server_pins:
+            self._runtime.limiter.release(self)
+            self._fail(_("This host refuses unknown certificates, and the server behind the RD Gateway has no "
+                         "pinned certificate."), "no server pin", kind=Kind.CERT_REJECTED)
+            return GLib.SOURCE_REMOVE
+        self.facts["certificate"].set_text(
+            _("Gateway trusted; server: trusted on first use by FreeRDP") if tofu else
+            _("Gateway and server trusted"))
+        self._launch(server_pins + [accepted], False, tofu=tofu)
+        return GLib.SOURCE_REMOVE
+
     def _cancelled(self, message: str, *, error: bool = False) -> bool:
         self._runtime.limiter.release(self)
+        self._close_tunnel()
         self._reconnecting = False
         self._set_status(ConnectionStatus.FAILED if error else ConnectionStatus.UNKNOWN, message, banner=True,
                          error=error)
@@ -815,10 +999,19 @@ class RdpSessionTab(SessionPage):
         self._reconnect_clicked()
 
     # ---------------------------------------------------------- launch
-    def _launch(self, fingerprints: List[str], ignore: bool) -> None:
+    def _launch(self, fingerprints: List[str], ignore: bool, *, tofu: bool = False) -> None:
         engine = self.engine
         assert engine is not None and engine.binary is not None
-        hostname, port, user = host_connection_params(self._host)
+        real_host, _real_port, _user = host_connection_params(self._host)
+        hostname, port = self._target()
+        gateway = self.settings.gateway
+        gateway_password = None
+        if gateway.enabled and not gateway.use_same_credentials and gateway.credential_id:
+            try:
+                gateway_password = self._gateway_password_provider(gateway.credential_id) \
+                    if self._gateway_password_provider else None
+            except Exception as exc:  # a locked store: FreeRDP asks itself, nothing breaks
+                LOGGER.warning("gateway password unavailable: %s", type(exc).__name__)
         identity = resolve_identity(self._host.option("user") or "", self.settings)
         parent = None
         window_size = None
@@ -835,7 +1028,9 @@ class RdpSessionTab(SessionPage):
             plan = build_launch(hostname=hostname, port=port, settings=self.settings, identity=identity,
                                 password=self._attempt_password, client=engine.binary, title=self._host.alias,
                                 accepted_fingerprints=fingerprints if not ignore else [], ignore_certificate=ignore,
-                                parent_window=parent, window_size=window_size)
+                                parent_window=parent, window_size=window_size, gateway_password=gateway_password,
+                                server_name=real_host if self.tunnel is not None else "",
+                                latency_ms=self._latency, cert_tofu=tofu)
         except LaunchError as exc:
             self._runtime.limiter.release(self)
             self._fail(_("Cannot start the session: {error}").format(error=_(str(exc))), "launch")
@@ -975,6 +1170,7 @@ class RdpSessionTab(SessionPage):
         return GLib.SOURCE_REMOVE
 
     def _handle_outcome(self, outcome: RdpOutcome) -> None:
+        self._close_tunnel()  # a new attempt opens a new one
         self.last_outcome = outcome
         self.connection_log.append(f"Ended: {outcome.kind.value} ({outcome.technical})")
         was_connected = self._connected
@@ -1053,6 +1249,7 @@ class RdpSessionTab(SessionPage):
               outcome_connected: bool = False) -> None:
         if technical:
             self.connection_log.append(f"Failed: {technical}")
+        self._close_tunnel()
         self.last_outcome = RdpOutcome(kind, technical or "failed", message, technical, outcome_connected)
         if self._reconnecting and kind is Kind.NETWORK and self._schedule_reconnect(self.last_outcome):
             return
@@ -1162,6 +1359,7 @@ class RdpSessionTab(SessionPage):
             process.stop(user=True)  # the whole process group; SIGKILL after the grace period
         if isinstance(self.surface, FrdpSurface):
             self.surface.close()
+        self._close_tunnel()
         self._runtime.limiter.release(self)
         self._typed_password = self._attempt_password = None
 

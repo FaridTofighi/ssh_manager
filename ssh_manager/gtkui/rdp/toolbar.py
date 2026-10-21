@@ -47,6 +47,7 @@ class RdpToolbar(Gtk.Box):
         self.on_disconnect: Optional[Callable[..., Any]] = None
         self.on_open_drives: Optional[Callable[..., Any]] = None
         self.info_lines: Callable[[], list] = lambda: []
+        self.drive_names: Callable[[], list] = lambda: []
         self._hide_source = 0
         self._pinned = False
         self._pointer_inside = False
@@ -78,7 +79,7 @@ class RdpToolbar(Gtk.Box):
             button("clipboard", Icons.PLAIN_TEXT, _("Clipboard sharing"), lambda: self._menu("clipboard")),
             button("screenshot", "camera-photo-symbolic", _("Save a screenshot…"),
                    lambda: self._call(self.on_screenshot)),
-            button("drives", Icons.OPEN_FOLDER, _("Open the shared folder"), lambda: self._call(self.on_open_drives)),
+            button("drives", Icons.OPEN_FOLDER, _("Shared folders"), lambda: self._menu("drives")),
             button("info", Icons.INFO, _("Connection info"), self._show_info),
             button("reconnect", Icons.RECONNECT, _("Reconnect"), lambda: self._call(self.on_reconnect)),
             button("disconnect", Icons.CLOSE, _("Disconnect"), lambda: self._call(self.on_disconnect)),
@@ -219,6 +220,10 @@ class RdpToolbar(Gtk.Box):
             spec = [MenuSection("fit", [MenuItemSpec(_("Fit to the window"),
                                                      lambda: self._call(self.on_resolution, None))]),
                     MenuSection("sizes", sizes)]
+        elif which == "drives":
+            spec = [MenuSection("drives", [MenuItemSpec(_("Open “{name}”").format(name=name),
+                                                        functools.partial(self._call, self.on_open_drives, name))
+                                           for name in self.drive_names()])]
         else:
             spec = [MenuSection("clipboard", [
                 MenuItemSpec(_("Both directions"), lambda: self._call(self.on_clipboard, "both")),

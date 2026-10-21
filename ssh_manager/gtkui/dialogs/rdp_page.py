@@ -26,7 +26,8 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...rdp.engines import CAPABILITY_LABELS, ENGINE_LABELS, Engine  # noqa: E402
-from ...rdp.probe import ProbeResult, probe  # noqa: E402
+from ...rdp.drives import check_folder  # noqa: E402
+from ...rdp.probe import ProbeResult, probe, probe_tls  # noqa: E402
 from ...rdp.settings import (  # noqa: E402
     KEYBOARD_LAYOUTS, PRESET_TOGGLES, Gateway, RdpSettings, RemoteApp, SharedFolder,
 )
@@ -39,7 +40,7 @@ from .confirm import confirm  # noqa: E402
 PAGES = ("rdp", "rdp_display", "rdp_devices", "rdp_connection")
 COMMON_SIZES = ((1280, 720), (1366, 768), (1440, 900), (1600, 900), (1920, 1080), (1920, 1200), (2560, 1440),
                 (3840, 2160))
-COL_NAME, COL_PATH, COL_RO = range(3)
+COL_NAME, COL_PATH, COL_RO, COL_SENSITIVE = range(4)
 
 
 def _spin(low: int, high: int, value: int, step: int = 1) -> Gtk.SpinButton:
@@ -69,7 +70,7 @@ class RdpPages:
     """Widgets of the RDP pages; :meth:`settings` reads them back."""
 
     def __init__(self, parent: Gtk.Window, settings: RdpSettings, labels: Gtk.SizeGroup, *,
-                 ssh_hosts: Sequence[Tuple[str, str]] = (),
+                 ssh_hosts: Sequence[Tuple[str, str]] = (), credentials: Sequence[Tuple[str, str]] = (),
                  target: Callable[[], Tuple[str, int]] = lambda: ("", 3389)) -> None:
         self._parent = parent
         self._base = settings
@@ -87,6 +88,7 @@ class RdpPages:
         self._build_performance(settings)
         self._build_input(settings)
         self._build_devices(settings)
+        self._credentials = list(credentials)  # (id, label) for the gateway's own credential
         self._build_connection(settings, ssh_hosts)
         self._build_programs(settings)
         self._build_advanced(settings)
@@ -153,6 +155,8 @@ class RdpPages:
         self.admin_session = _check(_("Connect to the _console (admin) session"), s.admin_session)
         self.restricted_admin = _check(_("_Restricted admin mode (no credentials sent to the server)"),
                                        s.restricted_admin)
+        self._last_restricted = s.restricted_admin
+        self.restricted_admin.connect("toggled", self._on_restricted_toggled)
         self.restricted_admin.set_tooltip_text(_("Your password is not delegated to the server; network resources "
                                                  "then use the computer's identity. Requires an administrator "
                                                  "account and server support."))
@@ -255,9 +259,9 @@ class RdpPages:
         folders = self._section("rdp_devices", _("Shared folders"),
                                 _("Folders of this computer the remote session can open. Off by default: the remote "
                                   "computer can read (and unless read-only, change) everything in them."))
-        self.drive_store = Gtk.ListStore(str, str, bool)
+        self.drive_store = Gtk.ListStore(str, str, bool, bool)
         for folder in s.drives:
-            self.drive_store.append([folder.name, folder.path, folder.read_only])
+            self.drive_store.append([folder.name, folder.path, folder.read_only, folder.allow_sensitive])
         self.drive_view = Gtk.TreeView(model=self.drive_store)
         set_accessible_name(self.drive_view, _("Shared folders"))
         name_cell = Gtk.CellRendererText()
@@ -328,6 +332,15 @@ class RdpPages:
         self._row(gateway, _("Gateway _user"), self.gw_user, capability="gateway")
         self.gw_domain = entry(s.gateway.domain)
         self._row(gateway, _("Gateway do_main"), self.gw_domain, capability="gateway")
+        self.gw_credential = Gtk.ComboBoxText()
+        self.gw_credential.append("", _("Ask when connecting"))
+        for cred_id, label in self._credentials:
+            self.gw_credential.append(cred_id, label)
+        if not self.gw_credential.set_active_id(s.gateway.credential_id or ""):
+            self.gw_credential.set_active_id("")
+        self._row(gateway, _("Gateway _password"), self.gw_credential,
+                  _("A saved credential's password; it reaches FreeRDP only through its stdin pipe."),
+                  capability="gateway")
         self.gw_transport = _combo([("auto", _("Automatic")), ("http", "HTTP"), ("rpc", "RPC")], s.gateway.transport)
         self._row(gateway, _("_Transport"), self.gw_transport, capability="gateway")
         self._sync_gateway()
@@ -367,6 +380,9 @@ class RdpPages:
         self.engine = _combo([("", _("As in Preferences"))] + [(eid, _(label)) for eid, label in ENGINE_LABELS.items()],
                              s.engine)
         self._row(section, _("_Engine"), self.engine, _("Which FreeRDP integration this host uses."))
+        self.vm_id = entry(s.hyperv_vm_id, "1f3e7f8c-0d4b-4b63-9e57-2f0a5d6b8c11")
+        self._row(section, _("Hyper-V _VM id"), self.vm_id,
+                  _("Connects to a virtual machine's console through Hyper-V (set the port to 2179)."))
         self.extra_args = entry(s.extra_args, "+async-update /gdi:hw")
         self._row(section, _("E_xtra options"), self.extra_args,
                   _("FreeRDP options from a safe list. Credentials, the server and certificate options can never be "
@@ -491,6 +507,23 @@ class RdpPages:
             return
         self._last_home = check.get_active()
 
+    def _on_restricted_toggled(self, check: Gtk.CheckButton) -> None:
+        if self._suppress:
+            return
+        if check.get_active() and not self._last_restricted and not confirm(
+            self._parent,
+            _("Use restricted admin mode?"),
+            _("Your password is not sent to the server, but the session then acts as the computer, not as you, "
+              "on the network (no access to your shares), and only administrators can connect. Someone who "
+              "controls the server can still use the session's rights while you are connected."),
+            confirm_label=_("_Use Restricted Admin Mode"),
+        ):
+            self._suppress = True
+            check.set_active(False)
+            self._suppress = False
+            return
+        self._last_restricted = check.get_active()
+
     def _on_unchecked_toggled(self, check: Gtk.CheckButton) -> None:
         if self._suppress:
             return
@@ -515,7 +548,7 @@ class RdpPages:
 
     def _sync_gateway(self) -> None:
         own = not self.gw_same.get_active()
-        for widget in (self.gw_user, self.gw_domain):
+        for widget in (self.gw_user, self.gw_domain, self.gw_credential):
             widget.set_sensitive(own and widget not in self._disabled)
 
     # ------------------------------------------------------------ drives
@@ -531,12 +564,26 @@ class RdpPages:
                 chooser.destroy()
         if not path:
             return
+        sensitive = False
+        check = check_folder(path)
+        if check.sensitive:
+            if not confirm(
+                self._parent,
+                _("Share {place}?").format(place=check.sensitive),
+                _("This folder holds private or system files ({place}): keys, passwords, configuration. The "
+                  "remote computer — and anyone controlling it — can read them and, unless read-only, change "
+                  "them.").format(place=check.sensitive),
+                confirm_label=_("_Share It Anyway"),
+                destructive=True,
+            ):
+                return
+            sensitive = True
         taken = {row[COL_NAME].casefold() for row in self.drive_store}
         base = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in os.path.basename(path.rstrip("/")))[:24]
         name, counter = base or "share", 2
         while name.casefold() in taken:
             name, counter = f"{base or 'share'}{counter}", counter + 1
-        self.drive_store.append([name, path, False])
+        self.drive_store.append([name, path, False, sensitive])
 
     def remove_drive(self) -> None:
         model, it = self.drive_view.get_selection().get_selected()
@@ -577,7 +624,8 @@ class RdpPages:
         base = self._base
         toggles = {name: check.get_active() for name, check in self.toggles.items()}
         monitors = [int(part) for part in self.monitors.get_text().replace(" ", "").split(",") if part.isdigit()]
-        drives = [SharedFolder(row[COL_NAME], row[COL_PATH], bool(row[COL_RO])) for row in self.drive_store]
+        drives = [SharedFolder(row[COL_NAME], row[COL_PATH], bool(row[COL_RO]), bool(row[COL_SENSITIVE]))
+                  for row in self.drive_store]
         return RdpSettings(
             domain=self.domain.get_text().strip(),
             use_credential_domain=self.use_credential_domain.get_active(),
@@ -624,13 +672,15 @@ class RdpPages:
             network_autodetect=self.network_autodetect.get_active(),
             gateway=Gateway(self.gw_host.get_text().strip(), int(self.gw_port.get_value()),
                             self.gw_user.get_text().strip(), self.gw_domain.get_text().strip(),
-                            self.gw_same.get_active(), self.gw_transport.get_active_id() or "auto"),
+                            self.gw_same.get_active(), self.gw_transport.get_active_id() or "auto",
+                            self.gw_credential.get_active_id() or ""),
             load_balance_info=self.load_balance.get_text().strip(),
             via_ssh=self.via_ssh.get_active_id() or "",
             initial_program=self.initial_program.get_text().strip(),
             working_dir=self.working_dir.get_text().strip(),
             remote_app=RemoteApp(self.app_program.get_text().strip(), self.app_name.get_text().strip(),
                                  self.app_args.get_text().strip()),
+            hyperv_vm_id=self.vm_id.get_text().strip(),
             extra_args=self.extra_args.get_text().strip(),
             extra_args_unchecked=self.extra_unchecked.get_active(),
             engine=self.engine.get_active_id() or "",
@@ -658,8 +708,15 @@ class RdpPages:
 
         def work() -> None:
             try:
-                result = probe(host, port, timeout=float(settings.connect_timeout_s),
-                               pinned=tuple(settings.pinned_sha256), configured_security=settings.security)
+                if settings.gateway.enabled:  # the server is usually only reachable through the gateway
+                    result = probe_tls(settings.gateway.host, settings.gateway.port,
+                                       timeout=float(settings.connect_timeout_s))
+                    result.notes.append("The server behind the RD Gateway is checked when connecting.")
+                else:
+                    result = probe(host, port, timeout=float(settings.connect_timeout_s),
+                                   pinned=tuple(settings.pinned_sha256), configured_security=settings.security)
+                if settings.via_ssh and not settings.gateway.enabled:
+                    result.notes.append("Tested directly; through the SSH tunnel it is tested when connecting.")
                 text, ok = self._describe(result), result.reachable and not result.error and not result.failure
             except Exception as exc:  # never let a worker die silently
                 text, ok = _("The test failed: {error}").format(error=type(exc).__name__), False

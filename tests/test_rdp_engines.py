@@ -199,6 +199,20 @@ class PlatformAndReportTests(unittest.TestCase):
         self.assertIn("dnf install freerdp", empty)
         self.assertIn("Flatpak", empty)
 
+    def test_platform_is_detected_on_the_calling_thread(self) -> None:
+        """Regression: GDK / GI in the discovery worker crashed the GTK main loop now and then."""
+
+        import threading
+
+        threads = []
+        done = threading.Event()
+        with mock.patch.object(engines, "detect_platform",
+                               side_effect=lambda: (threads.append(threading.current_thread()), X11)[1]):
+            engines.discover_async(lambda _r: done.set(), path_env="")
+            self.assertTrue(done.wait(5))
+        self.assertEqual(threads, [threading.main_thread()])
+        engines.store_report(None)
+
     def test_cache_and_async(self) -> None:
         import threading
 

@@ -234,10 +234,37 @@ class SessionController:
         resolved = creds.host_with_resolved_identity(host_obj)
         self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
         tab = RdpSessionTab(resolved, self.win._log_event, runtime=self.rdp_runtime, app_settings=self.win._settings,
-                            password_provider=partial(creds.resolve_password, host_obj), password_service=creds)
+                            password_provider=partial(creds.resolve_password, host_obj), password_service=creds,
+                            tunnel_factory=self.rdp_tunnel_backend, gateway_password_provider=self.credential_password)
+        tab.on_fullscreen = self.win.layout.set_maximized
         self.win.terminal_tabs.add_page(tab)
         self.bind_tab_status(tab, resolved)
         return resolved.alias
+
+    def inventory_host(self, host_id: str) -> Optional[HostEntry]:
+        for children in self.win.manager.tree.values():
+            for group in children.values():
+                for host in group.hosts:
+                    if getattr(host, "id", "") == host_id:
+                        return host
+        return None
+
+    def rdp_tunnel_backend(self, host_id: str):
+        """An SSH connection (not connected yet) to the inventory host an RDP host tunnels through."""
+
+        from ...transfer.sftp import backend_for
+
+        host = self.inventory_host(host_id)
+        if host is None or not protocols.is_ssh(host):
+            raise LookupError("the SSH host of the tunnel no longer exists")
+        creds = self.win.creds
+        resolved = creds.host_with_resolved_identity(host)
+        resolution = creds.resolve_password(host)
+        return backend_for(resolved, resolved.option("user") or "", resolution.password or "",
+                           host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
+
+    def credential_password(self, credential_id: str) -> Optional[str]:
+        return self.win._credential_store.get_password(credential_id) or None
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:
