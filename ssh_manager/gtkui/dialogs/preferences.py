@@ -18,7 +18,7 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
-from ...settings import AppSettings, TerminalAppearanceSettings  # noqa: E402
+from ...settings import AppSettings, FileTransferPreferences, TerminalAppearanceSettings  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..tab_labels import TabLabelMode  # noqa: E402
 from ..theme.density import DEFAULT_DENSITY, Density  # noqa: E402
@@ -26,6 +26,7 @@ from ..theme.loader import ThemeMode  # noqa: E402
 from ..theme.terminal_schemes import SCHEMES, resolve_terminal_colors  # noqa: E402
 from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.forms import FormSection, entry  # noqa: E402
+from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
 from .files import choose_folder, choose_save_file  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
@@ -45,6 +46,14 @@ THEME_CHOICES = [
     (ThemeMode.DARK.value, _("Dark")),
 ]
 CURSOR_SHAPES = [("block", _("Block")), ("ibeam", _("I-beam")), ("underline", _("Underline"))]
+CONFLICT_CHOICES = [
+    ("ask", _("Ask every time")),
+    ("overwrite", _("Overwrite")),
+    ("overwrite_newer", _("Overwrite if the source is newer")),
+    ("skip", _("Skip")),
+    ("rename", _("Keep both (rename)")),
+    ("resume", _("Resume when possible")),
+]
 
 
 @dataclass
@@ -72,6 +81,7 @@ class PreferencesValues:
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
     density: Density = DEFAULT_DENSITY
     tab_label_mode: TabLabelMode = TabLabelMode.NAME
+    file_transfer: Optional[FileTransferPreferences] = None
 
     @property
     def prefer_dark(self) -> bool:
@@ -157,6 +167,7 @@ class PreferencesDialog(BaseDialog):
         self._build_security()
         self._build_secrets()
         self._build_master_password()
+        self._build_file_transfer()
         self._build_git()
         self._build_audit()
         if inventory:
@@ -327,6 +338,67 @@ class PreferencesDialog(BaseDialog):
         buttons.pack_start(export, False, False, 0)
         page.append(buttons)
 
+    def _build_file_transfer(self) -> None:
+        prefs = self._settings.file_transfer
+        page = self.layout.new_page("file_transfer", _("File Transfer"),
+                                    _("FTP, FTPS and SFTP file browsers and the transfer queue."))
+        files = self._section(page, _("Files"))
+        row, self._download_dir_entry = _path_row(prefs.download_dir, self._choose_download_dir)
+        self._download_dir_entry.set_placeholder_text(_("Home folder"))
+        set_accessible_name(self._download_dir_entry, _("Download folder"))
+        files.add(_("_Download folder"), row, label_group=self._labels,
+                  help_text=_("The local side of a new file browser starts here (unless the host sets a folder)."))
+        self._conflict_combo = _combo(CONFLICT_CHOICES, prefs.conflict_policy)
+        files.add(_("When a file _exists"), self._conflict_combo, label_group=self._labels)
+        self._show_hidden_check = Gtk.CheckButton.new_with_mnemonic(_("Show _hidden files"))
+        self._show_hidden_check.set_active(prefs.show_hidden)
+        self._remember_dirs_check = Gtk.CheckButton.new_with_mnemonic(_("_Remember the last folders of each host"))
+        self._remember_dirs_check.set_active(prefs.remember_last_dirs)
+        self._open_default_check = Gtk.CheckButton.new_with_mnemonic(
+            _("_Open remote files with the default application"))
+        self._open_default_check.set_active(prefs.open_with_default_app)
+        self._clean_temp_check = Gtk.CheckButton.new_with_mnemonic(_("_Delete temporary copies when closing"))
+        self._clean_temp_check.set_active(prefs.clean_temp_on_exit)
+        for check in (self._show_hidden_check, self._remember_dirs_check, self._open_default_check,
+                      self._clean_temp_check):
+            files.add_widget(check)
+
+        queue = self._section(page, _("Transfers"))
+        self._concurrency_spin = _spin(1, 16, 1, float(prefs.concurrency))
+        queue.add(_("_Parallel transfers"), self._concurrency_spin, label_group=self._labels,
+                  help_text=_("At most this many files at once; each host also has its own connection limit."))
+        self._bandwidth_spin = _spin(0, 10_000_000, 64, float(prefs.bandwidth_limit_kbps))
+        queue.add(_("_Bandwidth limit (KiB/s)"), self._bandwidth_spin, label_group=self._labels,
+                  help_text=_("0 means unlimited."))
+
+        safety = self._section(page, _("Security and diagnostics"))
+        self._warn_ftp_check = Gtk.CheckButton.new_with_mnemonic(_("_Warn before connecting with unencrypted FTP"))
+        self._warn_ftp_check.set_active(prefs.warn_plain_ftp)
+        safety.add_widget(self._warn_ftp_check)
+        self._protocol_log_check = Gtk.CheckButton.new_with_mnemonic(_("Keep a _protocol log file"))
+        self._protocol_log_check.set_active(prefs.protocol_log)
+        safety.add_widget(self._protocol_log_check)
+        note = Gtk.Label(label=_("The log records server commands and replies for troubleshooting. Passwords are "
+                                 "always masked; the file is rotated and readable only by you."))
+        note.set_xalign(0.0)
+        note.set_line_wrap(True)
+        note.get_style_context().add_class("form-help")
+        safety.add_widget(note)
+
+    def file_transfer_values(self) -> FileTransferPreferences:
+        return FileTransferPreferences.from_dict({
+            "download_dir": self._download_dir_entry.get_text().strip(),
+            "conflict_policy": self._conflict_combo.get_active_id() or "ask",
+            "concurrency": int(self._concurrency_spin.get_value()),
+            "warn_plain_ftp": self._warn_ftp_check.get_active(),
+            "open_with_default_app": self._open_default_check.get_active(),
+            "clean_temp_on_exit": self._clean_temp_check.get_active(),
+            "bandwidth_limit_kbps": int(self._bandwidth_spin.get_value()),
+            "show_hidden": self._show_hidden_check.get_active(),
+            "remember_last_dirs": self._remember_dirs_check.get_active(),
+            "protocol_log": self._protocol_log_check.get_active(),
+        })
+
     def _build_git(self) -> None:
         settings = self._settings
         page = self.layout.new_page("git", _("Git Sync"), _("Watch a Git checkout of your SSH configs and get notified about new commits."))
@@ -413,6 +485,7 @@ class PreferencesDialog(BaseDialog):
             terminal_appearance=self._appearance_from_controls(),
             density=Density.coerce(self._density_combo.get_active_id()),
             tab_label_mode=TabLabelMode.coerce(self._tab_label_combo.get_active_id()),
+            file_transfer=self.file_transfer_values(),
         )
 
     def _appearance_from_controls(self) -> TerminalAppearanceSettings:
@@ -487,6 +560,12 @@ class PreferencesDialog(BaseDialog):
         filename = choose_save_file(self, _("Audit Log File"), current_file=current, current_name="audit.log")
         if filename:
             path_entry.set_text(filename)
+
+    def _choose_download_dir(self, path_entry: Gtk.Entry) -> None:
+        current = path_entry.get_text() or os.path.expanduser("~")
+        folder = choose_folder(self, _("Download Folder"), current_folder=current)
+        if folder:
+            path_entry.set_text(folder)
 
     def _choose_git_path(self, path_entry: Gtk.Entry) -> None:
         current = path_entry.get_text() or os.path.expanduser("~")

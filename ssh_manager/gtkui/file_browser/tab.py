@@ -55,6 +55,7 @@ from ...transfer.engine import (  # noqa: E402
 )
 from ...transfer.local import LocalBackend  # noqa: E402
 from ...transfer.names import UnsafePath, contained_path  # noqa: E402
+from ...transfer.protolog import ConnectionLog, RotatingLogFile, default_log_path  # noqa: E402
 from ...transfer.settings import TransferSettings, default_port_for  # noqa: E402
 from ...transfer.state import BrowserState, host_state_key  # noqa: E402
 from ..constants import Icons  # noqa: E402
@@ -124,6 +125,10 @@ class FileBrowserTab(SessionPage):
         self._connected_password = ""
         self._finished: set = set()
         self._conflict_lock = threading.Lock()
+        log_file = RotatingLogFile(default_log_path()) if bool(getattr(self.prefs, "protocol_log", False)) else None
+        self.connection_log = ConnectionLog(host.alias, file=log_file)
+        self._log_flush_pending = False
+        self.connection_log.listeners.append(self._on_log_line)
         concurrency = int(getattr(self.prefs, "concurrency", 3) or 3)
         self.queue = TransferQueue(concurrency=concurrency, limit_kbps=int(getattr(self.prefs, "bandwidth_limit_kbps",
                                                                                    0) or 0),
@@ -168,6 +173,8 @@ class FileBrowserTab(SessionPage):
         self.transfers_toggle = IconToggleButton(Icons.SAVE, _("Transfers"),
                                                  lambda active: self.panel.set_reveal_child(active))
         header.pack_end(self.transfers_toggle, False, False, 0)
+        self.log_toggle = IconToggleButton(Icons.ACTIVITY, _("Connection log"), self._set_log_visible)
+        header.pack_end(self.log_toggle, False, False, 0)
         header.pack_end(self.bookmarks_button, False, False, 0)
         self.pack_start(header, False, False, 0)
         self._update_security_badge()
@@ -205,6 +212,7 @@ class FileBrowserTab(SessionPage):
         self.panel.on_clear = self.queue.clear_finished
         self.panel.on_limit = self.queue.set_limit
         self.pack_start(self.panel, False, False, 0)
+        self.pack_start(self._build_log_pane(), False, False, 0)
         # desktop files dropped in: a stand-in source pane for "this computer"
         self._desktop_pane = FilePane("local", self.local_worker, lambda: self.local_backend)
         self._desktop_pane.owner = self
@@ -213,6 +221,100 @@ class FileBrowserTab(SessionPage):
         self._statusbar.size_label.set_tooltip_text("")
         self.pack_start(self._statusbar, False, False, 0)
         self._set_status(ConnectionStatus.CONNECTING, _("Connecting…"))
+
+    def _build_log_pane(self) -> Gtk.Widget:
+        """The connection log: server commands and replies (passwords masked), Copy Log, Copy Diagnostics."""
+
+        self.log_revealer = Gtk.Revealer()
+        self.log_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        box.get_style_context().add_class("file-browser-log")
+        for setter in (box.set_margin_start, box.set_margin_end, box.set_margin_bottom):
+            setter(Space.S)
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        title = Gtk.Label(label=_("Connection log"))
+        title.set_xalign(0.0)
+        title.get_style_context().add_class("section-title")
+        bar.pack_start(title, True, True, 0)
+        copy_diag = Gtk.Button.new_with_mnemonic(_("Copy _Diagnostics"))
+        copy_diag.set_tooltip_text(_("Server banner, features and TLS details (no passwords)"))
+        copy_diag.connect("clicked", lambda *_a: self.copy_diagnostics())
+        copy_log = Gtk.Button.new_with_mnemonic(_("Copy _Log"))
+        copy_log.connect("clicked", lambda *_a: self.copy_log())
+        bar.pack_end(copy_log, False, False, 0)
+        bar.pack_end(copy_diag, False, False, 0)
+        box.pack_start(bar, False, False, 0)
+        self.log_view = Gtk.TextView()
+        self.log_view.set_editable(False)
+        self.log_view.set_cursor_visible(False)
+        self.log_view.set_monospace(True)
+        self.log_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        set_accessible_name(self.log_view, _("Connection log"))
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_min_content_height(6 * Size.TREE_ROW)  # about six lines
+        scroller.set_shadow_type(Gtk.ShadowType.IN)
+        scroller.add(self.log_view)
+        box.pack_start(scroller, True, True, 0)
+        self.log_revealer.add(box)
+        self.log_revealer.set_reveal_child(False)
+        return self.log_revealer
+
+    def _set_log_visible(self, active: bool) -> None:
+        self.log_revealer.set_reveal_child(active)
+        if active:
+            self._flush_log()
+
+    def _on_log_line(self, _line: str) -> None:
+        """Called on any thread: one coalesced refresh on the GTK thread."""
+
+        if not self._log_flush_pending:
+            self._log_flush_pending = True
+            GLib.idle_add(self._flush_log)
+
+    def _flush_log(self) -> bool:
+        self._log_flush_pending = False
+        if self._closed or not self.log_revealer.get_reveal_child():
+            return GLib.SOURCE_REMOVE
+        buffer = self.log_view.get_buffer()
+        buffer.set_text(self.connection_log.text())
+        buffer.place_cursor(buffer.get_end_iter())
+        self.log_view.scroll_mark_onscreen(buffer.get_insert())
+        return GLib.SOURCE_REMOVE
+
+    def diagnostics_text(self) -> str:
+        """What "Copy Diagnostics" copies: connection facts and the server's own details (never a password)."""
+
+        hostname, port, user = host_connection_params(self._host)
+        kind = protocols.kind_for(self._host)
+        settings = self.settings
+        lines = ["SSH Manager — file transfer diagnostics",
+                 f"Protocol: {kind.badge if kind else self.protocol}",
+                 f"Server: {hostname}:{port or default_port_for(self.protocol, settings)}",
+                 f"User: {'(anonymous)' if settings.anonymous else (user or '(none)')}",
+                 f"Status: {self._status.value}"]
+        if self.protocol in ("ftp", "ftps"):
+            lines.append(f"Mode: {'passive' if settings.passive else 'active'}, list {settings.list_command}, "
+                         f"encoding {settings.encoding}")
+        if self.protocol == "ftps":
+            lines.append(f"TLS: {settings.tls_mode}, verify {settings.tls_verify}")
+        if self.server is not None:
+            lines += ["", "Server details"] + [f"  {line}" for line in self.server.lines()]
+        return "\n".join(lines) + "\n"
+
+    def copy_log(self) -> str:
+        from gi.repository import Gdk
+
+        text = self.connection_log.text()
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+        return text
+
+    def copy_diagnostics(self) -> str:
+        from gi.repository import Gdk
+
+        text = self.diagnostics_text()
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+        return text
 
     def _window(self) -> Optional[Gtk.Window]:
         toplevel = self.get_toplevel()
@@ -294,6 +396,7 @@ class FileBrowserTab(SessionPage):
         else:
             password, source = typed, origin
         self._flow.attempt(source, password if source in ("prompt", "retry") else None)
+        self.connection_log.set_secret("password", password)
         if not self._plain_ftp_ok(password):
             self._set_status(ConnectionStatus.FAILED, _("Connection cancelled: plain FTP was not confirmed."))
             return
@@ -319,7 +422,8 @@ class FileBrowserTab(SessionPage):
         from ...transfer.factory import make_backend
 
         policy = getattr(self._app_settings, "host_key_policy", "reject")
-        return make_backend(self._host, self._user(), password, host_key_policy=policy, settings=self.settings)
+        return make_backend(self._host, self._user(), password, host_key_policy=policy, settings=self.settings,
+                            log=self.connection_log)
 
     def _plain_ftp_ok(self, password: str) -> bool:
         """Plain FTP with a password: ask once per host (Preferences can turn the question off)."""
@@ -350,6 +454,7 @@ class FileBrowserTab(SessionPage):
         if old is not None and old is not backend:
             self.worker.submit(old.close)
         self.server = info
+        self.connection_log.append(f"Connected in {info.seconds:.2f} s" if info.seconds else "Connected")
         self._connected_password = password  # extra transfer connections log in the same way
         if self._endpoint is not None:
             self.worker.submit(self._endpoint.close)
@@ -369,6 +474,9 @@ class FileBrowserTab(SessionPage):
             return
         self.worker.submit(backend.close)
         alias = self._host.alias
+        technical = getattr(exc, "technical", "") or ""
+        self.connection_log.append(f"Connection failed: {getattr(exc, 'message', '') or type(exc).__name__}"
+                                   + (f" ({technical})" if technical else ""))
         if isinstance(exc, AuthError):
             self._typed_password = None
             action = self._flow.on_failure(AuthOutcome.AUTH_FAILED)
@@ -517,7 +625,8 @@ class FileBrowserTab(SessionPage):
         if self._closed:
             return GLib.SOURCE_REMOVE
         remembered = self._state.get(self._state_key).get("local") if self._remember_dirs() else None
-        start = self.settings.initial_local_dir or remembered or self.local_backend.home()
+        download_dir = os.path.expanduser(str(getattr(self.prefs, "download_dir", "") or ""))
+        start = self.settings.initial_local_dir or remembered or download_dir or self.local_backend.home()
         if not os.path.isdir(start):
             start = self.local_backend.home()
         self.local_pane.load(start)

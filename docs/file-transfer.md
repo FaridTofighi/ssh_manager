@@ -12,6 +12,7 @@ Hosts can use the protocols `ftp`, `ftps` and `sftp` (see
 | `settings.py` | `TransferSettings`, stored in `host.metadata["transfer"]` |
 | `pins.py` | Trusted certificate fingerprints |
 | `factory.py` | The right backend for a host |
+| `protolog.py` | The per-tab connection log and the optional rotating protocol log file |
 
 No new runtime dependency: `ftplib`, `ssl` and the existing `paramiko`.
 
@@ -289,6 +290,43 @@ panel (`transfer/engine.py`, `gtkui/file_browser/transfers.py`).
 - **Keyboard alternative:** **Ctrl+C** in one pane and **Ctrl+V** in the
   other, or the context menu's **Upload** / **Download**.
 
+## Preferences (Settings → File Transfer)
+
+Stored as `file_transfer` in the settings file.
+
+| Setting | Default | Effect |
+|---|---|---|
+| Download folder | `~` | Where the local side of a new browser starts (a host's own local folder or a remembered one wins) |
+| When a file exists | Ask | The default conflict policy of new transfers |
+| Show hidden files | off | Both panes (a host can also turn it on) |
+| Remember the last folders | on | Per host, in `file-browser.json` |
+| Open remote files with the default application | on | Off: "Open" downloads only |
+| Delete temporary copies when closing | on | Removes the tab's temporary folder |
+| Parallel transfers | 3 | Global cap (1–16); each host also has `max_connections` |
+| Bandwidth limit | 0 (unlimited) | KiB/s for all transfers of a tab |
+| Warn before unencrypted FTP | on | The "Send the password unencrypted?" question |
+| Keep a protocol log file | **off** | See below |
+
+## Diagnostics
+
+- **Connection log:** the activity button in a file-browser tab's header
+  shows the tab's log: FTP commands and replies (`>` / `<`), SFTP steps
+  (server version, host key, the authentication methods tried, the home
+  folder) and connection failures with their technical detail. It keeps the
+  last 2000 lines in memory. **Copy Log** copies it.
+- **Copy Diagnostics** copies the protocol, server address, user, status,
+  FTP mode / listing command / encoding, FTPS mode and verification, and the
+  server's banner, system type, features, TLS version and cipher,
+  certificate fingerprint or host key.
+- **Masking:** `PASS …` is masked by the FTP backend, and the log masks the
+  password of the current attempt again in every line. Control and bidi
+  characters from the server are shown as `?`. Nothing in the log, the
+  clipboard copies or the file contains a password.
+- **Protocol log file** (off by default): the same lines, with the date and
+  the host alias, appended to `$XDG_STATE_HOME/ssh-manager/protocol.log`
+  (`~/.local/state/…`), mode 0600, rotated at 1 MiB with three old copies.
+  It applies to tabs opened after it is turned on.
+
 ## Known limits
 
 - **Remote to desktop:** dragging from the remote pane to another
@@ -298,7 +336,11 @@ panel (`transfer/engine.py`, `gtkui/file_browser/transfers.py`).
 - **Columns:** widths and visibility are not remembered per host yet.
 - **Recursive delete:** runs in the background without a progress dialog.
 - **Skipped (optional in the brief):** "Open in terminal" for hosts that also
-  have an SSH entry.
+  have an SSH entry. The other direction exists: **Browse Files (SFTP)** on
+  an SSH host.
+- **Files view status:** the SFTP view of an SSH host does not change the
+  host's status dot in the tree (that belongs to its terminal sessions).
+- **Protocol log file:** turning it on or off affects new tabs only.
 - **SFTP checksums:** after a transfer, sizes are checked; there are no
   checksums.
 - **Integration test servers:** small fakes in `tests/`. `pyftpdlib` is not

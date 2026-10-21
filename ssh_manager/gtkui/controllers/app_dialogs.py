@@ -107,6 +107,8 @@ class AppDialogs:
         settings.git_watch_path = values.git_watch_path
         settings.git_watch_interval = values.git_watch_interval
         settings.terminal_appearance = values.terminal_appearance
+        if values.file_transfer is not None:
+            settings.file_transfer = values.file_transfer
         settings.save()
         self.win._save_ui_state()
         if master_toggled:

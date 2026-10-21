@@ -41,6 +41,9 @@ class WindowActions:
     def copy_scp_command(self) -> None:
         self.win.sessions.copy_scp_command()
 
+    def open_files_selected(self) -> None:
+        self.win.sessions.open_files_selected()
+
     def quick_connect(self) -> None:
         self.win.sessions.quick_connect()
 

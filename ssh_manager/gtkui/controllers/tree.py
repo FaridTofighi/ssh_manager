@@ -12,6 +12,7 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Gtk  # type: ignore  # noqa: E402
 
 from ...config import HostEntry  # noqa: E402
+from ... import protocols  # noqa: E402
 from ...smart_groups import SmartGroup, load_smart_groups, save_smart_groups  # noqa: E402
 from ..constants import RowKind, TreeColumn  # noqa: E402
 from ..i18n import _  # noqa: E402
@@ -354,6 +355,7 @@ class TreeController:
                 self.win.actions,
                 can_edit=can_edit and perms.get("can_edit", True),
                 has_session=has_session,
+                is_ssh=bool(host) and protocols.is_ssh(host),
                 accels=accels,
             )
         if kind is not None:

@@ -43,8 +43,16 @@ behind jump= #109#0%10.0.0.13%22%bob%%-1%-1%%10.0.0.254%22%alice%…
     at the first `=`, and spaces after it are allowed.
   - The value is `#<icon>#<type>%f0%f1%…`. The field count varies (49–64
     fields seen); missing fields read as empty.
-  - **Only type 0 (SSH) is imported.** Telnet, RDP, VNC, FTP, SFTP, serial,
-    Mosh, WSL and the other types are skipped and counted.
+  - **Types 0 (SSH), 6 (FTP) and 7 (SFTP) are imported.** Telnet, RDP, VNC,
+    serial, Mosh, WSL and the other types are skipped and counted. FTP and
+    SFTP can be left out with **Import FTP/SFTP sessions** (on by default).
+- **FTP and SFTP fields:** only `f0` (host), `f1` (port; empty means 21 for
+  FTP, 22 for SFTP) and `f2` (user) are read. Their other fields are not
+  verified, so passive / active mode, FTPS, jump hosts and keys keep the
+  defaults. An FTP session becomes a plain `ftp` host with the warning
+  `ftps_unknown` ("check whether this server uses FTPS"). An FTP session
+  with no user, or the user `anonymous`, is stored as anonymous
+  (`metadata["transfer"]["anonymous"]`) and gets no credential.
 - **SSH fields:**
   - `f0` is the host name. An IPv6 literal may be bracketed. A `host:port`
     form is split only when the port field is empty.
@@ -142,8 +150,9 @@ before writing: one deleted meanwhile aborts the import with no changes.
 ## Conflicts and re-runs
 
 An imported host **is the same host** as an existing one when it has the same
-destination group, host name, port and user (host name and user compared
-case-insensitively). For such hosts:
+destination group, protocol, host name, port and user (host name and user
+compared case-insensitively). An SFTP session therefore never matches the SSH
+host on the same `host:22`. For such hosts:
 
 - **Skip** (default) leaves the existing host untouched.
 - **Import a copy named “… (2)”** adds a numbered copy.
@@ -199,7 +208,8 @@ The application log records only the outcome and counts.
 | "This does not look like a MobaXterm sessions file." | The file has no `[Bookmarks]` section. Export the sessions again from MobaXterm. |
 | "The file is empty." / "binary file" | Choose the `.mxtsessions` file itself, not an archive or a settings file. |
 | "…larger than 50 MB…" | Not a sessions export; MobaXterm exports are a few MB at most. |
-| `unsupported_type` in the report | Non-SSH sessions (RDP, FTP, …) are counted, not imported. |
+| `unsupported_type` in the report | Sessions of other types (RDP, VNC, …; FTP / SFTP when unticked) are counted, not imported. |
+| `ftps_unknown` | An FTP session: the export does not say whether the server wants TLS. Edit the host and choose FTPS if it does. |
 | `empty_hostname` / `invalid_hostname` | The session has no usable host name; fix it in MobaXterm or add the host by hand. |
 | `windows_key_path` | The key path points to Windows; edit the host and choose the key again. |
 | `slash_replaced` / `name_truncated` / `name_deduplicated` | A name had to change for the inventory; the report lists original → stored. |

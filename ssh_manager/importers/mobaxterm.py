@@ -51,6 +51,10 @@ SLASH_REPLACEMENT = "\u2215"  # DIVISION SLASH: '/' separates group paths in the
 EMPTY_SUBREP_PARENT = "MobaXterm"  # folder for sessions of a section with an empty SubRep
 NO_USERNAME = ""  # username-entry key for sessions without a username
 SSH_TYPE = 0
+FTP_TYPE = 6
+SFTP_TYPE = 7
+TRANSFER_TYPES = {FTP_TYPE: "ftp", SFTP_TYPE: "sftp"}  # MobaXterm type → protocol id
+DEFAULT_PORTS = {"ssh": 22, "sftp": 22, "ftp": 21}
 TYPE_NAMES = {
     0: "SSH", 1: "Telnet", 2: "Rsh", 3: "Xdmcp", 4: "RDP", 5: "VNC", 6: "FTP", 7: "SFTP",
     8: "Serial", 9: "Mosh", 10: "AWS S3", 11: "WSL", 12: "Shell",
@@ -93,6 +97,7 @@ class IssueCode(str, Enum):
     EMPTY_SUBREP = "empty_subrep"
     FOLDER_TOO_DEEP = "folder_too_deep"
     LINE_TOO_LONG = "line_too_long"
+    FTPS_UNKNOWN = "ftps_unknown"
 
 
 @dataclass(frozen=True)
@@ -392,6 +397,13 @@ class SshTarget:
     user_is_reference: bool  # [label] = a MobaXterm credential reference, not a login name
     proxy_jump: str  # "" when none
     identity_file: str  # "" when none
+    protocol: str = "ssh"  # ssh, or ftp / sftp for MobaXterm FTP (6) and SFTP (7) sessions
+
+    @property
+    def anonymous(self) -> bool:
+        """FTP without a user, or the user ``anonymous``."""
+
+        return self.protocol == "ftp" and self.user_key.casefold() in ("", "anonymous")
 
 
 def _valid_hostname(host: str) -> bool:
@@ -417,8 +429,16 @@ def normalize_username(raw: str) -> Tuple[str, bool]:
 
 
 def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTarget]:
-    """The SSH fields of a type-0 session (``None`` when it cannot be imported; issues appended)."""
+    """The SSH fields of a type-0 session (``None`` when it cannot be imported; issues appended).
 
+    FTP (6) and SFTP (7) sessions use the same first three fields (host, port,
+    user); their other fields are not verified, so nothing else is read from
+    them. Whether an FTP server wants FTPS is unknown: it is imported as plain
+    FTP with a warning to check.
+    """
+
+    protocol = TRANSFER_TYPES.get(session.type_code, "ssh")
+    default_port = DEFAULT_PORTS[protocol]
     label = _safe_label(session.name)
     host = session.field(0).strip()
     port_text = session.field(1).strip()
@@ -443,8 +463,8 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
     port = _parse_port(port_text)
     if port is None:
         issues.append(ImportIssue(Severity.WARNING, IssueCode.INVALID_PORT,
-                                  f"'{label}' has no valid port; using 22.", session.line))
-        port = 22
+                                  f"'{label}' has no valid port; using {default_port}.", session.line))
+        port = default_port
     user_raw = session.field(2)
     user_key, reference = normalize_username(user_raw)
     if user_key and (user_key.startswith("-") or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127
@@ -452,6 +472,12 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
         issues.append(ImportIssue(Severity.WARNING, IssueCode.INVALID_FIELD,
                                   f"'{label}' has an unusable username; it is treated as empty.", session.line))
         user_key, reference = "", False
+    if protocol != "ssh":
+        if protocol == "ftp":
+            issues.append(ImportIssue(Severity.WARNING, IssueCode.FTPS_UNKNOWN,
+                                      f"'{label}' is imported as plain FTP; check whether this server uses FTPS.",
+                                      session.line))
+        return SshTarget(host, port, user_raw, user_key, reference, "", "", protocol)
     proxy = _proxy_jump(session, label, issues)
     identity = _identity_file(session, label, issues)
     return SshTarget(host, port, user_raw, user_key, reference, proxy, identity)
@@ -523,6 +549,7 @@ class ImportOptions:
     target_group: Tuple[str, ...] = ()  # EXISTING_GROUP: the group path (as shown in the tree)
     conflict_policy: ConflictPolicy = ConflictPolicy.SKIP
     skip_empty_folders: bool = False  # empty MobaXterm folders are created by default
+    include_transfer: bool = True  # FTP (6) / SFTP (7) sessions become ftp / sftp hosts
 
 
 @dataclass(frozen=True)
@@ -532,6 +559,7 @@ class ExistingHost:
     hostname: str
     port: Optional[int]
     user: str
+    protocol: str = "ssh"
 
 
 def _cf(path: Sequence[str]) -> Tuple[str, ...]:
@@ -564,7 +592,8 @@ class ExistingInventory:
             inventory.paths[_cf(path)] = path
         for host in store.list_hosts():
             inventory.hosts.setdefault(host.group_id, []).append(
-                ExistingHost(host.id, host.alias, host.hostname, host.port, host.user))
+                ExistingHost(host.id, host.alias, host.hostname, host.port, host.user,
+                             getattr(host, "protocol", "ssh") or "ssh"))
         return inventory
 
     @classmethod
@@ -654,8 +683,21 @@ class ImportPlan:
         return [g.path for g in self.groups if not g.exists]
 
 
-def build_folder_tree(result: MxtParseResult) -> List[FolderNode]:
-    """Preview tree of every folder (implicit ancestors included) with SSH host counts."""
+def _importable_type(type_code: int, include_transfer: bool) -> bool:
+    return type_code == SSH_TYPE or (include_transfer and type_code in TRANSFER_TYPES)
+
+
+def count_types(result: MxtParseResult) -> Dict[int, int]:
+    """Sessions per MobaXterm type code (the wizard shows SSH and FTP / SFTP separately)."""
+
+    counts: Dict[int, int] = {}
+    for session in result.sessions:
+        counts[session.type_code] = counts.get(session.type_code, 0) + 1
+    return counts
+
+
+def build_folder_tree(result: MxtParseResult, include_transfer: bool = True) -> List[FolderNode]:
+    """Preview tree of every folder (implicit ancestors included) with importable host counts."""
 
     nodes: Dict[Tuple[str, ...], FolderNode] = {}
     roots: List[FolderNode] = []
@@ -673,7 +715,7 @@ def build_folder_tree(result: MxtParseResult) -> List[FolderNode]:
     for folder in result.folders:
         node(folder.path)
     for session in result.sessions:
-        if session.type_code != SSH_TYPE or not session.folder:
+        if not _importable_type(session.type_code, include_transfer) or not session.folder:
             continue
         own = node(session.folder)
         own.own_hosts += 1
@@ -707,7 +749,7 @@ def plan_import(
     targets: List[Tuple[MxtSession, SshTarget]] = []
     excluded_hosts = 0
     for session in result.sessions:
-        if session.type_code != SSH_TYPE:
+        if not _importable_type(session.type_code, options.include_transfer):
             skipped_types[session.type_code] = skipped_types.get(session.type_code, 0) + 1
             continue
         if _excluded(session.folder, excluded):
@@ -719,7 +761,7 @@ def plan_import(
     for type_code, count in sorted(skipped_types.items()):
         name = TYPE_NAMES.get(type_code, f"type {type_code}")
         issues.append(ImportIssue(Severity.INFO, IssueCode.UNSUPPORTED_TYPE,
-                                  f"{count} {name} session(s) skipped (only SSH is imported)."))
+                                  f"{count} {name} session(s) skipped (not imported)."))
 
     # Folders to create: every selected folder (and implicit ancestors), or only those leading to hosts.
     order: Dict[Tuple[str, ...], int] = {}
@@ -789,7 +831,8 @@ def plan_import(
         hosts.append(planned)
 
     usernames = discover_usernames(hosts)
-    return ImportPlan(options, list(groups.values()), hosts, issues, usernames, build_folder_tree(result),
+    return ImportPlan(options, list(groups.values()), hosts, issues, usernames,
+                      build_folder_tree(result, options.include_transfer),
                       skipped_types, renamed, existing, excluded_hosts, destination_missing)
 
 
@@ -798,6 +841,8 @@ def discover_usernames(hosts: Sequence[PlannedHost]) -> List[UsernameEntry]:
 
     entries: Dict[str, UsernameEntry] = {}
     for host in hosts:
+        if host.target.anonymous:
+            continue  # anonymous FTP logs in without a credential
         key = host.target.user_key
         entry = entries.setdefault(key, UsernameEntry(key))
         entry.count += 1
@@ -872,15 +917,25 @@ def host_entry(host: PlannedHost, user: Optional[str], alias: Optional[str] = No
     if host.target.identity_file:
         options["identityfile"] = host.target.identity_file
     metadata: Dict[str, object] = {"imported_from": "mobaxterm", "mobaxterm_folder": _folder_text(host.folder)}
+    if host.target.anonymous:
+        options.pop("user", None)
+        metadata["transfer"] = {"v": 1, "anonymous": True}
     group = host.group
     return HostEntry(alias=alias or host.alias, options=options, metadata=metadata,
-                     parent_group=group[0] if group else "", child_group="/".join(group[1:]))
+                     parent_group=group[0] if group else "", child_group="/".join(group[1:]),
+                     protocol=host.target.protocol)
 
 
-def identity_key(hostname: str, port: Optional[int], user: Optional[str]) -> Tuple[str, int, str]:
-    """``(host name, port, user)`` as compared for "the same host" (case-insensitive name and user)."""
+def identity_key(hostname: str, port: Optional[int], user: Optional[str],
+                 protocol: str = "ssh") -> Tuple[str, int, str, str]:
+    """``(host name, port, user, protocol)`` as compared for "the same host" (case-insensitive name and user).
 
-    return ((hostname or "").strip().lower(), int(port or 22), (user or "").strip().casefold())
+    The protocol is part of it: an SFTP session never matches the SSH host on the same ``host:22``.
+    """
+
+    protocol = (protocol or "ssh").lower()
+    return ((hostname or "").strip().lower(), int(port or DEFAULT_PORTS.get(protocol, 22)),
+            (user or "").strip().casefold(), protocol)
 
 
 def apply_credential_mapping(
@@ -910,16 +965,18 @@ def apply_credential_mapping(
     policy = plan.options.conflict_policy
     for group in plan.groups:
         existing = plan.existing.hosts_in(group.path) if group.exists else []
-        by_identity: Dict[Tuple[str, int, str], List[ExistingHost]] = {}
+        by_identity: Dict[Tuple[str, int, str, str], List[ExistingHost]] = {}
         for existing_host in existing:
             by_identity.setdefault(identity_key(existing_host.hostname or existing_host.alias, existing_host.port,
-                                                existing_host.user), []).append(existing_host)
+                                                existing_host.user, existing_host.protocol),
+                                   []).append(existing_host)
         taken = {h.alias.casefold() for h in existing}
         for host in group.hosts:
-            cred_id = resolved.get(host.target.user_key)
-            user = _host_user(host, cred_id, credentials)
+            cred_id = None if host.target.anonymous else resolved.get(host.target.user_key)
+            user = None if host.target.anonymous else _host_user(host, cred_id, credentials)
             label = _safe_label(host.original_name)
-            candidates = by_identity.get(identity_key(host.target.hostname, host.target.port, user), [])
+            candidates = by_identity.get(identity_key(host.target.hostname, host.target.port, user,
+                                                      host.target.protocol), [])
             # The same host twice (an earlier "Rename" copy): prefer the one with this alias, else the first.
             match = next((h for h in candidates if h.alias.casefold() == host.alias.casefold()),
                          candidates[0] if candidates else None)
@@ -1032,7 +1089,7 @@ def commit(
             for entry in job.updates:
                 hostname, port, user, rest = host_columns(entry.options)
                 store.update_host(entry.id, hostname=hostname, port=port, user=user, options=rest,
-                                  metadata=dict(entry.metadata))
+                                  metadata=dict(entry.metadata), protocol=entry.protocol)
             binding_map = {entry.id: cid for entry, cid in job.bindings if entry.id}
             if binding_map:
                 credential_store.bind_many(binding_map)  # a failure rolls the database back as well
@@ -1067,7 +1124,8 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
     lines += ["", "Summary",
               f"  Top-level groups: {len(plan.top_level)}",
               f"  Groups: {len(plan.groups)} ({len(plan.new_groups)} new)",
-              f"  SSH hosts planned: {len(plan.hosts)}"]
+              f"  SSH hosts planned: {sum(1 for h in plan.hosts if h.target.protocol == 'ssh')}",
+              f"  FTP / SFTP hosts planned: {sum(1 for h in plan.hosts if h.target.protocol != 'ssh')}"]
     if job is not None:
         lines += [f"  Hosts to import: {job.host_count}",
                   f"  Skipped (already exist): {job.skipped_existing}",

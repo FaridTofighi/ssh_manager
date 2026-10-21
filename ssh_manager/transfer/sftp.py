@@ -137,32 +137,44 @@ class SftpBackend(RemoteFileBackend):
             return paramiko.ProxyCommand(proxy)
         return socket.create_connection((self.hostname, self.port), timeout=self.settings.timeout_connect)
 
+    def _note(self, text: str) -> None:
+        if self.log is not None:
+            self.log(text)  # never a password: only names, fingerprints and outcomes
+
     def connect(self) -> ServerInfo:
         started = time.monotonic()
         self.close()
+        self._note(f"Connecting to {self.hostname}:{self.port} (SFTP)")
         try:
             sock = self._socket()
             transport = paramiko.Transport(sock, default_window_size=WINDOW_SIZE, default_max_packet_size=MAX_PACKET)
             transport.banner_timeout = self.settings.timeout_connect
             transport.start_client(timeout=self.settings.timeout_connect)
-        except BackendError:
+        except BackendError as exc:
+            self._note(f"Failed: {exc}")
             raise
         except Exception as exc:
+            self._note(f"Failed: {type(exc).__name__}")
             raise self._map(exc)
         try:
+            self._note(f"Server: {(transport.remote_version or '')[:200]}")
             key = transport.get_remote_server_key()
+            self._note(f"Host key: {key.get_name()} {key_fingerprint(key)}")
             self._check_host_key(key)
             self._authenticate(transport)
+            self._note(f"Authenticated as {self.user or '(no user)'}")
             if self.settings.keepalive_s:
                 transport.set_keepalive(self.settings.keepalive_s)
             sftp = paramiko.SFTPClient.from_transport(transport, window_size=WINDOW_SIZE, max_packet_size=MAX_PACKET)
             if sftp is None:
                 raise ProtocolError("The server has no SFTP subsystem.")
             sftp.get_channel().settimeout(self.settings.timeout_read)
-        except BackendError:
+        except BackendError as exc:
+            self._note(f"Failed: {exc}")
             transport.close()
             raise
         except Exception as exc:
+            self._note(f"Failed: {type(exc).__name__}")
             transport.close()
             raise self._map(exc)
         self._transport, self._sftp = transport, sftp
@@ -170,6 +182,7 @@ class SftpBackend(RemoteFileBackend):
             self._home = self._cwd = sftp.normalize(".") or "/"
         except (OSError, paramiko.SSHException):
             self._home = self._cwd = "/"
+        self._note(f"SFTP session open; home folder {self._home}")
         self._info = ServerInfo(
             protocol="sftp", banner=(transport.remote_version or "")[:200],
             features={F_REST, F_CHMOD, F_SYMLINK, F_SIZE, F_MDTM, F_OWNER},
@@ -216,6 +229,7 @@ class SftpBackend(RemoteFileBackend):
     def _authenticate(self, transport: paramiko.Transport) -> None:
         errors: List[str] = []
         if self.key_file:
+            self._note("Trying the private key")
             try:
                 key = paramiko.PKey.from_path(self.key_file, self._passphrase.encode() if self._passphrase else None) \
                     if hasattr(paramiko.PKey, "from_path") else _load_key(self.key_file, self._passphrase)
@@ -227,6 +241,7 @@ class SftpBackend(RemoteFileBackend):
             except (paramiko.AuthenticationException, paramiko.SSHException, OSError) as exc:
                 errors.append(f"key: {type(exc).__name__}")
         if self.allow_agent:
+            self._note("Trying the SSH agent")
             try:
                 for agent_key in paramiko.Agent().get_keys():
                     try:
@@ -238,6 +253,7 @@ class SftpBackend(RemoteFileBackend):
             except paramiko.SSHException:
                 pass
         if self._password:
+            self._note("Trying the password")
             try:
                 transport.auth_password(self.user, self._password)
                 if transport.is_authenticated():

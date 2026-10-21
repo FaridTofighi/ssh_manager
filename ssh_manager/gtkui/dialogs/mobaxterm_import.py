@@ -29,6 +29,8 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...importers.mobaxterm import (  # noqa: E402
+    SSH_TYPE,
+    TRANSFER_TYPES,
     TYPE_NAMES,
     ConflictPolicy,
     CredentialMissingError,
@@ -46,6 +48,7 @@ from ...importers.mobaxterm import (  # noqa: E402
     apply_credential_mapping,
     build_folder_tree,
     commit,
+    count_types,
     parse_mxtsessions,
     plan_import,
     render_report,
@@ -187,8 +190,8 @@ class MobaXtermImportDialog(BaseDialog):
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         section = FormSection(
             _("MobaXterm sessions file"),
-            _("Export your sessions from MobaXterm (a *.mxtsessions file) and choose it here. SSH sessions and "
-              "their folders are imported; passwords are never part of an export, and nothing is connected to."),
+            _("Export your sessions from MobaXterm (a *.mxtsessions file) and choose it here. SSH, FTP and SFTP "
+              "sessions and their folders are imported; passwords are never part of an export, and nothing is connected to."),
         )
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.choose_button = Gtk.Button.new_with_mnemonic(_("_Choose File…"))
@@ -235,10 +238,16 @@ class MobaXtermImportDialog(BaseDialog):
         self.policy_combo.set_active_id(ConflictPolicy.SKIP.value)
         set_accessible_name(self.policy_combo, _("When a host already exists"))
         section.add(_("When a host already _exists"), self.policy_combo,
-                    help_text=_("The same host: same group, host name, port and user. Importing the same file "
-                                "again with “Skip” changes nothing."))
+                    help_text=_("The same host: same group, protocol, host name, port and user. Importing the "
+                                "same file again with “Skip” changes nothing."))
         self.skip_empty_check = Gtk.CheckButton.new_with_mnemonic(_("Skip _empty folders"))
         section.add_widget(self.skip_empty_check)
+        self.transfer_check = Gtk.CheckButton.new_with_mnemonic(_("Import _FTP/SFTP sessions"))
+        self.transfer_check.set_active(True)
+        self.transfer_check.set_tooltip_text(_("FTP sessions are imported as plain FTP; check whether the server "
+                                               "uses FTPS."))
+        self.transfer_check.connect("toggled", lambda *_a: self._on_transfer_toggled())
+        section.add_widget(self.transfer_check)
         page.pack_start(section, False, False, 0)
 
         tree_section = FormSection(_("Folders to import"), _("Untick a folder to leave it and everything in it out."))
@@ -491,13 +500,16 @@ class MobaXtermImportDialog(BaseDialog):
             self.file_summary.set_text("")
             return
         self.result = value
-        ssh = sum(1 for s in value.sessions if s.type_code == 0)
-        other = len(value.sessions) - ssh
+        counts = count_types(value)
+        ssh = counts.get(SSH_TYPE, 0)
+        transfer = sum(counts.get(code, 0) for code in TRANSFER_TYPES)
+        other = len(value.sessions) - ssh - transfer
         size = _human_size(value.size)
         self.file_label.set_text(f"{self.source_path.name} · {size}" if self.source_path else size)
-        self.file_summary.set_text(_("{folders} folders, {ssh} SSH sessions, {other} other sessions "
-                                     "(not imported). Encoding: {encoding}.").format(
-            folders=len(value.folders), ssh=ssh, other=other, encoding=value.encoding))
+        self.file_summary.set_text(_("{folders} folders, {ssh} SSH sessions, {transfer} FTP/SFTP sessions, "
+                                     "{other} other sessions (not imported). Encoding: {encoding}.").format(
+            folders=len(value.folders), ssh=ssh, transfer=transfer, other=other, encoding=value.encoding))
+        self.transfer_check.set_sensitive(transfer > 0)
         self._fill_folder_tree(value)
 
     # ========================================================= step 2: options
@@ -521,7 +533,7 @@ class MobaXtermImportDialog(BaseDialog):
             for child in node.children:
                 add(it, child)
 
-        for root in build_folder_tree(result):
+        for root in build_folder_tree(result, self.transfer_check.get_active()):
             add(None, root)
         self.folder_view.expand_to_path(Gtk.TreePath.new_first())
 
@@ -574,18 +586,40 @@ class MobaXtermImportDialog(BaseDialog):
         visit(self.folder_store.get_iter_first(), False)
         return excluded
 
-    def _selected_host_count(self) -> int:
+    def _selected_host_count(self, types=(SSH_TYPE,)) -> int:
         if self.result is None:
             return 0
         excluded = set(self.excluded_folders())
-        return sum(1 for s in self.result.sessions if s.type_code == 0 and not any(
+        return sum(1 for s in self.result.sessions if s.type_code in types and not any(
             s.folder[:depth] in excluded for depth in range(1, len(s.folder) + 1)))
 
     def _update_selection_label(self) -> None:
         count = self._selected_host_count()
-        self.selection_label.set_text(ngettext("{n} SSH session selected.", "{n} SSH sessions selected.",
-                                               count).format(n=count))
+        text = ngettext("{n} SSH session selected.", "{n} SSH sessions selected.", count).format(n=count)
+        transfer = self._selected_host_count(tuple(TRANSFER_TYPES)) if self.transfer_check.get_active() else 0
+        if transfer:
+            text += " " + ngettext("{n} FTP/SFTP session selected.", "{n} FTP/SFTP sessions selected.",
+                                   transfer).format(n=transfer)
+        self.selection_label.set_text(text)
         self._sync_buttons()
+
+    def _on_transfer_toggled(self) -> None:
+        """Recount the folder tree (ticks stay as they are)."""
+
+        if self.result is None:
+            return
+        totals = {}
+
+        def collect(node: FolderNode) -> None:
+            totals[node.path] = node.total_hosts
+            for child in node.children:
+                collect(child)
+
+        for root in build_folder_tree(self.result, self.transfer_check.get_active()):
+            collect(root)
+        self.folder_store.foreach(lambda m, _p, it: m.set_value(it, COL_COUNT, totals.get(m.get_value(it, COL_PATH), 0))
+                                  and False)
+        self._update_selection_label()
 
     def _options_valid(self) -> bool:
         return not self.existing_parent_radio.get_active() or bool(self.parent_combo.get_active_id())
@@ -601,6 +635,7 @@ class MobaXtermImportDialog(BaseDialog):
             target_group=tuple(target.split("\x1f")) if target else (),
             conflict_policy=ConflictPolicy(self.policy_combo.get_active_id() or ConflictPolicy.SKIP.value),
             skip_empty_folders=self.skip_empty_check.get_active(),
+            include_transfer=self.transfer_check.get_active(),
         )
 
     # ===================================================== step 3: credentials

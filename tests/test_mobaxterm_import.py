@@ -313,14 +313,16 @@ class PlannerTests(unittest.TestCase):
     def test_selection_excludes_branches(self) -> None:
         plan = self.plan(excluded_folders=[("Acme", "Team A")])
         self.assertNotIn(("Acme", "Team A"), self.paths(plan))
-        self.assertEqual(plan.excluded_hosts, 6)
+        self.assertEqual(plan.excluded_hosts, 7)  # 6 SSH + the FTP session
 
     def test_folder_tree_counts(self) -> None:
         roots = build_folder_tree(parse_mxtsessions(ACME.encode()))
         acme = roots[0]
-        self.assertEqual((acme.label, acme.own_hosts, acme.total_hosts), ("Acme", 1, 8))
+        self.assertEqual((acme.label, acme.own_hosts, acme.total_hosts), ("Acme", 1, 9))
         team_a = next(c for c in acme.children if c.label == "Team A")
-        self.assertEqual((team_a.own_hosts, team_a.total_hosts), (1, 6))  # RDP/FTP not counted
+        self.assertEqual((team_a.own_hosts, team_a.total_hosts), (1, 7))  # FTP counted, RDP not
+        ssh_only = build_folder_tree(parse_mxtsessions(ACME.encode()), include_transfer=False)
+        self.assertEqual(ssh_only[0].total_hosts, 8)
 
     def test_hostname_edge_cases(self) -> None:
         data = export(("Acme", [
@@ -488,19 +490,19 @@ class CommitTests(StoreTestCase):
         before = self.snapshot()
         job, report = self.run_import({"alice": self.ops.id})
         self.assertIs(report.status, ImportStatus.NOTHING)
-        self.assertEqual(job.skipped_existing, 9)
+        self.assertEqual(job.skipped_existing, 10)  # 9 SSH + 1 FTP
         self.assertEqual(self.snapshot(), before)
 
     def test_conflict_policies(self) -> None:
         self.run_import()
         job, report = self.run_import(conflict_policy=ConflictPolicy.RENAME)
-        self.assertEqual(job.renamed, 9)
+        self.assertEqual(job.renamed, 10)
         self.assertIn("web 01 (2)", [h.alias for h in self.manager.tree["Acme"]["Team A/Servers"].hosts])
         before = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
         changed = ACME.replace("10.0.0.254", "10.0.0.253").encode()  # the jump host changed in MobaXterm
         job, report = self.run_import(data=changed, conflict_policy=ConflictPolicy.OVERWRITE)
         self.assertIs(report.status, ImportStatus.SUCCESS)
-        self.assertEqual((job.host_count, job.overwritten), (0, 9))
+        self.assertEqual((job.host_count, job.overwritten), (0, 10))  # 9 SSH + 1 FTP
         after = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
         self.assertEqual(before, after)  # updated in place: same ids, same aliases
         self.assertEqual(self.host(("Acme", "Team A", "Servers"), "behind-jump").options["proxyjump"],
@@ -653,3 +655,72 @@ class PerformanceTests(StoreTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TRANSFER_EXPORT = export(("Acme\\Files", [
+    "ftp anon=" + session_value("10.0.0.40", "21", "", type_code=6, icon=130),
+    "ftp anon2=" + session_value("10.0.0.41", "", "anonymous", type_code=6, icon=130),
+    "ftp bob=" + session_value("10.0.0.42", "2121", "bob", type_code=6, icon=130),
+    "sftp alice=" + session_value("10.0.0.43", "22", "[alice]", type_code=7, icon=140,
+                                  gateway="10.0.0.254", gateway_port="22", gateway_user="alice"),
+    "ssh alice=" + session_value("10.0.0.43", "22", "[alice]"),
+]))
+
+
+class TransferSessionTests(StoreTestCase):
+    """MobaXterm FTP (6) and SFTP (7) sessions become ftp / sftp hosts (synthetic data only)."""
+
+    def test_planned_protocols_ports_and_ftps_warning(self) -> None:
+        plan = self.plan(TRANSFER_EXPORT)
+        targets = {h.alias: h.target for h in plan.hosts}
+        self.assertEqual({a: t.protocol for a, t in targets.items()},
+                         {"ftp anon": "ftp", "ftp anon2": "ftp", "ftp bob": "ftp", "sftp alice": "sftp",
+                          "ssh alice": "ssh"})
+        self.assertEqual(targets["ftp anon2"].port, 21)  # no port: the protocol default
+        self.assertEqual(targets["ftp bob"].port, 2121)
+        self.assertEqual(targets["sftp alice"].proxy_jump, "")  # only f0..f2 are read for FTP / SFTP
+        self.assertEqual(targets["ssh alice"].proxy_jump, "")
+        self.assertTrue(targets["ftp anon"].anonymous and targets["ftp anon2"].anonymous)
+        self.assertFalse(targets["ftp bob"].anonymous or targets["sftp alice"].anonymous)
+        warnings = [i for i in plan.issues if i.code is IssueCode.FTPS_UNKNOWN]
+        self.assertEqual(len(warnings), 3)
+        self.assertIn("check whether this server uses FTPS", warnings[0].message)
+        self.assertEqual(plan.skipped_types, {})
+
+    def test_usernames_cover_transfer_hosts_but_not_anonymous(self) -> None:
+        keys = {e.key: e.count for e in self.plan(TRANSFER_EXPORT).usernames}
+        self.assertEqual(keys, {"alice": 2, "bob": 1})
+
+    def test_option_off_skips_them(self) -> None:
+        plan = self.plan(TRANSFER_EXPORT, include_transfer=False)
+        self.assertEqual([h.alias for h in plan.hosts], ["ssh alice"])
+        self.assertEqual(plan.skipped_types, {6: 3, 7: 1})
+
+    def test_commit_stores_protocol_and_anonymous_settings(self) -> None:
+        job, report = self.run_import({"alice": self.ops.id, "bob": None}, data=TRANSFER_EXPORT,
+                                      default=self.root_cred.id)
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        rows = {h.alias: h for h in self.store.list_hosts()}
+        self.assertEqual(rows["ftp anon"].protocol, "ftp")
+        self.assertEqual(rows["ftp anon"].user, "")
+        self.assertEqual(rows["ftp anon"].metadata["transfer"], {"v": 1, "anonymous": True})
+        self.assertIsNone(self.creds.binding_for_host(rows["ftp anon"].id))  # no credential for anonymous
+        self.assertEqual((rows["ftp bob"].protocol, rows["ftp bob"].port, rows["ftp bob"].user), ("ftp", 2121, "bob"))
+        self.assertEqual(rows["sftp alice"].protocol, "sftp")
+        self.assertEqual(self.creds.binding_for_host(rows["sftp alice"].id), self.ops.id)
+        self.assertEqual(rows["ssh alice"].protocol, "ssh")
+        text = render_report(job.plan, job)
+        self.assertIn("FTP / SFTP hosts planned: 4", text)
+
+    def test_sftp_session_does_not_match_the_ssh_host_on_the_same_port(self) -> None:
+        self.run_import({"alice": self.ops.id}, data=TRANSFER_EXPORT)
+        job, report = self.run_import({"alice": self.ops.id}, data=TRANSFER_EXPORT)
+        self.assertIs(report.status, ImportStatus.NOTHING)
+        self.assertEqual(job.skipped_existing, 5)  # each one matched its own protocol, not the other
+
+    def test_sftp_session_next_to_an_ssh_host_is_imported(self) -> None:
+        ssh = export(("Acme", ["web=" + session_value("10.0.0.50", "22", "alice")]))
+        sftp = export(("Acme", ["web files=" + session_value("10.0.0.50", "22", "alice", type_code=7)]))
+        self.run_import(data=ssh)
+        job, report = self.run_import(data=sftp)
+        self.assertEqual((job.host_count, job.skipped_existing), (1, 0))  # not the SSH host on 10.0.0.50:22

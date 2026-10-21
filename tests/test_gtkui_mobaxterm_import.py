@@ -98,8 +98,30 @@ class ImportWizardTests(unittest.TestCase):
         self.assertFalse(dialog.empty_store_box.get_visible())
         self.next(dialog)
         self.assertIs(dialog.step, Step.REVIEW)
-        self.assertIn("9 hosts to import", dialog.review_summary.get_text())
+        self.assertIn("10 hosts to import", dialog.review_summary.get_text())  # 9 SSH + 1 FTP
         self.assertIn("alice (3 host(s)) → Ops", dialog.report_text)
+
+    def test_transfer_sessions_checkbox(self) -> None:
+        from ssh_manager.gtkui.dialogs.mobaxterm_import import COL_COUNT
+
+        ops = self.add_credential()
+        dialog = self.dialog()
+        dialog.choose_file()
+        dialog.wait()
+        self.assertIn("1 FTP/SFTP sessions", dialog.file_summary.get_text())
+        self.next(dialog)  # → options
+        self.assertTrue(dialog.transfer_check.get_active())  # on by default
+        self.assertIn("1 FTP/SFTP session selected", dialog.selection_label.get_text())
+        root = dialog.folder_store.get_iter_first()
+        self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 9)
+        dialog.transfer_check.set_active(False)
+        self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 8)
+        self.assertNotIn("FTP", dialog.selection_label.get_text())
+        self.assertFalse(dialog.options().include_transfer)
+        self.next(dialog)  # → credentials
+        dialog.default_combo.set_active_id(ops.id)
+        self.next(dialog)
+        self.assertIn("9 hosts to import", dialog.review_summary.get_text())
 
     def test_empty_credential_store_offers_a_way_out(self) -> None:
         self.assertEqual(self.win._credential_store.list(), [])

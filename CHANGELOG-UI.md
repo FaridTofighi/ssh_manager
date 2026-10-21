@@ -6,6 +6,32 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## File transfer, phase F4: integrations and diagnostics
+
+Details: `docs/file-transfer.md` ("Preferences", "Diagnostics"),
+`docs/protocols.md` ("Quick Connect URLs"), `docs/import-mobaxterm.md`.
+
+- **MobaXterm import:** FTP (type 6) and SFTP (type 7) sessions become `ftp`
+  and `sftp` hosts (host, port and user only). FTP gets the warning "check
+  whether this server uses FTPS". Anonymous FTP sessions get no credential.
+  The file step counts SSH and FTP/SFTP sessions separately; the options step
+  has **Import FTP/SFTP sessions** (on), and the folder counts follow it.
+  The protocol is now part of "the same host".
+- **Quick Connect:** accepts `ssh://`, `sftp://`, `ftp://` and `ftps://`
+  URLs (with an optional first folder). URLs with a password are refused.
+  The connection is not saved; the toast offers **Save to Inventory…**
+  (the host dialog, filled in).
+- **Browse Files (SFTP):** in an SSH host's menu (tree and host bar `···`):
+  an SFTP file browser with the host's address, user, key, jump host and
+  saved password. Nothing new is stored.
+- **Settings → File Transfer:** download folder, conflict policy, parallel
+  transfers, bandwidth limit, hidden files, remembered folders, open with
+  the default application, temporary-copy cleanup, the plain-FTP warning and
+  the protocol log file (off by default).
+- **Connection log:** an activity button in the file browser's header shows
+  the tab's masked log with **Copy Log** and **Copy Diagnostics** (banner,
+  features, TLS details, host key). SFTP now logs its connection steps.
+
 ## File transfer, phase F3: transfer queue and drag and drop
 
 Details: `docs/file-transfer.md` ("Transfers", "Drag and drop").

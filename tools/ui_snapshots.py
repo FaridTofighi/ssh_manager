@@ -1530,6 +1530,24 @@ def run(out_dir: Path) -> None:
                            *(int(round(v * scale)) for v in (900, 650)))
             window.destroy()
 
+    def settings_transfer_dialog(window) -> Gtk.Dialog:
+        dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
+        dialog.layout.show_page("file_transfer")
+        return dialog
+
+    for dark in (False, True):
+        @scenario(f"dialog-settings-file-transfer-{'dark' if dark else 'light'}")
+        def _settings_transfer(dark=dark) -> None:
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = settings_transfer_dialog(window)
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"dialog-settings-file-transfer-{'dark' if dark else 'light'}.png",
+                           *(int(round(v * scale)) for v in (820, 620)))
+            window.destroy()
+
     for dark in (False, True):
         for saved in (True, False):
             name = f"dialog-host-password-{'saved' if saved else 'notset'}-{'dark' if dark else 'light'}"
@@ -1635,6 +1653,31 @@ def run(out_dir: Path) -> None:
             window = _make_window(app, base, dark, "compact")
             _file_browser_scene(window)
             _show_transfers(window)
+            capture_window(window, out_dir / f"{name}.png", 1280, 800)
+            window.destroy()
+
+    def _show_log(window) -> None:
+        """The connection log with synthetic FTP-style lines (the password line is masked)."""
+
+        tab = window.terminal_tabs.current_tab()
+        log = tab.connection_log
+        log.set_secret("password", "example-secret")
+        for line in ("Connecting to 10.0.0.20:22 (SFTP)", "Server: SSH-2.0-OpenSSH_9.6",
+                     "Host key: ssh-ed25519 SHA256:Q5cXnWmJ2c0b2ExAMPLEfingerprintAAAAAAAAAAAA",
+                     "Trying the SSH agent", "Trying the password", "Authenticated as alice",
+                     "SFTP session open; home folder /srv/data", "Connected in 0.21 s"):
+            log(line)
+        tab.log_toggle.set_active(True)
+        _pump(30)
+
+    for dark in (False, True):
+        name = f"file-browser-log-{'dark' if dark else 'light'}"
+
+        @scenario(name)
+        def _file_browser_log(dark=dark, name=name) -> None:
+            window = _make_window(app, base, dark, "compact")
+            _file_browser_scene(window)
+            _show_log(window)
             capture_window(window, out_dir / f"{name}.png", 1280, 800)
             window.destroy()
 

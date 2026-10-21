@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import logging
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -114,7 +116,9 @@ class HostActions:
                             host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
 
     @requires_editable_inventory
-    def prompt_new_host(self, template: Optional[HostTemplate] = None) -> None:
+    def prompt_new_host(self, template: Optional[HostTemplate] = None, prefill: Optional[HostEntry] = None) -> None:
+        """Add a host; ``prefill`` (an unsaved Quick Connect host) fills the dialog ("Save to Inventory")."""
+
         parent, child = self.win.tree.infer_target_group()
         create_child = False
         if not parent or not child:
@@ -129,7 +133,11 @@ class HostActions:
                 return
             parent, child, create_child = selection
 
-        dialog = self.host_dialog(template_defaults=template.defaults if template else None)
+        if prefill is not None:
+            dialog = self.host_dialog(prefill, for_copy=True)
+            dialog.set_title(_("Save to Inventory"))
+        else:
+            dialog = self.host_dialog(template_defaults=template.defaults if template else None)
         host, cred_id, choice = self.run_host_dialog(dialog, parent, child)
         if not host:
             return
@@ -144,6 +152,14 @@ class HostActions:
             self.win.creds.apply_host_credentials(host, cred_id, choice)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_host(parent, child, host.alias)
+
+    def save_to_inventory(self, host: HostEntry) -> None:
+        """Save an unsaved (Quick Connect) host: the host dialog, filled in, then a group to put it in."""
+
+        hostname = host.option("hostname") or host.alias
+        prefill = dataclasses.replace(host, alias=hostname, options=dict(host.options),
+                                      metadata=copy.deepcopy(host.metadata), id="")
+        self.prompt_new_host(prefill=prefill)
 
     def new_host_from_template(self, template_id: str) -> None:
         template = next((t for t in built_in_templates() if t.id == template_id), None)

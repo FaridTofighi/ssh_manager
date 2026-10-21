@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import datetime
 import logging
 import shlex
@@ -176,8 +178,11 @@ class SessionController:
             self.bind_tab_status(tab, resolved)
         return resolved.alias
 
-    def open_transfer_host(self, host_obj: HostEntry) -> Optional[str]:
-        """The FTP / FTPS / SFTP opener: a file-browser tab; returns the alias."""
+    def open_transfer_host(self, host_obj: HostEntry, bind_status: bool = True) -> Optional[str]:
+        """The FTP / FTPS / SFTP opener: a file-browser tab; returns the alias.
+
+        ``bind_status=False`` leaves the tree status alone (the "Files" view of an SSH host).
+        """
 
         from ..file_browser.tab import FileBrowserTab
 
@@ -188,7 +193,8 @@ class SessionController:
         tab = FileBrowserTab(resolved, self.win._log_event, password_provider=partial(creds.resolve_password, host_obj),
                              password_service=creds, app_settings=self.win._settings, read_only=read_only)
         self.win.terminal_tabs.add_page(tab)
-        self.bind_tab_status(tab, resolved)
+        if bind_status:
+            self.bind_tab_status(tab, resolved)
         return resolved.alias
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
@@ -351,18 +357,23 @@ class SessionController:
 
     def quick_connect(self) -> None:
         from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+        from ssh_manager.protocols.urls import looks_like_url, parse_connection_url
 
         def validate(text: str) -> Optional[str]:
             if self.win.tree.find_host_by_alias(text.strip()) is not None:
                 return None
+            if looks_like_url(text):
+                _url, reason = parse_connection_url(text)
+                return _(reason) if reason else None
             if details_presenter.parse_quick_connect(text) is None:
-                return _("Use [user@]host[:port] or the alias of a saved host.")
+                return _("Use [user@]host[:port], a URL such as sftp://user@host, or the alias of a saved host.")
             return None
 
         value = PromptDialog(
             self.win,
             _("Quick Connect"),
-            _("Connect to a saved host by alias, or to any server as [user@]host[:port]."),
+            _("Connect to a saved host by alias, to any SSH server as [user@]host[:port], or open "
+              "sftp://, ftps:// or ftp:// URLs in a file browser."),
             placeholder=_("deploy@web-01.example.com:22"),
             accept_label=_("C_onnect"),
             validator=validate,
@@ -373,17 +384,40 @@ class SessionController:
         if saved is not None:
             self.open_hosts([saved])
             return
-        parsed = details_presenter.parse_quick_connect(value)
-        if parsed is None:
+        adhoc = quick_connect_host(value)
+        if adhoc is None:
             return
-        user, host, port = parsed
-        options = {"hostname": host}
-        if user:
-            options["user"] = user
-        if port:
-            options["port"] = port
-        adhoc = HostEntry(alias=value, options=options, parent_group=_("Quick Connect"), child_group="")
         self.open_hosts([adhoc])
+        self.win._notify(_("“{alias}” is not saved.").format(alias=adhoc.alias), Level.INFO,
+                         action_label=_("Save to Inventory…"),
+                         action=lambda host=adhoc: self.win.hosts.save_to_inventory(host))
+
+    def open_files_selected(self) -> None:
+        host = self.win.tree.selected_host()
+        if not host:
+            self.win._notify_info(_("Select an SSH host to browse its files."))
+            return
+        self.open_files_for_host(host)
+
+    def open_files_for_host(self, host: HostEntry) -> Optional[str]:
+        """An SFTP file browser for an SSH host: same address, user, key, jump host and saved password.
+
+        Nothing is stored: the SSH host stays an SSH host; the tab is a view of it over SFTP.
+        """
+
+        if not protocols.is_ssh(host):
+            return self.open_transfer_host(host) if protocols.protocol_of(host) == "sftp" else None
+        view = files_view_of(host)
+        if not self.win.creds.permissions_for_host(host).get("can_connect", True) and not confirm(
+            self.win,
+            _("Connect to “{alias}” anyway?").format(alias=host.alias),
+            _("Connecting is disabled for this host by its local permissions."),
+            confirm_label=_("C_onnect Anyway"),
+            destructive=True,
+        ):
+            return None
+        self.audit_log("connect", view)
+        return self.open_transfer_host(view, bind_status=False)
 
     def copy_ssh_command(self) -> None:
         host = self.win.tree.selected_host()
@@ -423,3 +457,38 @@ class SessionController:
             return
         for host in hosts:
             self.open_hosts([host])
+
+
+def quick_connect_host(value: str) -> Optional[HostEntry]:
+    """An unsaved host for Quick Connect: ``[user@]host[:port]`` (SSH) or an ssh/sftp/ftp/ftps URL."""
+
+    from ssh_manager.protocols.urls import looks_like_url, parse_connection_url
+
+    group = _("Quick Connect")
+    if looks_like_url(value):
+        url, _reason = parse_connection_url(value)
+        if url is None:
+            return None
+        transfer: Dict[str, object] = {"initial_remote_dir": url.path} if url.path else {}
+        if url.protocol == "ftps" and url.port == 990:
+            transfer["tls_mode"] = "implicit"  # the implicit-FTPS port
+        metadata = {"transfer": {"v": 1, **transfer}} if transfer else {}
+        return HostEntry(alias=url.label(), options=url.options(), metadata=metadata, parent_group=group,
+                         child_group="", protocol=url.protocol)
+    parsed = details_presenter.parse_quick_connect(value)
+    if parsed is None:
+        return None
+    user, host, port = parsed
+    options = {"hostname": host}
+    if user:
+        options["user"] = user
+    if port:
+        options["port"] = port
+    return HostEntry(alias=value, options=options, parent_group=group, child_group="")
+
+
+def files_view_of(host: HostEntry) -> HostEntry:
+    """The SFTP view of an SSH host (same id, so its credential and saved password apply)."""
+
+    return dataclasses.replace(host, options=dict(host.options), metadata=copy.deepcopy(host.metadata),
+                               protocol="sftp")

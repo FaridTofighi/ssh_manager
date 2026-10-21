@@ -115,7 +115,7 @@ CONFLICT_POLICIES = ("ask", "overwrite", "overwrite_newer", "skip", "rename", "r
 class FileTransferPreferences:
     """Preferences → File transfer (FTP / FTPS / SFTP tabs and the transfer queue)."""
 
-    download_dir: str = ""  # "" = ~/Downloads (or home)
+    download_dir: str = ""  # "" = the home folder
     conflict_policy: str = "ask"
     concurrency: int = 3  # global cap of running transfers (per host: its max_connections)
     warn_plain_ftp: bool = True

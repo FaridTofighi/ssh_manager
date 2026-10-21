@@ -83,18 +83,25 @@ that direct file mode follows `Include` directives.
   Esc or a click elsewhere closes it, and it never resizes the terminal.
   Select several hosts to connect, move or tag them together.
 - **Sessions**: double-click a host, press Enter, or use Quick Connect
-  (Ctrl+Shift+T or the `+` after the last tab) for an ad-hoc `user@host:port`.
+  (Ctrl+Shift+T or the `+` after the last tab) for an ad-hoc `user@host:port`
+  or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a temporary
+  connection; the toast offers **Save to Inventory…**).
   Every session has its own tab, labelled with the host name, or with its IP
   address, or both (Settings → Appearance → Tab label); duplicates read
   `web-01 (2)`, and F2 renames a tab. Drag tabs to reorder them; the tooltip
   shows `user@host:port` and the status. The session toolbar acts on the
   active tab: split pane, save transcript, copy as plain text, show all
   sessions, broadcast and remote stats.
+- **File transfer**: hosts can be FTP, FTPS or SFTP (host dialog →
+  Protocol). They open in a two-pane file browser with a transfer queue,
+  drag and drop and a connection log; SSH hosts have **Browse Files (SFTP)**
+  in their menu. Settings → File Transfer holds the defaults. See
+  `docs/file-transfer.md` and `docs/protocols.md`.
 - **Import from MobaXterm**: app menu → Import → From MobaXterm
-  (.mxtsessions)…, or the empty sidebar's main button. SSH sessions and their
-  folders become groups and hosts; you choose which SSH Manager credential
-  replaces each username found in the file. RDP/FTP sessions, icons and
-  colors are not imported, and passwords are never in an export. Any failure
+  (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP and SFTP
+  sessions and their folders become groups and hosts; you choose which SSH
+  Manager credential replaces each username found in the file. RDP and other
+  sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
 - **Messages** appear as toasts; the activity button in the header keeps every
@@ -155,6 +162,8 @@ authentication.
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
 - `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
+- `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
+- `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)
