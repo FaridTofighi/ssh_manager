@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 from typing import Any, List, Optional, Set, Tuple
 
+from ... import gc_guard
 from ...rdp.process import ChildRegistry, RdpProcess, SessionLimiter, reap_stale
 from ...trust import TrustStore
 
@@ -30,7 +31,7 @@ class RdpRuntime:
         self.state_path = state_path or Path(base) / "ssh-manager" / "rdp-embed.json"
         self.embed_failures: Set[Tuple[str, str]] = self._load_failures()
         if reap:
-            threading.Thread(target=self._reap, daemon=True, name="sshm-rdp-reap").start()
+            threading.Thread(target=gc_guard.worker(self._reap), daemon=True, name="sshm-rdp-reap").start()
 
     def _reap(self) -> None:
         try:

@@ -101,11 +101,20 @@ that direct file mode follows `Include` directives.
   their own sign-in, security, certificate, display, device and gateway
   settings and a **Test Connection** that shows the server's security and
   certificate. Sessions use FreeRDP, installed separately; Settings →
-  Remote Desktop → Diagnostics shows what was found. See `docs/rdp.md`.
+  Remote Desktop → Diagnostics shows what was found.
+  - **Import and export:** `.rdp` files can be imported (Import → From
+    Remote Desktop Files) and exported. Passwords are never read from or
+    written to them.
+  - **Quick Connect:** accepts `rdp://` and `host:3389`.
+  - **Command line:** `--rdp HOST[:PORT] [--user U] [--domain D]` opens a
+    session at start-up.
+  - **Wake-on-LAN:** a host with a MAC address has **Wake and Connect**.
+
+  See `docs/rdp.md`.
 - **Import from MobaXterm**: app menu → Import → From MobaXterm
-  (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP and SFTP
+  (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP, SFTP and RDP
   sessions and their folders become groups and hosts; you choose which SSH
-  Manager credential replaces each username found in the file. RDP and other
+  Manager credential replaces each username found in the file. Other
   sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
@@ -169,7 +178,7 @@ authentication.
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
-- `docs/rdp.md` — Remote Desktop: engines, install, capabilities, settings, the connection test, secrets
+- `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)

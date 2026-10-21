@@ -435,14 +435,15 @@ class SessionController:
                 _url, reason = parse_connection_url(text)
                 return _(reason) if reason else None
             if details_presenter.parse_quick_connect(text) is None:
-                return _("Use [user@]host[:port], a URL such as sftp://user@host, or the alias of a saved host.")
+                return _("Use [user@]host[:port], a URL such as sftp://user@host or rdp://user@host, or the alias "
+                         "of a saved host.")
             return None
 
         value = PromptDialog(
             self.win,
             _("Quick Connect"),
-            _("Connect to a saved host by alias, to any SSH server as [user@]host[:port], or open "
-              "sftp://, ftps:// or ftp:// URLs in a file browser."),
+            _("Connect to a saved host by alias, to any SSH server as [user@]host[:port], open sftp://, "
+              "ftps:// or ftp:// URLs in a file browser, or rdp:// URLs (and host:3389) as a remote desktop."),
             placeholder=_("deploy@web-01.example.com:22"),
             accept_label=_("C_onnect"),
             validator=validate,
@@ -456,6 +457,11 @@ class SessionController:
         adhoc = quick_connect_host(value)
         if adhoc is None:
             return
+        self.open_unsaved(adhoc)
+
+    def open_unsaved(self, adhoc: HostEntry) -> None:
+        """Open a host that is not in the inventory (Quick Connect, --rdp) and offer to save it."""
+
         self.open_hosts([adhoc])
         self.win._notify(_("“{alias}” is not saved.").format(alias=adhoc.alias), Level.INFO,
                          action_label=_("Save to Inventory…"),
@@ -541,13 +547,19 @@ def quick_connect_host(value: str) -> Optional[HostEntry]:
         transfer: Dict[str, object] = {"initial_remote_dir": url.path} if url.path else {}
         if url.protocol == "ftps" and url.port == 990:
             transfer["tls_mode"] = "implicit"  # the implicit-FTPS port
-        metadata = {"transfer": {"v": 1, **transfer}} if transfer else {}
+        metadata: Dict[str, object] = {"transfer": {"v": 1, **transfer}} if transfer else {}
+        if url.protocol == "rdp":
+            metadata = {"rdp": {"v": 1}}
         return HostEntry(alias=url.label(), options=url.options(), metadata=metadata, parent_group=group,
                          child_group="", protocol=url.protocol)
     parsed = details_presenter.parse_quick_connect(value)
     if parsed is None:
         return None
     user, host, port = parsed
+    if port == "3389":  # the RDP port: a Remote Desktop, not SSH
+        rdp_options = {"hostname": host, **({"user": user} if user else {})}
+        return HostEntry(alias=value, options=rdp_options, metadata={"rdp": {"v": 1}}, parent_group=group,
+                         child_group="", protocol="rdp")
     options = {"hostname": host}
     if user:
         options["user"] = user

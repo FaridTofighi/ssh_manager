@@ -43,9 +43,20 @@ behind jump= #109#0%10.0.0.13%22%bob%%-1%-1%%10.0.0.254%22%alice%…
     at the first `=`, and spaces after it are allowed.
   - The value is `#<icon>#<type>%f0%f1%…`. The field count varies (49–64
     fields seen); missing fields read as empty.
-  - **Types 0 (SSH), 6 (FTP) and 7 (SFTP) are imported.** Telnet, RDP, VNC,
-    serial, Mosh, WSL and the other types are skipped and counted. FTP and
-    SFTP can be left out with **Import FTP/SFTP sessions** (on by default).
+  - **Types 0 (SSH), 4 (RDP), 6 (FTP) and 7 (SFTP) are imported.**
+    Telnet, VNC, serial, Mosh, WSL and the other types are skipped and
+    counted.
+  - FTP and SFTP can be left out with **Import FTP/SFTP sessions**.
+  - RDP can be left out with **Import RDP sessions**.
+  - Both options are on by default.
+- **RDP fields:**
+  - Only `f0` (host), `f1` (port; empty means 3389) and `f2` (user) are
+    read.
+  - A literal `DOMAIN\user` is split: the domain goes to the host's RDP
+    settings. A bracketed `[label]` is a credential reference, as for SSH.
+  - Display and redirection options are not imported, because their
+    positions are not documented. The report says so, and the defaults are
+    used. See `docs/rdp.md`.
 - **FTP and SFTP fields:** only `f0` (host), `f1` (port; empty means 21 for
   FTP, 22 for SFTP) and `f2` (user) are read. Their other fields are not
   verified, so passive / active mode, FTPS, jump hosts and keys keep the
@@ -208,7 +219,7 @@ The application log records only the outcome and counts.
 | "This does not look like a MobaXterm sessions file." | The file has no `[Bookmarks]` section. Export the sessions again from MobaXterm. |
 | "The file is empty." / "binary file" | Choose the `.mxtsessions` file itself, not an archive or a settings file. |
 | "…larger than 50 MB…" | Not a sessions export; MobaXterm exports are a few MB at most. |
-| `unsupported_type` in the report | Sessions of other types (RDP, VNC, …; FTP / SFTP when unticked) are counted, not imported. |
+| `unsupported_type` in the report | Sessions of other types (VNC, Telnet, …; FTP / SFTP / RDP when unticked) are counted, not imported. |
 | `ftps_unknown` | An FTP session: the export does not say whether the server wants TLS. Edit the host and choose FTPS if it does. |
 | `empty_hostname` / `invalid_hostname` | The session has no usable host name; fix it in MobaXterm or add the host by hand. |
 | `windows_key_path` | The key path points to Windows; edit the host and choose the key again. |

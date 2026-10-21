@@ -22,7 +22,7 @@ gi.require_version("Vte", "2.91")
 
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango, Vte  # type: ignore  # noqa: E402,F401
 
-from ssh_manager.config import ConfigManager  # noqa: E402
+from ssh_manager.config import ConfigManager, HostEntry  # noqa: E402
 from ssh_manager.credentials import CredentialStore  # noqa: E402
 from ssh_manager.gtk_terminal import TerminalNotebook  # noqa: E402
 from ssh_manager.gtkui.constants import Icons, TreeColumn  # noqa: E402
@@ -128,7 +128,8 @@ def _home_relative(path: Path) -> str:
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
-    def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None) -> None:
+    def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None,
+                 startup_host: Optional[HostEntry] = None) -> None:
         Gtk.Application.__init__(self, application_id="org.codex.SSHManager")
         self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
         self._inventory = inventory  # --inventory: another database file
@@ -136,11 +137,17 @@ class SSHManagerApplication(Gtk.Application):
         self._theme = get_theme_manager()
         self._settings = AppSettings.load()
         self._master_password: Optional[str] = None
+        self._startup_host = startup_host  # --rdp / rdp://: opened once the window exists, never saved
 
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
         register_icon_path()
         self._install_css(None)
+
+    def _open_startup_host(self, host: HostEntry) -> bool:
+        if self._window is not None:
+            self._window.sessions.open_unsaved(host)
+        return False
 
     def do_activate(self) -> None:  # type: ignore[override]
         if not self._window:
@@ -159,6 +166,9 @@ class SSHManagerApplication(Gtk.Application):
                                             manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
+            if self._startup_host is not None:
+                host, self._startup_host = self._startup_host, None
+                GLib.timeout_add(500, self._open_startup_host, host)
         self._window.present()
 
     def _ask_startup(self, kind: str, message: str) -> Choice:
@@ -336,6 +346,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.app_dialogs = AppDialogs(self)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
+        from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
+
+        self.rdp_files = RdpFileActions(self)
         self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / HOST_HISTORY_FILE)
 
     def _build_ui(self) -> None:
@@ -479,6 +492,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "open-folder": self.inventory.open_inventory_folder,
             "import-mobaxterm": self.importer.open,
             "import-openssh": lambda: self.store_actions.import_openssh(),
+            "import-rdp-files": lambda: self.rdp_files.import_files(),
+            "export-rdp-file": lambda: self.rdp_files.export_selected(),
             "export-openssh": lambda: self.store_actions.export_openssh(),
             "backup-inventory": lambda: self.store_actions.backup_now(),
             "quit": self.close,

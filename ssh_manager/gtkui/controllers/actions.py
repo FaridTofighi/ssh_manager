@@ -44,6 +44,12 @@ class WindowActions:
     def open_files_selected(self) -> None:
         self.win.sessions.open_files_selected()
 
+    def export_rdp_file(self) -> None:
+        self.win.rdp_files.export_selected()
+
+    def wake_and_connect(self) -> None:
+        self.win.rdp_files.wake_and_connect()
+
     def quick_connect(self) -> None:
         self.win.sessions.quick_connect()
 

@@ -12,8 +12,11 @@ Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
 | `rdp/probe.py` | "Test connection": the X.224 negotiation probe and the server certificate |
 | `rdp/engines.py` | Which FreeRDP clients exist, their versions and options, the engines and their capabilities |
 | `trust.py` | Trusted certificates shared with FTPS (`TrustStore`; RDP keys are scoped `rdp:`) |
+| `rdp/rdpfile.py` | `.rdp` files: import (strict parser) and export |
+| `rdp/wol.py` | Wake-on-LAN magic packets |
+| `gtkui/controllers/rdp_files.py` | The `.rdp` import / export actions and **Wake and Connect** |
 
-Status: **phase R3**. With gtk-frdp, or FreeRDP on X11, the remote desktop
+Status: **phase R4** (complete). With gtk-frdp, or FreeRDP on X11, the remote desktop
 is shown inside the tab under a toolbar; elsewhere, or if embedding fails,
 it runs in FreeRDP's own window and the tab is a session card.
 
@@ -292,6 +295,14 @@ it accepted; such lines are ignored.
   start time, and only if the app instance that started it is gone.
 - **Limit:** at most "Sessions at once" (Preferences → Remote Desktop, 8 by
   default) run together.
+- **Worker threads:** discovery, probes, the stale-child check and stopping
+  run on short threads wrapped in `gc_guard.worker`. That pauses Python's
+  cycle collector while they run.
+  - **Why:** otherwise the collector could finalize GTK widgets on a worker.
+    The suite showed this as a deadlock between GObject's signal lock and
+    the GIL, and as rare crashes.
+  - **Exceptions:** long-lived threads (output readers, the tunnel) are not
+    wrapped.
 
 ### Known limits (R1)
 
@@ -548,3 +559,158 @@ The note in the connection log says which preset was chosen.
   starts (see above).
 - **Audio devices:** no device picker; the engine's default device is
   used.
+
+## Import, export, Quick Connect, Wake-on-LAN (R4)
+
+### MobaXterm sessions
+
+Type 4 sessions of a `.mxtsessions` export become `rdp` hosts (see
+`docs/import-mobaxterm.md`). **Import RDP sessions** in the wizard's options
+(on by default) leaves them out.
+
+- **Fields read:** `f0` host, `f1` port (empty means 3389) and `f2` user.
+- **User names:**
+  - A literal `CORP\alice` is split into the domain `CORP` (stored in
+    `metadata["rdp"]["domain"]`) and the user `alice`.
+  - A bracketed label `[alice]` is a MobaXterm credential reference. It goes
+    through the Credentials step like SSH users.
+  - Rows in the Credentials step show which protocols use each name.
+- **Not imported:** display and redirection options. Their positions in the
+  export are not documented, so the defaults are used and the report says
+  so.
+
+### `.rdp` files
+
+**Import → From Remote Desktop Files (.rdp)…** reads one or more files
+(200 at most) into a group you choose. Each file becomes one host named
+after the file; a name already used gets a number.
+
+- **Encodings:** UTF-16 LE with a BOM (what mstsc writes), UTF-8, or
+  Windows-1252.
+- **Size limits:** 256 KiB per file and 4096 characters per line. Lines
+  with control characters are refused, and a file without a valid
+  `full address` is reported and skipped.
+- **Passwords:** `password 51:b:` blobs, gateway passwords and access
+  tokens are **never** imported. They are DPAPI data usable only by the
+  Windows account that wrote them. The report names the key, never its
+  value.
+- **Mapped keys:**
+  - address and port;
+  - `DOMAIN\user`;
+  - screen mode, size and monitors;
+  - color depth;
+  - clipboard, printers, smart cards, sound and microphone;
+  - certificate policy;
+  - gateway;
+  - start program and RemoteApp;
+  - load-balance information;
+  - the performance preset (`connection type`);
+  - automatic reconnection.
+- **Certificates:** `authentication level:i:0` ("connect and don't warn")
+  **never** turns certificate checking off. It becomes "Ask the first
+  time", with a note.
+- **Shared folders:** `drivestoredirect` entries are checked like shared
+  folders. Sensitive or missing folders, Windows drive letters and `*` are
+  reported and left out.
+- **Other keys:** keys with no counterpart are listed in the report.
+  Harmless ones are kept in `metadata["rdp"]["extra"]["rdpfile"]` and
+  written back on export.
+
+**Export → Selected RDP Host as .rdp File…** (also in the host's context
+menu) writes a UTF-16 file for mstsc and other clients. It contains the
+address, user and domain, display, devices, gateway and programs, and
+**never a password**. `prompt for credentials` follows "Ask for the
+password every time".
+
+### Quick Connect and the command line
+
+- **Quick Connect:**
+  - `rdp://[DOMAIN%5Cuser@]host[:port]` opens an unsaved RDP tab. The user
+    may be percent-encoded, and a path is ignored.
+  - `host:3389` (with or without `user@`) is also treated as RDP.
+  - A password in the address is refused, as for the other schemes.
+- **Command line:**
+
+  ```bash
+  python3 -m ssh_manager --rdp win-01.acme.test:3390 --user alice --domain CORP
+  python3 -m ssh_manager rdp://CORP%5Calice@10.0.0.50
+  ```
+
+  - There is no password option. The password is asked for, or comes from
+    the host's credential once it is saved.
+  - An invalid target exits with status 2 before any window opens.
+
+### Wake-on-LAN
+
+RDP Connection → **Wake-on-LAN** stores a MAC address, a broadcast address
+(default `255.255.255.255`) and a wait (0–600 s, default 30). The settings
+are off while the MAC is empty.
+
+**Wake and Connect** (the host's context menu, shown when a MAC is set)
+sends one magic packet over UDP port 9 and then connects after the wait.
+
+- **Allowed targets:** packets go only to a broadcast or private / local
+  address.
+- **Refused addresses:** a MAC of all zeros or all `FF` is refused.
+
+## Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| "FreeRDP is not installed" | Install `freerdp3-x11` (or `freerdp2-x11`); Settings → Remote Desktop → Diagnostics shows what was found and the exact package name. |
+| The remote screen opens in a separate window | Embedding needs X11 or gtk-frdp. On Wayland without gtk-frdp, FreeRDP has its own window; **Focus Window** needs `xdotool` or `wmctrl`. |
+| "The certificate changed" | The server presents a different certificate than the pinned one. Check with the administrator before trusting it; **Trust the New Certificate** replaces the pin. The host dialog's Security section shows how many certificates are pinned for the host. |
+| Authentication fails with NLA | Check the domain (`CORP\alice` or `alice@corp.example`). If the server has NLA off, choose Security → TLS. Never turn certificate checking off to "fix" a login. |
+| The password is never filled in | The FreeRDP version supports no secret channel (`/args-from:stdin` on 3.x, `/from-stdin` on 2.x); the program asks FreeRDP to prompt instead, never `/p:` on the command line. |
+| Black screen or very slow | Choose a slower preset (WAN or Slow link), or lower the color depth. |
+| Gateway: "access denied" | Gateway credentials differ from the server's: untick "same credentials" and choose the gateway credential. |
+| SSH tunnel fails | The SSH host must allow TCP forwarding (`AllowTcpForwarding`); its password must come from a saved credential. |
+| Clipboard does not work | Clipboard redirection is per host (Devices → Clipboard); FreeRDP 2.x cannot limit its direction. |
+| Wake and Connect does nothing | The machine must have Wake-on-LAN on in its firmware and network card; across subnets, use the directed broadcast of the target's network (for example `10.0.0.255`). |
+| A `.rdp` file is refused | The report says why: no `full address`, a file over 256 KiB, or an invalid host name. |
+
+## Manual test checklist
+
+To be run before a release against a Windows server (2019 or later, NLA on)
+and an xrdp server (Debian). Use test accounts only.
+
+1. **Engines:** Settings → Remote Desktop → Diagnostics lists the FreeRDP
+   version and engine. Remove FreeRDP: the app starts, and opening an RDP
+   host explains how to install it.
+2. **Certificates:**
+   - Windows, first connection: the trust dialog shows the fingerprint, and
+     **Trust** pins it.
+   - Second connection: no prompt.
+   - Replace the certificate: the change warning appears, and the session
+     does not connect without a decision.
+3. **Credentials:**
+   - Connect with a saved credential; check that the password is in no
+     `ps` output, log, or the audit log.
+   - "Ask every time" prompts.
+   - A wrong password reports an authentication failure.
+4. **Display:**
+   - Embedded on X11: resize the window, and the remote desktop follows (or
+     scales).
+   - Full screen and back.
+   - Send Ctrl+Alt+Del.
+5. **Clipboard:** copy text both ways; with Clipboard off, nothing passes.
+6. **Shared folder:** share a folder; it appears under "This PC" on Windows
+   and in xrdp's `thinclient_drives`. A sensitive folder asks first.
+7. **Reconnect:** disconnect the network for 20 s; the tab reconnects, and
+   closing the tab kills FreeRDP (`pgrep freerdp` shows nothing).
+8. **Gateway and tunnel:**
+   - Through an RD Gateway, if one is available.
+   - Through an SSH host with xrdp only on 127.0.0.1.
+9. **Import:**
+   - A MobaXterm export with type 4 sessions (`CORP\alice` and `[alice]`).
+   - A `.rdp` file saved by mstsc with a saved password: it is reported, not
+     imported.
+   - Export, then import into mstsc.
+10. **Quick Connect / CLI:**
+    - `rdp://CORP%5Calice@host`;
+    - `host:3389`;
+    - `--rdp host --user alice --domain CORP`.
+11. **Wake-on-LAN:** set the MAC, shut the machine down, then use **Wake and
+    Connect**.
+12. **Accessibility:** every RDP dialog field is reachable with Tab and has a
+    mnemonic; Orca reads the toolbar buttons.

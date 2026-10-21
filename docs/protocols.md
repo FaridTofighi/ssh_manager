@@ -59,15 +59,16 @@ the registry.
 | Details page | A "Protocol" fact, the protocol's icon, and the URL as copy text |
 | Host dialog | **Protocol** is the first field; it swaps pages, updates the default port unless you typed one, and asks before dropping settings on an existing host |
 | Folder inventories | OpenSSH config files: SSH only (the Protocol field is disabled) |
-| Quick Connect | `[user@]host[:port]` stays SSH; `ssh://`, `sftp://`, `ftp://` and `ftps://` URLs open the matching tab (`protocols/urls.py`) |
-| MobaXterm import | Types 6 / 7 become `ftp` / `sftp` hosts; the protocol is part of "the same host" |
+| Quick Connect | `[user@]host[:port]` stays SSH (`host:3389` is RDP); `ssh://`, `sftp://`, `ftp://`, `ftps://` and `rdp://` URLs open the matching tab (`protocols/urls.py`) |
+| MobaXterm import | Types 6 / 7 / 4 become `ftp` / `sftp` / `rdp` hosts; the protocol is part of "the same host" |
 | SSH host menu | **Browse Files (SFTP)** opens an SFTP view of the SSH host (same id, credential, key and jump host; nothing stored) |
 | RDP | `rdp` (port 3389, `sshm-desktop` icon, `RDP` pill, `proto:rdp`): Remote Desktop pages in the host dialog, settings in `metadata["rdp"]`; see `docs/rdp.md` |
 
 ## Quick Connect URLs
 
 `parse_connection_url()` accepts `scheme://[user@]host[:port][/folder]` for
-`ssh`, `sftp`, `ftp` and `ftps`. The user and the folder may be
+`ssh`, `sftp`, `ftp`, `ftps` and `rdp`. An `rdp://` user may be
+`DOMAIN%5Cuser`; its path is ignored. The user and the folder may be
 percent-encoded; IPv6 hosts are bracketed. The folder becomes the
 connection's first remote folder (`ssh://` ignores it), and `ftps://…:990`
 selects implicit TLS. A URL with a password (`ftp://user:secret@host`) is

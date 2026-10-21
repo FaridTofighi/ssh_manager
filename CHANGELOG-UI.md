@@ -6,6 +6,35 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Remote Desktop, phase R4: import, export, Quick Connect, Wake-on-LAN
+
+Details: `docs/rdp.md` ("Import, export, Quick Connect, Wake-on-LAN").
+
+- **MobaXterm import:**
+  - RDP sessions (type 4) become RDP hosts.
+  - `CORP\alice` is split into domain and user. `[label]` users go through
+    the Credentials step.
+  - The new **Import RDP sessions** option is on by default.
+  - The Credentials step tags each user with the protocols using it.
+- **`.rdp` files:**
+  - **Import:** Import → From Remote Desktop Files (.rdp)…. Several files
+    go into a chosen group. Saved passwords (`password 51`) are reported,
+    never imported. `authentication level:i:0` becomes "Ask the first
+    time". Shared folders are checked.
+  - **Export:** Export → Selected RDP Host as .rdp File…, also in the host
+    menu. The file is UTF-16, for mstsc, and has no password.
+- **Quick Connect:** accepts `rdp://[DOMAIN%5Cuser@]host[:port]`, and
+  `host:3389` is treated as RDP.
+- **Command line:** `--rdp HOST[:PORT] --user U --domain D`, or an
+  `rdp://` argument, opens an unsaved session at start-up. There is no
+  password option, and an invalid target exits with status 2.
+- **Wake-on-LAN:**
+  - **Settings:** MAC, broadcast address and wait, under RDP Connection.
+  - **Wake and Connect:** in the host menu when a MAC is set.
+  - **Targets:** packets go only to broadcast or private addresses.
+- **Docs:** troubleshooting and a manual test checklist (Windows, xrdp) in
+  `docs/rdp.md`.
+
 ## Remote Desktop, phase R3: shared folders, RD Gateway, SSH tunnel, presets
 
 Details: `docs/rdp.md` ("Devices, gateway, tunnel, presets").

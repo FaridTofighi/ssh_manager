@@ -1,4 +1,6 @@
-"""``ssh://``, ``sftp://``, ``ftp://`` and ``ftps://`` connection URLs (pure Python).
+"""``ssh://``, ``sftp://``, ``ftp://``, ``ftps://`` and ``rdp://`` connection URLs (pure Python).
+
+``rdp://`` accepts ``DOMAIN\\user`` written as ``DOMAIN%5Cuser``.
 
 Quick Connect accepts them next to ``[user@]host[:port]``. A password in the
 URL (``ftp://user:secret@host``) is refused, never used: it would end up in
@@ -14,7 +16,7 @@ from urllib.parse import unquote
 
 from . import default_port
 
-SCHEMES = ("ssh", "sftp", "ftp", "ftps")
+SCHEMES = ("ssh", "sftp", "ftp", "ftps", "rdp")
 _URL = re.compile(r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://(?P<rest>.*)$", re.DOTALL)
 _BAD = re.compile(r"[\s\x00-\x1f\x7f\"'`\\]")
 
@@ -61,7 +63,7 @@ def parse_connection_url(text: str) -> Tuple[Optional[ConnectionUrl], str]:
         return None, "Not a URL."
     scheme = match.group("scheme").lower()
     if scheme not in SCHEMES:
-        return None, "Use ssh://, sftp://, ftp:// or ftps://."
+        return None, "Use ssh://, sftp://, ftp://, ftps:// or rdp://."
     rest = match.group("rest")
     authority, slash, path = rest.partition("/")
     path = slash + path
@@ -73,7 +75,8 @@ def parse_connection_url(text: str) -> Tuple[Optional[ConnectionUrl], str]:
         if ":" in userinfo:
             return None, "Do not put a password in the address; you will be asked for it."
         user = unquote(userinfo)
-        if not user or _BAD.search(user) or user.startswith("-"):
+        checked = user.replace("\\", "", 1) if scheme == "rdp" else user  # rdp://DOMAIN%5Cuser@host
+        if not user or _BAD.search(checked) or user.startswith("-"):
             return None, "The user name is not valid."
     port_text = ""
     if authority.startswith("["):
@@ -99,6 +102,31 @@ def parse_connection_url(text: str) -> Tuple[Optional[ConnectionUrl], str]:
     path = unquote(path) if path else ""
     if path and any(ord(ch) < 32 or ord(ch) == 127 for ch in path):
         return None, "The folder is not valid."
-    if scheme == "ssh":
-        path = ""  # a terminal has no "folder to open"
+    if scheme in ("ssh", "rdp"):
+        path = ""  # a terminal or a desktop has no "folder to open"
     return ConnectionUrl(scheme, host, user, port, path), ""
+
+
+def cli_rdp_target(target: str, user: str = "", domain: str = "") -> Tuple[Optional[ConnectionUrl], str]:
+    """``--rdp host[:port] [--user U] [--domain D]`` or ``rdp://…``: ``(url, reason)`` (never a password)."""
+
+    text = (target or "").strip()
+    if not text.lower().startswith("rdp://"):
+        if "://" in text:
+            return None, "Use --rdp host[:port] or an rdp:// address."
+        text = "rdp://" + text
+    url, reason = parse_connection_url(text)
+    if url is None:
+        return None, reason
+    if url.protocol != "rdp":
+        return None, "Use --rdp host[:port] or an rdp:// address."
+    user = (user or "").strip()
+    domain = (domain or "").strip()
+    if any(ord(ch) < 32 for ch in user + domain) or ":" in user:
+        return None, "The user or domain is not valid (a password is never given on the command line)."
+    if user:
+        url = ConnectionUrl(url.protocol, url.host, user, url.port, url.path)
+    if domain and "\\" not in url.user and "@" not in url.user:
+        url = ConnectionUrl(url.protocol, url.host, f"{domain}\\{url.user}" if url.user else "", url.port,
+                            url.path)
+    return url, ""

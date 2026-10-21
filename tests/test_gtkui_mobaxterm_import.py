@@ -98,8 +98,8 @@ class ImportWizardTests(unittest.TestCase):
         self.assertFalse(dialog.empty_store_box.get_visible())
         self.next(dialog)
         self.assertIs(dialog.step, Step.REVIEW)
-        self.assertIn("10 hosts to import", dialog.review_summary.get_text())  # 9 SSH + 1 FTP
-        self.assertIn("alice (3 host(s)) → Ops", dialog.report_text)
+        self.assertIn("11 hosts to import", dialog.review_summary.get_text())  # 9 SSH + 1 FTP + 1 RDP
+        self.assertIn("alice (4 host(s)) → Ops", dialog.report_text)  # dev\\alice of the RDP session
 
     def test_transfer_sessions_checkbox(self) -> None:
         from ssh_manager.gtkui.dialogs.mobaxterm_import import COL_COUNT
@@ -112,12 +112,17 @@ class ImportWizardTests(unittest.TestCase):
         self.next(dialog)  # → options
         self.assertTrue(dialog.transfer_check.get_active())  # on by default
         self.assertIn("1 FTP/SFTP session selected", dialog.selection_label.get_text())
+        self.assertIn("1 RDP sessions", dialog.file_summary.get_text())
+        self.assertIn("1 RDP session selected", dialog.selection_label.get_text())
         root = dialog.folder_store.get_iter_first()
-        self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 9)
+        self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 10)
         dialog.transfer_check.set_active(False)
+        self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 9)
+        dialog.rdp_check.set_active(False)
         self.assertEqual(dialog.folder_store.get_value(root, COL_COUNT), 8)
         self.assertNotIn("FTP", dialog.selection_label.get_text())
-        self.assertFalse(dialog.options().include_transfer)
+        self.assertNotIn("RDP", dialog.selection_label.get_text())
+        self.assertFalse(dialog.options().include_transfer or dialog.options().include_rdp)
         self.next(dialog)  # → credentials
         dialog.default_combo.set_active_id(ops.id)
         self.next(dialog)

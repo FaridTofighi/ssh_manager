@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
+from .. import gc_guard
+
 BINARIES = ("xfreerdp3", "xfreerdp", "sdl-freerdp3", "sdl-freerdp", "wlfreerdp3", "wlfreerdp")
 EMBEDDABLE = ("xfreerdp3", "xfreerdp")  # clients with /parent-window (X11 window embedding)
 ENGINE_IDS = ("frdp", "xfreerdp-embed", "external")
@@ -479,7 +481,7 @@ def discover_async(callback: Callable[[EngineReport], None], **kwargs) -> thread
         store_report(report)
         callback(report)
 
-    thread = threading.Thread(target=work, daemon=True, name="sshm-rdp-discovery")
+    thread = threading.Thread(target=gc_guard.worker(work), daemon=True, name="sshm-rdp-discovery")
     thread.start()
     return thread
 

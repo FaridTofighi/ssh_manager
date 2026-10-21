@@ -260,6 +260,9 @@ class RdpSettings:
     working_dir: str = ""
     remote_app: RemoteApp = field(default_factory=RemoteApp)
     hyperv_vm_id: str = ""  # Hyper-V console (/vmconnect, port 2179): the VM's GUID
+    wol_mac: str = ""  # Wake-on-LAN: off unless set
+    wol_broadcast: str = "255.255.255.255"
+    wol_wait_s: int = 30  # seconds between the wake-up packet and connecting
     extra_args: str = ""
     extra_args_unchecked: bool = False  # "I know what I'm doing": free-form flags (never the forbidden ones)
     engine: str = ""  # "" = the preference; or "frdp" / "xfreerdp-embed" / "external"
@@ -339,7 +342,7 @@ class RdpSettings:
                 setattr(self, name, getattr(defaults, name))
         for name, low, high in (("width", MIN_SIZE, MAX_SIZE), ("height", MIN_SIZE, MAX_SIZE),
                                 ("desktop_scale_factor", 100, 500), ("refresh_hz", 0, 240),
-                                ("connect_timeout_s", 1, 600), ("reconnect_max", 0, 1000)):
+                                ("connect_timeout_s", 1, 600), ("reconnect_max", 0, 1000), ("wol_wait_s", 0, 600)):
             if not low <= getattr(self, name) <= high:
                 warnings.append(f"{name} must be between {low} and {high}; the default is used.")
                 setattr(self, name, getattr(defaults, name))
@@ -386,6 +389,13 @@ class RdpSettings:
             problems.append("The load-balance information is too long (256 characters at most).")
         if self.gateway.enabled and self.via_ssh:
             problems.append("Use either an RD Gateway or an SSH tunnel, not both.")
+        if self.wol_mac:
+            from .wol import broadcast_ok, parse_mac
+
+            if parse_mac(self.wol_mac) is None:
+                problems.append("The MAC address for Wake-on-LAN is not valid (like AA:BB:CC:DD:EE:FF).")
+            if not broadcast_ok(self.wol_broadcast):
+                problems.append("Wake-on-LAN packets go only to a broadcast or local network address.")
         if self.hyperv_vm_id and not _GUID.match(self.hyperv_vm_id):
             problems.append("The Hyper-V VM id must be a GUID like 1f3e7f8c-0d4b-4b63-9e57-2f0a5d6b8c11.")
         problems += extra_args_problems(self.extra_args, self.extra_args_unchecked)

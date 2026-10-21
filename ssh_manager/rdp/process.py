@@ -28,6 +28,7 @@ from collections import deque
 from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional
 
+from .. import gc_guard
 from ..text_utils import strip_ansi
 from .command import LaunchPlan
 
@@ -251,7 +252,7 @@ class RdpProcess:
             if self.running:
                 self._signal(signal.SIGKILL)
 
-        threading.Thread(target=work, daemon=True, name="sshm-rdp-stop").start()
+        threading.Thread(target=gc_guard.worker(work), daemon=True, name="sshm-rdp-stop").start()
 
     def stop_now(self, grace: float = GRACE_S) -> None:
         """Synchronous stop (application exit)."""

@@ -25,6 +25,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
+from ... import gc_guard  # noqa: E402
 from ...rdp.engines import CAPABILITY_LABELS, ENGINE_LABELS, Engine  # noqa: E402
 from ...rdp.drives import check_folder  # noqa: E402
 from ...rdp.probe import ProbeResult, probe, probe_tls  # noqa: E402
@@ -358,6 +359,16 @@ class RdpPages:
             self.via_ssh.set_active_id("")
         self._row(tunnel, _("Th_rough"), self.via_ssh)
 
+        wake = self._section("rdp_connection", _("Wake-on-LAN"),
+                             _("Wake the computer before connecting (“Wake and Connect” in the host's menu)."))
+        self.wol_mac = entry(s.wol_mac, "AA:BB:CC:DD:EE:FF")
+        self._row(wake, _("_MAC address"), self.wol_mac, _("Empty: Wake-on-LAN is off."))
+        self.wol_broadcast = entry(s.wol_broadcast, "255.255.255.255")
+        self._row(wake, _("_Broadcast address"), self.wol_broadcast,
+                  _("The packet goes only to this address (port 9)."))
+        self.wol_wait = _spin(0, 600, s.wol_wait_s)
+        self._row(wake, _("_Wait before connecting (s)"), self.wol_wait)
+
     def _build_programs(self, s: RdpSettings) -> None:
         section = self._section("rdp_connection", _("Programs"))
         self.initial_program = entry(s.initial_program, _("C:\\Tools\\app.exe (optional)"))
@@ -681,6 +692,9 @@ class RdpPages:
             remote_app=RemoteApp(self.app_program.get_text().strip(), self.app_name.get_text().strip(),
                                  self.app_args.get_text().strip()),
             hyperv_vm_id=self.vm_id.get_text().strip(),
+            wol_mac=self.wol_mac.get_text().strip(),
+            wol_broadcast=self.wol_broadcast.get_text().strip() or "255.255.255.255",
+            wol_wait_s=int(self.wol_wait.get_value()),
             extra_args=self.extra_args.get_text().strip(),
             extra_args_unchecked=self.extra_unchecked.get_active(),
             engine=self.engine.get_active_id() or "",
@@ -722,7 +736,7 @@ class RdpPages:
                 text, ok = _("The test failed: {error}").format(error=type(exc).__name__), False
             GLib.idle_add(self._show_test, ok, text)
 
-        threading.Thread(target=work, daemon=True, name="sshm-rdp-test").start()
+        threading.Thread(target=gc_guard.worker(work), daemon=True, name="sshm-rdp-test").start()
 
     @staticmethod
     def _describe(result: ProbeResult) -> str:

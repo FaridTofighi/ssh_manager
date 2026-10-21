@@ -53,6 +53,7 @@ from ...auth_flow import (  # noqa: E402
     NO_PASSWORD, RETRY_DELAY_S, AuthOutcome, Decision, FailureAction, PasswordFlow, PasswordResolution, SaveContext,
     SaveOffer, source_phrase,
 )
+from ... import gc_guard  # noqa: E402
 from ...host_utils import host_connection_params  # noqa: E402
 from ...rdp.clipboard import ClipboardPolicy  # noqa: E402
 from ...rdp.command import LaunchError, build_launch  # noqa: E402
@@ -401,7 +402,8 @@ class RdpSessionTab(SessionPage):
         if self.process is None or not tool or self._embedded():
             return False
         pid = self.process.pid
-        threading.Thread(target=focus_pid, args=(pid, tool), daemon=True, name="sshm-rdp-focus").start()
+        threading.Thread(target=gc_guard.worker(focus_pid), args=(pid, tool), daemon=True,
+                         name="sshm-rdp-focus").start()
         return True
 
     def disconnect(self) -> None:
@@ -702,7 +704,7 @@ class RdpSessionTab(SessionPage):
                 return
             GLib.idle_add(self._tunnel_ready, tunnel)
 
-        threading.Thread(target=work, daemon=True, name="sshm-rdp-tunnel-open").start()
+        threading.Thread(target=gc_guard.worker(work), daemon=True, name="sshm-rdp-tunnel-open").start()
 
     def _tunnel_host_key(self, exc: Any) -> bool:
         if self._closed:
@@ -777,7 +779,7 @@ class RdpSessionTab(SessionPage):
                 result = ProbeResult(connect_host, connect_port, error=f"probe failed: {type(exc).__name__}")
             GLib.idle_add(self._after_probe, result, gateway_result)
 
-        threading.Thread(target=work, daemon=True, name="sshm-rdp-probe").start()
+        threading.Thread(target=gc_guard.worker(work), daemon=True, name="sshm-rdp-probe").start()
 
     def _gateway_key(self) -> str:
         gateway = self.settings.gateway

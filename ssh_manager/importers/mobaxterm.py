@@ -51,10 +51,14 @@ SLASH_REPLACEMENT = "\u2215"  # DIVISION SLASH: '/' separates group paths in the
 EMPTY_SUBREP_PARENT = "MobaXterm"  # folder for sessions of a section with an empty SubRep
 NO_USERNAME = ""  # username-entry key for sessions without a username
 SSH_TYPE = 0
+RDP_TYPE = 4
 FTP_TYPE = 6
 SFTP_TYPE = 7
 TRANSFER_TYPES = {FTP_TYPE: "ftp", SFTP_TYPE: "sftp"}  # MobaXterm type → protocol id
-DEFAULT_PORTS = {"ssh": 22, "sftp": 22, "ftp": 21}
+OTHER_TYPES = {RDP_TYPE: "rdp", **TRANSFER_TYPES}
+DEFAULT_PORTS = {"ssh": 22, "sftp": 22, "ftp": 21, "rdp": 3389}
+RDP_NOTE = ("RDP display and redirection options (resolution, colors, clipboard, drives …) were not imported: "
+            "their positions in the MobaXterm export are not documented. The defaults are used.")
 TYPE_NAMES = {
     0: "SSH", 1: "Telnet", 2: "Rsh", 3: "Xdmcp", 4: "RDP", 5: "VNC", 6: "FTP", 7: "SFTP",
     8: "Serial", 9: "Mosh", 10: "AWS S3", 11: "WSL", 12: "Shell",
@@ -397,7 +401,8 @@ class SshTarget:
     user_is_reference: bool  # [label] = a MobaXterm credential reference, not a login name
     proxy_jump: str  # "" when none
     identity_file: str  # "" when none
-    protocol: str = "ssh"  # ssh, or ftp / sftp for MobaXterm FTP (6) and SFTP (7) sessions
+    protocol: str = "ssh"  # ssh, or ftp / sftp / rdp for MobaXterm FTP (6), SFTP (7) and RDP (4) sessions
+    domain: str = ""  # RDP: the DOMAIN of a literal DOMAIN\user in the file
 
     @property
     def anonymous(self) -> bool:
@@ -437,7 +442,7 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
     FTP with a warning to check.
     """
 
-    protocol = TRANSFER_TYPES.get(session.type_code, "ssh")
+    protocol = OTHER_TYPES.get(session.type_code, "ssh")
     default_port = DEFAULT_PORTS[protocol]
     label = _safe_label(session.name)
     host = session.field(0).strip()
@@ -467,6 +472,15 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
         port = default_port
     user_raw = session.field(2)
     user_key, reference = normalize_username(user_raw)
+    domain = ""
+    if protocol == "rdp" and not reference and "\\" in user_key:  # a literal DOMAIN\user (not a label)
+        domain, _sep, user_key = user_key.partition("\\")
+        domain, user_key = domain.strip(), user_key.strip()
+        if "\\" in user_key or not domain:
+            issues.append(ImportIssue(Severity.WARNING, IssueCode.INVALID_FIELD,
+                                      f"'{label}' has an unusable DOMAIN\\user; it is treated as empty.",
+                                      session.line))
+            domain, user_key = "", ""
     if user_key and (user_key.startswith("-") or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127
                                                      for ch in user_key)):
         issues.append(ImportIssue(Severity.WARNING, IssueCode.INVALID_FIELD,
@@ -477,7 +491,7 @@ def ssh_target(session: MxtSession, issues: List[ImportIssue]) -> Optional[SshTa
             issues.append(ImportIssue(Severity.WARNING, IssueCode.FTPS_UNKNOWN,
                                       f"'{label}' is imported as plain FTP; check whether this server uses FTPS.",
                                       session.line))
-        return SshTarget(host, port, user_raw, user_key, reference, "", "", protocol)
+        return SshTarget(host, port, user_raw, user_key, reference, "", "", protocol, domain)
     proxy = _proxy_jump(session, label, issues)
     identity = _identity_file(session, label, issues)
     return SshTarget(host, port, user_raw, user_key, reference, proxy, identity)
@@ -550,6 +564,7 @@ class ImportOptions:
     conflict_policy: ConflictPolicy = ConflictPolicy.SKIP
     skip_empty_folders: bool = False  # empty MobaXterm folders are created by default
     include_transfer: bool = True  # FTP (6) / SFTP (7) sessions become ftp / sftp hosts
+    include_rdp: bool = True  # RDP (4) sessions become rdp hosts
 
 
 @dataclass(frozen=True)
@@ -654,6 +669,7 @@ class UsernameEntry:
     references: int = 0  # how many were [bracketed] credential labels
     literals: int = 0
     case_variants: List[str] = field(default_factory=list)
+    protocols: Set[str] = field(default_factory=set)  # ssh, sftp, ftp, rdp: shown as tags in the wizard
 
 
 @dataclass
@@ -683,8 +699,9 @@ class ImportPlan:
         return [g.path for g in self.groups if not g.exists]
 
 
-def _importable_type(type_code: int, include_transfer: bool) -> bool:
-    return type_code == SSH_TYPE or (include_transfer and type_code in TRANSFER_TYPES)
+def _importable_type(type_code: int, include_transfer: bool, include_rdp: bool = True) -> bool:
+    return (type_code == SSH_TYPE or (include_transfer and type_code in TRANSFER_TYPES)
+            or (include_rdp and type_code == RDP_TYPE))
 
 
 def count_types(result: MxtParseResult) -> Dict[int, int]:
@@ -696,7 +713,8 @@ def count_types(result: MxtParseResult) -> Dict[int, int]:
     return counts
 
 
-def build_folder_tree(result: MxtParseResult, include_transfer: bool = True) -> List[FolderNode]:
+def build_folder_tree(result: MxtParseResult, include_transfer: bool = True,
+                      include_rdp: bool = True) -> List[FolderNode]:
     """Preview tree of every folder (implicit ancestors included) with importable host counts."""
 
     nodes: Dict[Tuple[str, ...], FolderNode] = {}
@@ -715,7 +733,7 @@ def build_folder_tree(result: MxtParseResult, include_transfer: bool = True) -> 
     for folder in result.folders:
         node(folder.path)
     for session in result.sessions:
-        if not _importable_type(session.type_code, include_transfer) or not session.folder:
+        if not _importable_type(session.type_code, include_transfer, include_rdp) or not session.folder:
             continue
         own = node(session.folder)
         own.own_hosts += 1
@@ -749,7 +767,7 @@ def plan_import(
     targets: List[Tuple[MxtSession, SshTarget]] = []
     excluded_hosts = 0
     for session in result.sessions:
-        if not _importable_type(session.type_code, options.include_transfer):
+        if not _importable_type(session.type_code, options.include_transfer, options.include_rdp):
             skipped_types[session.type_code] = skipped_types.get(session.type_code, 0) + 1
             continue
         if _excluded(session.folder, excluded):
@@ -832,7 +850,7 @@ def plan_import(
 
     usernames = discover_usernames(hosts)
     return ImportPlan(options, list(groups.values()), hosts, issues, usernames,
-                      build_folder_tree(result, options.include_transfer),
+                      build_folder_tree(result, options.include_transfer, options.include_rdp),
                       skipped_types, renamed, existing, excluded_hosts, destination_missing)
 
 
@@ -846,6 +864,7 @@ def discover_usernames(hosts: Sequence[PlannedHost]) -> List[UsernameEntry]:
         key = host.target.user_key
         entry = entries.setdefault(key, UsernameEntry(key))
         entry.count += 1
+        entry.protocols.add(host.target.protocol)
         if key:
             entry.raw_forms.add(host.target.user_raw.strip())
         if host.target.user_is_reference:
@@ -920,6 +939,8 @@ def host_entry(host: PlannedHost, user: Optional[str], alias: Optional[str] = No
     if host.target.anonymous:
         options.pop("user", None)
         metadata["transfer"] = {"v": 1, "anonymous": True}
+    if host.target.protocol == "rdp":
+        metadata["rdp"] = {"v": 1, "domain": host.target.domain} if host.target.domain else {"v": 1}
     group = host.group
     return HostEntry(alias=alias or host.alias, options=options, metadata=metadata,
                      parent_group=group[0] if group else "", child_group="/".join(group[1:]),
@@ -1125,7 +1146,10 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
               f"  Top-level groups: {len(plan.top_level)}",
               f"  Groups: {len(plan.groups)} ({len(plan.new_groups)} new)",
               f"  SSH hosts planned: {sum(1 for h in plan.hosts if h.target.protocol == 'ssh')}",
-              f"  FTP / SFTP hosts planned: {sum(1 for h in plan.hosts if h.target.protocol != 'ssh')}"]
+              f"  FTP / SFTP hosts planned: {sum(1 for h in plan.hosts if h.target.protocol in ('ftp', 'sftp'))}",
+              f"  RDP hosts planned: {sum(1 for h in plan.hosts if h.target.protocol == 'rdp')}"]
+    if any(h.target.protocol == "rdp" for h in plan.hosts):
+        lines.append("  Note: " + RDP_NOTE)
     if job is not None:
         lines += [f"  Hosts to import: {job.host_count}",
                   f"  Skipped (already exist): {job.skipped_existing}",

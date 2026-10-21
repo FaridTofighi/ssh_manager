@@ -29,6 +29,7 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...importers.mobaxterm import (  # noqa: E402
+    RDP_TYPE,
     SSH_TYPE,
     TRANSFER_TYPES,
     TYPE_NAMES,
@@ -190,7 +191,7 @@ class MobaXtermImportDialog(BaseDialog):
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         section = FormSection(
             _("MobaXterm sessions file"),
-            _("Export your sessions from MobaXterm (a *.mxtsessions file) and choose it here. SSH, FTP and SFTP "
+            _("Export your sessions from MobaXterm (a *.mxtsessions file) and choose it here. SSH, FTP, SFTP and RDP "
               "sessions and their folders are imported; passwords are never part of an export, and nothing is connected to."),
         )
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
@@ -248,6 +249,12 @@ class MobaXtermImportDialog(BaseDialog):
                                                "uses FTPS."))
         self.transfer_check.connect("toggled", lambda *_a: self._on_transfer_toggled())
         section.add_widget(self.transfer_check)
+        self.rdp_check = Gtk.CheckButton.new_with_mnemonic(_("Import _RDP sessions"))
+        self.rdp_check.set_active(True)
+        self.rdp_check.set_tooltip_text(_("Host, port and user are imported; display and device options keep "
+                                          "their defaults."))
+        self.rdp_check.connect("toggled", lambda *_a: self._on_transfer_toggled())
+        section.add_widget(self.rdp_check)
         page.pack_start(section, False, False, 0)
 
         tree_section = FormSection(_("Folders to import"), _("Untick a folder to leave it and everything in it out."))
@@ -503,13 +510,16 @@ class MobaXtermImportDialog(BaseDialog):
         counts = count_types(value)
         ssh = counts.get(SSH_TYPE, 0)
         transfer = sum(counts.get(code, 0) for code in TRANSFER_TYPES)
-        other = len(value.sessions) - ssh - transfer
+        rdp = counts.get(RDP_TYPE, 0)
+        other = len(value.sessions) - ssh - transfer - rdp
         size = _human_size(value.size)
         self.file_label.set_text(f"{self.source_path.name} · {size}" if self.source_path else size)
         self.file_summary.set_text(_("{folders} folders, {ssh} SSH sessions, {transfer} FTP/SFTP sessions, "
-                                     "{other} other sessions (not imported). Encoding: {encoding}.").format(
-            folders=len(value.folders), ssh=ssh, transfer=transfer, other=other, encoding=value.encoding))
+                                     "{rdp} RDP sessions, {other} other sessions (not imported). "
+                                     "Encoding: {encoding}.").format(
+            folders=len(value.folders), ssh=ssh, transfer=transfer, rdp=rdp, other=other, encoding=value.encoding))
         self.transfer_check.set_sensitive(transfer > 0)
+        self.rdp_check.set_sensitive(rdp > 0)
         self._fill_folder_tree(value)
 
     # ========================================================= step 2: options
@@ -533,7 +543,7 @@ class MobaXtermImportDialog(BaseDialog):
             for child in node.children:
                 add(it, child)
 
-        for root in build_folder_tree(result, self.transfer_check.get_active()):
+        for root in build_folder_tree(result, self.transfer_check.get_active(), self.rdp_check.get_active()):
             add(None, root)
         self.folder_view.expand_to_path(Gtk.TreePath.new_first())
 
@@ -600,6 +610,9 @@ class MobaXtermImportDialog(BaseDialog):
         if transfer:
             text += " " + ngettext("{n} FTP/SFTP session selected.", "{n} FTP/SFTP sessions selected.",
                                    transfer).format(n=transfer)
+        rdp = self._selected_host_count((RDP_TYPE,)) if self.rdp_check.get_active() else 0
+        if rdp:
+            text += " " + ngettext("{n} RDP session selected.", "{n} RDP sessions selected.", rdp).format(n=rdp)
         self.selection_label.set_text(text)
         self._sync_buttons()
 
@@ -615,7 +628,7 @@ class MobaXtermImportDialog(BaseDialog):
             for child in node.children:
                 collect(child)
 
-        for root in build_folder_tree(self.result, self.transfer_check.get_active()):
+        for root in build_folder_tree(self.result, self.transfer_check.get_active(), self.rdp_check.get_active()):
             collect(root)
         self.folder_store.foreach(lambda m, _p, it: m.set_value(it, COL_COUNT, totals.get(m.get_value(it, COL_PATH), 0))
                                   and False)
@@ -636,6 +649,7 @@ class MobaXtermImportDialog(BaseDialog):
             conflict_policy=ConflictPolicy(self.policy_combo.get_active_id() or ConflictPolicy.SKIP.value),
             skip_empty_folders=self.skip_empty_check.get_active(),
             include_transfer=self.transfer_check.get_active(),
+            include_rdp=self.rdp_check.get_active(),
         )
 
     # ===================================================== step 3: credentials
@@ -688,7 +702,9 @@ class MobaXtermImportDialog(BaseDialog):
             self.rows_grid.attach(heading, column, 0, 1, 1)
         for index, entry in enumerate(self.plan.usernames if self.plan else [], start=1):
             name = entry.key or _("(no username)")
-            label = Gtk.Label(label=name)
+            tags = " ".join(sorted({"rdp": "RDP", "ftp": "FTP", "sftp": "SFTP"}[p]
+                                   for p in entry.protocols if p in ("rdp", "ftp", "sftp")))
+            label = Gtk.Label(label=f"{name}  [{tags}]" if tags else name)
             label.set_xalign(0.0)
             label.set_selectable(True)
             tips = []
@@ -730,7 +746,7 @@ class MobaXtermImportDialog(BaseDialog):
         self._apply_default()
         hosts = len(self.plan.hosts) if self.plan else 0
         self.credentials_hint.set_text(ngettext(
-            "{users} username found in {hosts} SSH host.", "{users} usernames found in {hosts} SSH hosts.",
+            "{users} username found in {hosts} host.", "{users} usernames found in {hosts} hosts.",
             hosts).format(users=len(self._rows), hosts=hosts))
         self.credentials_error.hide()
         self._sync_buttons()

@@ -313,15 +313,15 @@ class PlannerTests(unittest.TestCase):
     def test_selection_excludes_branches(self) -> None:
         plan = self.plan(excluded_folders=[("Acme", "Team A")])
         self.assertNotIn(("Acme", "Team A"), self.paths(plan))
-        self.assertEqual(plan.excluded_hosts, 7)  # 6 SSH + the FTP session
+        self.assertEqual(plan.excluded_hosts, 8)  # 6 SSH + the FTP and RDP sessions
 
     def test_folder_tree_counts(self) -> None:
         roots = build_folder_tree(parse_mxtsessions(ACME.encode()))
         acme = roots[0]
-        self.assertEqual((acme.label, acme.own_hosts, acme.total_hosts), ("Acme", 1, 9))
+        self.assertEqual((acme.label, acme.own_hosts, acme.total_hosts), ("Acme", 1, 10))
         team_a = next(c for c in acme.children if c.label == "Team A")
-        self.assertEqual((team_a.own_hosts, team_a.total_hosts), (1, 7))  # FTP counted, RDP not
-        ssh_only = build_folder_tree(parse_mxtsessions(ACME.encode()), include_transfer=False)
+        self.assertEqual((team_a.own_hosts, team_a.total_hosts), (1, 8))  # FTP and RDP counted
+        ssh_only = build_folder_tree(parse_mxtsessions(ACME.encode()), include_transfer=False, include_rdp=False)
         self.assertEqual(ssh_only[0].total_hosts, 8)
 
     def test_hostname_edge_cases(self) -> None:
@@ -403,8 +403,9 @@ class UsernameTests(unittest.TestCase):
         plan = plan_import(parse_mxtsessions(ACME.encode()))
         entries = {e.key: e for e in plan.usernames}
         self.assertEqual(set(entries), {"alice", "bob", "Alice", "alice@corp.local", "svc_backup", NO_USERNAME})
-        self.assertEqual(entries["alice"].count, 3)
-        self.assertEqual(entries["alice"].raw_forms, {"[alice]", "alice"})  # bracket + plain merged
+        self.assertEqual(entries["alice"].count, 4)  # + dev\\alice of the RDP session
+        self.assertEqual(entries["alice"].raw_forms, {"[alice]", "alice", "dev\\alice"})  # merged forms
+        self.assertEqual(entries["alice"].protocols, {"ssh", "rdp"})
         self.assertEqual(entries["alice"].case_variants, ["Alice"])  # case-sensitive, with a hint
         self.assertEqual(entries[NO_USERNAME].count, 1)
         self.assertEqual(plan.usernames[0].key, "alice")  # most used first
@@ -490,19 +491,19 @@ class CommitTests(StoreTestCase):
         before = self.snapshot()
         job, report = self.run_import({"alice": self.ops.id})
         self.assertIs(report.status, ImportStatus.NOTHING)
-        self.assertEqual(job.skipped_existing, 10)  # 9 SSH + 1 FTP
+        self.assertEqual(job.skipped_existing, 11)  # 9 SSH + 1 FTP + 1 RDP
         self.assertEqual(self.snapshot(), before)
 
     def test_conflict_policies(self) -> None:
         self.run_import()
         job, report = self.run_import(conflict_policy=ConflictPolicy.RENAME)
-        self.assertEqual(job.renamed, 10)
+        self.assertEqual(job.renamed, 11)  # 9 SSH + 1 FTP + 1 RDP
         self.assertIn("web 01 (2)", [h.alias for h in self.manager.tree["Acme"]["Team A/Servers"].hosts])
         before = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
         changed = ACME.replace("10.0.0.254", "10.0.0.253").encode()  # the jump host changed in MobaXterm
         job, report = self.run_import(data=changed, conflict_policy=ConflictPolicy.OVERWRITE)
         self.assertIs(report.status, ImportStatus.SUCCESS)
-        self.assertEqual((job.host_count, job.overwritten), (0, 10))  # 9 SSH + 1 FTP
+        self.assertEqual((job.host_count, job.overwritten), (0, 11))  # 9 SSH + 1 FTP + 1 RDP
         after = {h.alias: h.id for h in self.manager.tree["Acme"]["Team A/Servers"].hosts}
         self.assertEqual(before, after)  # updated in place: same ids, same aliases
         self.assertEqual(self.host(("Acme", "Team A", "Servers"), "behind-jump").options["proxyjump"],
@@ -511,7 +512,7 @@ class CommitTests(StoreTestCase):
                          "alice@10.0.0.254")  # the copy is not the one that matched
         # A different user is a different host: it is added, never merged.
         job, report = self.run_import({"alice": self.ops.id}, conflict_policy=ConflictPolicy.OVERWRITE)
-        self.assertEqual(job.host_count, 3)
+        self.assertEqual(job.host_count, 4)  # the 3 SSH alice hosts + the RDP dev\\alice host
         self.assertTrue(any("before-import-overwrite" in p.name for p in self.store.list_backups()))
 
     def test_alias_taken_by_a_different_host(self) -> None:
@@ -596,7 +597,7 @@ class CommitTests(StoreTestCase):
         text = render_report(job.plan, job, report, source_name="acme.mxtsessions")
         self.assertNotIn("s3cret", text)
         self.assertNotIn("#109#", text)
-        self.assertIn("alice (3 host(s)) → Ops account", text)
+        self.assertIn("alice (4 host(s)) → Ops account", text)  # dev\\alice (RDP) is alice
         path = save_report(text, self.root / "imports")
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
@@ -724,3 +725,53 @@ class TransferSessionTests(StoreTestCase):
         self.run_import(data=ssh)
         job, report = self.run_import(data=sftp)
         self.assertEqual((job.host_count, job.skipped_existing), (1, 0))  # not the SSH host on 10.0.0.50:22
+
+
+RDP_EXPORT = export(("Acme\\Desktops", [
+    "label upn=" + session_value("10.0.0.60", "3389", "[alice@corp.local]", type_code=4, icon=91),
+    "label short=" + session_value("10.0.0.61", "", "[bob]", type_code=4, icon=91),
+    "domain user=" + session_value("10.0.0.62", "3390", "dev\\alice", type_code=4, icon=91),
+    "plain=" + session_value("10.0.0.63", "3389", "carol", type_code=4, icon=91),
+    "nobody=" + session_value("10.0.0.64", "3389", "", type_code=4, icon=91),
+    "bad domain=" + session_value("10.0.0.65", "3389", "a\\b\\c", type_code=4, icon=91),
+]))
+
+
+class RdpSessionTests(StoreTestCase):
+    """MobaXterm RDP (type 4) sessions become rdp hosts; only host, port and user are read."""
+
+    def test_targets_and_usernames(self) -> None:
+        plan = self.plan(RDP_EXPORT)
+        targets = {h.alias: h.target for h in plan.hosts}
+        self.assertTrue(all(t.protocol == "rdp" for t in targets.values()))
+        self.assertEqual(targets["label short"].port, 3389)  # empty port: the RDP default
+        self.assertEqual((targets["domain user"].user_key, targets["domain user"].domain), ("alice", "dev"))
+        self.assertEqual((targets["label upn"].user_key, targets["label upn"].user_is_reference),
+                         ("alice@corp.local", True))  # a credential label, never a login name
+        self.assertEqual(targets["bad domain"].user_key, "")
+        self.assertIn(IssueCode.INVALID_FIELD, codes(plan.issues))
+        entries = {e.key: e for e in plan.usernames}
+        self.assertEqual(entries["alice"].protocols, {"rdp"})
+        self.assertEqual(entries["bob"].references, 1)
+
+    def test_commit_and_report(self) -> None:
+        job, report = self.run_import({"bob": self.ops.id}, data=RDP_EXPORT)
+        self.assertIs(report.status, ImportStatus.SUCCESS)
+        rows = {h.alias: h for h in self.store.list_hosts()}
+        self.assertEqual((rows["domain user"].protocol, rows["domain user"].user, rows["domain user"].port),
+                         ("rdp", "alice", 3390))
+        self.assertEqual(rows["domain user"].metadata["rdp"], {"v": 1, "domain": "dev"})
+        self.assertEqual(rows["plain"].metadata["rdp"], {"v": 1})
+        self.assertEqual(rows["label short"].user, "ops")  # the label was mapped to a credential
+        self.assertEqual(self.creds.binding_for_host(rows["label short"].id), self.ops.id)
+        self.assertEqual(rows["label upn"].user, "")  # an unmapped label is never used as the login name
+        text = render_report(job.plan, job)
+        self.assertIn("RDP hosts planned: 6", text)
+        self.assertIn("were not imported", text)
+        again, second = self.run_import({"bob": self.ops.id}, data=RDP_EXPORT)
+        self.assertIs(second.status, ImportStatus.NOTHING)  # idempotent
+
+    def test_option_off(self) -> None:
+        plan = self.plan(RDP_EXPORT, include_rdp=False)
+        self.assertEqual(plan.hosts, [])
+        self.assertEqual(plan.skipped_types, {4: 6})
