@@ -5,6 +5,79 @@ groups, launching SSH sessions, managing credentials, and editing host
 metadata. The desktop app keeps its own inventory; OpenSSH config files can be
 imported and exported.
 
+## How to install and run
+
+These steps start from a fresh Debian 13 or Ubuntu 24.04 (or later) desktop.
+The app runs on the system's Python packages, so it needs no virtualenv and no
+`pip`.
+
+### 1. Install the packages
+
+```bash
+sudo apt update
+sudo apt install -y \
+  git python3 \
+  python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91 \
+  python3-paramiko python3-cryptography python3-pexpect \
+  openssh-client sshpass \
+  freerdp3-x11 \
+  python3-keyring xdotool
+```
+
+| Packages | What they are for |
+|---|---|
+| `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-vte-2.91` | The GTK window and the built-in terminals (required) |
+| `python3-paramiko` | SFTP, the file browser, and Remote Desktop through an SSH host |
+| `python3-cryptography` | The encrypted password store |
+| `python3-pexpect` | Running SSH sessions |
+| `openssh-client`, `sshpass` | `ssh` itself, and filling in saved passwords |
+| `freerdp3-x11` | Remote Desktop (`freerdp2-x11` on older releases). Optional: without it, everything except RDP works |
+| `python3-keyring` | Optional: keeps saved passwords in the desktop keyring |
+| `xdotool` | Optional: makes **Focus Window** work when FreeRDP runs in its own window |
+
+The Textual terminal app also needs `python3-textual python3-rich`. The GTK app
+does not.
+
+### 2. Get the code
+
+```bash
+git clone <repository> ssh-manager
+cd ssh-manager
+```
+
+### 3. Run it
+
+```bash
+python3 -m ssh_manager
+```
+
+On the first run:
+
+- **Master password:** the app asks you to create one. It unlocks the app and
+  encrypts the passwords stored on this computer.
+- **Inventory:** created at `~/.local/share/ssh-manager/inventory.db`.
+- **Importing:** if `~/.ssh/config` or `~/.ssh/conf.d` has hosts, the app
+  offers once to import them. MobaXterm exports, OpenSSH config files and
+  `.rdp` files can be imported later from the app menu → Import.
+
+Some other ways to start it:
+
+```bash
+python3 -m ssh_manager --inventory ~/other.db                          # another inventory database
+python3 -m ssh_manager --rdp 10.0.0.50 --user alice --domain CORP     # open one Remote Desktop session
+```
+
+### 4. Check the installation
+
+- **Remote Desktop:** Settings → Remote Desktop → Diagnostics shows the
+  FreeRDP version found and the engine that will be used.
+- **Tests (optional):** run the test suite from a desktop session; the GTK
+  tests need a display.
+
+  ```bash
+  python3 -m unittest discover -s tests -t .
+  ```
+
 ## Launching
 
 GTK desktop app:
