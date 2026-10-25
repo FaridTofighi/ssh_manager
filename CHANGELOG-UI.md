@@ -6,6 +6,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Fixes
+
+- Transfers: an unexpected error in a file transfer now marks the job as failed instead of done.
+
 ## Remote Desktop, phase R4: import, export, Quick Connect, Wake-on-LAN
 
 Details: `docs/rdp.md` ("Import, export, Quick Connect, Wake-on-LAN").
