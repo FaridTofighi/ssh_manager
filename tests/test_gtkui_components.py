@@ -123,14 +123,30 @@ class ToastControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.visible, [])
         self.assertEqual({m.id for m in self.dismissed}, {info.id, success.id})
 
-    def test_warning_and_error_are_sticky(self) -> None:
+    def test_warning_and_error_stay_longer_then_auto_dismiss(self) -> None:
+        # Changed deliberately: they used to stay forever; now 20 s / 30 s (an error toast never lingers).
         warning = self.controller.notify("Careful", Level.WARNING)
         error = self.controller.notify("Failed", Level.ERROR)
-        self.scheduler.advance(3600)
-        self.assertEqual([m.id for m in self.controller.visible], [warning.id, error.id])
         self.assertTrue(warning.sticky and error.sticky)
+        self.scheduler.advance(19.0)
+        self.assertEqual([m.id for m in self.controller.visible], [warning.id, error.id])
+        self.scheduler.advance(1.0)
+        self.assertEqual([m.id for m in self.controller.visible], [error.id])
+        self.scheduler.advance(10.0)
+        self.assertEqual(self.controller.visible, [])
+        self.assertEqual([m.text for m in self.history.items()], ["Failed", "Careful"])  # history keeps them
+
+    def test_dismissing_an_error_early_cancels_its_timer(self) -> None:
+        warning = self.controller.notify("Careful", Level.WARNING)
+        error = self.controller.notify("Failed", Level.ERROR)
         self.controller.dismiss(error.id)
         self.assertEqual([m.id for m in self.controller.visible], [warning.id])
+        self.assertEqual(len(self.scheduler.pending), 1)
+
+    def test_an_explicitly_sticky_error_stays(self) -> None:
+        self.controller.notify("Keep", Level.ERROR, timeout=None)
+        self.scheduler.advance(3600)
+        self.assertEqual(len(self.controller.visible), 1)
 
     def test_history_keeps_everything_newest_first(self) -> None:
         for idx in range(5):
@@ -165,6 +181,47 @@ class ToastControllerTests(unittest.TestCase):
         self.controller.notify("sticky info", Level.INFO, timeout=None)
         self.scheduler.advance(60)
         self.assertEqual(len(self.controller.visible), 1)
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class ToastWidgetTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        from ssh_manager.gtkui.widgets.toast import Toast, ToastOverlay
+
+        self.Gtk, self.Toast = Gtk, Toast
+        self.scheduler = FakeScheduler()
+        self.controller = ToastController(MessageHistory(), self.scheduler, clock=lambda: self.scheduler.now)
+        self.overlay = ToastOverlay(self.controller)
+        self.overlay.add(Gtk.Box())
+
+    def labels(self, widget):
+        if isinstance(widget, self.Gtk.Label):
+            yield widget
+        if isinstance(widget, self.Gtk.Container):
+            for child in widget.get_children():
+                yield from self.labels(child)
+
+    def test_toast_text_is_not_selectable(self) -> None:
+        message = self.controller.notify("Host key verification failed for web-01.", Level.ERROR)
+        toast = self.overlay._toasts[message.id]
+        texts = [label for label in self.labels(toast) if label.get_text() == message.text]
+        self.assertEqual(len(texts), 1)
+        self.assertFalse(texts[0].get_selectable())
+
+    def test_removal_is_safe_twice_and_after_the_overlay_is_destroyed(self) -> None:
+        first = self.controller.notify("a", Level.ERROR)
+        second = self.controller.notify("b", Level.ERROR)
+        toast = self.overlay._toasts[first.id]
+        self.overlay._remove_toast(toast)
+        self.overlay._remove_toast(toast)  # again: nothing to do
+        self.overlay._on_dismiss(first)  # a dismiss for a toast that is already gone
+        late = self.overlay._toasts[second.id]
+        self.overlay.destroy()
+        self.overlay._remove_toast(late)  # a removal timer that fires after the window closed
+        self.overlay._on_dismiss(second)
+        self.overlay._update_input_shape()
 
 
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")

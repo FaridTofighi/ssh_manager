@@ -78,9 +78,12 @@ class RealClickTests(unittest.TestCase):
         self.assertEqual(self.report.get("xtest_dismiss_removed_one"), "True", self.report.get("xtest_dismiss_press_log"))
 
     def test_a_click_on_a_toasts_text_stays_on_the_toast(self) -> None:
+        # The text has no window of its own: the press lands on the toast layer's window (GTK reports the
+        # toplevel) or on a toast widget, never on the terminal / panes below it.
         log = self.report.get("xtest_toast_body_press_log", "")
         self.assertIn("button-press->", log)
-        self.assertIn("Toast", log.split("button-press->", 1)[1].split(" grab=")[0])
+        target = log.split("button-press->", 1)[1].split(" grab=")[0]
+        self.assertTrue(target == "SSHManagerWindow" or "Toast<" in target, target)
 
     def test_clicks_beside_the_toasts_reach_the_widgets_below(self) -> None:
         self.assertGreaterEqual(len(self.points), 20, self.output[-3000:])

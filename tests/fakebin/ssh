@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Host key verification failed." >&2
+exit 255

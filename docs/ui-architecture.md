@@ -207,7 +207,7 @@ brand block exactly as wide as the sidebar so the two dividers line up.
 
 ```python
 self.win._notify(_("Copied."), Level.SUCCESS)           # auto-dismisses
-self.win._notify(_("Upload failed."), Level.ERROR,      # sticky, stays in history
+self.win._notify(_("Upload failed."), Level.ERROR,      # stays 30 s (warnings 20 s), always in history
                  action_label=_("_Retry"), action=retry)
 ```
 

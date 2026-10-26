@@ -61,7 +61,7 @@ class Toast(Gtk.Revealer):
         label.set_line_wrap(True)
         label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
         label.set_max_width_chars(60)
-        label.set_selectable(True)
+        label.set_selectable(False)  # the text stays in the message history; a selectable label grabs drags
         label.set_can_focus(False)
         box.pack_start(label, True, True, 0)
 

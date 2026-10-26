@@ -1,0 +1,4 @@
+#!/bin/sh
+# sshpass -e ssh ...: drop the sshpass options and run the (fake) ssh
+while [ $# -gt 0 ]; do case "$1" in -e|-d*|-f*|-p*) shift ;; *) break ;; esac; done
+exec "$@"

@@ -9,6 +9,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 ## Fixes
 
 - Transfers: an unexpected error in a file transfer now marks the job as failed instead of done.
+- Toasts: after an error toast, clicks in a tall column above it were swallowed (menus, buttons and the
+  terminal on the right did not react). Only the toasts themselves take clicks now.
+- Toasts: errors disappear after 30 s and warnings after 20 s (they used to stay until dismissed); every
+  message stays in the message history. Toast text is no longer selectable (copy it from the history).
 
 ## Remote Desktop, phase R4: import, export, Quick Connect, Wake-on-LAN
 

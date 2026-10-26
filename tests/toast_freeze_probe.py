@@ -291,7 +291,11 @@ def main(argv=None) -> int:
         return 2
     tmp = tempfile.TemporaryDirectory()
     if not args.real_ssh:
-        fakebin = write_fakebin(Path(tmp.name) / "fakebin")
+        bundled = Path(__file__).resolve().parent / "fakebin"
+        if all(os.access(bundled / name, os.X_OK) for name in ("ssh", "sshpass")):
+            fakebin = bundled
+        else:  # not executable (e.g. a checkout without file modes): a private copy
+            fakebin = write_fakebin(Path(tmp.name) / "fakebin")
         os.environ["PATH"] = f"{fakebin}{os.pathsep}{os.environ.get('PATH', '')}"
 
     from tests.gtk_window_fixture import WindowSandbox
