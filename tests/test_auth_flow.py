@@ -253,6 +253,19 @@ class TerminalAuthTests(unittest.TestCase):
         with mock.patch.object(type(tab), "_auth_failure_output", return_value=output):
             tab._on_child_exited(tab._terminal, status)
 
+    def test_ssh_and_sshpass_are_found_through_path(self) -> None:
+        # argv names "sshpass" / "ssh" without a folder: older VTE (0.68, Ubuntu 22.04) only searches PATH when
+        # asked, so a bundled or non-/usr/bin ssh would fail with "Failed to execve".
+        from gi.repository import GLib
+
+        tab = self.tab()
+        tab._spawn()
+        flags = tab._terminal.spawn_async.call_args[0][4]
+        self.assertTrue(flags & GLib.SpawnFlags.SEARCH_PATH)
+        pane = mock.Mock()
+        tab._spawn_secondary(pane)
+        self.assertTrue(pane.spawn_async.call_args[0][4] & GLib.SpawnFlags.SEARCH_PATH)
+
     def test_argv_has_the_sentinel_and_never_the_password(self) -> None:
         tab = self.tab()
         argv, envv = self.spawn(tab)

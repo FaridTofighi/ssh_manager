@@ -1307,7 +1307,7 @@ class TerminalTab(SessionPage):
         self._reveal_banner(False)
         self._reconnect_button.set_sensitive(False)
         term.spawn_async(
-            Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.DEFAULT,
+            Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.SEARCH_PATH,  # argv names "ssh" / "sshpass"
             None, None, -1, None, _on_spawn_finish, None,
         )
 
@@ -1326,7 +1326,7 @@ class TerminalTab(SessionPage):
             None,
             argv,
             envv,
-            GLib.SpawnFlags.DEFAULT,
+            GLib.SpawnFlags.SEARCH_PATH,
             None,
             None,
             -1,
