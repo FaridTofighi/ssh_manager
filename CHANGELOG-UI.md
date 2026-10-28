@@ -6,6 +6,31 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Terminals: gnome-terminal mouse, configurable shortcuts, a local shell
+
+Details: `docs/terminal.md`.
+
+- **Mouse in every terminal** (SSH tabs, split panes, tiles, local tabs):
+  - Shift+right-click opens a terminal menu, also in programs that use the mouse.
+  - Right-click opens the same menu unless a program reads the mouse (setting:
+    paste instead, or nothing).
+  - Middle-click pastes the selection (setting: the clipboard, or nothing).
+  - Selected text goes to the selection at once, and optionally to the clipboard.
+- **Keyboard shortcuts can be changed:** Settings → Keyboard Shortcuts (or
+  Customize… in the shortcuts window).
+  - Change, add a second one, clear, reset, reset all.
+  - Conflicts name the other action and offer Replace.
+  - Changes apply at once, menus and tooltips included.
+- **New terminal shortcuts:** Shift+Insert pastes the selection, and Ctrl+Insert
+  copies. Select all, Clear scrollback, Reset terminal and Open terminal menu
+  have no default key. In a text field these keys act on the field, never on a
+  terminal behind it.
+- **New tab = local shell:** `+` after the last tab, the empty state and
+  Ctrl+Shift+T open your shell in a tab, like gnome-terminal. Quick Connect
+  moved to the menu next to `+`.
+- **Changed default:** Quick Connect is now **Ctrl+Alt+T** (it was
+  Ctrl+Shift+T, which now opens a local terminal).
+
 ## Fixes
 
 - Transfers: an unexpected error in a file transfer now marks the job as failed instead of done.

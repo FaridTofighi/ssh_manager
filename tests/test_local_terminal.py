@@ -151,9 +151,13 @@ class LocalTerminalTests(unittest.TestCase):
 
     def test_no_zombies_after_many_tabs(self) -> None:
         tabs = [self.open() for _ in range(20)]
+        shells = [tab._shell_pid for tab in tabs]
         for tab in tabs:
             self.tabs.close_tab(tab)
         self.assertTrue(pump(10, until=lambda: not zombies_of(os.getpid())), zombies_of(os.getpid()))
+        # Closing hangs the shells up: none keeps running as an orphan.
+        self.assertTrue(pump(10, until=lambda: not [p for p in shells if Path(f"/proc/{p}").exists()]),
+                        [p for p in shells if Path(f"/proc/{p}").exists()])
 
     def test_quick_connect_still_works(self) -> None:
         with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog") as prompt:

@@ -156,9 +156,16 @@ that direct file mode follows `Include` directives.
   Esc or a click elsewhere closes it, and it never resizes the terminal.
   Select several hosts to connect, move or tag them together.
 - **Sessions**: double-click a host, press Enter, or use Quick Connect
-  (Ctrl+Shift+T or the `+` after the last tab) for an ad-hoc `user@host:port`
-  or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a temporary
-  connection; the toast offers **Save to Inventory…**).
+  (Ctrl+Alt+T, or the menu next to the `+` after the last tab) for an ad-hoc
+  `user@host:port` or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a
+  temporary connection; the toast offers **Save to Inventory…**).
+- **Local terminal**: `+` after the last tab, or Ctrl+Shift+T, opens your own
+  shell in a tab, like gnome-terminal (split, zoom, copy/paste and transcripts
+  as in SSH tabs). See `docs/terminal.md`.
+- **Terminal mouse**: Shift+right-click opens the terminal menu (also in vim,
+  tmux, htop …), right-click opens it too unless a program uses the mouse,
+  middle-click and Shift+Insert paste the selection, and selected text is
+  copied to the selection at once. Settings → Terminal changes the clicks.
   Every session has its own tab, labelled with the host name, or with its IP
   address, or both (Settings → Appearance → Tab label); duplicates read
   `web-01 (2)`, and F2 renames a tab. Drag tabs to reorder them; the tooltip
@@ -199,7 +206,10 @@ that direct file mode follows `Include` directives.
   session), F2 (rename tab), Ctrl+Shift+D (duplicate session), Ctrl+I (host
   details; in a terminal Ctrl+I is still Tab, use F9 there), Ctrl+B (sidebar),
   Ctrl+Shift+B (broadcast) and F11 (focus mode). Terminal copy and paste are
-  Ctrl+Shift+C / Ctrl+Shift+V. The sidebar starts with every group collapsed;
+  Ctrl+Shift+C / Ctrl+Shift+V (also Ctrl+Insert / Shift+Insert, which pastes
+  the selection); Ctrl+Shift+T opens a local terminal and Ctrl+Alt+T Quick
+  Connect. Every shortcut can be changed in Settings → Keyboard Shortcuts.
+  The sidebar starts with every group collapsed;
   Ctrl+Shift+O expands all groups and Ctrl+Shift+L collapses them again (also
   in the filter popover and the tree's empty-space menu).
 
@@ -251,6 +261,7 @@ authentication.
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
+- `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
