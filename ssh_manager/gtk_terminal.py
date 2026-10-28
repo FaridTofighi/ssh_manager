@@ -18,7 +18,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 
-from gi.repository import Gdk, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
 
 from ssh_manager.auth_flow import (
     AUTH_FAILURE_RE,
@@ -172,6 +172,24 @@ def _select_all_terminal_text(*_args) -> bool:
     return True
 
 
+def _terminal_contents(term: Vte.Terminal) -> Optional[str]:
+    """The terminal's whole text (scrollback and screen) via ``write_contents_sync``; ``None`` if unavailable.
+
+    For VTE < 0.72, which has no ``get_text_range_format``: there ``get_text`` / ``get_text_range`` print
+    two warnings on every call through PyGObject (callback ignored, attributes array deprecated).
+    """
+
+    if not hasattr(term, "write_contents_sync"):
+        return None
+    try:
+        stream = Gio.MemoryOutputStream.new_resizable()
+        term.write_contents_sync(stream, Vte.WriteFlags.DEFAULT, None)
+        stream.close(None)
+        return bytes(stream.steal_as_bytes().get_data()).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
 def terminal_text(term: Vte.Terminal) -> str:
     """Return all visible/scrollback text from a VTE terminal.
 
@@ -191,6 +209,9 @@ def terminal_text(term: Vte.Terminal) -> str:
         return _terminal_text_result(result)
     if hasattr(term, "get_text_format"):
         return _terminal_text_result(term.get_text_format(Vte.Format.TEXT))
+    contents = _terminal_contents(term)  # VTE < 0.72
+    if contents is not None:
+        return contents
     try:  # legacy VTE (< 0.76)
         result = term.get_text(_select_all_terminal_text, None, None)
     except TypeError:
@@ -983,6 +1004,9 @@ class TerminalTab(SessionPage):
             )
             return _terminal_text_result(result)[-limit:]
         except AttributeError:
+            contents = _terminal_contents(term)  # VTE < 0.72: no warnings, unlike get_text_range
+            if contents is not None:
+                return contents.rstrip("\n")[-limit:]
             try:
                 column, row = term.get_cursor_position()
                 columns = max(80, int(term.get_column_count() or 80))

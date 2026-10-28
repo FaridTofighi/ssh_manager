@@ -117,6 +117,53 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(calls, [True])
         self.assertFalse(dummy._banner_alive)
 
+    def test_older_vte_text_is_read_through_write_contents(self) -> None:
+        # VTE < 0.72 has no get_text_range_format; get_text / get_text_range print two VTE-WARNINGs per
+        # call there (ignored callback, deprecated attributes array), so the contents are written to a
+        # memory stream instead.
+        class OldTerminal:
+            def __init__(self) -> None:
+                self.flags = None
+
+            def get_cursor_position(self):
+                return 9, 3
+
+            def get_column_count(self) -> int:
+                return 80
+
+            def write_contents_sync(self, stream, flags, cancellable):
+                self.flags = flags
+                stream.write_all("first line\nPassword: \n\n\n".encode(), None)
+                return True
+
+            def get_text(self, *args):
+                raise AssertionError("get_text called")
+
+            def get_text_range(self, *args):
+                raise AssertionError("get_text_range called")
+
+        term = OldTerminal()
+        self.assertEqual(terminal_text(term), "first line\nPassword: \n\n\n")
+        self.assertEqual(term.flags, Vte.WriteFlags.DEFAULT)
+        self.assertEqual(TerminalTab._terminal_tail(object(), term), "first line\nPassword: ")
+        self.assertEqual(TerminalTab._terminal_tail(object(), term, limit=10), "Password: ")
+
+    def test_write_contents_reads_a_real_terminal(self) -> None:
+        from ssh_manager.gtk_terminal import _terminal_contents
+
+        import time
+
+        from gi.repository import Gtk  # type: ignore
+
+        term = Vte.Terminal()
+        term.feed(b"hello marker\r\nsecond line\r\n")
+        deadline = time.monotonic() + 5
+        while "second line" not in (_terminal_contents(term) or "") and time.monotonic() < deadline:
+            while Gtk.events_pending():  # VTE processes fed data from the main loop
+                Gtk.main_iteration_do(False)
+            time.sleep(0.01)
+        self.assertIn("hello marker\nsecond line", _terminal_contents(term) or "")
+
     def test_terminal_text_real_vte_returns_scrollback(self) -> None:
         term = Vte.Terminal()
         term.feed(b"hello marker\r\nsecond line\r\n")
