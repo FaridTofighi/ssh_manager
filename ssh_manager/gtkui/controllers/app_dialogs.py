@@ -41,7 +41,9 @@ class AppDialogs:
         self.win = win
         self._shortcuts_window: Optional[Gtk.ShortcutsWindow] = None
 
-    def open_settings(self) -> None:
+    def open_settings(self, page: str = "") -> None:
+        """Preferences; ``page`` opens a page by id ("terminal" from the terminal menu)."""
+
         dialog = PreferencesDialog(
             self.win,
             self.win._theme_mode,
@@ -55,6 +57,8 @@ class AppDialogs:
             tab_label_mode=self.win._ui.tab_label_mode,
             inventory=self.inventory_info(),
         )
+        if page:
+            dialog.layout.show_page(page)
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
         finally:
@@ -109,6 +113,9 @@ class AppDialogs:
         settings.terminal_appearance = values.terminal_appearance
         if values.file_transfer is not None:
             settings.file_transfer = values.file_transfer
+        if values.terminal_input is not None:
+            # In place: every open terminal shares this object, so the change applies at once.
+            vars(settings.terminal_input).update(vars(values.terminal_input))
         if values.remote_desktop is not None:
             changed = values.remote_desktop != settings.remote_desktop
             settings.remote_desktop = values.remote_desktop

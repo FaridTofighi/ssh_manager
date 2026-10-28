@@ -19,7 +19,7 @@ gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
 from ...settings import (  # noqa: E402
-    AppSettings, FileTransferPreferences, RemoteDesktopPreferences, TerminalAppearanceSettings,
+    AppSettings, FileTransferPreferences, RemoteDesktopPreferences, TerminalAppearanceSettings, TerminalInputSettings,
 )
 from ..i18n import _  # noqa: E402
 from ..tab_labels import TabLabelMode  # noqa: E402
@@ -85,10 +85,24 @@ class PreferencesValues:
     tab_label_mode: TabLabelMode = TabLabelMode.NAME
     file_transfer: Optional[FileTransferPreferences] = None
     remote_desktop: Optional[RemoteDesktopPreferences] = None
+    terminal_input: Optional[TerminalInputSettings] = None
 
     @property
     def prefer_dark(self) -> bool:
         return self.theme_mode is ThemeMode.DARK
+
+
+MIDDLE_CLICK_LABELS = (
+    ("paste_primary", _("Pastes the selection")),
+    ("paste_clipboard", _("Pastes the clipboard")),
+    ("none", _("Does nothing")),
+)
+RIGHT_CLICK_LABELS = (
+    ("menu", _("Opens the menu")),
+    ("paste_clipboard", _("Pastes the clipboard")),
+    ("paste_primary", _("Pastes the selection")),
+    ("none", _("Does nothing")),
+)
 
 
 def _combo(choices, active: str) -> Gtk.ComboBoxText:
@@ -242,6 +256,18 @@ class PreferencesDialog(BaseDialog):
             button.connect("color-set", lambda *_: self._update_preview_terminal())
         colors.add(_("_Foreground"), self._fg_button, label_group=self._labels)
         colors.add(_("_Background"), self._bg_button, label_group=self._labels)
+
+        mouse = self._section(page, _("Mouse and selection"),
+                              _("Shift+right-click always opens the terminal menu, also in programs that use the mouse."))
+        inputs = self._settings.terminal_input
+        self._middle_click_combo = _combo(MIDDLE_CLICK_LABELS, inputs.middle_click)
+        mouse.add(_("_Middle-click"), self._middle_click_combo, label_group=self._labels)
+        self._right_click_combo = _combo(RIGHT_CLICK_LABELS, inputs.right_click)
+        mouse.add(_("_Right-click"), self._right_click_combo, label_group=self._labels)
+        self._copy_select_clipboard_check = Gtk.CheckButton.new_with_mnemonic(
+            _("Selecting text also copies it to the _clipboard (it always goes to the selection buffer)"))
+        self._copy_select_clipboard_check.set_active(inputs.copy_on_select_clipboard)
+        mouse.add_widget(self._copy_select_clipboard_check)
 
         cursor = self._section(page, _("Cursor and rendering"))
         self._cursor_combo = _combo(CURSOR_SHAPES, appearance.cursor_shape)
@@ -530,7 +556,16 @@ class PreferencesDialog(BaseDialog):
             tab_label_mode=TabLabelMode.coerce(self._tab_label_combo.get_active_id()),
             file_transfer=self.file_transfer_values(),
             remote_desktop=self.remote_desktop_values(),
+            terminal_input=self.terminal_input_values(),
         )
+
+    def terminal_input_values(self) -> TerminalInputSettings:
+        return TerminalInputSettings.from_dict({
+            "copy_on_select": self._settings.terminal_input.copy_on_select,
+            "copy_on_select_clipboard": self._copy_select_clipboard_check.get_active(),
+            "middle_click": self._middle_click_combo.get_active_id() or "paste_primary",
+            "right_click": self._right_click_combo.get_active_id() or "menu",
+        })
 
     def _appearance_from_controls(self) -> TerminalAppearanceSettings:
         custom = self._custom_colors_check.get_active()

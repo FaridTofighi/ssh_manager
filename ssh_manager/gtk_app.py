@@ -464,6 +464,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         tabs.set_name("terminal-area")
         tabs.on_quick_connect = self.sessions.quick_connect
         tabs.on_new_host = self.hosts.prompt_new_host
+        tabs.input_settings = self._settings.terminal_input  # shared: Preferences changes apply at once
+        tabs.on_terminal_preferences = lambda: self.app_dialogs.open_settings("terminal")
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
         tabs.on_sessions_changed = self._on_sessions_changed
         tabs.set_label_mode(self._ui.tab_label_mode)

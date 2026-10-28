@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from .persistence import write_json_atomic
 
 DEFAULT_CONFIG_FILENAME = "settings.json"
 APP_NAME = "ssh-manager"
+LOGGER = logging.getLogger(__name__)
 
 
 def _default_config_dir() -> Path:
@@ -180,6 +182,41 @@ class RemoteDesktopPreferences:
         return dict(vars(self))
 
 
+MIDDLE_CLICK_CHOICES = ("paste_primary", "paste_clipboard", "none")  # same as terminal_input.py
+RIGHT_CLICK_CHOICES = ("menu", "paste_clipboard", "paste_primary", "none")
+
+
+@dataclass
+class TerminalInputSettings:
+    """Preferences → Terminal: mouse and selection behaviour of every terminal (``docs/terminal.md``)."""
+
+    copy_on_select: bool = True  # selecting copies to PRIMARY (what VTE does; always on in practice)
+    copy_on_select_clipboard: bool = False  # … and to the clipboard as well
+    middle_click: str = "paste_primary"  # paste_primary | paste_clipboard | none
+    right_click: str = "menu"  # menu | paste_clipboard | paste_primary | none (Shift+right-click: always the menu)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TerminalInputSettings":
+        prefs = cls()
+        for name in ("copy_on_select", "copy_on_select_clipboard"):
+            value = data.get(name)
+            if isinstance(value, bool):
+                setattr(prefs, name, value)
+            elif value is not None:
+                LOGGER.warning("settings: terminal_input.%s must be true or false; the default is used", name)
+        for name, choices in (("middle_click", MIDDLE_CLICK_CHOICES), ("right_click", RIGHT_CLICK_CHOICES)):
+            value = data.get(name)
+            if value in choices:
+                setattr(prefs, name, value)
+            elif value is not None:
+                LOGGER.warning("settings: terminal_input.%s must be one of %s; the default is used",
+                               name, ", ".join(choices))
+        return prefs
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(vars(self))
+
+
 @dataclass
 class AppSettings:
     """Application-wide settings with JSON persistence."""
@@ -204,6 +241,7 @@ class AppSettings:
     terminal_appearance: TerminalAppearanceSettings = field(default_factory=TerminalAppearanceSettings)
     file_transfer: FileTransferPreferences = field(default_factory=FileTransferPreferences)
     remote_desktop: RemoteDesktopPreferences = field(default_factory=RemoteDesktopPreferences)
+    terminal_input: TerminalInputSettings = field(default_factory=TerminalInputSettings)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "AppSettings":
@@ -298,6 +336,8 @@ class AppSettings:
         instance.file_transfer = FileTransferPreferences.from_dict(transfer if isinstance(transfer, dict) else {})
         desktop = data.get("remote_desktop")
         instance.remote_desktop = RemoteDesktopPreferences.from_dict(desktop if isinstance(desktop, dict) else {})
+        terminal_input = data.get("terminal_input")
+        instance.terminal_input = TerminalInputSettings.from_dict(terminal_input if isinstance(terminal_input, dict) else {})
 
         timeouts = data.get("timeouts")
         if isinstance(timeouts, dict):
@@ -335,6 +375,7 @@ class AppSettings:
             "terminal_appearance": self.terminal_appearance.to_dict(),
             "file_transfer": self.file_transfer.to_dict(),
             "remote_desktop": self.remote_desktop.to_dict(),
+            "terminal_input": self.terminal_input.to_dict(),
         }
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)

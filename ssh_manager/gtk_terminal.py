@@ -54,7 +54,8 @@ from ssh_manager.password_change import PasswordChangeTracker
 # --- BEGIN: PARAMIKO_VTE_IMPORTS ---
 from ssh_manager.vte_bridge import VTEBridge
 # --- END: PARAMIKO_VTE_IMPORTS ---
-from ssh_manager.settings import TerminalAppearanceSettings
+from ssh_manager.settings import TerminalAppearanceSettings, TerminalInputSettings
+from ssh_manager.terminal_input import MouseAction, decide_mouse_action  # noqa: E402
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 from ssh_manager.gtkui.constants import Icons
 from ssh_manager.gtkui.dialogs.files import choose_save_file
@@ -62,6 +63,7 @@ from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog, SavePasswo
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
+from ssh_manager.gtkui.controllers.shortcuts import accel_label  # noqa: E402
 from ssh_manager.gtkui.view_models import status_text
 from ssh_manager.gtkui.theme.loader import get_theme_manager
 from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Size, Space
@@ -170,6 +172,15 @@ def _terminal_text_result(value) -> str:
 
 def _select_all_terminal_text(*_args) -> bool:
     return True
+
+
+def _copy_selection(term: Vte.Terminal) -> None:
+    """The selection as plain text into the clipboard (no formatting)."""
+
+    if hasattr(term, "copy_clipboard_format"):
+        term.copy_clipboard_format(Vte.Format.TEXT)
+    else:  # VTE < 0.50
+        term.copy_clipboard()
 
 
 def _terminal_contents(term: Vte.Terminal) -> Optional[str]:
@@ -382,6 +393,12 @@ class TerminalTab(SessionPage):
         self._strip_ansi_on_copy = False
         self._appearance = appearance
 
+        # Mouse and selection (gnome-terminal conventions; ``terminal_input.py``).
+        self._input_settings = TerminalInputSettings()
+        self._handled_buttons: set = set()  # (terminal, button) presses handled here: their release too
+        self._text_cursors: Dict[Vte.Terminal, Optional[Gdk.Cursor]] = {}
+        self.on_open_preferences: Optional[Callable[[], None]] = None  # the terminal menu's "Preferences…"
+
         self._status = ConnectionStatus.UNKNOWN
         self._stats_enabled = True
         self._custom_title = ""
@@ -566,7 +583,174 @@ class TerminalTab(SessionPage):
             self._input_commit_handlers[term] = handler_id
         except (TypeError, ValueError):
             pass
+        self._connect_mouse(term)
         return term
+
+    # ------------------------------------------------------------ mouse and clipboard
+    def set_input_settings(self, settings: TerminalInputSettings) -> None:
+        """Mouse / selection preferences (shared object: later changes apply at once)."""
+
+        self._input_settings = settings
+
+    def _connect_mouse(self, term: Vte.Terminal) -> None:
+        term.connect("button-press-event", self._on_terminal_button_press)
+        # After VTE's own handler: it runs only when VTE did not take the press, i.e. the program in the
+        # terminal has no mouse reporting on (VTE consumes every press it reports).
+        term.connect_after("button-press-event", self._on_terminal_button_press_after)
+        term.connect("button-release-event", self._on_terminal_button_release)
+        term.connect("selection-changed", self._on_terminal_selection_changed)
+        term.connect("realize", self._remember_text_cursor)
+
+    @staticmethod
+    def _pointer_window(term: Vte.Terminal) -> Optional[Gdk.Window]:
+        window = term.get_window()
+        if window is None:
+            return None
+        children = [child for child in window.get_children() if child.is_input_only()]
+        return children[0] if children else window
+
+    def _remember_text_cursor(self, term: Vte.Terminal) -> None:
+        window = self._pointer_window(term)
+        self._text_cursors[term] = window.get_cursor() if window is not None else None
+
+    def _mouse_reporting(self, term: Vte.Terminal) -> bool:
+        """Whether the program reads the mouse: VTE then shows the arrow instead of its text pointer.
+
+        VTE has no getter for this; the pointer it sets is the only public trace. Used only for a
+        non-default middle-click setting (right-click relies on VTE consuming the press instead).
+        """
+
+        window = self._pointer_window(term)
+        text_cursor = self._text_cursors.get(term)
+        if window is None or text_cursor is None:
+            return False
+        current = window.get_cursor()
+        return current is not None and current != text_cursor
+
+    def _on_terminal_button_press(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        if event.type != Gdk.EventType.BUTTON_PRESS:
+            return False
+        state = event.state & Gtk.accelerator_get_default_mod_mask()
+        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+        settings = self._input_settings
+        if event.button == 3 and shift:  # the menu, even while a program reads the mouse
+            return self._perform_mouse_action(term, MouseAction.SHOW_MENU, event)
+        if event.button == 2:
+            if not shift and settings.middle_click == "paste_primary":
+                return False  # VTE pastes PRIMARY itself (or reports the click to the program)
+            tracking = not shift and self._mouse_reporting(term)
+            action = decide_mouse_action(2, shift, ctrl, tracking, settings)
+            if action is not MouseAction.PASS_TO_TERMINAL:
+                return self._perform_mouse_action(term, action, event)
+        return False
+
+    def _on_terminal_button_press_after(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        if event.type != Gdk.EventType.BUTTON_PRESS or event.button != 3:
+            return False
+        state = event.state & Gtk.accelerator_get_default_mod_mask()
+        if state & Gdk.ModifierType.SHIFT_MASK:
+            return False
+        action = decide_mouse_action(3, False, bool(state & Gdk.ModifierType.CONTROL_MASK), False, self._input_settings)
+        if action is MouseAction.PASS_TO_TERMINAL:
+            return False
+        return self._perform_mouse_action(term, action, event)
+
+    def _on_terminal_button_release(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        key = (term, event.button)
+        if key in self._handled_buttons:
+            self._handled_buttons.discard(key)
+            return True  # no stray selection change from a press VTE never saw
+        return False
+
+    def _perform_mouse_action(self, term: Vte.Terminal, action: MouseAction, event: Gdk.EventButton) -> bool:
+        term.grab_focus()
+        if action is MouseAction.SHOW_MENU:
+            self.show_terminal_menu(term, event)
+        elif action is MouseAction.PASTE_CLIPBOARD:
+            term.paste_clipboard()
+        elif action is MouseAction.PASTE_PRIMARY:
+            term.paste_primary()
+        self._handled_buttons.add((term, event.button))
+        return True
+
+    def _on_terminal_selection_changed(self, term: Vte.Terminal) -> None:
+        # VTE itself puts a mouse selection into PRIMARY; the clipboard only when asked, and never empty.
+        if self._input_settings.copy_on_select_clipboard and term.get_has_selection():
+            _copy_selection(term)
+
+    def select_all_terminal(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is None:
+            return
+        term.select_all()
+        if self._input_settings.copy_on_select and hasattr(term, "copy_primary"):
+            try:
+                term.copy_primary()
+            except Exception:  # no PRIMARY selection (some Wayland compositors): nothing to do
+                pass
+
+    def paste_primary(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.paste_primary()
+
+    def clear_scrollback(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.feed(b"\x1b[3J")  # "erase saved lines": the scrollback only, the screen stays
+
+    def reset_terminal(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.reset(True, False)
+
+    def show_terminal_menu(self, term: Optional[Vte.Terminal] = None, event: Optional[Gdk.Event] = None) -> None:
+        term = term or self._active_terminal()
+        if term is None:
+            return
+        menu = build_context_menu(self.terminal_menu_spec(term, event), attach_to=term)
+        popup_menu(menu, event, widget=term)
+
+    def terminal_menu_spec(self, term: Vte.Terminal, event: Optional[Gdk.Event] = None) -> list[MenuSection]:
+        """The terminal's context menu; every item acts on ``term`` (the pane under the pointer)."""
+
+        del event  # no hyperlink / match handling is enabled in this app's terminals
+        has_selection = bool(term.get_has_selection())
+        try:
+            can_paste = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_is_text_available()
+        except Exception:
+            can_paste = True
+        edit = MenuSection("edit", [
+            MenuItemSpec(_("_Copy"), lambda: self.copy_clipboard(term), accel=accel_label("copy"),
+                         sensitive=has_selection),
+            MenuItemSpec(_("Copy as Plain _Text"), lambda: _copy_selection(term), sensitive=has_selection),
+            MenuItemSpec(_("_Paste"), lambda: term.paste_clipboard(), accel=accel_label("paste"), sensitive=can_paste),
+            MenuItemSpec(_("Paste _Selection"), lambda: term.paste_primary(), accel=accel_label("paste-primary")),
+            MenuItemSpec(_("Select _All"), lambda: self.select_all_terminal(term),
+                         accel=accel_label("select-all-terminal")),
+        ])
+        terminal = MenuSection("terminal", [
+            MenuItemSpec(_("C_lear Scrollback"), lambda: self.clear_scrollback(term), accel=accel_label("clear-scrollback")),
+            MenuItemSpec(_("_Reset Terminal"), lambda: self.reset_terminal(term), accel=accel_label("reset-terminal")),
+        ])
+        zoom = MenuSection("zoom", [
+            MenuItemSpec(_("Zoom _In"), self.increase_font, accel=accel_label("font-increase")),
+            MenuItemSpec(_("Zoom _Out"), self.decrease_font, accel=accel_label("font-decrease")),
+            MenuItemSpec(_("_Normal Size"), self.reset_font, accel=accel_label("font-reset")),
+        ])
+        session = MenuSection("session", [
+            MenuItemSpec(_("Close _Split") if self.is_split else _("Split _Pane"), self.toggle_split,
+                         accel=accel_label("split-pane")),
+            MenuItemSpec(_("_Reconnect"), self.reconnect, accel=accel_label("reconnect"),
+                         visible=not self._session_active),
+            MenuItemSpec(_("Save _Transcript…"), self.save_transcript, accel=accel_label("save-transcript")),
+        ])
+        preferences = MenuSection("preferences", [
+            MenuItemSpec(_("_Preferences…"), lambda: self.on_open_preferences() if self.on_open_preferences else None,
+                         sensitive=self.on_open_preferences is not None),
+        ])
+        return [edit, terminal, zoom, session, preferences]
 
     @property
     def host(self) -> HostEntry:
@@ -763,8 +947,8 @@ class TerminalTab(SessionPage):
             return True
         return False
 
-    def copy_clipboard(self) -> None:
-        term = self._active_terminal()
+    def copy_clipboard(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
         if not term:
             return
         try:
@@ -781,8 +965,8 @@ class TerminalTab(SessionPage):
         self._appearance = appearance
         self._apply_terminal_theme()
 
-    def paste_clipboard(self) -> None:
-        term = self._active_terminal()
+    def paste_clipboard(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
         if term:
             term.paste_clipboard()
 
@@ -1920,6 +2104,8 @@ class TerminalNotebook(Gtk.Box):
         self._appearance = appearance
         self.on_quick_connect: Optional[Callable[[], None]] = None
         self.on_new_host: Optional[Callable[[], None]] = None
+        self.input_settings = TerminalInputSettings()  # the window passes AppSettings.terminal_input (shared)
+        self.on_terminal_preferences: Optional[Callable[[], None]] = None  # terminal menu → Preferences
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
         self.on_sessions_changed: Optional[Callable[[], None]] = None
         self.on_strip_changed: Optional[Callable[[], None]] = None  # session strip shown/hidden
@@ -2165,6 +2351,9 @@ class TerminalNotebook(Gtk.Box):
         tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
         tab.connect_activity(self._on_tab_activity)
+        if hasattr(tab, "set_input_settings"):  # terminals (file browsers have none)
+            tab.set_input_settings(self.input_settings)
+            tab.on_open_preferences = lambda: self.on_terminal_preferences() if self.on_terminal_preferences else None
 
         self._tabs.append(tab)
         self._open_order.append(tab)
