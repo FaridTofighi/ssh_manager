@@ -2571,6 +2571,42 @@ class TerminalNotebook(Gtk.Box):
         if 1 <= number <= len(ordered):
             self._focus_tab(ordered[number - 1])
 
+    def terminal_action(self, name: str, focus: Optional[Gtk.Widget]) -> bool:
+        """Run terminal action ``name`` on the focused terminal (``True`` when something handled it).
+
+        Terminal shortcuts (copy, paste, Shift+Insert …) must never reach a terminal in the background:
+        in a text field they do the field's own copy / paste / select all, anywhere else nothing.
+        """
+
+        if isinstance(focus, Vte.Terminal):
+            tab = next((t for t in self._tabs if getattr(t, "is_terminal", False) and focus in t._terminals()), None)
+            if tab is None:
+                return False
+            run = {
+                "copy": lambda: tab.copy_clipboard(focus),
+                "paste": lambda: tab.paste_clipboard(focus),
+                "paste-primary": lambda: tab.paste_primary(focus),
+                "select-all-terminal": lambda: tab.select_all_terminal(focus),
+                "clear-scrollback": lambda: tab.clear_scrollback(focus),
+                "reset-terminal": lambda: tab.reset_terminal(focus),
+                "terminal-menu": lambda: tab.show_terminal_menu(focus),
+            }.get(name)
+            if run is None:
+                return False
+            run()
+            return True
+        if isinstance(focus, (Gtk.Editable, Gtk.TextView)):
+            signal = {"copy": "copy-clipboard", "paste": "paste-clipboard", "paste-primary": "paste-clipboard"}.get(name)
+            if signal is not None:
+                focus.emit(signal)  # what Ctrl+Insert / Shift+Insert do in the field itself
+            elif name == "select-all-terminal":
+                if isinstance(focus, Gtk.TextView):
+                    focus.emit("select-all", True)
+                else:
+                    focus.select_region(0, -1)
+            return True
+        return False
+
     def reconnect_current(self) -> None:
         tab = self._current_tab()
         if tab:

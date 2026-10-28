@@ -47,7 +47,10 @@ from ssh_manager.gtkui.controllers.session_controller import (  # noqa: E402,F40
     audit_log_key,
     audit_log_value,
 )
-from ssh_manager.gtkui.controllers.shortcuts import register_actions  # noqa: E402
+from ssh_manager.gtkui.controllers.shortcut_registry import ShortcutRegistry  # noqa: E402
+from ssh_manager.gtkui.controllers.shortcuts import (  # noqa: E402
+    refresh_accel_tooltips, register_actions, set_active_registry,
+)
 from ssh_manager.gtkui.controllers.tree import TreeController  # noqa: E402
 from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
     UI_STATE_FILE,
@@ -473,6 +476,15 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _register_actions(self) -> None:
         tabs, hosts, sessions, dialogs = self.terminal_tabs, self.hosts, self.sessions, self.app_dialogs
+        # The user's shortcuts (Preferences → Keyboard Shortcuts): menus, the shortcuts window and the
+        # accelerators below all read this registry.
+        self.shortcut_registry = ShortcutRegistry(overrides=self._settings.shortcuts)
+        set_active_registry(self.shortcut_registry)
+        self.connect("destroy", lambda *_a: self._release_shortcut_registry())
+
+        def terminal(name: str):  # acts on the focused terminal; in a text field, the field's own action
+            return lambda: tabs.terminal_action(name, self.get_focus())
+
         callbacks = {
             "new-host": hosts.prompt_new_host,
             "new-host-template": hosts.new_host_from_template,
@@ -521,8 +533,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "split-pane": tabs.toggle_split_current,
             "toggle-stats": tabs.toggle_stats_current,
             "toggle-strip-ansi": tabs.toggle_strip_ansi_copy,
-            "copy": tabs.copy_current,
-            "paste": tabs.paste_current,
+            "copy": terminal("copy"),
+            "paste": terminal("paste"),
+            "paste-primary": terminal("paste-primary"),
+            "terminal-menu": terminal("terminal-menu"),
+            "select-all-terminal": terminal("select-all-terminal"),
+            "clear-scrollback": terminal("clear-scrollback"),
+            "reset-terminal": terminal("reset-terminal"),
             "interrupt": tabs.interrupt_current,
             "font-increase": tabs.increase_font,
             "font-decrease": tabs.decrease_font,
@@ -533,6 +550,23 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "toggle-maximize": self.layout.toggle_maximized,
         }
         self._actions = register_actions(self, callbacks)
+        self.shortcut_registry.add_listener(self._on_shortcuts_changed)
+
+    def _on_shortcuts_changed(self) -> None:
+        """The user changed a shortcut: live accelerators, hints, the shortcuts window, the settings file."""
+
+        self.shortcut_registry.apply(self.get_application(), self._actions)
+        self.emit("keys-changed")  # GTK caches the window's key lookup; without this the old keys keep working
+        refresh_accel_tooltips()
+        self.app_dialogs.refresh_shortcuts_window()
+        self._settings.shortcuts = self.shortcut_registry.to_dict()
+        self._settings.save()
+
+    def _release_shortcut_registry(self) -> None:
+        from ssh_manager.gtkui.controllers import shortcuts
+
+        if shortcuts._ACTIVE_REGISTRY is getattr(self, "shortcut_registry", None):
+            set_active_registry(None)
 
     # ------------------------------------------------------------ feedback
     def _log_event(self, message: str, success: object) -> None:

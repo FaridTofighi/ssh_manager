@@ -27,6 +27,7 @@ from gi.repository import Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..controllers.notifications import MessageHistory  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..health import Health  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
@@ -138,6 +139,7 @@ class HeaderView(Gtk.HeaderBar):
         self.sidebar_expand_button = IconButton(
             Icons.SIDEBAR, _("Show sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("topbar-icon",)
         )
+        set_accel_tooltip(self.sidebar_expand_button, _("Show sidebar"), "toggle-sidebar")
         self.sidebar_expand_button.set_no_show_all(True)
         self.brand.pack_start(self.sidebar_expand_button, False, False, 0)
 

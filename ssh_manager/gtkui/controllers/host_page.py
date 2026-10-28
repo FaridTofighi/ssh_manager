@@ -42,6 +42,7 @@ from ..theme.tokens import Level  # noqa: E402
 from ..views.host_page import HostPageContent, HostPageView, PanelPage, latency_css  # noqa: E402
 from ..widgets.menus import build_menu, popup_menu  # noqa: E402
 from ..widgets.ready_state import ReadyState  # noqa: E402
+from .shortcuts import accel_label, accel_tooltip  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -280,7 +281,7 @@ class HostPageController:
         ]
         tags = [t.strip() for t in (host.option("tags") or "").split(",") if t.strip()]
         if live:
-            primary, outlined, tip = _("_Reconnect"), True, _("Reconnect the current session (Ctrl+Shift+R)")
+            primary, outlined, tip = _("_Reconnect"), True, accel_tooltip(_("Reconnect the current session"), "reconnect")
         else:
             primary, outlined = _("_Connect"), False
             tip = _("Open a session (Enter)") if perms.get("can_connect", True) else _("Connecting is disabled; you will be asked to confirm")
@@ -369,7 +370,7 @@ class HostPageController:
             address=ngettext("{n} host", "{n} hosts", count).format(n=count),
             icon=Icons.SERVER,
             primary_label=_("Add host"),
-            primary_tooltip=_("Add a new host (Ctrl+N)"),
+            primary_tooltip=accel_tooltip(_("Add a new host"), "new-host"),
             now=now,
         )
 
@@ -525,7 +526,7 @@ class HostPageController:
 
         if kind is RowKind.HOST and host is not None:
             panel = [
-                MenuItemSpec(_("Host _Details…"), self.show_details, icon=Icons.INFO, accel="Ctrl+I"),
+                MenuItemSpec(_("Host _Details…"), self.show_details, icon=Icons.INFO, accel=accel_label("toggle-details")),
                 MenuItemSpec(_("Host _Activity…"), self.show_activity, icon=Icons.ACTIVITY),
             ]
             if self.win.terminal_tabs.has_session_for(host):

@@ -10,10 +10,16 @@ Terminal-friendly choices: copy/paste/interrupt use Ctrl+Shift so plain Ctrl
 combinations still reach programs running in the terminal; ``Delete`` and
 ``Esc`` are handled by the focused widget (tree, search, broadcast strip)
 instead of global accelerators so they keep working inside terminals.
+
+The accelerators here are the defaults: the user may change them
+(``shortcut_registry.ShortcutRegistry``, Preferences → Keyboard Shortcuts).
+Once the window sets the active registry, :func:`accel_label`,
+:func:`register_actions` and the shortcuts window use its effective bindings.
 """
 
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -103,8 +109,13 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("toggle-stats", _("Show remote statistics"), G_SESSIONS),
     ActionSpec("toggle-strip-ansi", _("Copy as plain text"), G_SESSIONS),
     # Terminal
-    ActionSpec("copy", _("Copy"), G_TERMINAL, ("<Primary><Shift>c",)),
+    ActionSpec("copy", _("Copy"), G_TERMINAL, ("<Primary><Shift>c", "<Primary>Insert")),
     ActionSpec("paste", _("Paste"), G_TERMINAL, ("<Primary><Shift>v",)),
+    ActionSpec("paste-primary", _("Paste selection"), G_TERMINAL, ("<Shift>Insert",)),
+    ActionSpec("terminal-menu", _("Open terminal context menu"), G_TERMINAL),
+    ActionSpec("select-all-terminal", _("Select all"), G_TERMINAL),  # Ctrl+Shift+A is "Show all sessions"
+    ActionSpec("clear-scrollback", _("Clear scrollback"), G_TERMINAL),
+    ActionSpec("reset-terminal", _("Reset terminal"), G_TERMINAL),
     ActionSpec("interrupt", _("Send interrupt (Ctrl+C)"), G_TERMINAL, ("<Primary><Shift>k",)),
     ActionSpec("font-increase", _("Zoom in"), G_TERMINAL, ("<Primary>plus", "<Primary>equal", "<Primary>KP_Add")),
     ActionSpec("font-decrease", _("Zoom out"), G_TERMINAL, ("<Primary>minus", "<Primary>KP_Subtract")),
@@ -120,6 +131,22 @@ GOTO_TAB_ACCELS = tuple((f"<Alt>{n}", n) for n in range(1, 10))
 
 ACTION_BY_NAME: Dict[str, ActionSpec] = {spec.name: spec for spec in ACTIONS}
 
+_ACTIVE_REGISTRY = None  # the window's ShortcutRegistry (set_active_registry); None = the defaults
+
+
+def set_active_registry(registry) -> None:
+    global _ACTIVE_REGISTRY
+    _ACTIVE_REGISTRY = registry
+
+
+def effective_accels(spec: ActionSpec) -> Tuple[str, ...]:
+    """The accelerators ``spec`` has now (the user's, else the defaults)."""
+
+    registry = _ACTIVE_REGISTRY
+    if registry is not None and registry.spec(spec.name) is not None:
+        return tuple(registry.effective_accels(spec.name))
+    return spec.accels
+
 
 def accel_label(spec_name: str) -> str:
     """Human-readable label of an action's first accelerator (for menu hints)."""
@@ -127,11 +154,39 @@ def accel_label(spec_name: str) -> str:
     spec = ACTION_BY_NAME.get(spec_name)
     if spec is None:
         return ""
-    accels = spec.accels or spec.display_accels
+    accels = effective_accels(spec) or spec.display_accels
     if not accels:
         return ""
     key, mods = Gtk.accelerator_parse(accels[0])
     return Gtk.accelerator_get_label(key, mods) if key else ""
+
+
+_TOOLTIPS: List[Tuple["weakref.ref", str, str, str]] = []  # (widget, text, action, suffix): refresh_accel_tooltips
+
+
+def accel_tooltip(text: str, action: str, suffix: str = "") -> str:
+    """``text (Ctrl+B)`` with the action's current shortcut (just ``text`` when it has none), then ``suffix``."""
+
+    label = accel_label(action)
+    head = f"{text} ({label})" if label else text
+    return f"{head}. {suffix}" if suffix else head
+
+
+def set_accel_tooltip(widget: Gtk.Widget, text: str, action: str, suffix: str = "") -> None:
+    """Tooltip naming ``action``'s shortcut; it follows the user's changes (:func:`refresh_accel_tooltips`)."""
+
+    widget.set_tooltip_text(accel_tooltip(text, action, suffix))
+    _TOOLTIPS.append((weakref.ref(widget), text, action, suffix))
+
+
+def refresh_accel_tooltips() -> None:
+    alive = []
+    for ref, text, action, suffix in _TOOLTIPS:
+        widget = ref()
+        if widget is not None:
+            widget.set_tooltip_text(accel_tooltip(text, action, suffix))
+            alive.append((ref, text, action, suffix))
+    _TOOLTIPS[:] = alive
 
 
 def register_actions(
@@ -157,8 +212,8 @@ def register_actions(
     app = application or window.get_application()
     if app is not None:
         for spec in ACTIONS:
-            if spec.name in created and spec.accels:
-                app.set_accels_for_action(spec.detailed_name, list(spec.accels))
+            if spec.name in created and effective_accels(spec):
+                app.set_accels_for_action(spec.detailed_name, list(effective_accels(spec)))
         if "goto-tab" in created:
             for accel, number in GOTO_TAB_ACCELS:
                 app.set_accels_for_action(f"win.goto-tab({number})", [accel])
@@ -175,17 +230,25 @@ def set_enabled(actions: Dict[str, Gio.SimpleAction], names: Iterable[str], enab
 def _groups(specs: Sequence[ActionSpec]) -> Dict[str, List[ActionSpec]]:
     grouped: Dict[str, List[ActionSpec]] = {}
     for spec in specs:
-        if spec.accels or spec.display_accels:
+        if effective_accels(spec) or spec.display_accels:
             grouped.setdefault(spec.group, []).append(spec)
     return grouped
 
 
-def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
-    """Build the ``Gtk.ShortcutsWindow`` from :data:`ACTIONS`.
+def _shortcut_accelerator(spec: ActionSpec) -> str:
+    if spec.name == "goto-tab":
+        return "<Alt>1...9"
+    return " ".join(list(effective_accels(spec)) + list(spec.display_accels))
+
+
+def build_shortcuts_window(parent: Optional[Gtk.Window],
+                           on_customize: Optional[Callable[[], None]] = None) -> Gtk.ShortcutsWindow:
+    """Build the ``Gtk.ShortcutsWindow`` from :data:`ACTIONS` (the effective bindings).
 
     Closing it only hides it, and callers reuse one window (never destroy it).
     GTK 3.24 leaves dangling CSS nodes behind a destroyed ``ShortcutsWindow``,
     and the next theme or font change restyles them and crashes the process.
+    So it is never rebuilt: :func:`refresh_shortcuts_window` updates it in place.
     """
 
     window = Gtk.ShortcutsWindow(modal=True)
@@ -195,16 +258,18 @@ def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
         window.set_transient_for(parent)
     section = Gtk.ShortcutsSection(section_name="main", title=_("SSH Manager"), max_height=12)
     section.show()
-    for group_title, specs in _groups(ACTIONS).items():
+    rows: Dict[str, Gtk.ShortcutsShortcut] = {}
+    groups: Dict[str, Gtk.ShortcutsGroup] = {}
+    grouped = _groups(ACTIONS)
+    for group_title in dict.fromkeys(spec.group for spec in ACTIONS):
         group = Gtk.ShortcutsGroup(title=group_title)
         group.show()
-        for spec in specs:
-            accels = list(spec.accels or spec.display_accels)
-            if spec.name == "goto-tab":
-                accels = ["<Alt>1...9"]
-            shortcut = Gtk.ShortcutsShortcut(title=spec.title, accelerator=" ".join(accels))
+        groups[group_title] = group
+        for spec in grouped.get(group_title, []):
+            shortcut = Gtk.ShortcutsShortcut(title=spec.title, accelerator=_shortcut_accelerator(spec))
             shortcut.show()
             group.add(shortcut)
+            rows[spec.name] = shortcut
         if spec_extra := _EXTRA_SHORTCUTS.get(group_title):
             for title, accel in spec_extra:
                 shortcut = Gtk.ShortcutsShortcut(title=title, accelerator=accel)
@@ -212,7 +277,33 @@ def build_shortcuts_window(parent: Optional[Gtk.Window]) -> Gtk.ShortcutsWindow:
                 group.add(shortcut)
         section.add(group)
     window.add(section)
+    window._sshm_rows, window._sshm_groups = rows, groups  # type: ignore[attr-defined]
+    titlebar = window.get_titlebar()
+    if on_customize is not None and isinstance(titlebar, Gtk.HeaderBar):
+        button = Gtk.Button.new_with_mnemonic(_("_Customize…"))
+        button.set_tooltip_text(_("Change the keyboard shortcuts"))
+        button.connect("clicked", lambda _b: (window.hide(), on_customize()))
+        button.show()
+        titlebar.pack_end(button)
     return window
+
+
+def refresh_shortcuts_window(window: Gtk.ShortcutsWindow) -> None:
+    """Show the current bindings (after the user changed them) without rebuilding the window."""
+
+    rows: Dict[str, Gtk.ShortcutsShortcut] = getattr(window, "_sshm_rows", {})
+    groups: Dict[str, Gtk.ShortcutsGroup] = getattr(window, "_sshm_groups", {})
+    for spec in ACTIONS:
+        accelerator = _shortcut_accelerator(spec)
+        row = rows.get(spec.name)
+        if row is None:
+            if not accelerator or spec.group not in groups:
+                continue
+            row = Gtk.ShortcutsShortcut(title=spec.title, accelerator=accelerator)
+            groups[spec.group].add(row)
+            rows[spec.name] = row
+        row.set_property("accelerator", accelerator)
+        row.set_visible(bool(accelerator))
 
 
 _EXTRA_SHORTCUTS: Dict[str, List[Tuple[str, str]]] = {

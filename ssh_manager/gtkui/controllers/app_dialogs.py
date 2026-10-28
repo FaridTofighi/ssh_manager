@@ -25,7 +25,7 @@ from ..dialogs.secrets import NewSecretDialog  # noqa: E402
 from ..dialogs.vault import VaultDialog  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
-from .shortcuts import build_shortcuts_window  # noqa: E402
+from .shortcuts import build_shortcuts_window, refresh_shortcuts_window  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -56,6 +56,7 @@ class AppDialogs:
             density=self.win.density,
             tab_label_mode=self.win._ui.tab_label_mode,
             inventory=self.inventory_info(),
+            shortcuts=getattr(self.win, "shortcut_registry", None),
         )
         if page:
             dialog.layout.show_page(page)
@@ -113,6 +114,9 @@ class AppDialogs:
         settings.terminal_appearance = values.terminal_appearance
         if values.file_transfer is not None:
             settings.file_transfer = values.file_transfer
+        registry = getattr(self.win, "shortcut_registry", None)
+        if values.shortcuts is not None and registry is not None and values.shortcuts != registry.to_dict():
+            registry.from_dict(values.shortcuts)  # applies the accelerators and saves (window listener)
         if values.terminal_input is not None:
             # In place: every open terminal shares this object, so the change applies at once.
             vars(settings.terminal_input).update(vars(values.terminal_input))
@@ -190,9 +194,15 @@ class AppDialogs:
         # One window per main window, hidden on close (see build_shortcuts_window).
         window = self._shortcuts_window
         if window is None:
-            window = self._shortcuts_window = build_shortcuts_window(self.win)
+            window = self._shortcuts_window = build_shortcuts_window(
+                self.win, on_customize=lambda: self.open_settings("shortcuts"))
         window.show_all()
+        refresh_shortcuts_window(window)  # rows of disabled shortcuts stay hidden after show_all
         window.present()
+
+    def refresh_shortcuts_window(self) -> None:
+        if self._shortcuts_window is not None:
+            refresh_shortcuts_window(self._shortcuts_window)
 
     def open_documentation(self) -> None:
         readme = Path(__file__).resolve().parents[3] / "README.md"

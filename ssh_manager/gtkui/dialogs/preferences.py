@@ -86,6 +86,7 @@ class PreferencesValues:
     file_transfer: Optional[FileTransferPreferences] = None
     remote_desktop: Optional[RemoteDesktopPreferences] = None
     terminal_input: Optional[TerminalInputSettings] = None
+    shortcuts: Optional[Dict[str, List[str]]] = None  # the user's shortcut changes (only differences)
 
     @property
     def prefer_dark(self) -> bool:
@@ -160,6 +161,7 @@ class PreferencesDialog(BaseDialog):
         density: object = DEFAULT_DENSITY,
         tab_label_mode: object = TabLabelMode.NAME,
         inventory: Optional[Dict[str, object]] = None,
+        shortcuts: object = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -190,6 +192,9 @@ class PreferencesDialog(BaseDialog):
         self._build_audit()
         if inventory:
             self._build_inventory(inventory)
+        self.shortcuts_page = None
+        if shortcuts is not None:
+            self._build_shortcuts(shortcuts)
         self.add_body(self.layout, expand=True)
 
         self.add_cancel()
@@ -557,7 +562,17 @@ class PreferencesDialog(BaseDialog):
             file_transfer=self.file_transfer_values(),
             remote_desktop=self.remote_desktop_values(),
             terminal_input=self.terminal_input_values(),
+            shortcuts=self.shortcuts_page.editor.to_dict() if self.shortcuts_page is not None else None,
         )
+
+    def _build_shortcuts(self, registry) -> None:
+        from .shortcuts_page import ShortcutEditor, ShortcutsPage
+
+        page = self.layout.new_page("shortcuts", _("Keyboard Shortcuts"),
+                                    _("Click a row to change it. Shortcuts that are plain keys or Ctrl+letter take "
+                                      "those keys away from programs in the terminal."))
+        self.shortcuts_page = ShortcutsPage(ShortcutEditor(registry), lambda: self)
+        page.append(self.shortcuts_page, expand=True)
 
     def terminal_input_values(self) -> TerminalInputSettings:
         return TerminalInputSettings.from_dict({

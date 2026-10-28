@@ -38,6 +38,7 @@ from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 
 FILTER_HELP = _(
     "Combine <b>key:value</b> terms with <b>AND</b>.\n"
@@ -255,9 +256,8 @@ class SidebarView(Gtk.Box):
         ctx = self.add_host_button.get_style_context()
         ctx.add_class("suggested-action")
         ctx.add_class("add-host")
-        self.add_host_button.set_tooltip_text(
-            _("Add a new host (Ctrl+N). Right-click or Shift+click for templates, groups and Quick Connect.")
-        )
+        set_accel_tooltip(self.add_host_button, _("Add a new host"), "new-host",
+                          _("Right-click or Shift+click for templates, groups and Quick Connect."))
         set_accessible_name(self.add_host_button, _("Add host"))
         self.add_host_button.connect("clicked", self._on_add_host_clicked)
         self.add_host_button.connect("button-press-event", self._on_add_host_pressed)
@@ -354,12 +354,14 @@ class SidebarView(Gtk.Box):
         footer.get_style_context().add_class("sidebar-footer")
         self._footer = footer
         self.settings_link = _footer_link(Icons.SETTINGS, _("Settings"), "win.settings", _("Settings (Ctrl+,)"))
+        set_accel_tooltip(self.settings_link, _("Settings"), "settings")
         footer.pack_start(self.settings_link, False, False, 0)
         self.keys_link = _footer_link(Icons.KEY, _("Keys"), "win.credentials", _("Credentials and keys"))
         footer.pack_start(self.keys_link, False, False, 0)
         self.collapse_button = IconButton(
             Icons.CHEVRON_LEFT, _("Hide sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("footer-icon",)
         )
+        set_accel_tooltip(self.collapse_button, _("Hide sidebar"), "toggle-sidebar")
         footer.pack_end(self.collapse_button, False, False, 0)
         return footer
 
@@ -402,12 +404,12 @@ class SidebarView(Gtk.Box):
         box.pack_start(Gtk.Separator(), False, False, Space.XS)
         groups_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         for label, action, tip in (
-            (_("_Expand All"), "win.expand-all-groups", _("Open every group (Ctrl+Shift+O)")),
-            (_("C_ollapse All"), "win.collapse-all-groups", _("Close every group (Ctrl+Shift+L)")),
+            (_("_Expand All"), "expand-all-groups", _("Open every group")),
+            (_("C_ollapse All"), "collapse-all-groups", _("Close every group")),
         ):
             button = Gtk.Button.new_with_mnemonic(label)
-            button.set_action_name(action)
-            button.set_tooltip_text(tip)
+            button.set_action_name(f"win.{action}")
+            set_accel_tooltip(button, tip, action)
             groups_row.pack_start(button, True, True, 0)
         self.expand_all_button, self.collapse_all_button = groups_row.get_children()
         box.pack_start(groups_row, False, False, 0)

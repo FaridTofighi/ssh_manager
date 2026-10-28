@@ -242,6 +242,9 @@ class AppSettings:
     file_transfer: FileTransferPreferences = field(default_factory=FileTransferPreferences)
     remote_desktop: RemoteDesktopPreferences = field(default_factory=RemoteDesktopPreferences)
     terminal_input: TerminalInputSettings = field(default_factory=TerminalInputSettings)
+    # Keyboard shortcuts the user changed: {"<action>": ["<Primary><Shift>c", …]} ([] = disabled). Validated
+    # by gtkui.controllers.shortcut_registry; only the differences from the defaults are stored.
+    shortcuts: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "AppSettings":
@@ -338,6 +341,11 @@ class AppSettings:
         instance.remote_desktop = RemoteDesktopPreferences.from_dict(desktop if isinstance(desktop, dict) else {})
         terminal_input = data.get("terminal_input")
         instance.terminal_input = TerminalInputSettings.from_dict(terminal_input if isinstance(terminal_input, dict) else {})
+        shortcuts = data.get("shortcuts")
+        if isinstance(shortcuts, dict):
+            instance.shortcuts = {str(name): value for name, value in shortcuts.items()}
+        elif shortcuts is not None:
+            LOGGER.warning("settings: shortcuts must be a mapping; the defaults are used")
 
         timeouts = data.get("timeouts")
         if isinstance(timeouts, dict):
@@ -376,6 +384,7 @@ class AppSettings:
             "file_transfer": self.file_transfer.to_dict(),
             "remote_desktop": self.remote_desktop.to_dict(),
             "terminal_input": self.terminal_input.to_dict(),
+            "shortcuts": self.shortcuts,
         }
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)
