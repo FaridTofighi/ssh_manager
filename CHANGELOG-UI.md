@@ -33,6 +33,9 @@ Details: `docs/terminal.md`.
 
 ## Fixes
 
+- Terminals: started from a terminal running tmux, SSH Manager passed `TERM=tmux-256color` on to `ssh`, and
+  servers without that terminfo entry failed in `clear`, `less`, `top` ("'tmux-256color': unknown terminal
+  type"). SSH tabs and local tabs now always get `TERM=xterm-256color` (what VTE emulates) and no `TMUX`.
 - Transfers: an unexpected error in a file transfer now marks the job as failed instead of done.
 - Toasts: after an error toast, clicks in a tall column above it were swallowed (menus, buttons and the
   terminal on the right did not react). Only the toasts themselves take clicks now.

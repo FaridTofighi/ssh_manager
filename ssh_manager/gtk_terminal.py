@@ -49,6 +49,7 @@ from ssh_manager.text_utils import strip_ansi
 from ssh_manager.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
     _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output,
 )
+from ssh_manager.local_shell import terminal_env  # noqa: E402
 from ssh_manager.persistence import write_text_atomic
 from ssh_manager.password_change import PasswordChangeTracker
 # --- BEGIN: PARAMIKO_VTE_IMPORTS ---
@@ -279,6 +280,11 @@ class TerminalPaneContainer(Gtk.Box):
         self.terminal.set_vexpand(True)
         self.pack_start(self.terminal, True, True, 0)
         self.show_all()
+
+
+# envv is the complete environment (terminal_env(os.environ)): NO_PARENT_ENVV, else VTE starts from the
+# app's own environment and its TERM (tmux-256color when started inside tmux) reaches the server.
+_SSH_SPAWN_FLAGS = GLib.SpawnFlags(int(GLib.SpawnFlags.SEARCH_PATH) | int(getattr(Vte, "SPAWN_NO_PARENT_ENVV", 0)))
 
 
 class TerminalTab(SessionPage):
@@ -1470,7 +1476,7 @@ class TerminalTab(SessionPage):
 
     def _spawn_command(self, password: Optional[str]) -> Tuple[List[str], List[str]]:
         argv = self._ssh_arguments()
-        envv = [f"{key}={value}" for key, value in os.environ.items()]
+        envv = [f"{key}={value}" for key, value in terminal_env(os.environ).items()]
         if self._profile and self._profile.env_vars:
             envv.extend(f"{k}={v}" for k, v in self._profile.env_vars.items())
         self._marker = None
@@ -1515,13 +1521,13 @@ class TerminalTab(SessionPage):
         self._reveal_banner(False)
         self._reconnect_button.set_sensitive(False)
         term.spawn_async(
-            Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.SEARCH_PATH,  # argv names "ssh" / "sshpass"
+            Vte.PtyFlags.DEFAULT, None, argv, envv, _SSH_SPAWN_FLAGS,  # argv names "ssh" / "sshpass"
             None, None, -1, None, _on_spawn_finish, None,
         )
 
     def _spawn_secondary(self, term: Vte.Terminal) -> None:
         argv = self._ssh_arguments()
-        envv = [f"{key}={value}" for key, value in os.environ.items()]
+        envv = [f"{key}={value}" for key, value in terminal_env(os.environ).items()]
         if self._profile and self._profile.env_vars:
             for k, v in self._profile.env_vars.items():
                 envv.append(f"{k}={v}")
@@ -1534,7 +1540,7 @@ class TerminalTab(SessionPage):
             None,
             argv,
             envv,
-            GLib.SpawnFlags.SEARCH_PATH,
+            _SSH_SPAWN_FLAGS,
             None,
             None,
             -1,

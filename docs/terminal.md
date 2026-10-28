@@ -114,8 +114,9 @@ an executable file. If it cannot be started, the tab says why and offers
 *Choose Another Shell…*.
 
 **Its environment** is the app's, minus `SSHPASS` and every `SSH_MANAGER_*` /
-`SSHM_*` variable. `TERM` is `xterm-256color` (or the `xterm*` name the app
-already has, if its terminfo exists), and `COLORTERM=truecolor`. `HOME`,
+`SSHM_*` variable and the outer `TMUX`, `TMUX_PANE`, `STY` and `WINDOW`. `TERM`
+is `xterm-256color` and `COLORTERM=truecolor`, whatever terminal the app was
+started from (SSH tabs too; see *TERM* below). `HOME`,
 `USER`, `LANG`, `LC_*`, `DISPLAY`, `WAYLAND_DISPLAY`, `SSH_AUTH_SOCK` and
 `DBUS_SESSION_BUS_ADDRESS` are kept. The shell gets exactly this list: VTE's
 `SPAWN_NO_PARENT_ENVV` stops VTE from adding the app's environment back.
@@ -127,3 +128,14 @@ set), the bundled folders are removed from `PATH`, `LD_LIBRARY_PATH`,
 its own variables are dropped (`APPIMAGE`, `APPDIR`, `PYTHONNOUSERSITE`, the GTK
 module caches …). So `git`, `python`, `ssh` and every other program started
 from the shell are the host's, not the bundled ones.
+
+## TERM
+
+Every terminal child (the local shell and `ssh` in SSH tabs) gets
+`TERM=xterm-256color` and `COLORTERM=truecolor`, like gnome-terminal: that is
+what VTE emulates. The `TERM` of the terminal the app was started from
+(`tmux-256color` inside tmux, `xterm-kitty` …) is not passed on, nor are tmux's
+and screen's own variables. `ssh` sends `TERM` to the server, and a server
+without that terminfo entry fails with "'tmux-256color': unknown terminal type"
+in `clear`, `less`, `top` …. A profile's own `TERM` (profile environment
+variables) still wins. Code: `local_shell.terminal_env`.

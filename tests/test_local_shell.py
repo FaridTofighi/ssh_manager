@@ -98,11 +98,38 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual((env["PATH"], env["PYTHONPATH"], env["LD_LIBRARY_PATH"]),
                          ("/opt/x/bin:/usr/bin", "/home/u/lib", "/opt/lib"))
 
-    def test_term(self) -> None:
-        if os.path.exists("/usr/share/terminfo/x/xterm-direct") or os.path.exists("/lib/terminfo/x/xterm-direct"):
-            self.assertEqual(env_dict(local_shell_env({"TERM": "xterm-direct"}))["TERM"], "xterm-direct")
-        for term in ("dumb", "screen-256color", "xterm-does-not-exist", "../x"):
-            self.assertEqual(env_dict(local_shell_env({"TERM": term}))["TERM"], "xterm-256color", term)
+    def test_term_is_vtes_whatever_terminal_started_the_app(self) -> None:
+        for term in ("tmux-256color", "screen-256color", "xterm-kitty", "xterm-direct", "dumb", "", "../x"):
+            env = env_dict(local_shell_env({"TERM": term, "TMUX": "/tmp/tmux-1000/default,1,0", "TMUX_PANE": "%1",
+                                            "STY": "1.pts-0", "WINDOW": "0"}))
+            self.assertEqual((env["TERM"], env["COLORTERM"]), ("xterm-256color", "truecolor"), term)
+            for name in ("TMUX", "TMUX_PANE", "STY", "WINDOW"):
+                self.assertNotIn(name, env)
+
+    def test_ssh_tabs_get_the_same_terminal(self) -> None:
+        """ssh sends TERM to the server: tmux-256color there fails ("unknown terminal type")."""
+
+        from unittest import mock
+
+        try:
+            from ssh_manager.gtk_terminal import TerminalTab
+        except (ImportError, ValueError) as exc:  # no GTK / VTE
+            self.skipTest(str(exc))
+        tab = mock.Mock(_profile=None, _host=mock.Mock(options={}))
+        tab._ssh_arguments.return_value = ["ssh", "web-01"]
+        with mock.patch.dict(os.environ, {"TERM": "tmux-256color", "TMUX": "/tmp/tmux-1000/default,1,0",
+                                          "COLORTERM": ""}):
+            _argv, envv = TerminalTab._spawn_command(tab, None)
+        env = env_dict(envv)
+        self.assertEqual((env["TERM"], env["COLORTERM"]), ("xterm-256color", "truecolor"))
+        self.assertNotIn("TMUX", env)
+        tab._profile = mock.Mock(env_vars={"TERM": "vt100"})  # a profile's own TERM still wins
+        self.assertEqual(env_dict(TerminalTab._spawn_command(tab, None)[1])["TERM"], "vt100")
+        # envv is the whole environment: VTE must not start from the app's own (its TERM, TMUX).
+        from gi.repository import Vte  # type: ignore
+
+        from ssh_manager import gtk_terminal
+        self.assertTrue(int(gtk_terminal._SSH_SPAWN_FLAGS) & int(Vte.SPAWN_NO_PARENT_ENVV))
 
 
 class LocalShellSettingsTests(unittest.TestCase):

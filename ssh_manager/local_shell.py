@@ -9,6 +9,11 @@
   internals. When the app runs from its AppImage (``SSH_MANAGER_APPDIR``), the
   bundled folders are removed from ``PATH`` and the other search paths, so the
   user's shell and the programs it starts (git, python, ssh …) are the host's.
+* :func:`terminal_env` — what every VTE child (the local shell, ssh) gets as
+  its terminal: ``TERM=xterm-256color`` like gnome-terminal, whatever terminal
+  the app itself was started from, and no tmux / screen variables. ssh sends
+  ``TERM`` to the server, where e.g. ``tmux-256color`` or ``xterm-kitty`` is
+  often unknown ("'tmux-256color': unknown terminal type").
 """
 
 from __future__ import annotations
@@ -30,7 +35,8 @@ APPIMAGE_ONLY = ("PYTHONNOUSERSITE", "PYTHONDONTWRITEBYTECODE", "GDK_PIXBUF_MODU
                  "APPDIR", "APPIMAGE", "ARGV0", "OWD")
 SECRET_NAMES = ("SSHPASS",)
 SECRET_PREFIXES = ("SSH_MANAGER_", "SSHM_")
-TERMINFO_DIRS = ("/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo", "/usr/lib/terminfo")
+# The terminal the app was started from (tmux, screen): not the terminal its tabs run in.
+OUTER_TERMINAL_NAMES = ("TMUX", "TMUX_PANE", "STY", "WINDOW")
 
 
 def _executable(path: str) -> bool:
@@ -100,18 +106,6 @@ def process_cwd(pid: Optional[int]) -> Optional[str]:
         return None
 
 
-def _terminfo_exists(name: str, environ: Mapping[str, str]) -> bool:
-    if not name or "/" in name:
-        return False
-    folders = [environ.get("TERMINFO", ""), os.path.join(environ.get("HOME", ""), ".terminfo"), *TERMINFO_DIRS]
-    folders += [f for f in environ.get("TERMINFO_DIRS", "").split(":") if f]
-    for folder in folders:
-        if folder and (os.path.exists(os.path.join(folder, name[0], name)) or
-                       os.path.exists(os.path.join(folder, f"{ord(name[0]):x}", name))):
-            return True
-    return False
-
-
 def _inside(path: str, folder: str) -> bool:
     path, folder = os.path.normpath(path), os.path.normpath(folder)
     return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
@@ -135,11 +129,17 @@ def local_shell_env(environ: Optional[Mapping[str, str]] = None) -> List[str]:
                     continue  # only bundled folders (PYTHONHOME, PYTHONPATH …): drop it
                 value = ":".join(kept)
         env[name] = value
-    # VTE is xterm compatible: keep an xterm terminfo name the app already has, else xterm-256color.
-    term = env.get("TERM", "")
-    env["TERM"] = term if term.startswith("xterm") and _terminfo_exists(term, env) else DEFAULT_TERM
+    return [f"{name}={value}" for name, value in terminal_env(env).items()]
+
+
+def terminal_env(environ: Mapping[str, str]) -> Dict[str, str]:
+    """``environ`` for a child of a VTE terminal: VTE's ``TERM`` / ``COLORTERM``, no outer tmux / screen."""
+
+    env = {name: value for name, value in environ.items() if name not in OUTER_TERMINAL_NAMES}
+    env["TERM"] = DEFAULT_TERM
     env["COLORTERM"] = "truecolor"
-    return [f"{name}={value}" for name, value in env.items()]
+    return env
 
 
-__all__ = ["resolve_shell", "shell_argv", "start_directory", "home_directory", "process_cwd", "local_shell_env"]
+__all__ = ["resolve_shell", "shell_argv", "start_directory", "home_directory", "process_cwd", "local_shell_env",
+           "terminal_env"]
