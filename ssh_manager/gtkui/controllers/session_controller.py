@@ -422,6 +422,9 @@ class SessionController:
         if tab is None:
             self.win._notify_info(_("Open a session first."))
             return
+        if getattr(tab, "is_local", False):
+            self.win.terminal_tabs.duplicate_tab(tab)
+            return
         self.open_hosts([tab.host])
 
     def quick_connect(self) -> None:

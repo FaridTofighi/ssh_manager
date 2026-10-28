@@ -20,6 +20,7 @@ from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
 from ..theme.tokens import ConnectionStatus, Motion, Size, Space  # noqa: E402
 from ..view_models import status_text  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..widgets.icon_button import (  # noqa: E402
     ActionBar,
     IconButton,
@@ -255,7 +256,7 @@ class SessionStrip(Gtk.Box):
     filled by the owner.
     """
 
-    def __init__(self, on_new: Callable[[], None]) -> None:
+    def __init__(self, on_new: Callable[[], None], on_quick_connect: Optional[Callable[[], None]] = None) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.get_style_context().add_class("session-strip")
         self.on_reorder: Callable[[SessionTab, int], None] = lambda _tab, _index: None
@@ -272,8 +273,26 @@ class SessionStrip(Gtk.Box):
         self.tabs_box.get_style_context().add_class("session-tabs-row")
         set_accessible_name(self.tabs_box, _("Sessions"))
         self._row.pack_start(self.tabs_box, False, False, 0)
-        self.new_button = IconButton(Icons.NEW, _("Quick connect (Ctrl+Shift+T)"), on_new)
+        self.new_button = IconButton(Icons.NEW, _("New local terminal"), on_new)
+        set_accel_tooltip(self.new_button, _("New local terminal"), "new-local-tab")
         self._row.pack_start(self.new_button, False, False, 0)
+        # The other ways to open a tab: a chevron next to "+" and a right-click on "+".
+        self.new_menu = Gtk.Menu()
+        for label, callback in ((_("New _Local Terminal"), on_new), (_("_Quick Connect…"), on_quick_connect)):
+            if callback is not None:
+                item = Gtk.MenuItem.new_with_mnemonic(label)
+                item.connect("activate", lambda _i, cb=callback: cb())
+                self.new_menu.append(item)
+        self.new_menu.show_all()
+        self.new_menu.attach_to_widget(self, None)
+        self.new_menu_button = Gtk.MenuButton()
+        self.new_menu_button.set_relief(Gtk.ReliefStyle.NONE)
+        self.new_menu_button.set_popup(self.new_menu)
+        self.new_menu_button.get_style_context().add_class("session-new-menu")
+        set_accessible_name(self.new_menu_button, _("More ways to open a session"))
+        self.new_menu_button.set_tooltip_text(_("New local terminal or Quick Connect"))
+        self._row.pack_start(self.new_menu_button, False, False, 0)
+        self.new_button.connect("button-press-event", self._on_new_button_press)
         self._scroller.add(self._row)
         self.pack_start(self._scroller, True, True, 0)
         self.scroll_right = IconButton(Icons.CHEVRON_RIGHT, _("Scroll tabs right"), lambda: self._scroll(1))
@@ -286,6 +305,12 @@ class SessionStrip(Gtk.Box):
         self._hadj = self._scroller.get_hadjustment()
         for signal in ("changed", "value-changed"):
             self._hadj.connect(signal, lambda *_: self._sync_chevrons())
+
+    def _on_new_button_press(self, _button, event) -> bool:
+        if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 3:
+            self.new_menu.popup_at_pointer(event)
+            return True
+        return False
 
     # ------------------------------------------------------------- api
     def set_tabs(self, tabs: list) -> None:

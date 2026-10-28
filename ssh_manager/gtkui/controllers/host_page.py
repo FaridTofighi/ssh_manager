@@ -204,7 +204,7 @@ class HostPageController:
         """
 
         tab = self.active_session()
-        if tab is not None:
+        if tab is not None and not getattr(tab, "is_local", False):  # a local shell has no host: the tree's
             host = tab.host
             data = {"parent": host.parent_group, "child": host.child_group, "alias": host.alias}
             return RowKind.HOST, host, data, [host]

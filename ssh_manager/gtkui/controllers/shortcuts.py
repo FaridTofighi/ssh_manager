@@ -61,7 +61,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("new-host-template", _("New host from template"), G_GENERAL, parameter="s"),
     ActionSpec("new-group", _("New group"), G_GENERAL),
     ActionSpec("new-child-group", _("New child group"), G_GENERAL),
-    ActionSpec("quick-connect", _("Quick connect"), G_GENERAL, ("<Primary><Shift>t",)),
+    ActionSpec("quick-connect", _("Quick connect"), G_GENERAL, ("<Primary><Alt>t",)),
     ActionSpec("focus-search", _("Search hosts"), G_GENERAL, ("<Primary>k", "<Primary>f")),
     ActionSpec("open-folder", _("Open config folder"), G_GENERAL),
     ActionSpec("import-mobaxterm", _("Import from MobaXterm"), G_GENERAL),
@@ -96,6 +96,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("expand-all-groups", _("Expand all groups"), G_HOSTS, ("<Primary><Shift>o",)),
     ActionSpec("collapse-all-groups", _("Collapse all groups"), G_HOSTS, ("<Primary><Shift>l",)),
     # Sessions
+    ActionSpec("new-local-tab", _("New local terminal"), G_SESSIONS, ("<Primary><Shift>t",)),
     ActionSpec("close-tab", _("Close session"), G_SESSIONS, ("<Primary>w",)),
     ActionSpec("next-tab", _("Next session"), G_SESSIONS, ("<Primary>Tab", "<Primary>Page_Down")),
     ActionSpec("prev-tab", _("Previous session"), G_SESSIONS, ("<Primary><Shift>Tab", "<Primary>Page_Up")),

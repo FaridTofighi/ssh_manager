@@ -62,7 +62,7 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
-from ssh_manager.gtkui.i18n import _  # noqa: E402
+from ssh_manager.gtkui.i18n import _, ngettext  # noqa: E402
 from ssh_manager.gtkui.theme import density as density_tokens  # noqa: E402
 from ssh_manager.gtkui.theme.density import Density  # noqa: E402
 from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager  # noqa: E402
@@ -468,6 +468,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         tabs.on_quick_connect = self.sessions.quick_connect
         tabs.on_new_host = self.hosts.prompt_new_host
         tabs.input_settings = self._settings.terminal_input  # shared: Preferences changes apply at once
+        tabs.local_shell_settings = self._settings.local_shell
         tabs.on_terminal_preferences = lambda: self.app_dialogs.open_settings("terminal")
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
         tabs.on_sessions_changed = self._on_sessions_changed
@@ -491,6 +492,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "new-group": self.groups.create_parent_group,
             "new-child-group": self.groups.create_child_group,
             "quick-connect": sessions.quick_connect,
+            "new-local-tab": tabs.new_local_terminal,
             "focus-search": self.focus_search,
             "refresh": self.inventory.refresh,
             "settings": dialogs.open_settings,
@@ -809,6 +811,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             _("Disconnect the remote desktops?"),
             detail=_("{n} remote desktop sessions are open. Disconnect them and quit?").format(n=desktops),
             confirm_label=_("Disconnect and _Quit"),
+        ):
+            return True  # keep the window open
+        busy = sum(1 for tab in self.terminal_tabs.tabs() if getattr(tab, "foreground_job_running", lambda: False)())
+        if busy and not self._confirm(
+            _("Quit while programs are running?"),
+            detail=ngettext("A process is still running in a local terminal. Quit anyway?",
+                            "Processes are still running in {n} local terminals. Quit anyway?", busy).format(n=busy),
+            confirm_label=_("_Quit"),
         ):
             return True  # keep the window open
         running = sum(getattr(tab, "running_transfers", lambda: 0)() for tab in self.terminal_tabs.tabs())

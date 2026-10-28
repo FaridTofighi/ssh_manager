@@ -117,6 +117,8 @@ class AppDialogs:
         registry = getattr(self.win, "shortcut_registry", None)
         if values.shortcuts is not None and registry is not None and values.shortcuts != registry.to_dict():
             registry.from_dict(values.shortcuts)  # applies the accelerators and saves (window listener)
+        if values.local_shell is not None:
+            vars(settings.local_shell).update(vars(values.local_shell))  # shared with the notebook
         if values.terminal_input is not None:
             # In place: every open terminal shares this object, so the change applies at once.
             vars(settings.terminal_input).update(vars(values.terminal_input))

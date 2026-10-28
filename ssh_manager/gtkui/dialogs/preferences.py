@@ -19,7 +19,8 @@ gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, Gtk, Pango, Vte  # type: ignore  # noqa: E402
 
 from ...settings import (  # noqa: E402
-    AppSettings, FileTransferPreferences, RemoteDesktopPreferences, TerminalAppearanceSettings, TerminalInputSettings,
+    AppSettings, FileTransferPreferences, LocalShellSettings, RemoteDesktopPreferences, TerminalAppearanceSettings,
+    TerminalInputSettings,
 )
 from ..i18n import _  # noqa: E402
 from ..tab_labels import TabLabelMode  # noqa: E402
@@ -87,6 +88,7 @@ class PreferencesValues:
     remote_desktop: Optional[RemoteDesktopPreferences] = None
     terminal_input: Optional[TerminalInputSettings] = None
     shortcuts: Optional[Dict[str, List[str]]] = None  # the user's shortcut changes (only differences)
+    local_shell: Optional[LocalShellSettings] = None
 
     @property
     def prefer_dark(self) -> bool:
@@ -273,6 +275,22 @@ class PreferencesDialog(BaseDialog):
             _("Selecting text also copies it to the _clipboard (it always goes to the selection buffer)"))
         self._copy_select_clipboard_check.set_active(inputs.copy_on_select_clipboard)
         mouse.add_widget(self._copy_select_clipboard_check)
+
+        local = self._section(page, _("Local terminal"), _("The shell of a new tab (Ctrl+Shift+T or “+”)."))
+        shell = self._settings.local_shell
+        self._shell_entry = Gtk.Entry()
+        self._shell_entry.set_text(shell.command)
+        self._shell_entry.set_placeholder_text(_("Automatic ($SHELL)"))
+        local.add(_("S_hell"), self._shell_entry, label_group=self._labels)
+        self._login_shell_check = Gtk.CheckButton.new_with_mnemonic(_("Run it as a _login shell"))
+        self._login_shell_check.set_active(shell.login_shell)
+        local.add_widget(self._login_shell_check)
+        self._start_in_combo = _combo((("current", _("The current local terminal's folder")),
+                                       ("home", _("The home folder"))), shell.start_in)
+        local.add(_("_Start in"), self._start_in_combo, label_group=self._labels)
+        self._on_exit_combo = _combo((("close", _("Close the tab")), ("hold", _("Keep the tab open")),
+                                      ("hold_on_error", _("Keep it open when the shell failed"))), shell.on_exit)
+        local.add(_("When the shell _exits"), self._on_exit_combo, label_group=self._labels)
 
         cursor = self._section(page, _("Cursor and rendering"))
         self._cursor_combo = _combo(CURSOR_SHAPES, appearance.cursor_shape)
@@ -563,6 +581,12 @@ class PreferencesDialog(BaseDialog):
             remote_desktop=self.remote_desktop_values(),
             terminal_input=self.terminal_input_values(),
             shortcuts=self.shortcuts_page.editor.to_dict() if self.shortcuts_page is not None else None,
+            local_shell=LocalShellSettings.from_dict({
+                "command": self._shell_entry.get_text().strip(),
+                "login_shell": self._login_shell_check.get_active(),
+                "start_in": self._start_in_combo.get_active_id() or "current",
+                "on_exit": self._on_exit_combo.get_active_id() or "close",
+            }),
         )
 
     def _build_shortcuts(self, registry) -> None:

@@ -54,7 +54,7 @@ from ssh_manager.password_change import PasswordChangeTracker
 # --- BEGIN: PARAMIKO_VTE_IMPORTS ---
 from ssh_manager.vte_bridge import VTEBridge
 # --- END: PARAMIKO_VTE_IMPORTS ---
-from ssh_manager.settings import TerminalAppearanceSettings, TerminalInputSettings
+from ssh_manager.settings import LocalShellSettings, TerminalAppearanceSettings, TerminalInputSettings
 from ssh_manager.terminal_input import MouseAction, decide_mouse_action  # noqa: E402
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 from ssh_manager.gtkui.constants import Icons
@@ -2105,6 +2105,7 @@ class TerminalNotebook(Gtk.Box):
         self.on_quick_connect: Optional[Callable[[], None]] = None
         self.on_new_host: Optional[Callable[[], None]] = None
         self.input_settings = TerminalInputSettings()  # the window passes AppSettings.terminal_input (shared)
+        self.local_shell_settings = LocalShellSettings()  # … and AppSettings.local_shell
         self.on_terminal_preferences: Optional[Callable[[], None]] = None  # terminal menu → Preferences
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
         self.on_sessions_changed: Optional[Callable[[], None]] = None
@@ -2145,7 +2146,7 @@ class TerminalNotebook(Gtk.Box):
     def _build_strip(self) -> None:
         """One row: session tabs, ``+`` after the last tab, the all-sessions menu and the toolbar."""
 
-        strip = SessionStrip(self._request_quick_connect)
+        strip = SessionStrip(self.new_local_terminal, on_quick_connect=self._request_quick_connect)
         strip.on_reorder = self._on_strip_reorder
         self._tabs_menu_button = IconMenuButton(Icons.CHEVRON_DOWN, _("All sessions"))
         self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
@@ -2188,13 +2189,13 @@ class TerminalNotebook(Gtk.Box):
             Icons.TERMINAL,
             _("No open sessions"),
             _(
-                "Double-click a host or press Enter to connect. Ctrl+T opens the selected host; "
-                "Ctrl+Shift+T opens Quick Connect."
+                "Double-click a host or press Enter to connect. Ctrl+T opens the selected host, "
+                "Ctrl+Shift+T a local terminal and Ctrl+Alt+T Quick Connect."
             ),
-            action_label=_("_Quick Connect…"),
-            on_action=self._request_quick_connect,
-            secondary_label=_("_New Host…"),
-            on_secondary=lambda: self.on_new_host() if self.on_new_host else None,
+            action_label=_("New _Local Terminal"),
+            on_action=self.new_local_terminal,
+            secondary_label=_("_Quick Connect…"),
+            on_secondary=self._request_quick_connect,
         )
 
         self._stack = Gtk.Stack()
@@ -2247,6 +2248,8 @@ class TerminalNotebook(Gtk.Box):
         return [self.label_for(tab) for tab in self._ordered_tabs()]
 
     def _label_info(self, tab: TerminalTab) -> SessionLabelInfo:
+        if getattr(tab, "is_local", False):  # the shell's title ("Local" until it sets one)
+            return SessionLabelInfo(key=tab, alias=tab.title, hostname=tab.title, port=0, custom_name=tab.custom_title)
         try:
             hostname, port, _user = host_connection_params(tab.host)
         except Exception:  # malformed host entry: fall back to the alias
@@ -2266,6 +2269,12 @@ class TerminalNotebook(Gtk.Box):
     def tab_tooltip(self, tab: TerminalTab) -> str:
         """``alias`` / ``user@host:port`` / ``Connected · 121×38`` (+ duplicate hint)."""
 
+        if getattr(tab, "is_local", False):
+            details = [tab.title, _("Local terminal: {shell}").format(shell=tab.shell_path)]
+            folder = tab.current_directory()
+            if folder:
+                details.append(folder)
+            return "\n".join(details)
         lines = [tab.custom_title or tab.host.alias]
         if tab.custom_title:
             lines.append(tab.host.alias)
@@ -2339,6 +2348,23 @@ class TerminalNotebook(Gtk.Box):
             password_service=password_service,
         )
         self.add_page(tab)
+        return tab
+
+    def new_local_terminal(self, cwd: Optional[str] = None) -> "TerminalTab":
+        """A new tab with the user's shell (``local_shell``), focused; not part of broadcast by default."""
+
+        from ssh_manager.gtkui.local_terminal import LocalTerminalTab
+
+        if cwd is None and self.local_shell_settings.start_in == "current":
+            current = self._current_tab()
+            if getattr(current, "is_local", False):
+                cwd = current.current_directory()
+        tab = LocalTerminalTab(self._log, self._default_font_scale, settings=self.local_shell_settings, cwd=cwd,
+                               appearance=self._appearance)
+        tab.on_title_changed = self._refresh_labels
+        self.add_page(tab)
+        self._broadcast_included[tab] = False
+        self._update_broadcast_ui()
         return tab
 
     def add_page(self, tab: SessionPage) -> SessionPage:
@@ -2618,6 +2644,9 @@ class TerminalNotebook(Gtk.Box):
             self.duplicate_tab(tab)
 
     def duplicate_tab(self, tab: TerminalTab) -> None:
+        if getattr(tab, "is_local", False):  # another shell in the same folder
+            self.new_local_terminal(cwd=tab.current_directory())
+            return
         if self.on_duplicate_session is not None:
             self.on_duplicate_session(tab)
         else:

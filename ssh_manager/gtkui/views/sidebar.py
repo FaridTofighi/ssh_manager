@@ -62,6 +62,7 @@ def _add_menu_model(template_items) -> Gio.Menu:
             templates.append(label, detailed_action)
         hosts.append_submenu(_("New Host from Template"), templates)
     hosts.append(_("Quick Connect…"), "win.quick-connect")
+    hosts.append(_("New Local Terminal"), "win.new-local-tab")
     menu.append_section(None, hosts)
     groups = Gio.Menu()
     groups.append(_("New Group…"), "win.new-group")

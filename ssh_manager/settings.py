@@ -217,6 +217,44 @@ class TerminalInputSettings:
         return dict(vars(self))
 
 
+LOCAL_SHELL_START_IN = ("current", "home")
+LOCAL_SHELL_ON_EXIT = ("close", "hold", "hold_on_error")
+
+
+@dataclass
+class LocalShellSettings:
+    """Preferences → Terminal → Local terminal: the shell of "New tab" (``docs/terminal.md``)."""
+
+    command: str = ""  # empty: $SHELL, then the account's shell, /bin/bash, /bin/sh
+    login_shell: bool = False
+    start_in: str = "current"  # current (the current local tab's folder) | home
+    on_exit: str = "close"  # close | hold | hold_on_error
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LocalShellSettings":
+        prefs = cls()
+        command = data.get("command")
+        if isinstance(command, str) and len(command) <= 4096 and not any(ord(ch) < 32 for ch in command):
+            prefs.command = command.strip()
+        elif command is not None:
+            LOGGER.warning("settings: local_shell.command is not valid; the default is used")
+        login = data.get("login_shell")
+        if isinstance(login, bool):
+            prefs.login_shell = login
+        elif login is not None:
+            LOGGER.warning("settings: local_shell.login_shell must be true or false; the default is used")
+        for name, choices in (("start_in", LOCAL_SHELL_START_IN), ("on_exit", LOCAL_SHELL_ON_EXIT)):
+            value = data.get(name)
+            if value in choices:
+                setattr(prefs, name, value)
+            elif value is not None:
+                LOGGER.warning("settings: local_shell.%s must be one of %s; the default is used", name, ", ".join(choices))
+        return prefs
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(vars(self))
+
+
 @dataclass
 class AppSettings:
     """Application-wide settings with JSON persistence."""
@@ -245,6 +283,7 @@ class AppSettings:
     # Keyboard shortcuts the user changed: {"<action>": ["<Primary><Shift>c", …]} ([] = disabled). Validated
     # by gtkui.controllers.shortcut_registry; only the differences from the defaults are stored.
     shortcuts: Dict[str, Any] = field(default_factory=dict)
+    local_shell: LocalShellSettings = field(default_factory=LocalShellSettings)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "AppSettings":
@@ -341,6 +380,8 @@ class AppSettings:
         instance.remote_desktop = RemoteDesktopPreferences.from_dict(desktop if isinstance(desktop, dict) else {})
         terminal_input = data.get("terminal_input")
         instance.terminal_input = TerminalInputSettings.from_dict(terminal_input if isinstance(terminal_input, dict) else {})
+        local_shell = data.get("local_shell")
+        instance.local_shell = LocalShellSettings.from_dict(local_shell if isinstance(local_shell, dict) else {})
         shortcuts = data.get("shortcuts")
         if isinstance(shortcuts, dict):
             instance.shortcuts = {str(name): value for name, value in shortcuts.items()}
@@ -385,6 +426,7 @@ class AppSettings:
             "remote_desktop": self.remote_desktop.to_dict(),
             "terminal_input": self.terminal_input.to_dict(),
             "shortcuts": self.shortcuts,
+            "local_shell": self.local_shell.to_dict(),
         }
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)
