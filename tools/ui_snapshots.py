@@ -37,7 +37,7 @@ import gi  # noqa: E402
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
-from gi.repository import Gdk, Gio, GLib, Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # type: ignore  # noqa: E402
 
 SAMPLE_INVENTORY = {
     "production/web.conf": """Host web-01
@@ -1330,6 +1330,8 @@ def run(out_dir: Path) -> None:
             "tile-four": [host, host, other, other],
             "tile-broadcast": [host, host, other],
             "duplicate-session": [host, host],
+            # Broadcast's violet next to the red of a failed session (docs/ui-design-system.md).
+            "broadcast-violet": [host, host, other, other],
         }[kind]
         tabs = []
         for target in hosts:
@@ -1345,8 +1347,48 @@ def run(out_dir: Path) -> None:
         if kind == "tile-broadcast":
             notebook.set_broadcast_mode(True)
             notebook._tile_wrappers[tabs[2]].include.set_active(False)  # one session left out
+        if kind.startswith("broadcast-"):
+            notebook.set_broadcast_mode(True)
+            notebook._tile_wrappers[tabs[2]].include.set_active(False)  # excluded
+            if kind == "broadcast-violet":
+                tabs[3]._set_status("Connection failed", False)  # red: a real problem
+                notebook._tile_wrappers[tabs[3]].include.set_active(False)  # its own (red) border shows
         notebook.focus_tab(tabs[0])
         _pump()
+
+    def _strip_area(window, area: list):
+        """``on_rendered`` hook: where the broadcast strip is in the rendered image."""
+
+        def hook(holder) -> None:
+            strip = window.terminal_tabs._broadcast_strip
+            x, y = strip.translate_coordinates(holder, 0, 0)
+            allocation = strip.get_allocation()
+            area[:] = [x, y, allocation.width, allocation.height]
+
+        return hook
+
+    def _crop_strip(path: Path, area: list, crop: Path) -> None:
+        """The broadcast strip (and the row above it) cut out of ``path``."""
+
+        x, y, width, height = area
+        image = GdkPixbuf.Pixbuf.new_from_file(str(path))
+        top = max(0, y - 40)
+        image.new_subpixbuf(x, top, min(image.get_width() - x, max(width, 600)),
+                            min(image.get_height() - top, height + 48)).savev(str(crop), "png", [], [])
+
+    for kind in ("broadcast-violet",):
+        for theme, dark in (("dark", True), ("light", False)):
+
+            @scenario(f"{kind}-{theme}")
+            def _violet(kind=kind, theme=theme, dark=dark) -> None:
+                window = _make_window(app, density_base, dark, "comfortable")
+                _pane_scene(window, kind)
+                path = out_dir / f"{kind}-{theme}.png"
+                area: list = []
+                capture_window(window, path, 1280, 800, on_rendered=_strip_area(window, area))
+                if kind == "broadcast-violet" and area:
+                    _crop_strip(path, area, out_dir / f"broadcast-strip-{theme}.png")
+                window.destroy()
 
     for kind in ("split-two-panes", "tile-two", "tile-four", "tile-broadcast", "duplicate-session"):
         for theme, dark in (("dark", True), ("light", False)):

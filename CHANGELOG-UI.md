@@ -6,6 +6,15 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Broadcast colour
+
+- Broadcast mode now uses a violet highlight instead of the red error colour:
+  the strip (with the broadcast icon instead of a warning triangle, same
+  text), its Stop button, the toolbar toggle, pane outlines, the Broadcast
+  chip and the `BROADCAST` badge. Red is left for real problems (failed
+  sessions, errors, destructive actions, critical statistics). Screenshots:
+  `docs/ui-after/broadcast-violet-*.png`, `broadcast-strip-*.png`.
+
 ## Terminal macros
 
 Details: `docs/macros.md`.

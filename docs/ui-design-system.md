@@ -34,11 +34,12 @@ every color role becomes `@define-color sm_<role>`.
 | `focus_ring` | `#176B4D` | `#5CCB9C` | 2 px focus ring |
 | `chip_bg` | `#F1F4F2` | `#25272B` | Chips |
 | `avatar_bg` | `#233B32` | `#3F4A45` | User avatar |
-| `broadcast_bg` / `broadcast_fg` | `#FDECEA` / `#8F1D14` | `#4A1A16` / `#FFDAD5` | Broadcast warning strip |
+| `broadcast` | `#5B47B8` | `#B3A6F5` | Broadcast's identity colour (violet): the strip's line, the toolbar toggle, the strip's Stop button, the checked Broadcast chip, the `BROADCAST` badge. **Violet = broadcast; red = errors only** |
+| `broadcast_bg` / `broadcast_fg` | `#F0EDFB` / `#3B2D86` | `#2A2550` / `#E4DFFC` | Broadcast strip (9.6:1 / 11.0:1) |
 | `icon_default` (aliases: `icon_group`, `icon_file`, `icon_host`, `icon_host_selected`) | `#18231F` | `#FFFFFF` | Every group and host icon, in every row state (Phase 9b); a user-picked item color overrides it |
 | `badge_connected` / `badge_unknown` | `#2A9D6A` / `#848E88` | `#48C48D` / `#8A9098` | Host status badge (connecting and failed use `warning` / `danger`); light values are the nearest shades of `success` / `text_muted` that reach 3:1 on the selected row |
 | `scrollbar` | `#C9D2CD` | `#454951` | Overlay scrollbar thumb |
-| `pane_border` / `pane_border_focus` / `pane_border_broadcast` | `#868F8A` / `#176B4D` / `#B42318` | `#5E6269` / `#1F7A57` / `#F07A6E` | Pane outlines in split and tile mode (all ≥ 3:1 against the gutter) |
+| `pane_border` / `pane_border_focus` / `pane_border_broadcast` | `#868F8A` / `#176B4D` / `#6A55C9` | `#5E6269` / `#1F7A57` / `#9C8CF0` | Pane outlines in split and tile mode (all ≥ 3:1 against the gutter) |
 | `pane_header_bg` / `pane_header_bg_focus` | `#FFFFFF` / `#EAF5EF` | `#212226` / `#202A25` | Pane header and footer; focused pane header |
 | `pane_gutter` / `pane_dim` | `#F5F7F6` / 12 % black | `#121315` / 12 % black | Gutter between panes (= `bg_canvas`); veil over unfocused panes |
 | `shadow` / `shadow_popover` | 6 % / 12 % of `#18231F` | 35 % / 45 % black | Soft elevation |
@@ -186,7 +187,7 @@ share it.
   - plain: 1 px `pane_border` with 1 px padding;
   - focused: 2 px `pane_border_focus` with an accent-tinted header;
   - broadcast (while on): 2 px `pane_border_broadcast` and a `BROADCAST` badge;
-  - focused and broadcast: 1 px danger border with a 1 px accent inner ring;
+  - focused and broadcast: 1 px broadcast (violet) border with a 1 px accent inner ring;
   - failed / disconnected: 1 px danger / warning border, with the status text
     in the footer.
 
@@ -328,7 +329,7 @@ with a token report.
 | `.empty-state`, `.ready-state`, `.empty-card`, `.empty-title`, `.empty-description`, `.empty-caption`, `button.hero` | Empty states | Ready to connect and other placeholders |
 | `notebook.session-tabs`, `.session-strip-actions`, `.session-toolbar-row`, `.terminal-card` | Terminal tab | Session strip, toolbar, terminal card |
 | `.statusbar`, `.stat-warn`, `.stat-critical`, `.stat-icon` | Live stats | Warn at 80 %, critical at 90 % |
-| `.broadcast-strip`, `.broadcast-active` | Workspace | Broadcast warning; a single session's outline while broadcasting in tabs mode |
+| `.broadcast-strip`, `.broadcast-active`, `button.broadcast-toggle` | Workspace | Broadcast strip (violet, the broadcast icon); a single session's outline while broadcasting in tabs mode; the toolbar toggle |
 | `.pane-frame` (`.focused`, `.broadcast`, `.broadcasting`, `.failed`, `.disconnected`), `.pane-header`, `.pane-footer`, `.pane-dim`, `.pane-gutter`, `paned.pane-split`, `button.broadcast-chip` | Panes | Split panes and tiles (see "Panes" below) |
 | `button.primary` / `.suggested-action`, `button.outlined`, `.destructive-action` | Buttons | Primary, secondary, destructive |
 | `popover.sm-popover`, `.popover-menu-item`, `menuitem .menu-icon`, `.accel-hint`, `menuitem.destructive` | Menus | Popovers and menus |
