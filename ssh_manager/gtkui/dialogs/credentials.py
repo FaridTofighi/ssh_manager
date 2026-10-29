@@ -86,6 +86,15 @@ class CredentialManagerDialog(ListManagerDialog):
         )
         self._store = store
         self.set_hint(_("Passwords are kept in the system keyring or the encrypted password file."))
+        self.export_button = Gtk.Button.new_with_mnemonic(_("E_xport…"))
+        self.export_button.set_tooltip_text(_("Save the credentials and their passwords in a file encrypted with a "
+                                              "passphrase"))
+        self.export_button.connect("clicked", lambda *_a: self.on_export())
+        self.import_button = Gtk.Button.new_with_mnemonic(_("_Import…"))
+        self.import_button.set_tooltip_text(_("Add credentials from an exported file"))
+        self.import_button.connect("clicked", lambda *_a: self.on_import())
+        for button in (self.export_button, self.import_button):
+            self.toolbar.pack_start(button, False, False, 0)
         self.refresh()
 
     def load_rows(self):
@@ -115,6 +124,17 @@ class CredentialManagerDialog(ListManagerDialog):
             return
         self.refresh()
         self.select_id(created.id)
+
+    def on_export(self) -> None:
+        from .credentials_transfer import run_export
+
+        run_export(self, self._store)
+
+    def on_import(self) -> None:
+        from .credentials_transfer import run_import
+
+        if run_import(self, self._store) is not None:
+            self.refresh()
 
     def on_edit(self, item_id: str) -> None:
         cred = self._store.get(item_id)
