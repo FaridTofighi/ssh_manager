@@ -167,7 +167,7 @@ usually `~/.config/ssh-manager/`):
 * **Everything** (names, shortcuts, descriptions, steps) is inside `data`.
 * **Key:** PBKDF2-HMAC-SHA256 of the master password, 600 000 iterations
   (stored, so it can be raised later), with a random salt of this file's own
-  (never the vault's or the master-password hash's). Deriving takes about
+  (never the master-password hash's). Deriving takes about
   0.25 s, so it runs in a thread once per session ("Unlocking macros…"); only
   the derived key is kept in memory, and it is dropped when the window closes.
 * **Cipher:** Fernet (AES-128-CBC + HMAC-SHA256, from `cryptography`). Fernet

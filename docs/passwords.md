@@ -10,12 +10,22 @@ and how it knows a login worked. Code: `ssh_manager/auth_flow.py` (no GTK),
 Each connection resolves its password once per attempt, **read-only**, in this
 order (`PasswordResolution.source`):
 
-1. **vault:** the host's bound vault entry, when the vault is unlocked;
-2. **credential** or **host:** the password of the credential bound to the
+1. **credential** or **host:** the password of the credential bound to the
    host. It is `host` when that credential is the host's own (see below);
-3. **legacy:** the per-host secret stored by older versions under
+2. **legacy:** the per-host secret stored by older versions under
    `(host name, port, user)`;
-4. **none:** nothing is stored.
+3. **none:** nothing is stored.
+
+<!-- legacy-migration-note -->
+**Moved from the Credential Vault.** The vault (its own password and file,
+`vault.json`) was removed. At the first start after the update its entries
+are moved into Credentials: each becomes a shared credential (an existing one
+with the same username and password is reused), the hosts that used it are
+bound to it, everything is verified, and only then does SSH Manager offer to
+delete the old file. *Later* keeps everything and asks again at the next
+start; meanwhile the Credentials manager has **Import old vault…**. Code:
+`ssh_manager/legacy_vault.py` (migration only).
+<!-- /legacy-migration-note -->
 
 Resolving never writes. Older versions copied the credential's password into
 the legacy per-host secret on every connect; that is gone, so a shared
@@ -93,6 +103,18 @@ credential's (`credential:<id>` in the keyring or encrypted file).
   - **Not affected:** there is no SFTP browser, and broadcast only sends
     keystrokes.
 
+## Moving credentials to another computer
+
+**Credentials → Export…** writes the shared credentials with their passwords
+to a `.sshcred` file, always encrypted with an export passphrase you type
+twice (scrypt n=32768, r=8, p=1 and AES-256-GCM, the header authenticated; it
+is not the master password and is never stored). Host-specific passwords stay
+on this computer. **Import…** asks for the passphrase, lists the credentials
+with a check box each and, when a name is already used, skips it, numbers it
+"(2)" or keeps the existing one if its username and password are the same.
+A wrong passphrase, a changed file or a newer format writes nothing. Code:
+`ssh_manager/credentials_export.py`, `ssh_manager/aead.py`.
+
 ## What triggers the password dialog
 
 - The **first attempt** has no stored password (and `sshpass` is installed).
@@ -125,14 +147,14 @@ Nothing else asks for a password. `classify_exit` keeps these apart:
 The flow is a per-tab state machine (`PasswordFlow` in
 `ssh_manager/auth_flow.py`). The GTK side only shows its texts.
 
-1. **First attempt:** the resolved password (vault, credential, host-specific
-   or legacy). With none stored, the password dialog opens first.
+1. **First attempt:** the resolved password (credential, host-specific or
+   legacy). With none stored, the password dialog opens first.
 2. **On `AUTH_FAILED`,** after ≥ 1 s, a non-blocking dialog asks again.
    - **Title:** "Password for ‘web’".
    - **Text:** "‘web’ rejected the saved password (credential ‘Ops’). Enter
      the password for `alice@10.0.0.10:22`." The phrase names the source: a
-     credential, a host-specific password, a vault entry, a saved password, or
-     the password you entered.
+     credential, a host-specific password, a saved password, or the password
+     you entered.
    - **Buttons:** **Retry** / **Cancel**, and "Attempt N of 3".
    - **Cancel, Escape or an empty entry:** stops the flow. The red banner
      with **Reconnect** stays.
@@ -160,7 +182,6 @@ The flow is a per-tab state machine (`PasswordFlow` in
 
 - the password came from a store and worked;
 - the typed password equals the stored one (nothing is said);
-- the host has a **vault entry** — it overrides; the log explains that;
 - it was already asked in this tab;
 - `sshpass` is missing (success cannot be verified; the existing warning
   stays);

@@ -26,7 +26,7 @@ ssh_manager/
     widgets/            chips, status_dot, dot, toast, empty_state, ready_state, secret_entry,
                         icon_button, menus, forms, icons (SvgIcon), searchable_list
     dialogs/            base, confirm, prompt, files, secrets, settings_layout, list_manager,
-                        host_dialog, preferences, credentials, vault, group_picker,
+                        host_dialog, preferences, credentials, credentials_transfer, group_picker,
                         child_group_chooser (New Host / drop on a top-level group: search +
                         list of its child groups, "Create new group"), config_viewer, password,
                         bulk_tag, native_export / native_import (the .sshm export dialog and
@@ -43,11 +43,11 @@ ssh_manager/
       tree.py               TreeController: rebuild, selection, smart groups, context menus
       drag_drop.py          DragDropController
       session_controller.py SessionController: open hosts, Paramiko, status, audit log, quick connect
-      credentials_controller.py  credential/vault resolution, permissions, password persistence
+      credentials_controller.py  credential resolution, permissions, password persistence
       host_actions.py       HostActions: create/edit/duplicate/move/tag/delete hosts
       group_actions.py      GroupActions: parent/child group CRUD
       inventory.py          reloads, shared inventory polling, Git watch
-      app_dialogs.py        settings, credentials, vault, config file, about, shortcuts
+      app_dialogs.py        settings, credentials, config file, about, shortcuts
       layout.py             sidebar visibility and width, focus mode, narrow variant, brand alignment
       colors.py             per-item tree colors
       native_transfer.py    NativeTransferController: .sshm export (dialog, worker write) and import

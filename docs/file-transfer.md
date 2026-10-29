@@ -176,8 +176,7 @@ Double-click an FTP, FTPS or SFTP host to open a **file-browser tab**:
   download only. Upload, new folder, rename and delete are disabled, and say
   why.
 - **Connecting:**
-  - **Passwords:** the same rules as SSH (vault → credential → host-specific
-    → saved). A rejected password opens the same retry dialog (at most 3).
+  - **Passwords:** the same rules as SSH (credential → host-specific → saved). A rejected password opens the same retry dialog (at most 3).
     A typed password that worked is offered once: "Save this password for
     this host?".
   - **Plain FTP with a password:** asks once per host and keeps a "Not

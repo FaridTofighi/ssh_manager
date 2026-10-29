@@ -245,8 +245,8 @@ are configured separately under Settings → Terminal.
 When a remote host forces an interactive password change, the GTK embedded
 terminal watches for standard `current password`, `new password`, and `retype`
 prompts. After the user enters and confirms the new password, the app updates
-the saved secret for that host. If the host is bound to a reusable credential or
-an unlocked vault entry, that credential source is updated as well.
+the saved secret for that host. If the host is bound to a reusable credential,
+that credential is updated as well.
 
 ## Password Storage
 
@@ -256,6 +256,10 @@ available. Otherwise they are stored in `~/.config/ssh-manager/passwords.json`
 password. An existing plain-text file is encrypted automatically on the next
 unlock, and the file is re-encrypted when the master password changes. If the
 master password is disabled, the file is kept as private (0600) plain text.
+
+Credentials → **Export…** / **Import…** move the shared credentials and their
+passwords between computers in a passphrase-encrypted `.sshcred` file (see
+`docs/passwords.md`).
 
 ## Paramiko Mode
 

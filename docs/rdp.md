@@ -206,7 +206,7 @@ types and timeouts.
 1. **Engine:** the host's engine, else the preference, else the first one
    available. In R1 an embedded engine falls back to the external window
    (the connection log says so).
-2. **Password:** the stored one (vault → credential → host password), or
+2. **Password:** the stored one (credential → host password), or
    the password dialog when nothing is stored or "Ask for the password every
    time" is on.
 3. **Probe:** reachability, the security the server selects and its

@@ -32,8 +32,8 @@ folder shows the system's error. Read-only inventories can be exported. A
 toast reports the result; **Details** opens the export report (counts per
 protocol, colours, credentials referenced, fields removed, warnings).
 
-**Never exported:** passwords (credentials, host-specific passwords), vault
-entries (only their label), private key files (only their paths), TLS
+**Never exported:** passwords (credentials, host-specific passwords), private
+key files (only their paths), TLS
 certificate pins, macros, the master password, application settings,
 history and activity, window state.
 
@@ -55,7 +55,7 @@ host's own data that could be a secret, and counts each removal in the report
 | SSH options | any key containing `password`, `passwd`, `pwd`, `secret`, `token`, `passphrase` (any case) |
 | `ProxyCommand`, `LocalCommand` (and any value mentioning `sshpass` or `--password`) | the value after `sshpass … -p`, `--password` / `--password=`, `SSHPASS=` is replaced by `<removed>`; the command stays and is listed in the report (ssh's own `-p` port flag is left alone) |
 | `identityfile` | kept (a path is not a secret) and listed in the report: the key itself is not exported |
-| `metadata.vault_id` | removed; the vault entry's **label** is exported (`"vault": {"label": …}`) |
+| links left by removed features | removed |
 | `metadata.transfer` (FTP/FTPS/SFTP) | `pinned_sha256` (certificate pin) and any password-like key; `anonymous_password` is kept (the `anonymous@` convention, not a secret) |
 | `metadata.rdp` | `pinned_sha256`, the gateway's local `credential_id`, any password-like key; `via_ssh` becomes `via_ssh_ref` |
 | any other metadata | password-like keys, at any depth |
@@ -166,8 +166,7 @@ follows the MobaXterm one (`docs/import-mobaxterm.md`):
    failing that, the only credential with that username — is chosen and marked
    **matched**. *Next* waits until every row is decided; with no credentials at
    all: *Create New Credential…* or *Import without Credentials*. Hosts with a
-   host-specific password ask for it on first connect; hosts that used a vault
-   entry are listed (choose the entry in the host dialog).
+   host-specific password ask for it on first connect.
 5. **Hosts that already exist** — the same host is the same group, protocol,
    host name, port and user (host name and user in any case); a different user
    is a different host. **Skip** (default), **Import a copy “… (2)”** or

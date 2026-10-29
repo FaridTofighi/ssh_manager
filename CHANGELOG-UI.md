@@ -6,6 +6,18 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Credential Vault removed
+
+- The Credential Vault was removed; its entries are moved to Credentials. At
+  the first start the entries become shared credentials (reused when the
+  username and password match), the hosts that used them are rebound, and
+  after a verified move SSH Manager offers to delete the old file. *Later*
+  asks again at the next start; the Credentials manager has **Import old
+  vault…** meanwhile.
+- **Credentials → Export… / Import…**: shared credentials with their
+  passwords in a `.sshcred` file, always encrypted with a passphrase
+  (scrypt + AES-256-GCM); it replaces the vault's export.
+
 ## SSH Manager export and import (.sshm)
 
 Details: `docs/export-import.md`.
