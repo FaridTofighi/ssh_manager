@@ -96,8 +96,21 @@ class HostActions:
             vault_unlocked=self.win._vault.unlocked,
             profiles=self.win._profiles,
             alias_validator=validators_for(self.win.manager)["alias"],
+            rdp_ssh_hosts=self.tunnel_hosts(exclude=getattr(host, "id", "") if host else ""),
+            rdp_engine_preference=self.win._settings.remote_desktop.preferred_engine,
             **kwargs,
         )
+
+    def tunnel_hosts(self, exclude: str = "") -> List[Tuple[str, str]]:
+        """``(id, label)`` of the inventory's SSH hosts, for an RDP host's "SSH tunnel" choice (app store only)."""
+
+        store = getattr(self.win.manager, "store", None)
+        if store is None:
+            return []
+        rows = [row for row in store.list_hosts() if (row.protocol or "ssh") == "ssh" and row.id != exclude]
+        rows.sort(key=lambda row: row.alias.casefold())
+        return [(row.id, f"{row.alias} ({row.hostname})" if row.hostname and row.hostname != row.alias else row.alias)
+                for row in rows]
 
     def transfer_backend(self, host: HostEntry, cred_id: Optional[str], original: Optional[HostEntry] = None):
         """A not-connected backend for the host dialog's "Test connection" (credential or host password)."""

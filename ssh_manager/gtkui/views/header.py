@@ -27,6 +27,7 @@ from gi.repository import Gio, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..constants import Icons  # noqa: E402
 from ..controllers.notifications import MessageHistory  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..health import Health  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
@@ -61,9 +62,11 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     import_menu = Gio.Menu()
     import_menu.append(_("From MobaXterm (.mxtsessions)…"), "win.import-mobaxterm")
     import_menu.append(_("From OpenSSH Config…"), "win.import-openssh")
+    import_menu.append(_("From Remote Desktop Files (.rdp)…"), "win.import-rdp-files")
     inventory.append_submenu(_("Import"), import_menu)
     export_menu = Gio.Menu()
     export_menu.append(_("To OpenSSH Config…"), "win.export-openssh")
+    export_menu.append(_("Selected RDP Host as .rdp File…"), "win.export-rdp-file")
     inventory.append_submenu(_("Export"), export_menu)
     inventory.append(_("Open Shared Inventory…"), "win.open-shared")
     inventory.append(_("Git Updates Available…") if git_updates else _("Check for Git Updates"), "win.git-check")
@@ -136,6 +139,7 @@ class HeaderView(Gtk.HeaderBar):
         self.sidebar_expand_button = IconButton(
             Icons.SIDEBAR, _("Show sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("topbar-icon",)
         )
+        set_accel_tooltip(self.sidebar_expand_button, _("Show sidebar"), "toggle-sidebar")
         self.sidebar_expand_button.set_no_show_all(True)
         self.brand.pack_start(self.sidebar_expand_button, False, False, 0)
 

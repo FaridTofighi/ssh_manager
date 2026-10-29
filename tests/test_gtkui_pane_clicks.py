@@ -194,6 +194,12 @@ class PaneClickTests(unittest.TestCase):
         self.spawn_secondary = mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn_secondary")
         self.spawn.start()
         self.spawn_secondary.start()
+        # A right-click opens the terminal menu (gnome-terminal behaviour); a real Gtk.Menu would keep its
+        # pointer grab after the test and swallow the next tests' clicks.
+        self.menus = []
+        self.popup = mock.patch("ssh_manager.gtk_terminal.popup_menu", side_effect=lambda menu, *a, **k: self.menus.append(
+            menu.get_attach_widget()))
+        self.popup.start()
         self.screen = None
         self.presses = []  # (terminal, button) presses that reached VTE
 
@@ -202,6 +208,7 @@ class PaneClickTests(unittest.TestCase):
             self.screen.restore()
         self.spawn.stop()
         self.spawn_secondary.stop()
+        self.popup.stop()
         self.sandbox.close()
 
     # ------------------------------------------------------------ helpers
@@ -263,9 +270,11 @@ class PaneClickTests(unittest.TestCase):
             with self.subTest(button=button):
                 tab.activate_pane(first)
                 del self.presses[:]
+                del self.menus[:]
                 screen.press(second, 40, 40, button=button)
                 self.assertActive(tab, second, frames, frames[1])
                 self.assertEqual(self.presses, [(second, button)])
+                self.assertEqual(self.menus, [second] if button == 3 else [])  # the menu of the clicked pane
 
     def test_split_drag_select_still_selects(self) -> None:
         from gi.repository import Gdk, Gtk, Vte  # type: ignore

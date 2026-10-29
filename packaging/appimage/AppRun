@@ -1,0 +1,81 @@
+#!/bin/sh
+# AppRun for the SSH Manager AppImage: sets up the bundled Python / GTK / programs, then starts the app.
+#
+# Everything bundled lives under $HERE (read-only). Nothing is ever written there: state stays in the
+# user's XDG folders exactly as with a normal install; the only extra files are two small GTK module
+# caches with this mount's paths, written to $XDG_CACHE_HOME/ssh-manager-appimage/.
+#
+# SSH_MANAGER_APPIMAGE_EXEC=1 ./SSH_Manager.AppImage <program> [args]  runs a bundled program (python3,
+# ssh, sshpass, xdotool, xfreerdp3 ...) with the same environment instead of the app (tests, support).
+
+HERE="$(dirname "$(readlink -f "$0")")"
+export SSH_MANAGER_APPDIR="$HERE"
+LIBDIR="$HERE/usr/lib"
+ARCHLIB="$HERE/usr/lib/x86_64-linux-gnu"
+
+# Bundled programs first (ssh, sshpass, xdotool, xfreerdp3): one consistent set of versions.
+export PATH="$HERE/usr/bin${PATH:+:$PATH}"
+export LD_LIBRARY_PATH="$LIBDIR:$ARCHLIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GI_TYPELIB_PATH="$ARCHLIB/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export GSETTINGS_SCHEMA_DIR="$HERE/usr/share/glib-2.0/schemas"
+export GIO_MODULE_DIR="$ARCHLIB/gio/modules"   # the host's GIO modules may need a newer GLib
+export GTK_PATH="$ARCHLIB/gtk-3.0"
+export GTK_EXE_PREFIX="$HERE/usr"
+export GTK_DATA_PREFIX="$HERE/usr"
+export LTDL_LIBRARY_PATH="$ARCHLIB/libcanberra-0.30${LTDL_LIBRARY_PATH:+:$LTDL_LIBRARY_PATH}"  # event-sound drivers
+
+# Python: the bundled interpreter with its own prefix ("-I" is not used: it would ignore PYTHONHOME
+# and look for the standard library on the host).
+export PYTHONHOME="$HERE/usr"
+export PYTHONPATH="$HERE/usr/lib/python3/dist-packages"
+export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+
+# CA certificates: the host's bundle, else the bundled certifi one (OpenSSL's built-in path is Debian's).
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+    for bundle in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/ca-bundle.pem \
+                  /etc/ssl/cert.pem /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem; do
+        if [ -r "$bundle" ]; then SSL_CERT_FILE="$bundle"; break; fi
+    done
+    export SSL_CERT_FILE="${SSL_CERT_FILE:-$HERE/usr/lib/python3/dist-packages/certifi/cacert.pem}"
+fi
+if [ -z "${SSL_CERT_DIR:-}" ] && [ -d /etc/ssl/certs ]; then
+    export SSL_CERT_DIR=/etc/ssl/certs
+fi
+
+# GTK module caches hold absolute paths: write copies with this mount's path outside the image.
+# The mount path changes on every start: one small folder per mount, stale ones are removed.
+cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/ssh-manager-appimage"
+key="$(printf '%s' "$HERE" | cksum | cut -d' ' -f1)"
+cache_dir="$cache_root/$key"
+if [ -d "$cache_root" ]; then
+    for old in "$cache_root"/*; do
+        [ -f "$old/appdir" ] || continue
+        [ -d "$(cat "$old/appdir")/usr/share/ssh-manager" ] || rm -rf "$old"
+    done
+fi
+if mkdir -p "$cache_dir" 2>/dev/null && [ -w "$cache_dir" ]; then
+    printf '%s\n' "$HERE" > "$cache_dir/appdir"
+else
+    cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/ssh-manager-appimage.XXXXXX")"
+fi
+for template in gdk-pixbuf-loaders.cache gtk-immodules.cache; do
+    if [ -r "$HERE/usr/share/ssh-manager/caches/$template" ] && [ ! -s "$cache_dir/$template" ]; then
+        sed "s|@APPDIR@|$HERE|g" "$HERE/usr/share/ssh-manager/caches/$template" > "$cache_dir/$template.tmp" \
+            && mv -f "$cache_dir/$template.tmp" "$cache_dir/$template"
+    fi
+done
+export GDK_PIXBUF_MODULE_FILE="$cache_dir/gdk-pixbuf-loaders.cache"
+export GTK_IM_MODULE_FILE="$cache_dir/gtk-immodules.cache"
+
+if [ "${SSH_MANAGER_APPIMAGE_EXEC:-}" = "1" ]; then
+    unset SSH_MANAGER_APPIMAGE_EXEC
+    [ "$#" -gt 0 ] || { echo "usage: SSH_MANAGER_APPIMAGE_EXEC=1 $0 <program> [args...]" >&2; exit 2; }
+    # Not exec: this shell keeps the AppImage mounted. A program that closes every inherited descriptor at
+    # start (ssh does) would otherwise release the runtime's mount and die with SIGBUS.
+    "$@"
+    exit $?
+fi
+
+exec "$HERE/usr/bin/python3" -s "$HERE/usr/share/ssh-manager/main.py" "$@"

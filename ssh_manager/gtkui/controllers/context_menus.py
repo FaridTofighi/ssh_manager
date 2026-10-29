@@ -22,6 +22,8 @@ class TreeMenuCallbacks(Protocol):
     def copy_ssh_command(self) -> None: ...
     def copy_scp_command(self) -> None: ...
     def open_files_selected(self) -> None: ...
+    def export_rdp_file(self) -> None: ...
+    def wake_and_connect(self) -> None: ...
     def edit_selected(self) -> None: ...
     def duplicate_selected(self) -> None: ...
     def move_selected(self) -> None: ...
@@ -53,6 +55,8 @@ def host_menu(
     can_edit: bool = True,
     has_session: bool = False,
     is_ssh: bool = True,
+    is_rdp: bool = False,
+    can_wake: bool = False,
     accels: Dict[str, str] = None,  # type: ignore[assignment]
 ) -> MenuSpec:
     accels = accels or {}
@@ -63,6 +67,10 @@ def host_menu(
                          tooltip=_("Reconnect the open session for this host")),
             MenuItemSpec(_("Browse _Files (SFTP)"), cb.open_files_selected, Icons.TRANSFER, visible=is_ssh,
                          tooltip=_("Open a file browser over SFTP with this host's address and login")),
+            MenuItemSpec(_("_Wake and Connect"), cb.wake_and_connect, Icons.CONNECT, visible=is_rdp and can_wake,
+                         tooltip=_("Send a Wake-on-LAN packet, then connect")),
+            MenuItemSpec(_("Export as ._rdp File…"), cb.export_rdp_file, Icons.SAVE, visible=is_rdp,
+                         tooltip=_("For other Remote Desktop clients; no password is stored")),
             MenuItemSpec(_("Copy SSH Command"), cb.copy_ssh_command, Icons.TERMINAL),
             MenuItemSpec(_("Copy SCP Command"), cb.copy_scp_command, Icons.COPY),
         ]),

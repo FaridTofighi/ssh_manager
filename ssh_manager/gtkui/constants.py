@@ -62,6 +62,7 @@ class Icons:
     HOST = "sshm-server"
     SERVER = "sshm-server"
     TRANSFER = "sshm-transfer"  # FTP / FTPS / SFTP hosts
+    DESKTOP = "sshm-desktop"  # RDP hosts
     # Overlays composited onto tree icons.
     BADGE_DOT = "sshm-badge-dot"
     BADGE_RING = "sshm-badge-ring"
@@ -116,6 +117,8 @@ class Icons:
     MEMORY = "sshm-stats"
     DISK = "sshm-server"
     INTERRUPT = "sshm-interrupt"
+    RECORD = "sshm-record"  # terminal macros: record / stop
+    STOP = "sshm-stop"
     DETAILS = "sshm-info"
     OPEN_FOLDER = "sshm-folder-open"  # file chooser actions (Import…)
     TAG = "sshm-tag"

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+
+import cairo
 from typing import Callable, Dict, Optional, Sequence, Tuple
 
 import gi
@@ -59,7 +61,7 @@ class Toast(Gtk.Revealer):
         label.set_line_wrap(True)
         label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
         label.set_max_width_chars(60)
-        label.set_selectable(True)
+        label.set_selectable(False)  # the text stays in the message history; a selectable label grabs drags
         label.set_can_focus(False)
         box.pack_start(label, True, True, 0)
 
@@ -92,6 +94,9 @@ class ToastOverlay(Gtk.Overlay):
         self._stack.set_margin_bottom(Space.S)
         self.add_overlay(self._stack)
         self.set_overlay_pass_through(self._stack, False)
+        # Gtk.Overlay sizes the stack's window from its narrowest layout (wrapping labels), so the
+        # window can be far taller than the toasts. Its input region is cut to the toasts themselves.
+        self._stack.connect("size-allocate", lambda *_a: self._update_input_shape())
         controller.on_show(self._on_show)
         controller.on_dismiss(self._on_dismiss)
         self.connect("destroy", lambda *_: controller.shutdown())
@@ -100,6 +105,7 @@ class ToastOverlay(Gtk.Overlay):
         toast = Toast(message, self.controller)
         self._toasts[message.id] = toast
         self._stack.pack_end(toast, False, False, 0)
+        toast.connect("size-allocate", lambda *_a: self._update_input_shape())
         toast.show_all()
         toast.set_reveal_child(True)
 
@@ -118,7 +124,21 @@ class ToastOverlay(Gtk.Overlay):
         if toast.get_parent() is self._stack:
             self._stack.remove(toast)
         toast.destroy()
+        self._update_input_shape()
         return GLib.SOURCE_REMOVE
+
+    def _update_input_shape(self) -> None:
+        """Clicks reach the stack's window only on the toasts; everywhere else they go to the window below."""
+
+        window = self._stack.get_window()
+        if window is None or window is self.get_window() or window.get_parent() is None:
+            return  # not the overlay's own child window (never shape the main window)
+        rects = []
+        for toast in self._stack.get_children():
+            alloc = toast.get_allocation()
+            if toast.get_visible() and alloc.width > 1 and alloc.height > 1:
+                rects.append(cairo.RectangleInt(alloc.x, alloc.y, alloc.width, alloc.height))
+        window.input_shape_combine_region(cairo.Region(rects), 0, 0)
 
 
 def _format_time(timestamp: float) -> str:

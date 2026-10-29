@@ -9,9 +9,9 @@ jumps to the first page with an error instead of closing.
 jump-host field, so editing a host no longer rewrites a ProxyCommand into a
 ProxyJump.
 
-The first field is the **Protocol** (SSH, FTP, FTPS, SFTP — the registry in
+The first field is the **Protocol** (SSH, FTP, FTPS, SFTP, RDP — the registry in
 :mod:`ssh_manager.protocols`). It swaps the protocol-specific pages (keys and
-jump hosts, SSH options), shows the protocol's default port as the port
+jump hosts, SSH options; file transfer; the Remote Desktop pages), shows the protocol's default port as the port
 placeholder, and asks before a switch on an existing host would drop settings
 that only the old protocol uses. Folder inventories are OpenSSH config files:
 SSH only.
@@ -24,7 +24,7 @@ caller applies :meth:`HostDialog.password_choice` after Save; Cancel discards it
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import gi
 
@@ -45,6 +45,9 @@ from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from ...transfer.settings import TransferSettings, default_port_for  # noqa: E402
 from .transfer_page import TransferPage  # noqa: E402
+from .rdp_page import PAGES as RDP_PAGES, RdpPages  # noqa: E402
+from ...rdp.engines import cached_report, choose_engine  # noqa: E402
+from ...rdp.settings import RdpSettings  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 from .confirm import confirm  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
@@ -124,11 +127,15 @@ class HostDialog(BaseDialog):
         can_edit: bool = True,
         protocols_enabled: bool = True,
         transfer_backend_factory: Optional[Callable[[HostEntry, Optional[str]], object]] = None,
+        rdp_ssh_hosts: Sequence[Tuple[str, str]] = (),
+        rdp_engine_preference: str = "auto",
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
         self._editing = host is not None
         self._protocols_enabled = protocols_enabled
         self._transfer_backend_factory = transfer_backend_factory  # (host, credential id) -> backend
+        self._rdp_ssh_hosts = list(rdp_ssh_hosts)  # (inventory id, label) of SSH hosts an RDP host can tunnel through
+        self._rdp_engine_preference = rdp_engine_preference
         self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
         self._port_edited = False  # the user typed a port in this dialog
         self._suppress_protocol_events = False
@@ -195,6 +202,8 @@ class HostDialog(BaseDialog):
                 lost.append(_("SSH options"))
         if (new is None or new.family != "transfer") and self._metadata.get("transfer"):
             lost.append(_("file-transfer settings"))
+        if (new is None or new.id != "rdp") and (self._metadata.get("rdp") or self._protocol == "rdp"):
+            lost.append(_("remote desktop settings"))
         return lost
 
     def _on_protocol_changed(self, _combo: Gtk.ComboBoxText) -> None:
@@ -237,6 +246,11 @@ class HostDialog(BaseDialog):
         self.layout.set_page_visible("connection", ssh_like)
         self.layout.set_page_visible("ssh_options", ssh_like)
         self.layout.set_page_visible("transfer", transfer)
+        rdp = self._protocol == "rdp"
+        for page_id in RDP_PAGES:
+            self.layout.set_page_visible(page_id, rdp)
+        if rdp:
+            self._apply_rdp_engine()
         if page is not None:
             page.set_protocol(self._protocol)
             anonymous = transfer and page.anonymous_active()
@@ -295,8 +309,8 @@ class HostDialog(BaseDialog):
 
     def _build_pages(self) -> None:
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
-        for build in (self._page_general, self._page_connection, self._page_transfer, self._page_credentials,
-                      self._page_tags, self._page_ssh_options, self._page_permissions):
+        for build in (self._page_general, self._page_connection, self._page_transfer, self._page_rdp,
+                      self._page_credentials, self._page_tags, self._page_ssh_options, self._page_permissions):
             build(labels)
 
     def _page_transfer(self, labels: Gtk.SizeGroup) -> None:
@@ -314,6 +328,45 @@ class HostDialog(BaseDialog):
         self.transfer_page.append_to(page)
         self.transfer_page.test_button.connect("clicked", lambda *_: self._test_connection())
         self.connect("destroy", lambda *_: self.transfer_page.close())
+
+    def _page_rdp(self, labels: Gtk.SizeGroup) -> None:
+        settings, warnings = RdpSettings.from_json(self._metadata.get("rdp"))
+        self.rdp_pages = RdpPages(self, settings, labels, ssh_hosts=self._rdp_ssh_hosts, target=self._rdp_target,
+                                  credentials=[(c.id, f"{c.name} ({c.username})") for c in self._credential_choices])
+        self._rdp_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
+        self._rdp_error.set_xalign(0.0)
+        self._rdp_error.set_line_wrap(True)
+        self._rdp_error.get_style_context().add_class("form-error")
+        self._rdp_error.set_no_show_all(not warnings)
+        first = self.rdp_pages.append_to(self.layout, "rdp", _("Remote Desktop"),
+                                         _("RDP sign-in, security and the server's certificate."))
+        first.append(self._rdp_error)
+        self.rdp_pages.append_to(self.layout, "rdp_display", _("Display & Input"),
+                                 _("Screen size, colors, performance and keyboard."))
+        self.rdp_pages.append_to(self.layout, "rdp_devices", _("Devices"),
+                                 _("What the remote computer may use from this one. Everything but the clipboard is "
+                                   "off by default."))
+        self.rdp_pages.append_to(self.layout, "rdp_connection", _("RDP Connection"),
+                                 _("Reconnecting, RD Gateway, SSH tunnel, programs and advanced options."))
+        self.rdp_pages.engine.connect("changed", lambda *_: self._apply_rdp_engine())
+        self.connect("destroy", lambda *_: self.rdp_pages.close())
+
+    def _rdp_target(self) -> Tuple[str, int]:
+        port = self.port_entry.get_text().strip()
+        return self.hostname_entry.get_text().strip(), int(port) if port.isdigit() else 3389
+
+    def _apply_rdp_engine(self) -> None:
+        report = cached_report()
+        if report is None:
+            self.rdp_pages.apply_engine(None)
+            return
+        engine, note = choose_engine(report.engines, self._rdp_engine_preference,
+                                     self.rdp_pages.engine.get_active_id() or "")
+        if engine is None:
+            self.rdp_pages.apply_engine(None, _("No FreeRDP client was found; the host can be saved, but not opened "
+                                                "until FreeRDP is installed (Preferences → Remote Desktop)."))
+            return
+        self.rdp_pages.apply_engine(engine, _(note) if note else "")
 
     def _on_anonymous(self, anonymous: bool) -> None:
         self._credential_combo.set_sensitive(not anonymous)
@@ -628,6 +681,14 @@ class HostDialog(BaseDialog):
         self._transfer_error.set_visible(bool(problems))
         return not problems
 
+    def _validate_rdp(self) -> bool:
+        if self._protocol != "rdp":
+            return True
+        problems = self.rdp_pages.problems()
+        self._rdp_error.set_text("\n".join(_(p) for p in problems))
+        self._rdp_error.set_visible(bool(problems))
+        return not problems
+
     def validate(self) -> bool:
         """Validate every field; show the first page with an error."""
 
@@ -640,6 +701,7 @@ class HostDialog(BaseDialog):
             ("ssh_options", self._extras_row.validate()),
             ("credentials", self._validate_password()),
             ("transfer", self._validate_transfer()),
+            ("rdp", self._validate_rdp()),
         ]
         for page_id, ok in checks:
             if not ok:
@@ -693,6 +755,8 @@ class HostDialog(BaseDialog):
             metadata["permissions"] = perms
         if kind is not None and kind.family == "transfer":
             metadata["transfer"] = self.transfer_page.settings().to_json()  # protocol settings, never ssh options
+        if self._protocol == "rdp":
+            metadata["rdp"] = self.rdp_pages.settings().to_json()
         return HostEntry(
             alias=alias,
             options=options,

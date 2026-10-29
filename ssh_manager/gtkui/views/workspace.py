@@ -20,6 +20,7 @@ from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
 from ..theme.tokens import ConnectionStatus, Motion, Size, Space  # noqa: E402
 from ..view_models import status_text  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..widgets.icon_button import (  # noqa: E402
     ActionBar,
     IconButton,
@@ -53,6 +54,13 @@ class SessionToolbar(ActionBar):
         self.add_separator()
         self.stats = IconToggleButton(Icons.STATS, _("Show remote CPU, memory and disk"))
         self.add_start(self.stats)
+        self.add_separator()
+        # Terminal macros: Record ↔ Stop (●); the label shows the time and steps while recording.
+        self.record = IconButton(Icons.RECORD, _("Record macro"))
+        self.record_status = Gtk.Label()
+        self.record_status.get_style_context().add_class("macro-recording-status")
+        self.record_status.set_no_show_all(True)
+        self.add_start(self.record, self.record_status)
 
         self.more = IconMenuButton(Icons.MORE, _("More session actions"))
         self.reconnect = IconButton(Icons.RECONNECT, _("Reconnect (Ctrl+Shift+R)"))
@@ -60,6 +68,18 @@ class SessionToolbar(ActionBar):
 
     def set_overflow(self, sections) -> None:
         self.more.set_popup(build_menu(sections))
+
+    def set_recording(self, recording: bool, status: str = "") -> None:
+        """The Record button becomes Stop (●) with ``status`` (elapsed time, steps) next to it."""
+
+        self.record.set_icon(Icons.STOP if recording else Icons.RECORD)
+        tooltip = _("Stop recording the macro") if recording else _("Record macro")
+        self.record.set_tooltip_text(tooltip)
+        set_accessible_name(self.record, tooltip)
+        context = self.record.get_style_context()
+        (context.add_class if recording else context.remove_class)("macro-recording")
+        self.record_status.set_text(status)
+        self.record_status.set_visible(recording)
 
 
 class BroadcastStrip(Gtk.Revealer):
@@ -142,6 +162,11 @@ class SessionTab(Gtk.EventBox):
         self.activity.set_tooltip_text(_("New output"))
         self.activity.set_no_show_all(True)
         box.pack_start(self.activity, False, False, 0)
+        self.recording = Gtk.Label(label="●")
+        self.recording.get_style_context().add_class("macro-recording-dot")
+        self.recording.set_tooltip_text(_("Recording a macro"))
+        self.recording.set_no_show_all(True)
+        box.pack_start(self.recording, False, False, 0)
         self.close_button = IconButton(Icons.CLOSE, _("Close session (Ctrl+W)"), on_close)
         self.close_button.set_can_focus(False)  # the tab itself takes focus; Delete closes
         box.pack_start(self.close_button, False, False, 0)
@@ -182,6 +207,9 @@ class SessionTab(Gtk.EventBox):
 
     def set_activity(self, active: bool) -> None:
         self.activity.set_visible(active)
+
+    def set_recording(self, recording: bool) -> None:
+        self.recording.set_visible(recording)
 
     def set_current(self, current: bool) -> None:
         self._current = current
@@ -255,7 +283,7 @@ class SessionStrip(Gtk.Box):
     filled by the owner.
     """
 
-    def __init__(self, on_new: Callable[[], None]) -> None:
+    def __init__(self, on_new: Callable[[], None], on_quick_connect: Optional[Callable[[], None]] = None) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.get_style_context().add_class("session-strip")
         self.on_reorder: Callable[[SessionTab, int], None] = lambda _tab, _index: None
@@ -272,8 +300,25 @@ class SessionStrip(Gtk.Box):
         self.tabs_box.get_style_context().add_class("session-tabs-row")
         set_accessible_name(self.tabs_box, _("Sessions"))
         self._row.pack_start(self.tabs_box, False, False, 0)
-        self.new_button = IconButton(Icons.NEW, _("Quick connect (Ctrl+Shift+T)"), on_new)
+        self.new_button = IconButton(Icons.NEW, _("New local terminal"), on_new)
+        set_accel_tooltip(self.new_button, _("New local terminal"), "new-local-tab")
         self._row.pack_start(self.new_button, False, False, 0)
+        # The other ways to open a tab: a chevron next to "+" and a right-click on "+".
+        self.new_menu = Gtk.Menu()
+        for label, callback in ((_("New _Local Terminal"), on_new), (_("_Quick Connect…"), on_quick_connect)):
+            if callback is not None:
+                item = Gtk.MenuItem.new_with_mnemonic(label)
+                item.connect("activate", lambda _i, cb=callback: cb())
+                self.new_menu.append(item)
+        self.new_menu.show_all()
+        self.new_menu_button = Gtk.MenuButton()
+        self.new_menu_button.set_relief(Gtk.ReliefStyle.NONE)
+        self.new_menu_button.set_popup(self.new_menu)
+        self.new_menu_button.get_style_context().add_class("session-new-menu")
+        set_accessible_name(self.new_menu_button, _("More ways to open a session"))
+        self.new_menu_button.set_tooltip_text(_("New local terminal or Quick Connect"))
+        self._row.pack_start(self.new_menu_button, False, False, 0)
+        self.new_button.connect("button-press-event", self._on_new_button_press)
         self._scroller.add(self._row)
         self.pack_start(self._scroller, True, True, 0)
         self.scroll_right = IconButton(Icons.CHEVRON_RIGHT, _("Scroll tabs right"), lambda: self._scroll(1))
@@ -286,6 +331,12 @@ class SessionStrip(Gtk.Box):
         self._hadj = self._scroller.get_hadjustment()
         for signal in ("changed", "value-changed"):
             self._hadj.connect(signal, lambda *_: self._sync_chevrons())
+
+    def _on_new_button_press(self, _button, event) -> bool:
+        if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 3:
+            self.new_menu.popup_at_pointer(event)
+            return True
+        return False
 
     # ------------------------------------------------------------- api
     def set_tabs(self, tabs: list) -> None:

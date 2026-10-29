@@ -356,6 +356,8 @@ class TreeController:
                 can_edit=can_edit and perms.get("can_edit", True),
                 has_session=has_session,
                 is_ssh=bool(host) and protocols.is_ssh(host),
+                is_rdp=bool(host) and protocols.protocol_of(host) == "rdp",
+                can_wake=bool(host) and bool(((host.metadata or {}).get("rdp") or {}).get("wol_mac")),
                 accels=accels,
             )
         if kind is not None:

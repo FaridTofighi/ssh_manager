@@ -731,6 +731,8 @@ notebook.session-tabs > stack {
 .session-strip-actions { padding-right: ${xs}px; }
 .info-live .statusbar { padding: 0; font-size: ${fs_mono}em; }
 .tab-activity { font-weight: bold; color: @sm_accent_text; }
+.macro-recording-dot, .macro-recording-status { color: @sm_danger; font-weight: bold; }
+.sm-window button.macro-recording { color: @sm_danger; }
 .statusbar {
     background-color: transparent;
     color: @sm_text_secondary;

@@ -7,7 +7,9 @@ which keeps the rules testable with a fake clock and scheduler.
 Rules:
 
 * ``info`` and ``success`` toasts auto-dismiss (5 s / 4 s by default);
-* ``warning`` and ``error`` toasts are sticky until dismissed;
+* ``warning`` and ``error`` toasts are "sticky": they stay much longer (20 s /
+  30 s) and can be dismissed earlier; ``timeout=None`` keeps a toast until it
+  is dismissed;
 * at most :attr:`ToastController.MAX_VISIBLE` toasts are on screen; older ones
   are dismissed but every message stays in the history.
 """
@@ -115,8 +117,8 @@ class ToastController:
     AUTO_DISMISS_SECONDS: Dict[Level, Optional[float]] = {
         Level.INFO: 5.0,
         Level.SUCCESS: 4.0,
-        Level.WARNING: None,
-        Level.ERROR: None,
+        Level.WARNING: 20.0,
+        Level.ERROR: 30.0,
     }
 
     def __init__(

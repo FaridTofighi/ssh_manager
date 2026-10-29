@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=SSH Manager
+GenericName=SSH, file transfer and remote desktop manager
+Comment=Organise SSH hosts, open terminals, transfer files and connect to remote desktops
+Exec=ssh-manager %U
+Icon=ssh-manager
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=ssh;sftp;ftp;rdp;terminal;remote;
+StartupWMClass=org.codex.SSHManager
+StartupNotify=true
+X-AppImage-Name=SSH Manager

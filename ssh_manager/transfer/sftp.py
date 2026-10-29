@@ -141,10 +141,14 @@ class SftpBackend(RemoteFileBackend):
         if self.log is not None:
             self.log(text)  # never a password: only names, fingerprints and outcomes
 
-    def connect(self) -> ServerInfo:
-        started = time.monotonic()
-        self.close()
-        self._note(f"Connecting to {self.hostname}:{self.port} (SFTP)")
+    def open_transport(self, purpose: str = "SFTP") -> Any:
+        """Connect, check the host key and authenticate: an authenticated ``paramiko.Transport``.
+
+        Shared by :meth:`connect` and the RDP SSH tunnel (``ssh_manager.rdp.tunnel``): the same jump host,
+        known_hosts rules and key / agent / password order. The caller owns the transport.
+        """
+
+        self._note(f"Connecting to {self.hostname}:{self.port} ({purpose})")
         try:
             sock = self._socket()
             transport = paramiko.Transport(sock, default_window_size=WINDOW_SIZE, default_max_packet_size=MAX_PACKET)
@@ -165,6 +169,22 @@ class SftpBackend(RemoteFileBackend):
             self._note(f"Authenticated as {self.user or '(no user)'}")
             if self.settings.keepalive_s:
                 transport.set_keepalive(self.settings.keepalive_s)
+        except BackendError as exc:
+            self._note(f"Failed: {exc}")
+            transport.close()
+            raise
+        except Exception as exc:
+            self._note(f"Failed: {type(exc).__name__}")
+            transport.close()
+            raise self._map(exc)
+        return transport
+
+    def connect(self) -> ServerInfo:
+        started = time.monotonic()
+        self.close()
+        transport = self.open_transport()
+        key = transport.get_remote_server_key()
+        try:
             sftp = paramiko.SFTPClient.from_transport(transport, window_size=WINDOW_SIZE, max_packet_size=MAX_PACKET)
             if sftp is None:
                 raise ProtocolError("The server has no SFTP subsystem.")

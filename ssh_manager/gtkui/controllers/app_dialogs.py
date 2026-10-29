@@ -25,7 +25,7 @@ from ..dialogs.secrets import NewSecretDialog  # noqa: E402
 from ..dialogs.vault import VaultDialog  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
-from .shortcuts import build_shortcuts_window  # noqa: E402
+from .shortcuts import build_shortcuts_window, refresh_shortcuts_window  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -41,7 +41,9 @@ class AppDialogs:
         self.win = win
         self._shortcuts_window: Optional[Gtk.ShortcutsWindow] = None
 
-    def open_settings(self) -> None:
+    def open_settings(self, page: str = "") -> None:
+        """Preferences; ``page`` opens a page by id ("terminal" from the terminal menu)."""
+
         dialog = PreferencesDialog(
             self.win,
             self.win._theme_mode,
@@ -54,7 +56,10 @@ class AppDialogs:
             density=self.win.density,
             tab_label_mode=self.win._ui.tab_label_mode,
             inventory=self.inventory_info(),
+            shortcuts=getattr(self.win, "shortcut_registry", None),
         )
+        if page:
+            dialog.layout.show_page(page)
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
         finally:
@@ -91,6 +96,10 @@ class AppDialogs:
         self.win._ui.latency_probe = values.latency_probe
         self.win.host_page.set_latency_enabled(values.latency_probe)
         settings = self.win._settings
+        macros = getattr(self.win, "macros", None)
+        if values.master_password_disabled and not settings.master_password_disabled and macros is not None \
+                and not macros.allow_disabling_master_password():
+            values.master_password_disabled = False  # macros are never stored unencrypted
         master_toggled = values.master_password_disabled != settings.master_password_disabled
         settings.host_key_policy = values.host_key_policy
         settings.connect_timeout = values.connect_timeout
@@ -109,6 +118,19 @@ class AppDialogs:
         settings.terminal_appearance = values.terminal_appearance
         if values.file_transfer is not None:
             settings.file_transfer = values.file_transfer
+        registry = getattr(self.win, "shortcut_registry", None)
+        if values.shortcuts is not None and registry is not None and values.shortcuts != registry.to_dict():
+            registry.from_dict(values.shortcuts)  # applies the accelerators and saves (window listener)
+        if values.local_shell is not None:
+            vars(settings.local_shell).update(vars(values.local_shell))  # shared with the notebook
+        if values.terminal_input is not None:
+            # In place: every open terminal shares this object, so the change applies at once.
+            vars(settings.terminal_input).update(vars(values.terminal_input))
+        if values.remote_desktop is not None:
+            changed = values.remote_desktop != settings.remote_desktop
+            settings.remote_desktop = values.remote_desktop
+            if changed:
+                self.win.sessions.refresh_rdp_engines()
         settings.save()
         self.win._save_ui_state()
         if master_toggled:
@@ -116,6 +138,8 @@ class AppDialogs:
                 self.win.creds.rekey_password_file(None)
             elif self.win._master_password:
                 self.win.creds.rekey_password_file(self.win._master_password)
+                if macros is not None:
+                    macros.master_password_enabled()
             elif self.win._secure_store.uses_file_backend:
                 self.win._notify_info(_("Saved passwords will be encrypted after the next master password unlock."))
         self.win.terminal_tabs.set_appearance(values.terminal_appearance)
@@ -178,9 +202,15 @@ class AppDialogs:
         # One window per main window, hidden on close (see build_shortcuts_window).
         window = self._shortcuts_window
         if window is None:
-            window = self._shortcuts_window = build_shortcuts_window(self.win)
+            window = self._shortcuts_window = build_shortcuts_window(
+                self.win, on_customize=lambda: self.open_settings("shortcuts"))
         window.show_all()
+        refresh_shortcuts_window(window)  # rows of disabled shortcuts stay hidden after show_all
         window.present()
+
+    def refresh_shortcuts_window(self) -> None:
+        if self._shortcuts_window is not None:
+            refresh_shortcuts_window(self._shortcuts_window)
 
     def open_documentation(self) -> None:
         readme = Path(__file__).resolve().parents[3] / "README.md"
@@ -215,6 +245,9 @@ class AppDialogs:
         new_password = dialog.ask()
         if new_password is None:
             return
+        macros = getattr(self.win, "macros", None)
+        if macros is not None and not macros.rekey(new_password):
+            return  # the macros stay readable with the old password, which stays in use
         self.win._settings.master_password_hash = hash_master_password(new_password)
         self.win._settings.save()
         self.win._master_password = new_password

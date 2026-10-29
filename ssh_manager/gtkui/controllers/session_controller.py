@@ -72,6 +72,7 @@ class UIHostConfig:
 
 # Openers by protocol: a terminal for SSH, the file browser for the FTP family.
 protocols.set_opener("ssh", lambda win, host: win.sessions.open_ssh_host(host))
+protocols.set_opener("rdp", lambda win, host: win.sessions.open_rdp_host(host))
 for _transfer_protocol in ("ftp", "ftps", "sftp"):
     protocols.set_opener(_transfer_protocol, lambda win, host: win.sessions.open_transfer_host(host))
 
@@ -83,6 +84,16 @@ class SessionController:
         self.win = win
         self.paramiko_connectors: Dict[object, Connector] = {}
         self.audit_lock = threading.Lock()
+        self._rdp_runtime = None  # created on first use (child registry, limits, trust store)
+        self.rdp_discovery: Optional[threading.Thread] = None  # the running FreeRDP discovery, if any
+
+    @property
+    def rdp_runtime(self):
+        from ..rdp.runtime import RdpRuntime
+
+        if self._rdp_runtime is None:
+            self._rdp_runtime = RdpRuntime(max_sessions=self.win._settings.remote_desktop.max_sessions)
+        return self._rdp_runtime
 
     def bind_tab_status(self, tab, host: HostEntry) -> None:
         host_key = self.win.creds.host_key(host)
@@ -196,6 +207,64 @@ class SessionController:
         if bind_status:
             self.bind_tab_status(tab, resolved)
         return resolved.alias
+
+    # ------------------------------------------------------------- RDP
+    def refresh_rdp_engines(self) -> None:
+        """Look for FreeRDP clients again (off the GTK thread); dialogs read the cached report."""
+
+        from ...rdp.engines import discover_async
+
+        prefs = self.win._settings.remote_desktop
+        self.rdp_discovery = discover_async(lambda _report: None, preference=prefs.preferred_engine,
+                                            override=prefs.binary_path)
+        self.rdp_runtime.set_limit(prefs.max_sessions)
+
+    def open_rdp_host(self, host_obj: HostEntry) -> Optional[str]:
+        """The RDP opener: a session tab (it explains a missing FreeRDP itself, never a traceback)."""
+
+        from ...rdp.engines import cached_report, install_hint
+        from ..rdp.tab import RdpSessionTab
+
+        report = cached_report()
+        if report is not None and not report.any_available:
+            self.win._notify(_("“{alias}” cannot be opened: no FreeRDP client was found. {hint}").format(
+                alias=host_obj.alias, hint=install_hint(report.platform)), Level.WARNING)
+            return None
+        creds = self.win.creds
+        resolved = creds.host_with_resolved_identity(host_obj)
+        self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
+        tab = RdpSessionTab(resolved, self.win._log_event, runtime=self.rdp_runtime, app_settings=self.win._settings,
+                            password_provider=partial(creds.resolve_password, host_obj), password_service=creds,
+                            tunnel_factory=self.rdp_tunnel_backend, gateway_password_provider=self.credential_password)
+        tab.on_fullscreen = self.win.layout.set_maximized
+        self.win.terminal_tabs.add_page(tab)
+        self.bind_tab_status(tab, resolved)
+        return resolved.alias
+
+    def inventory_host(self, host_id: str) -> Optional[HostEntry]:
+        for children in self.win.manager.tree.values():
+            for group in children.values():
+                for host in group.hosts:
+                    if getattr(host, "id", "") == host_id:
+                        return host
+        return None
+
+    def rdp_tunnel_backend(self, host_id: str):
+        """An SSH connection (not connected yet) to the inventory host an RDP host tunnels through."""
+
+        from ...transfer.sftp import backend_for
+
+        host = self.inventory_host(host_id)
+        if host is None or not protocols.is_ssh(host):
+            raise LookupError("the SSH host of the tunnel no longer exists")
+        creds = self.win.creds
+        resolved = creds.host_with_resolved_identity(host)
+        resolution = creds.resolve_password(host)
+        return backend_for(resolved, resolved.option("user") or "", resolution.password or "",
+                           host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
+
+    def credential_password(self, credential_id: str) -> Optional[str]:
+        return self.win._credential_store.get_password(credential_id) or None
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
                            password_provider=None) -> None:
@@ -353,6 +422,9 @@ class SessionController:
         if tab is None:
             self.win._notify_info(_("Open a session first."))
             return
+        if getattr(tab, "is_local", False):
+            self.win.terminal_tabs.duplicate_tab(tab)
+            return
         self.open_hosts([tab.host])
 
     def quick_connect(self) -> None:
@@ -366,14 +438,15 @@ class SessionController:
                 _url, reason = parse_connection_url(text)
                 return _(reason) if reason else None
             if details_presenter.parse_quick_connect(text) is None:
-                return _("Use [user@]host[:port], a URL such as sftp://user@host, or the alias of a saved host.")
+                return _("Use [user@]host[:port], a URL such as sftp://user@host or rdp://user@host, or the alias "
+                         "of a saved host.")
             return None
 
         value = PromptDialog(
             self.win,
             _("Quick Connect"),
-            _("Connect to a saved host by alias, to any SSH server as [user@]host[:port], or open "
-              "sftp://, ftps:// or ftp:// URLs in a file browser."),
+            _("Connect to a saved host by alias, to any SSH server as [user@]host[:port], open sftp://, "
+              "ftps:// or ftp:// URLs in a file browser, or rdp:// URLs (and host:3389) as a remote desktop."),
             placeholder=_("deploy@web-01.example.com:22"),
             accept_label=_("C_onnect"),
             validator=validate,
@@ -387,6 +460,11 @@ class SessionController:
         adhoc = quick_connect_host(value)
         if adhoc is None:
             return
+        self.open_unsaved(adhoc)
+
+    def open_unsaved(self, adhoc: HostEntry) -> None:
+        """Open a host that is not in the inventory (Quick Connect, --rdp) and offer to save it."""
+
         self.open_hosts([adhoc])
         self.win._notify(_("“{alias}” is not saved.").format(alias=adhoc.alias), Level.INFO,
                          action_label=_("Save to Inventory…"),
@@ -472,13 +550,19 @@ def quick_connect_host(value: str) -> Optional[HostEntry]:
         transfer: Dict[str, object] = {"initial_remote_dir": url.path} if url.path else {}
         if url.protocol == "ftps" and url.port == 990:
             transfer["tls_mode"] = "implicit"  # the implicit-FTPS port
-        metadata = {"transfer": {"v": 1, **transfer}} if transfer else {}
+        metadata: Dict[str, object] = {"transfer": {"v": 1, **transfer}} if transfer else {}
+        if url.protocol == "rdp":
+            metadata = {"rdp": {"v": 1}}
         return HostEntry(alias=url.label(), options=url.options(), metadata=metadata, parent_group=group,
                          child_group="", protocol=url.protocol)
     parsed = details_presenter.parse_quick_connect(value)
     if parsed is None:
         return None
     user, host, port = parsed
+    if port == "3389":  # the RDP port: a Remote Desktop, not SSH
+        rdp_options = {"hostname": host, **({"user": user} if user else {})}
+        return HostEntry(alias=value, options=rdp_options, metadata={"rdp": {"v": 1}}, parent_group=group,
+                         child_group="", protocol="rdp")
     options = {"hostname": host}
     if user:
         options["user"] = user

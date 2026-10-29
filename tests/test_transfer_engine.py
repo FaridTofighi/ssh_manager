@@ -378,6 +378,109 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(summarize([job]), (0, 0.0))
 
 
+class Boom(FakeBackend):
+    """A backend with a programming error: not a BackendError, not an OSError."""
+
+    def open_write(self, *args, **kwargs):
+        raise ValueError("unexpected bug inside backend")
+
+
+class UnexpectedErrorTests(unittest.TestCase):
+    """An unexpected exception never leaves a job DONE with an item still RUNNING."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        for name in ("a.txt", "b.txt", "c.txt"):
+            (self.root / name).write_text(name)
+        self.queue = TransferQueue(concurrency=3, sleep=lambda _s: None)
+        self.addCleanup(self.queue.shutdown)
+        self.local = Endpoint("local", LocalBackend, local=True)
+
+    def upload(self, backend, *names):
+        local = LocalBackend()
+        server = Endpoint("server", lambda: backend, max_connections=3)
+        job = TransferJob(Direction.UPLOAD, [local.stat(str(self.root / n)) for n in names], "/srv", self.local,
+                          server)
+        return wait(self.queue.add(job))
+
+    def assert_all_final(self, job) -> None:
+        self.assertEqual([i.target for i in job.items if i.state not in eng.FINISHED], [])
+
+    def test_unexpected_backend_error_fails_the_item_and_the_job(self) -> None:
+        job = self.upload(Boom(home="/srv"), "a.txt")
+        self.assertEqual(job.state, State.FAILED)
+        self.assertEqual(job.error, "1 of 1 failed")
+        (item,) = job.items
+        self.assertEqual((item.state, item.error), (State.FAILED, "Unexpected error (ValueError)"))
+        self.assertEqual(item.technical, "ValueError: unexpected bug inside backend")
+        self.assert_all_final(job)
+
+    def test_only_the_broken_file_fails(self) -> None:
+        backend = RestBackend(home="/srv")
+        original = backend.open_write
+
+        def broken(path, *args, **kwargs):
+            if "b.txt" in path:
+                raise KeyError(path)
+            return original(path, *args, **kwargs)
+
+        backend.open_write = broken
+        job = self.upload(backend, "a.txt", "b.txt", "c.txt")
+        self.assertEqual(job.state, State.FAILED)
+        self.assertEqual(job.error, "1 of 3 failed")
+        states = {i.name: i.state for i in job.items}
+        self.assertEqual(states, {"a.txt": State.DONE, "b.txt": State.FAILED, "c.txt": State.DONE})
+        self.assertEqual(backend.files["/srv/a.txt"], b"a.txt")
+
+    def test_unexpected_error_while_creating_a_folder(self) -> None:
+        (self.root / "tree" / "sub").mkdir(parents=True)
+        (self.root / "tree" / "f.txt").write_text("f")
+        backend = RestBackend(home="/srv")
+        backend.mkdir = mock.Mock(side_effect=ValueError("mkdir bug"))
+        job = self.upload(backend, "tree")
+        self.assertEqual((job.state, job.error), (State.FAILED, "ValueError"))
+        self.assertTrue(job.items)
+        self.assert_all_final(job)
+        self.assertEqual({i.error for i in job.items}, {"Not run"})
+
+    def test_fault_outside_the_items_own_handling(self) -> None:
+        with mock.patch.object(TransferQueue, "_run_item", side_effect=RuntimeError("helper fault")):
+            job = self.upload(RestBackend(home="/srv"), "a.txt")
+        self.assertEqual((job.state, job.error), (State.FAILED, "1 of 1 failed"))
+        self.assertEqual(job.items[0].state, State.FAILED)
+        self.assertEqual(job.items[0].error, "Unexpected error (RuntimeError)")
+
+    def test_final_job_state(self) -> None:
+        def job_with(*states, cancelled=False):
+            endpoint = Endpoint("x", FakeBackend)
+            job = TransferJob(Direction.UPLOAD, [], "/srv", endpoint, endpoint)
+            job.items = [eng.TransferItem(f"/l/{n}", f"/r/{n}", state=s) for n, s in enumerate(states)]
+            if cancelled:
+                job.cancel.cancel()
+            return job
+
+        cases = [
+            ((State.DONE, State.DONE), {}, (State.DONE, "")),
+            ((State.DONE, State.SKIPPED), {}, (State.DONE, "")),
+            ((State.DONE, State.FAILED), {}, (State.FAILED, "1 of 2 failed")),
+            ((State.DONE, State.RUNNING), {}, (State.FAILED, "1 of 2 failed")),
+            ((State.QUEUED, State.DONE), {}, (State.FAILED, "1 of 2 failed")),
+            ((State.FAILED, State.RUNNING), {}, (State.FAILED, "2 of 2 failed")),
+            ((State.DONE, State.RUNNING), {"cancelled": True}, (State.CANCELLED, "")),
+            ((), {}, (State.DONE, "")),
+        ]
+        for states, kwargs, expected in cases:
+            with self.subTest(states=states, **kwargs):
+                job = job_with(*states, **kwargs)
+                self.assertEqual(eng.final_job_state(job), expected)
+                if expected[0] is State.FAILED:
+                    self.assert_all_final(job)
+                    self.assertTrue(all(i.error == "Did not complete" for i in job.items
+                                        if i.state is State.FAILED and states[job.items.index(i)] is not State.FAILED))
+
+
 class LimiterTests(unittest.TestCase):
     def test_token_bucket(self) -> None:
         limiter = RateLimiter(1000, burst=1000)

@@ -170,7 +170,16 @@ class _Server(paramiko.ServerInterface):
         return "keyboard-interactive" if self.owner.otp_only else "password,publickey"
 
     def check_channel_request(self, kind, chanid):
+        if kind == "direct-tcpip":
+            return paramiko.OPEN_SUCCEEDED if self.owner.allow_forward else \
+                paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
         return paramiko.OPEN_SUCCEEDED if kind == "session" else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+    def check_channel_direct_tcpip_request(self, chanid, origin, destination):
+        if not self.owner.allow_forward:
+            return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+        self.owner.forwards[chanid] = destination
+        return paramiko.OPEN_SUCCEEDED
 
 
 class FakeSftpServer:
@@ -180,6 +189,8 @@ class FakeSftpServer:
         self.host_key = host_key or paramiko.ECDSAKey.generate()
         self.authorized_key: Optional[paramiko.PKey] = None
         self.otp_only = False
+        self.allow_forward = True  # direct-tcpip (RDP SSH tunnel tests)
+        self.forwards: dict = {}  # channel id -> (host, port) asked for
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
         self._stop = threading.Event()
@@ -201,6 +212,45 @@ class FakeSftpServer:
             except (paramiko.SSHException, EOFError, OSError):
                 continue
             self._transports.append(transport)
+            threading.Thread(target=self._accept_forwards, args=(transport,), daemon=True).start()
+
+    def _accept_forwards(self, transport) -> None:
+        """Bridge every accepted direct-tcpip channel to the destination it asked for."""
+
+        import select
+
+        while transport.is_active() and not self._stop.is_set():
+            channel = transport.accept(0.2)
+            if channel is None or channel.get_id() not in self.forwards:
+                continue
+            host, port = self.forwards[channel.get_id()]
+            try:
+                target = socket.create_connection((host, port), timeout=5)
+            except OSError:
+                channel.close()
+                continue
+
+            def bridge(channel=channel, target=target) -> None:
+                try:
+                    while True:
+                        ready, _w, _x = select.select([channel, target], [], [], 0.5)
+                        if channel in ready:
+                            data = channel.recv(65536)
+                            if not data:
+                                break
+                            target.sendall(data)
+                        if target in ready:
+                            data = target.recv(65536)
+                            if not data:
+                                break
+                            channel.sendall(data)
+                except (OSError, EOFError):
+                    pass
+                finally:
+                    channel.close()
+                    target.close()
+
+            threading.Thread(target=bridge, daemon=True).start()
 
     def __enter__(self) -> "FakeSftpServer":
         self._thread.start()

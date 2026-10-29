@@ -1,0 +1,16 @@
+# Build-only tools for PyGObject / pycairo (meson-python); never shipped in the AppImage.
+#   pip install --require-hashes --no-deps --only-binary=:all: -r requirements-build.lock
+meson==1.5.2 \
+    --hash=sha256:77706e2368a00d789c097632ccf4fc39251fba56d03e1e1b262559a3c7a08f5b
+meson-python==0.17.1 \
+    --hash=sha256:30a75c52578ef14aff8392677b09c39346e0a24d2b2c6204b8ed30583c11269c
+pyproject-metadata==0.9.1 \
+    --hash=sha256:ee5efde548c3ed9b75a354fc319d5afd25e9585fa918a34f62f904cc731973ad
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+tomli==2.2.1 \
+    --hash=sha256:cb55c73c5f4408779d0cf3eef9f762b9c9f147a77de7b258bef0a5628adc85cc
+
+# Built from source against the bundled Ubuntu 22.04 GObject stack (sdists, verified in build.sh):
+# pycairo==1.27.0    pycairo-1.27.0.tar.gz    5cb21e7a00a2afcafea7f14390235be33497a2cce53a98a19389492a60628430
+# PyGObject==3.50.0  pygobject-3.50.0.tar.gz  4500ad3dbf331773d8dedf7212544c999a76fc96b63a91b3dcac1e5925a1d103

@@ -26,6 +26,7 @@ from gi.repository import Gtk  # type: ignore  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from .icons import make_icon  # noqa: E402
 
 
@@ -99,7 +100,7 @@ class ReadyState(Gtk.Box):
         self.details_link.get_style_context().add_class("flat")
         self.details_link.get_style_context().add_class("link-button")
         self.details_link.set_halign(Gtk.Align.CENTER)
-        self.details_link.set_tooltip_text(_("Show the host's details and activity (Ctrl+I)"))
+        set_accel_tooltip(self.details_link, _("Show the host's details and activity"), "toggle-details")
         self.details_link.connect("clicked", lambda *_: self.on_details())
         self.details_link.set_no_show_all(True)
         self.pack_start(self.details_link, False, False, 0)

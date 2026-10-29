@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, BinaryIO, Dict, Iterator, Optional, Set
 
+from ..trust import CertificateInfo  # noqa: F401  (re-exported: FTPS code and dialogs import it here)
+
 MAX_PATH = 4096  # characters of a remote path
 MAX_NAME_BYTES = 255  # of one name (UTF-8)
 
@@ -68,18 +70,6 @@ class HostKeyChanged(HostKeyError):
 
 class TlsError(BackendError):
     default_message = "The secure (TLS) connection failed."
-
-
-@dataclass(frozen=True)
-class CertificateInfo:
-    """What the "Trust this certificate?" dialog shows (all from the untrusted peer: escape before markup)."""
-
-    subject: str = ""
-    issuer: str = ""
-    not_before: str = ""
-    not_after: str = ""
-    sha256: str = ""  # "AB:CD:…"
-    reason: str = ""  # why it is not trusted (verification error)
 
 
 class UntrustedCertificate(TlsError):

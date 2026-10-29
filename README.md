@@ -5,6 +5,79 @@ groups, launching SSH sessions, managing credentials, and editing host
 metadata. The desktop app keeps its own inventory; OpenSSH config files can be
 imported and exported.
 
+## How to install and run
+
+These steps start from a fresh Debian 13 or Ubuntu 24.04 (or later) desktop.
+The app runs on the system's Python packages, so it needs no virtualenv and no
+`pip`.
+
+### 1. Install the packages
+
+```bash
+sudo apt update
+sudo apt install -y \
+  git python3 \
+  python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91 \
+  python3-paramiko python3-cryptography python3-pexpect \
+  openssh-client sshpass \
+  freerdp3-x11 \
+  python3-keyring xdotool
+```
+
+| Packages | What they are for |
+|---|---|
+| `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-vte-2.91` | The GTK window and the built-in terminals (required) |
+| `python3-paramiko` | SFTP, the file browser, and Remote Desktop through an SSH host |
+| `python3-cryptography` | The encrypted password store |
+| `python3-pexpect` | Running SSH sessions |
+| `openssh-client`, `sshpass` | `ssh` itself, and filling in saved passwords |
+| `freerdp3-x11` | Remote Desktop (`freerdp2-x11` on older releases). Optional: without it, everything except RDP works |
+| `python3-keyring` | Optional: keeps saved passwords in the desktop keyring |
+| `xdotool` | Optional: makes **Focus Window** work when FreeRDP runs in its own window |
+
+The Textual terminal app also needs `python3-textual python3-rich`. The GTK app
+does not.
+
+### 2. Get the code
+
+```bash
+git clone <repository> ssh-manager
+cd ssh-manager
+```
+
+### 3. Run it
+
+```bash
+python3 -m ssh_manager
+```
+
+On the first run:
+
+- **Master password:** the app asks you to create one. It unlocks the app and
+  encrypts the passwords stored on this computer.
+- **Inventory:** created at `~/.local/share/ssh-manager/inventory.db`.
+- **Importing:** if `~/.ssh/config` or `~/.ssh/conf.d` has hosts, the app
+  offers once to import them. MobaXterm exports, OpenSSH config files and
+  `.rdp` files can be imported later from the app menu → Import.
+
+Some other ways to start it:
+
+```bash
+python3 -m ssh_manager --inventory ~/other.db                          # another inventory database
+python3 -m ssh_manager --rdp 10.0.0.50 --user alice --domain CORP     # open one Remote Desktop session
+```
+
+### 4. Check the installation
+
+- **Remote Desktop:** Settings → Remote Desktop → Diagnostics shows the
+  FreeRDP version found and the engine that will be used.
+- **Tests (optional):** run the test suite from a desktop session; the GTK
+  tests need a display.
+
+  ```bash
+  python3 -m unittest discover -s tests -t .
+  ```
+
 ## Launching
 
 GTK desktop app:
@@ -83,9 +156,21 @@ that direct file mode follows `Include` directives.
   Esc or a click elsewhere closes it, and it never resizes the terminal.
   Select several hosts to connect, move or tag them together.
 - **Sessions**: double-click a host, press Enter, or use Quick Connect
-  (Ctrl+Shift+T or the `+` after the last tab) for an ad-hoc `user@host:port`
-  or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a temporary
-  connection; the toast offers **Save to Inventory…**).
+  (Ctrl+Alt+T, or the menu next to the `+` after the last tab) for an ad-hoc
+  `user@host:port` or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a
+  temporary connection; the toast offers **Save to Inventory…**).
+- **Local terminal**: `+` after the last tab, or Ctrl+Shift+T, opens your own
+  shell in a tab, like gnome-terminal (split, zoom, copy/paste and transcripts
+  as in SSH tabs). See `docs/terminal.md`.
+- **Macros**: the ● button in the session toolbar records what you type in a
+  terminal; Stop asks for a name and an optional shortcut. Run a macro with its
+  shortcut (in a focused terminal) or from *More session actions → Run Macro*;
+  *Manage Macros…* edits and deletes them. Macros (passwords typed at prompts
+  included) are stored encrypted with the master password. See `docs/macros.md`.
+- **Terminal mouse**: Shift+right-click opens the terminal menu (also in vim,
+  tmux, htop …), right-click opens it too unless a program uses the mouse,
+  middle-click and Shift+Insert paste the selection, and selected text is
+  copied to the selection at once. Settings → Terminal changes the clicks.
   Every session has its own tab, labelled with the host name, or with its IP
   address, or both (Settings → Appearance → Tab label); duplicates read
   `web-01 (2)`, and F2 renames a tab. Drag tabs to reorder them; the tooltip
@@ -97,10 +182,24 @@ that direct file mode follows `Include` directives.
   drag and drop and a connection log; SSH hosts have **Browse Files (SFTP)**
   in their menu. Settings → File Transfer holds the defaults. See
   `docs/file-transfer.md` and `docs/protocols.md`.
+- **Remote Desktop (RDP)**: hosts can be RDP (host dialog → Protocol) with
+  their own sign-in, security, certificate, display, device and gateway
+  settings and a **Test Connection** that shows the server's security and
+  certificate. Sessions use FreeRDP, installed separately; Settings →
+  Remote Desktop → Diagnostics shows what was found.
+  - **Import and export:** `.rdp` files can be imported (Import → From
+    Remote Desktop Files) and exported. Passwords are never read from or
+    written to them.
+  - **Quick Connect:** accepts `rdp://` and `host:3389`.
+  - **Command line:** `--rdp HOST[:PORT] [--user U] [--domain D]` opens a
+    session at start-up.
+  - **Wake-on-LAN:** a host with a MAC address has **Wake and Connect**.
+
+  See `docs/rdp.md`.
 - **Import from MobaXterm**: app menu → Import → From MobaXterm
-  (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP and SFTP
+  (.mxtsessions)…, or the empty sidebar's main button. SSH, FTP, SFTP and RDP
   sessions and their folders become groups and hosts; you choose which SSH
-  Manager credential replaces each username found in the file. RDP and other
+  Manager credential replaces each username found in the file. Other
   sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
@@ -112,7 +211,10 @@ that direct file mode follows `Include` directives.
   session), F2 (rename tab), Ctrl+Shift+D (duplicate session), Ctrl+I (host
   details; in a terminal Ctrl+I is still Tab, use F9 there), Ctrl+B (sidebar),
   Ctrl+Shift+B (broadcast) and F11 (focus mode). Terminal copy and paste are
-  Ctrl+Shift+C / Ctrl+Shift+V. The sidebar starts with every group collapsed;
+  Ctrl+Shift+C / Ctrl+Shift+V (also Ctrl+Insert / Shift+Insert, which pastes
+  the selection); Ctrl+Shift+T opens a local terminal and Ctrl+Alt+T Quick
+  Connect. Every shortcut can be changed in Settings → Keyboard Shortcuts.
+  The sidebar starts with every group collapsed;
   Ctrl+Shift+O expands all groups and Ctrl+Shift+L collapses them again (also
   in the filter popover and the tree's empty-space menu).
 
@@ -164,6 +266,9 @@ authentication.
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
+- `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
+- `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
+- `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with
   `python3 tools/ui_snapshots.py docs/ui-after` (renders offscreen in a sandbox)

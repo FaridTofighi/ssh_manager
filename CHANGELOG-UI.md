@@ -6,6 +6,218 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Terminal macros
+
+Details: `docs/macros.md`.
+
+- Macros run on all broadcast-enabled sessions; sessions excluded from the
+  broadcast never receive them. Runs on several sessions ask first (*Don't ask
+  again* / Manage Macros → *Ask before running a macro on several sessions*),
+  every session has Stop, the current one Stop All, and one message reports
+  the result.
+
+- **Record macro** (● in the session toolbar, *More session actions → Record
+  Macro*): records what you type in the active terminal (text, pastes, named
+  keys, pauses); passwords typed at prompts become masked secret steps. Stop
+  asks for a name and an optional shortcut and shows the steps.
+- **Run** a macro with its shortcut (only while a terminal has the focus) or
+  from *Run Macro ▸*; it types into the current session (and, with broadcast,
+  the included ones), with a banner and **Stop**.
+- **Manage Macros…**: run, edit (name, shortcut, timing, steps), duplicate,
+  delete.
+- **Shortcuts:** a macro's shortcut is checked against every action and macro
+  ("already assigned to “…”", Replace / Choose Another). New configurable
+  actions: *Record macro / stop recording*, *Manage macros*, *Stop the running
+  macro* (no default keys).
+- **Security:** `macros.enc` is encrypted with the master password (PBKDF2-
+  SHA256, 600 000 iterations, Fernet); without a master password macros cannot
+  be saved, and the master password cannot be turned off while macros exist.
+
+## Terminals: gnome-terminal mouse, configurable shortcuts, a local shell
+
+Details: `docs/terminal.md`.
+
+- **Mouse in every terminal** (SSH tabs, split panes, tiles, local tabs):
+  - Shift+right-click opens a terminal menu, also in programs that use the mouse.
+  - Right-click opens the same menu unless a program reads the mouse (setting:
+    paste instead, or nothing).
+  - Middle-click pastes the selection (setting: the clipboard, or nothing).
+  - Selected text goes to the selection at once, and optionally to the clipboard.
+- **Keyboard shortcuts can be changed:** Settings → Keyboard Shortcuts (or
+  Customize… in the shortcuts window).
+  - Change, add a second one, clear, reset, reset all.
+  - Conflicts name the other action and offer Replace.
+  - Changes apply at once, menus and tooltips included.
+- **New terminal shortcuts:** Shift+Insert pastes the selection, and Ctrl+Insert
+  copies. Select all, Clear scrollback, Reset terminal and Open terminal menu
+  have no default key. In a text field these keys act on the field, never on a
+  terminal behind it.
+- **New tab = local shell:** `+` after the last tab, the empty state and
+  Ctrl+Shift+T open your shell in a tab, like gnome-terminal. Quick Connect
+  moved to the menu next to `+`.
+- **Changed default:** Quick Connect is now **Ctrl+Alt+T** (it was
+  Ctrl+Shift+T, which now opens a local terminal).
+
+## Fixes
+
+- Terminals: started from a terminal running tmux, SSH Manager passed `TERM=tmux-256color` on to `ssh`, and
+  servers without that terminfo entry failed in `clear`, `less`, `top` ("'tmux-256color': unknown terminal
+  type"). SSH tabs and local tabs now always get `TERM=xterm-256color` (what VTE emulates) and no `TMUX`.
+- Transfers: an unexpected error in a file transfer now marks the job as failed instead of done.
+- Toasts: after an error toast, clicks in a tall column above it were swallowed (menus, buttons and the
+  terminal on the right did not react). Only the toasts themselves take clicks now.
+- Toasts: errors disappear after 30 s and warnings after 20 s (they used to stay until dismissed); every
+  message stays in the message history. Toast text is no longer selectable (copy it from the history).
+
+## Remote Desktop, phase R4: import, export, Quick Connect, Wake-on-LAN
+
+Details: `docs/rdp.md` ("Import, export, Quick Connect, Wake-on-LAN").
+
+- **MobaXterm import:**
+  - RDP sessions (type 4) become RDP hosts.
+  - `CORP\alice` is split into domain and user. `[label]` users go through
+    the Credentials step.
+  - The new **Import RDP sessions** option is on by default.
+  - The Credentials step tags each user with the protocols using it.
+- **`.rdp` files:**
+  - **Import:** Import → From Remote Desktop Files (.rdp)…. Several files
+    go into a chosen group. Saved passwords (`password 51`) are reported,
+    never imported. `authentication level:i:0` becomes "Ask the first
+    time". Shared folders are checked.
+  - **Export:** Export → Selected RDP Host as .rdp File…, also in the host
+    menu. The file is UTF-16, for mstsc, and has no password.
+- **Quick Connect:** accepts `rdp://[DOMAIN%5Cuser@]host[:port]`, and
+  `host:3389` is treated as RDP.
+- **Command line:** `--rdp HOST[:PORT] --user U --domain D`, or an
+  `rdp://` argument, opens an unsaved session at start-up. There is no
+  password option, and an invalid target exits with status 2.
+- **Wake-on-LAN:**
+  - **Settings:** MAC, broadcast address and wait, under RDP Connection.
+  - **Wake and Connect:** in the host menu when a MAC is set.
+  - **Targets:** packets go only to broadcast or private addresses.
+- **Docs:** troubleshooting and a manual test checklist (Windows, xrdp) in
+  `docs/rdp.md`.
+
+## Remote Desktop, phase R3: shared folders, RD Gateway, SSH tunnel, presets
+
+Details: `docs/rdp.md` ("Devices, gateway, tunnel, presets").
+
+- **Shared folders:** real paths, symbolic links followed. Sensitive places
+  (`/`, `/etc`, the home folder, `~/.ssh`, `~/.gnupg`, keyrings, the app's
+  own folders) are shared only after a red confirmation, and are checked
+  again at every launch. The toolbar's **Shared folders** menu opens them
+  on this computer.
+- **RD Gateway:** a gateway credential whose password goes only through
+  FreeRDP's stdin pipe. The gateway certificate goes through the trust flow
+  with its own pins. FreeRDP's trust on first use covers the server behind
+  the gateway, which cannot be checked first. Test Connection checks the
+  gateway.
+- **SSH tunnel:** "Through" an SSH host of the inventory.
+  - **Forwarding:** a loopback-only forward on a kernel-chosen port, one
+    client at a time.
+  - **Login:** same jump host, known_hosts and key / agent / password rules
+    as SSH.
+  - **Certificates:** the server is probed and pinned through the tunnel;
+    FreeRDP uses `/server-name:` so names are checked against the real
+    host.
+  - **Lifetime:** the tunnel is closed with the session.
+- **Presets:** "Automatic" picks LAN, Broadband, WAN or Slow link from the
+  measured latency (documented table).
+- **Advanced:** Hyper-V console (`/vmconnect`); turning on restricted admin
+  mode asks first.
+
+## Remote Desktop, phase R2: the remote screen in the tab, toolbar, reconnecting
+
+Details: `docs/rdp.md` ("The remote screen in the tab").
+
+- **Embedded engines:** FreeRDP in a `Gtk.Socket` on X11, or gtk-frdp's
+  widget (members verified by introspection), shows the remote desktop
+  inside the tab.
+  - **Resizing:** the remote desktop follows the tab's size (debounced,
+    HiDPI-aware, never a transient tiny size).
+  - **Fallback:** if FreeRDP's window does not appear within 10 s, the tab
+    switches to an external window and remembers that this engine fails on
+    this session type.
+- **Toolbar** above the remote screen (auto-hide, pin, F10): Send
+  Ctrl+Alt+Del (where possible), full screen (Ctrl+Alt+Enter, focus mode),
+  scale mode, resolution, keyboard, clipboard, screenshot, open the shared
+  folder, connection info, reconnect and disconnect. Option changes apply
+  to this session only, by reconnecting; unavailable actions say why.
+- **Reconnecting:** a dropped network reconnects automatically, with
+  backoff (2–60 s, a limited number of attempts, waiting while the network
+  is down), and the card offers **Stop Reconnecting**. An idle timeout or a
+  session taken over by someone else asks first; a sign-out never
+  reconnects.
+- **Keyboard and clipboard:** the grab indicator follows the focus, and
+  the release key is shown in the tooltip. Clipboard direction, kinds and
+  size limits are enforced, and contents are never logged.
+- **Fix:** the launch check refused short passwords that happened to
+  appear in the command line (for example `32` in `/bpp:32`, or a letter of
+  the client's path); it now looks only at password positions.
+
+## Remote Desktop, phase R1: sessions through FreeRDP (external window)
+
+Details: `docs/rdp.md` ("Sessions").
+
+- **Opening an RDP host:** a session tab, shown as a card while FreeRDP
+  draws the desktop in its own window.
+  - **The card:** server, engine, security, certificate, screen size, time
+    connected, the connection log (with **Copy Log**), **Focus Window**,
+    **Disconnect** and **Reconnect**.
+  - **Status:** the tree's status dot, notifications and a banner with
+    **Reconnect** / **Close Session** on failures.
+- **Passwords:** stored password, or the dialog. Only a wrong password asks
+  again (at most 3 times). Locked, disabled or expired accounts,
+  certificates and network problems get their own messages.
+  - **Save offer:** after a log-verified NLA sign-in, the app offers "Save
+    this password for this host?".
+  - **No exposure:** the password reaches FreeRDP only through its stdin
+    pipe, never argv, the environment or the logs.
+- **Certificates:** checked by the app before FreeRDP starts.
+  - **First use:** asks once, offering Trust Once / Trust and Remember.
+  - **Changed certificate:** blocked behind a warning whose default is
+    Cancel.
+  - **"Do not check":** confirmed on every connection and flagged in the
+    tab.
+- **Cleanup:** closing a connected tab asks first; quitting asks once for
+  all remote desktops. FreeRDP's whole process group is stopped, and
+  children left behind by a crash are stopped at the next start.
+- **Fix:** the file browser's error banner now shows its text (the label
+  was never made visible).
+
+## Remote Desktop, phase R0: RDP hosts, settings, connection test, engines
+
+Details: `docs/rdp.md`.
+
+- **RDP hosts:**
+  - The protocol is `rdp`, port 3389.
+  - Each host gets a desktop icon in the tree, an `RDP` pill and the
+    `proto:rdp` filter.
+  - OpenSSH export leaves RDP hosts out.
+- **Host dialog:** four pages, shown only for RDP hosts.
+  - **Remote Desktop:** sign-in, security, certificate and **Test
+    Connection**.
+  - **Display & Input:** size, colors, scaling, performance preset and
+    keyboard layout (Persian 0x429 included).
+  - **Devices:** clipboard, shared folders, printers, sound, USB and smart
+    cards.
+  - **RDP Connection:** reconnect, RD Gateway, SSH tunnel, programs and
+    advanced options.
+  - **Gating:** options the engine cannot do are disabled, with the reason
+    in the tooltip.
+  - **Confirmations:** risky choices (no certificate check, standard RDP
+    security, sharing the home folder, any extra option) ask first.
+- **Test Connection:** shows reachability, latency, the security the server
+  selects and its certificate, and whether that matches a pinned one. It
+  never sends a password.
+- **Settings → Remote Desktop:** engine preference, the FreeRDP client and
+  the number of sessions at once. **Diagnostics…** lists every FreeRDP
+  client, engine and capability, with **Copy** and install hints.
+- **Shared trust store:** the FTPS certificate pins moved to
+  `ssh_manager/trust.py` and are shared with RDP (RDP keys are scoped).
+- **Opening an RDP host:** says that sessions come in the next phase, or
+  how to install FreeRDP when none was found.
+
 ## File transfer, phase F4: integrations and diagnostics
 
 Details: `docs/file-transfer.md` ("Preferences", "Diagnostics"),

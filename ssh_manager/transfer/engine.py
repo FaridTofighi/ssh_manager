@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import itertools
+import logging
 import os
 import posixpath
 import threading
@@ -44,6 +45,8 @@ from .backend import (
 )
 from .copy import DEFAULT_CHUNK, copy_file, part_path
 from .names import UnsafePath, contained_path, safe_local_name, unique_name
+
+LOGGER = logging.getLogger(__name__)
 
 MAX_DEPTH = 64
 MAX_PLANNED_ITEMS = 500_000
@@ -377,6 +380,28 @@ def is_inside(child: str, parent: str) -> bool:
 Listener = Callable[[TransferJob], None]
 
 
+def final_job_state(job: TransferJob) -> Tuple[State, str]:
+    """The state (and error text) of a job whose items all ran: ``DONE`` only if every item finished.
+
+    An item still queued / running / paused at this point is an engine fault:
+    it is marked failed ("Did not complete") and counted.
+    """
+
+    if job.cancel.cancelled:
+        return State.CANCELLED, ""
+    for item in job.items:
+        if item.state not in FINISHED:
+            item.state, item.error = State.FAILED, "Did not complete"
+    if any(i.state is State.FAILED for i in job.items):
+        return State.FAILED, f"{len(job.failures())} of {len(job.items)} failed"
+    return State.DONE, ""
+
+
+def _unexpected(item: TransferItem, exc: BaseException) -> None:
+    item.state, item.error = State.FAILED, f"Unexpected error ({type(exc).__name__})"
+    item.technical = f"{type(exc).__name__}: {str(exc)[:500]}"
+
+
 class TransferQueue:
     """Runs jobs: planning, items on a bounded pool, retries, conflicts, pause / resume / cancel."""
 
@@ -491,6 +516,13 @@ class TransferQueue:
             files = [i for i in job.items if not i.is_dir]
             futures = [self._pool.submit(self._run_item, job, item) for item in files]
             concurrent.futures.wait(futures)
+            for future, item in zip(futures, files):
+                if future.cancelled():  # the queue is shutting down
+                    continue
+                exc = future.exception()
+                if exc is not None and item.state is not State.FAILED:  # raised outside _run_item's handling
+                    LOGGER.error("transfer %s: %s escaped the item handler", job.id, type(exc).__name__)
+                    _unexpected(item, exc)
         except Cancelled:
             job.state = State.CANCELLED
         except BackendError as exc:
@@ -500,17 +532,17 @@ class TransferQueue:
             job.state = State.FAILED
             job.error = f"{type(exc).__name__}"
         else:
-            if job.cancel.cancelled:
-                job.state = State.CANCELLED
-            elif any(i.state is State.FAILED for i in job.items):
-                job.state = State.FAILED
-                job.error = f"{len(job.failures())} of {len(job.items)} failed"
-            else:
-                job.state = State.DONE
+            state, error = final_job_state(job)
+            job.state = state
+            if error:
+                job.error = error
         job.finished = time.monotonic()
         for item in job.items:
             if item.state in (State.QUEUED, State.RUNNING, State.PAUSED) and job.state is State.CANCELLED:
                 item.state = State.CANCELLED
+            elif item.state not in FINISHED and job.state is State.FAILED:
+                item.error = "Not run" if item.state is State.QUEUED else "Did not complete"
+                item.state = State.FAILED
         self._emit(job, force=True)
 
     def _planned(self, job: TransferJob, count: int) -> None:
@@ -563,6 +595,10 @@ class TransferQueue:
                     return
                 except OSError as exc:  # local disk: full, permission …
                     item.state, item.error = State.FAILED, exc.strerror or str(exc)
+                    return
+                except Exception as exc:  # a bug in a backend: this item fails, never the job silently
+                    LOGGER.exception("transfer %s: unexpected error", job.id)
+                    _unexpected(item, exc)
                     return
                 finally:
                     self._emit(job)

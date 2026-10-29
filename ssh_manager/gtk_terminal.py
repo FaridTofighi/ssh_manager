@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import logging
 import math
 import os
@@ -19,7 +18,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 
-from gi.repository import Gdk, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
 
 from ssh_manager.auth_flow import (
     AUTH_FAILURE_RE,
@@ -47,12 +46,17 @@ from ssh_manager.host_utils import host_connection_params
 from ssh_manager.ssh_command import build_ssh_command
 from ssh_manager.secure_store import SecureStore, SecureStoreError
 from ssh_manager.text_utils import strip_ansi
+from ssh_manager.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
+    _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output,
+)
+from ssh_manager.local_shell import terminal_env  # noqa: E402
 from ssh_manager.persistence import write_text_atomic
 from ssh_manager.password_change import PasswordChangeTracker
 # --- BEGIN: PARAMIKO_VTE_IMPORTS ---
 from ssh_manager.vte_bridge import VTEBridge
 # --- END: PARAMIKO_VTE_IMPORTS ---
-from ssh_manager.settings import TerminalAppearanceSettings
+from ssh_manager.settings import LocalShellSettings, TerminalAppearanceSettings, TerminalInputSettings
+from ssh_manager.terminal_input import MouseAction, decide_mouse_action  # noqa: E402
 from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
 from ssh_manager.gtkui.constants import Icons
 from ssh_manager.gtkui.dialogs.files import choose_save_file
@@ -60,6 +64,7 @@ from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog, SavePasswo
 from ssh_manager.gtkui.dialogs.prompt import prompt_text
 from ssh_manager.gtkui.i18n import _
 from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection
+from ssh_manager.gtkui.controllers.shortcuts import accel_label  # noqa: E402
 from ssh_manager.gtkui.view_models import status_text
 from ssh_manager.gtkui.theme.loader import get_theme_manager
 from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Size, Space
@@ -97,97 +102,6 @@ class PasswordService(Protocol):
 
     def save_host_password(self, host: HostEntry, password: str) -> Tuple[str, str]: ...
 LOGGER = logging.getLogger(__name__)
-
-_REMOTE_STATS_SCRIPT = """
-import functools
-import json
-import functools
-import os
-import time
-
-def cpu_percent():
-    with open('/proc/stat', 'r') as f:
-        parts = f.readline().split()
-    idle_a = int(parts[4])
-    total_a = sum(int(x) for x in parts[1:])
-    time.sleep(0.2)
-    with open('/proc/stat', 'r') as f:
-        parts = f.readline().split()
-    idle_b = int(parts[4])
-    total_b = sum(int(x) for x in parts[1:])
-    idle_delta = idle_b - idle_a
-    total_delta = total_b - total_a
-    if total_delta <= 0:
-        return 0.0
-    return max(0.0, min(100.0, (1.0 - idle_delta / total_delta) * 100.0))
-
-def mem_usage():
-    info = {}
-    with open('/proc/meminfo', 'r') as f:
-        for line in f:
-            key, val, *_ = line.split()
-            info[key.rstrip(':')] = int(val)
-    total = info.get('MemTotal', 0)
-    available = info.get('MemAvailable', info.get('MemFree', 0))
-    used = total - available
-    return used / 1024.0, total / 1024.0
-
-def disk_usage():
-    st = os.statvfs('/')
-    total = st.f_blocks * st.f_frsize
-    free = st.f_bavail * st.f_frsize
-    used = total - free
-    gb = 1024.0 ** 3
-    return used / gb, total / gb
-
-cpu = cpu_percent()
-mem_used, mem_total = mem_usage()
-disk_used, disk_total = disk_usage()
-print(json.dumps({
-    'cpu': cpu,
-    'mem_used': mem_used,
-    'mem_total': mem_total,
-    'disk_used': disk_used,
-    'disk_total': disk_total
-}))
-"""
-
-
-def parse_remote_stats_output(output: str) -> Optional[Dict[str, object]]:
-    """Parse the JSON payload produced by the remote stats script."""
-
-    text = output.strip()
-    if not text:
-        return None
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
-def build_remote_stats_command(
-    ssh_args: list[str],
-    *,
-    password: Optional[str] = None,
-    sshpass_path: Optional[str] = None,
-) -> Tuple[list[str], Optional[Dict[str, str]]]:
-    """Build the auxiliary stats SSH command and optional environment."""
-
-    command = list(ssh_args)
-    if not command:
-        return [], None
-
-    if password and sshpass_path:
-        command[1:1] = ["-o", "ConnectTimeout=6"]
-        command.extend(["python3", "-"])
-        env = os.environ.copy()
-        env["SSHPASS"] = password
-        return [sshpass_path, "-e", *command], env
-
-    command[1:1] = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=6"]
-    command.extend(["python3", "-"])
-    return command, None
 
 
 def session_tile_position(index: int, count: int) -> Tuple[int, int]:
@@ -261,6 +175,33 @@ def _select_all_terminal_text(*_args) -> bool:
     return True
 
 
+def _copy_selection(term: Vte.Terminal) -> None:
+    """The selection as plain text into the clipboard (no formatting)."""
+
+    if hasattr(term, "copy_clipboard_format"):
+        term.copy_clipboard_format(Vte.Format.TEXT)
+    else:  # VTE < 0.50
+        term.copy_clipboard()
+
+
+def _terminal_contents(term: Vte.Terminal) -> Optional[str]:
+    """The terminal's whole text (scrollback and screen) via ``write_contents_sync``; ``None`` if unavailable.
+
+    For VTE < 0.72, which has no ``get_text_range_format``: there ``get_text`` / ``get_text_range`` print
+    two warnings on every call through PyGObject (callback ignored, attributes array deprecated).
+    """
+
+    if not hasattr(term, "write_contents_sync"):
+        return None
+    try:
+        stream = Gio.MemoryOutputStream.new_resizable()
+        term.write_contents_sync(stream, Vte.WriteFlags.DEFAULT, None)
+        stream.close(None)
+        return bytes(stream.steal_as_bytes().get_data()).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
 def terminal_text(term: Vte.Terminal) -> str:
     """Return all visible/scrollback text from a VTE terminal.
 
@@ -280,6 +221,9 @@ def terminal_text(term: Vte.Terminal) -> str:
         return _terminal_text_result(result)
     if hasattr(term, "get_text_format"):
         return _terminal_text_result(term.get_text_format(Vte.Format.TEXT))
+    contents = _terminal_contents(term)  # VTE < 0.72
+    if contents is not None:
+        return contents
     try:  # legacy VTE (< 0.76)
         result = term.get_text(_select_all_terminal_text, None, None)
     except TypeError:
@@ -336,6 +280,11 @@ class TerminalPaneContainer(Gtk.Box):
         self.terminal.set_vexpand(True)
         self.pack_start(self.terminal, True, True, 0)
         self.show_all()
+
+
+# envv is the complete environment (terminal_env(os.environ)): NO_PARENT_ENVV, else VTE starts from the
+# app's own environment and its TERM (tmux-256color when started inside tmux) reaches the server.
+_SSH_SPAWN_FLAGS = GLib.SpawnFlags(int(GLib.SpawnFlags.SEARCH_PATH) | int(getattr(Vte, "SPAWN_NO_PARENT_ENVV", 0)))
 
 
 class TerminalTab(SessionPage):
@@ -446,9 +395,16 @@ class TerminalTab(SessionPage):
         self._panes: ActivePane = ActivePane()
         self.on_activated: Optional[Callable[["TerminalTab"], None]] = None  # a pane of this tab became active
         self._input_observer: Optional[Callable[[TerminalTab, str], None]] = None
+        self._macro_feeding = False  # macro playback is writing: not user input (password heuristics, broadcast)
         self._profile = profile
         self._strip_ansi_on_copy = False
         self._appearance = appearance
+
+        # Mouse and selection (gnome-terminal conventions; ``terminal_input.py``).
+        self._input_settings = TerminalInputSettings()
+        self._handled_buttons: set = set()  # (terminal, button) presses handled here: their release too
+        self._text_cursors: Dict[Vte.Terminal, Optional[Gdk.Cursor]] = {}
+        self.on_open_preferences: Optional[Callable[[], None]] = None  # the terminal menu's "Preferences…"
 
         self._status = ConnectionStatus.UNKNOWN
         self._stats_enabled = True
@@ -474,6 +430,12 @@ class TerminalTab(SessionPage):
         self._banner_alive = True
         self._banner.connect("destroy", self._on_banner_destroy)
         self.pack_start(self._banner, False, False, 0)
+
+    def attach_info_bar(self, bar: Gtk.Widget) -> None:
+        """Show ``bar`` (macro recording / playback) right below the connection banner."""
+
+        self.pack_start(bar, False, False, 0)
+        self.reorder_child(bar, self.get_children().index(self._banner) + 1)
 
     def _build_terminal_area(self) -> None:
         self._terminal = self._create_terminal()
@@ -634,7 +596,174 @@ class TerminalTab(SessionPage):
             self._input_commit_handlers[term] = handler_id
         except (TypeError, ValueError):
             pass
+        self._connect_mouse(term)
         return term
+
+    # ------------------------------------------------------------ mouse and clipboard
+    def set_input_settings(self, settings: TerminalInputSettings) -> None:
+        """Mouse / selection preferences (shared object: later changes apply at once)."""
+
+        self._input_settings = settings
+
+    def _connect_mouse(self, term: Vte.Terminal) -> None:
+        term.connect("button-press-event", self._on_terminal_button_press)
+        # After VTE's own handler: it runs only when VTE did not take the press, i.e. the program in the
+        # terminal has no mouse reporting on (VTE consumes every press it reports).
+        term.connect_after("button-press-event", self._on_terminal_button_press_after)
+        term.connect("button-release-event", self._on_terminal_button_release)
+        term.connect("selection-changed", self._on_terminal_selection_changed)
+        term.connect("realize", self._remember_text_cursor)
+
+    @staticmethod
+    def _pointer_window(term: Vte.Terminal) -> Optional[Gdk.Window]:
+        window = term.get_window()
+        if window is None:
+            return None
+        children = [child for child in window.get_children() if child.is_input_only()]
+        return children[0] if children else window
+
+    def _remember_text_cursor(self, term: Vte.Terminal) -> None:
+        window = self._pointer_window(term)
+        self._text_cursors[term] = window.get_cursor() if window is not None else None
+
+    def _mouse_reporting(self, term: Vte.Terminal) -> bool:
+        """Whether the program reads the mouse: VTE then shows the arrow instead of its text pointer.
+
+        VTE has no getter for this; the pointer it sets is the only public trace. Used only for a
+        non-default middle-click setting (right-click relies on VTE consuming the press instead).
+        """
+
+        window = self._pointer_window(term)
+        text_cursor = self._text_cursors.get(term)
+        if window is None or text_cursor is None:
+            return False
+        current = window.get_cursor()
+        return current is not None and current != text_cursor
+
+    def _on_terminal_button_press(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        if event.type != Gdk.EventType.BUTTON_PRESS:
+            return False
+        state = event.state & Gtk.accelerator_get_default_mod_mask()
+        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+        settings = self._input_settings
+        if event.button == 3 and shift:  # the menu, even while a program reads the mouse
+            return self._perform_mouse_action(term, MouseAction.SHOW_MENU, event)
+        if event.button == 2:
+            if not shift and settings.middle_click == "paste_primary":
+                return False  # VTE pastes PRIMARY itself (or reports the click to the program)
+            tracking = not shift and self._mouse_reporting(term)
+            action = decide_mouse_action(2, shift, ctrl, tracking, settings)
+            if action is not MouseAction.PASS_TO_TERMINAL:
+                return self._perform_mouse_action(term, action, event)
+        return False
+
+    def _on_terminal_button_press_after(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        if event.type != Gdk.EventType.BUTTON_PRESS or event.button != 3:
+            return False
+        state = event.state & Gtk.accelerator_get_default_mod_mask()
+        if state & Gdk.ModifierType.SHIFT_MASK:
+            return False
+        action = decide_mouse_action(3, False, bool(state & Gdk.ModifierType.CONTROL_MASK), False, self._input_settings)
+        if action is MouseAction.PASS_TO_TERMINAL:
+            return False
+        return self._perform_mouse_action(term, action, event)
+
+    def _on_terminal_button_release(self, term: Vte.Terminal, event: Gdk.EventButton) -> bool:
+        key = (term, event.button)
+        if key in self._handled_buttons:
+            self._handled_buttons.discard(key)
+            return True  # no stray selection change from a press VTE never saw
+        return False
+
+    def _perform_mouse_action(self, term: Vte.Terminal, action: MouseAction, event: Gdk.EventButton) -> bool:
+        term.grab_focus()
+        if action is MouseAction.SHOW_MENU:
+            self.show_terminal_menu(term, event)
+        elif action is MouseAction.PASTE_CLIPBOARD:
+            term.paste_clipboard()
+        elif action is MouseAction.PASTE_PRIMARY:
+            term.paste_primary()
+        self._handled_buttons.add((term, event.button))
+        return True
+
+    def _on_terminal_selection_changed(self, term: Vte.Terminal) -> None:
+        # VTE itself puts a mouse selection into PRIMARY; the clipboard only when asked, and never empty.
+        if self._input_settings.copy_on_select_clipboard and term.get_has_selection():
+            _copy_selection(term)
+
+    def select_all_terminal(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is None:
+            return
+        term.select_all()
+        if self._input_settings.copy_on_select and hasattr(term, "copy_primary"):
+            try:
+                term.copy_primary()
+            except Exception:  # no PRIMARY selection (some Wayland compositors): nothing to do
+                pass
+
+    def paste_primary(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.paste_primary()
+
+    def clear_scrollback(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.feed(b"\x1b[3J")  # "erase saved lines": the scrollback only, the screen stays
+
+    def reset_terminal(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
+        if term is not None:
+            term.reset(True, False)
+
+    def show_terminal_menu(self, term: Optional[Vte.Terminal] = None, event: Optional[Gdk.Event] = None) -> None:
+        term = term or self._active_terminal()
+        if term is None:
+            return
+        menu = build_context_menu(self.terminal_menu_spec(term, event), attach_to=term)
+        popup_menu(menu, event, widget=term)
+
+    def terminal_menu_spec(self, term: Vte.Terminal, event: Optional[Gdk.Event] = None) -> list[MenuSection]:
+        """The terminal's context menu; every item acts on ``term`` (the pane under the pointer)."""
+
+        del event  # no hyperlink / match handling is enabled in this app's terminals
+        has_selection = bool(term.get_has_selection())
+        try:
+            can_paste = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_is_text_available()
+        except Exception:
+            can_paste = True
+        edit = MenuSection("edit", [
+            MenuItemSpec(_("_Copy"), lambda: self.copy_clipboard(term), accel=accel_label("copy"),
+                         sensitive=has_selection),
+            MenuItemSpec(_("Copy as Plain _Text"), lambda: _copy_selection(term), sensitive=has_selection),
+            MenuItemSpec(_("_Paste"), lambda: term.paste_clipboard(), accel=accel_label("paste"), sensitive=can_paste),
+            MenuItemSpec(_("Paste _Selection"), lambda: term.paste_primary(), accel=accel_label("paste-primary")),
+            MenuItemSpec(_("Select _All"), lambda: self.select_all_terminal(term),
+                         accel=accel_label("select-all-terminal")),
+        ])
+        terminal = MenuSection("terminal", [
+            MenuItemSpec(_("C_lear Scrollback"), lambda: self.clear_scrollback(term), accel=accel_label("clear-scrollback")),
+            MenuItemSpec(_("_Reset Terminal"), lambda: self.reset_terminal(term), accel=accel_label("reset-terminal")),
+        ])
+        zoom = MenuSection("zoom", [
+            MenuItemSpec(_("Zoom _In"), self.increase_font, accel=accel_label("font-increase")),
+            MenuItemSpec(_("Zoom _Out"), self.decrease_font, accel=accel_label("font-decrease")),
+            MenuItemSpec(_("_Normal Size"), self.reset_font, accel=accel_label("font-reset")),
+        ])
+        session = MenuSection("session", [
+            MenuItemSpec(_("Close _Split") if self.is_split else _("Split _Pane"), self.toggle_split,
+                         accel=accel_label("split-pane")),
+            MenuItemSpec(_("_Reconnect"), self.reconnect, accel=accel_label("reconnect"),
+                         visible=not self._session_active),
+            MenuItemSpec(_("Save _Transcript…"), self.save_transcript, accel=accel_label("save-transcript")),
+        ])
+        preferences = MenuSection("preferences", [
+            MenuItemSpec(_("_Preferences…"), lambda: self.on_open_preferences() if self.on_open_preferences else None,
+                         sensitive=self.on_open_preferences is not None),
+        ])
+        return [edit, terminal, zoom, session, preferences]
 
     @property
     def host(self) -> HostEntry:
@@ -831,8 +960,8 @@ class TerminalTab(SessionPage):
             return True
         return False
 
-    def copy_clipboard(self) -> None:
-        term = self._active_terminal()
+    def copy_clipboard(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
         if not term:
             return
         try:
@@ -849,8 +978,8 @@ class TerminalTab(SessionPage):
         self._appearance = appearance
         self._apply_terminal_theme()
 
-    def paste_clipboard(self) -> None:
-        term = self._active_terminal()
+    def paste_clipboard(self, term: Optional[Vte.Terminal] = None) -> None:
+        term = term or self._active_terminal()
         if term:
             term.paste_clipboard()
 
@@ -861,6 +990,23 @@ class TerminalTab(SessionPage):
         term = self._active_terminal()
         if term and data:
             term.feed_child(data.encode("utf-8"))
+
+    def is_session_active(self) -> bool:
+        """The ssh process (or the local shell) runs."""
+
+        return bool(self._session_active)
+
+    def macro_send(self, term: Vte.Terminal, data: bytes = b"", paste: Optional[str] = None) -> None:
+        """Macro playback: straight to ``term`` (no broadcast; VTE's ``commit`` is ignored meanwhile)."""
+
+        self._macro_feeding = True
+        try:
+            if paste is not None:
+                term.paste_text(paste)  # honours the program's bracketed-paste mode
+            elif data:
+                term.feed_child(data)
+        finally:
+            self._macro_feeding = False
 
     def send_interrupt(self) -> None:
         term = self._active_terminal()
@@ -1072,6 +1218,9 @@ class TerminalTab(SessionPage):
             )
             return _terminal_text_result(result)[-limit:]
         except AttributeError:
+            contents = _terminal_contents(term)  # VTE < 0.72: no warnings, unlike get_text_range
+            if contents is not None:
+                return contents.rstrip("\n")[-limit:]
             try:
                 column, row = term.get_cursor_position()
                 columns = max(80, int(term.get_column_count() or 80))
@@ -1113,6 +1262,8 @@ class TerminalTab(SessionPage):
             self._stage_detected_password_change(password, term)
 
     def _on_terminal_commit(self, term: Vte.Terminal, text: str, _length: int) -> None:
+        if getattr(self, "_macro_feeding", False):
+            return  # a macro, not the user: never fed to the password-change heuristics
         if self._last_key_input:
             last_term, last_text, last_time = self._last_key_input
             if last_term is term and last_text == text and time.monotonic() - last_time < 0.25:
@@ -1351,7 +1502,7 @@ class TerminalTab(SessionPage):
 
     def _spawn_command(self, password: Optional[str]) -> Tuple[List[str], List[str]]:
         argv = self._ssh_arguments()
-        envv = [f"{key}={value}" for key, value in os.environ.items()]
+        envv = [f"{key}={value}" for key, value in terminal_env(os.environ).items()]
         if self._profile and self._profile.env_vars:
             envv.extend(f"{k}={v}" for k, v in self._profile.env_vars.items())
         self._marker = None
@@ -1396,13 +1547,13 @@ class TerminalTab(SessionPage):
         self._reveal_banner(False)
         self._reconnect_button.set_sensitive(False)
         term.spawn_async(
-            Vte.PtyFlags.DEFAULT, None, argv, envv, GLib.SpawnFlags.DEFAULT,
+            Vte.PtyFlags.DEFAULT, None, argv, envv, _SSH_SPAWN_FLAGS,  # argv names "ssh" / "sshpass"
             None, None, -1, None, _on_spawn_finish, None,
         )
 
     def _spawn_secondary(self, term: Vte.Terminal) -> None:
         argv = self._ssh_arguments()
-        envv = [f"{key}={value}" for key, value in os.environ.items()]
+        envv = [f"{key}={value}" for key, value in terminal_env(os.environ).items()]
         if self._profile and self._profile.env_vars:
             for k, v in self._profile.env_vars.items():
                 envv.append(f"{k}={v}")
@@ -1415,7 +1566,7 @@ class TerminalTab(SessionPage):
             None,
             argv,
             envv,
-            GLib.SpawnFlags.DEFAULT,
+            _SSH_SPAWN_FLAGS,
             None,
             None,
             -1,
@@ -1985,11 +2136,18 @@ class TerminalNotebook(Gtk.Box):
         self._appearance = appearance
         self.on_quick_connect: Optional[Callable[[], None]] = None
         self.on_new_host: Optional[Callable[[], None]] = None
+        self.input_settings = TerminalInputSettings()  # the window passes AppSettings.terminal_input (shared)
+        self.local_shell_settings = LocalShellSettings()  # … and AppSettings.local_shell
+        self.on_terminal_preferences: Optional[Callable[[], None]] = None  # terminal menu → Preferences
         self.on_duplicate_session: Optional[Callable[[TerminalTab], None]] = None
         self.on_sessions_changed: Optional[Callable[[], None]] = None
         self.on_strip_changed: Optional[Callable[[], None]] = None  # session strip shown/hidden
         self.on_toggle_focus_mode: Optional[Callable[[], None]] = None
         self._status_dock: Optional[Gtk.Box] = None
+        # Terminal macros (gtkui/controllers/macro_controller.py): the toolbar's Record button and the
+        # macro entries of the "More session actions" menu.
+        self.on_record_clicked: Optional[Callable[[], None]] = None
+        self.macro_menu: Optional[Callable[[], List[MenuSection]]] = None
 
         self._build_toolbar()
         self._build_strip()
@@ -2011,6 +2169,7 @@ class TerminalNotebook(Gtk.Box):
         }
         bar.save.connect("clicked", lambda *_: self.save_current_transcript())
         bar.reconnect.connect("clicked", lambda *_: self.reconnect_current())
+        bar.record.connect("clicked", lambda *_: self.on_record_clicked() if self.on_record_clicked else None)
         bar.set_overflow(self._overflow_menu_spec())
         # In tabs mode the toolbar lives at the right end of the session strip
         # (the notebook's tab row); in tile mode it gets this row of its own.
@@ -2024,7 +2183,7 @@ class TerminalNotebook(Gtk.Box):
     def _build_strip(self) -> None:
         """One row: session tabs, ``+`` after the last tab, the all-sessions menu and the toolbar."""
 
-        strip = SessionStrip(self._request_quick_connect)
+        strip = SessionStrip(self.new_local_terminal, on_quick_connect=self._request_quick_connect)
         strip.on_reorder = self._on_strip_reorder
         self._tabs_menu_button = IconMenuButton(Icons.CHEVRON_DOWN, _("All sessions"))
         self._tabs_menu_button.connect("toggled", self._on_tabs_menu_toggled)
@@ -2067,13 +2226,13 @@ class TerminalNotebook(Gtk.Box):
             Icons.TERMINAL,
             _("No open sessions"),
             _(
-                "Double-click a host or press Enter to connect. Ctrl+T opens the selected host; "
-                "Ctrl+Shift+T opens Quick Connect."
+                "Double-click a host or press Enter to connect. Ctrl+T opens the selected host, "
+                "Ctrl+Shift+T a local terminal and Ctrl+Alt+T Quick Connect."
             ),
-            action_label=_("_Quick Connect…"),
-            on_action=self._request_quick_connect,
-            secondary_label=_("_New Host…"),
-            on_secondary=lambda: self.on_new_host() if self.on_new_host else None,
+            action_label=_("New _Local Terminal"),
+            on_action=self.new_local_terminal,
+            secondary_label=_("_Quick Connect…"),
+            on_secondary=self._request_quick_connect,
         )
 
         self._stack = Gtk.Stack()
@@ -2126,6 +2285,8 @@ class TerminalNotebook(Gtk.Box):
         return [self.label_for(tab) for tab in self._ordered_tabs()]
 
     def _label_info(self, tab: TerminalTab) -> SessionLabelInfo:
+        if getattr(tab, "is_local", False):  # the shell's title ("Local" until it sets one)
+            return SessionLabelInfo(key=tab, alias=tab.title, hostname=tab.title, port=0, custom_name=tab.custom_title)
         try:
             hostname, port, _user = host_connection_params(tab.host)
         except Exception:  # malformed host entry: fall back to the alias
@@ -2145,6 +2306,12 @@ class TerminalNotebook(Gtk.Box):
     def tab_tooltip(self, tab: TerminalTab) -> str:
         """``alias`` / ``user@host:port`` / ``Connected · 121×38`` (+ duplicate hint)."""
 
+        if getattr(tab, "is_local", False):
+            details = [tab.title, _("Local terminal: {shell}").format(shell=tab.shell_path)]
+            folder = tab.current_directory()
+            if folder:
+                details.append(folder)
+            return "\n".join(details)
         lines = [tab.custom_title or tab.host.alias]
         if tab.custom_title:
             lines.append(tab.host.alias)
@@ -2184,11 +2351,25 @@ class TerminalNotebook(Gtk.Box):
             MenuSection("view", [
                 MenuItemSpec(_("_Focus Mode"), self._toggle_focus_mode, Icons.MAXIMIZE, "F11"),
             ]),
+            *(self.macro_menu() if self.macro_menu is not None else []),
             MenuSection("close", [
                 MenuItemSpec(_("Close _Other Sessions"), lambda: self.close_others(self._current_tab())),
                 MenuItemSpec(_("_Close Session"), self.close_current, Icons.CLOSE, "Ctrl+W"),
             ]),
         ]
+
+    def refresh_overflow_menu(self) -> None:
+        """Rebuild "More session actions" (the macros changed)."""
+
+        self._toolbar.set_overflow(self._overflow_menu_spec())
+
+    def set_macro_recording(self, tab: Optional[TerminalTab], recording: bool, status: str = "") -> None:
+        """The toolbar's Record / Stop state and the red dot on the recorded tab's label."""
+
+        self._toolbar.set_recording(recording, status)
+        label = self._tab_labels.get(tab) if tab is not None else None
+        if label is not None:
+            label.set_recording(recording)
 
     # ----------------------------------------------------------------- tab api
     @property
@@ -2220,6 +2401,23 @@ class TerminalNotebook(Gtk.Box):
         self.add_page(tab)
         return tab
 
+    def new_local_terminal(self, cwd: Optional[str] = None) -> "TerminalTab":
+        """A new tab with the user's shell (``local_shell``), focused; not part of broadcast by default."""
+
+        from ssh_manager.gtkui.local_terminal import LocalTerminalTab
+
+        if cwd is None and self.local_shell_settings.start_in == "current":
+            current = self._current_tab()
+            if getattr(current, "is_local", False):
+                cwd = current.current_directory()
+        tab = LocalTerminalTab(self._log, self._default_font_scale, settings=self.local_shell_settings, cwd=cwd,
+                               appearance=self._appearance)
+        tab.on_title_changed = self._refresh_labels
+        self.add_page(tab)
+        self._broadcast_included[tab] = False
+        self._update_broadcast_ui()
+        return tab
+
     def add_page(self, tab: SessionPage) -> SessionPage:
         """Add any session page (terminal, file browser …) to the tabs / tile grid."""
 
@@ -2230,6 +2428,9 @@ class TerminalNotebook(Gtk.Box):
         tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
         tab.connect_activity(self._on_tab_activity)
+        if hasattr(tab, "set_input_settings"):  # terminals (file browsers have none)
+            tab.set_input_settings(self.input_settings)
+            tab.on_open_preferences = lambda: self.on_terminal_preferences() if self.on_terminal_preferences else None
 
         self._tabs.append(tab)
         self._open_order.append(tab)
@@ -2447,6 +2648,42 @@ class TerminalNotebook(Gtk.Box):
         if 1 <= number <= len(ordered):
             self._focus_tab(ordered[number - 1])
 
+    def terminal_action(self, name: str, focus: Optional[Gtk.Widget]) -> bool:
+        """Run terminal action ``name`` on the focused terminal (``True`` when something handled it).
+
+        Terminal shortcuts (copy, paste, Shift+Insert …) must never reach a terminal in the background:
+        in a text field they do the field's own copy / paste / select all, anywhere else nothing.
+        """
+
+        if isinstance(focus, Vte.Terminal):
+            tab = next((t for t in self._tabs if getattr(t, "is_terminal", False) and focus in t._terminals()), None)
+            if tab is None:
+                return False
+            run = {
+                "copy": lambda: tab.copy_clipboard(focus),
+                "paste": lambda: tab.paste_clipboard(focus),
+                "paste-primary": lambda: tab.paste_primary(focus),
+                "select-all-terminal": lambda: tab.select_all_terminal(focus),
+                "clear-scrollback": lambda: tab.clear_scrollback(focus),
+                "reset-terminal": lambda: tab.reset_terminal(focus),
+                "terminal-menu": lambda: tab.show_terminal_menu(focus),
+            }.get(name)
+            if run is None:
+                return False
+            run()
+            return True
+        if isinstance(focus, (Gtk.Editable, Gtk.TextView)):
+            signal = {"copy": "copy-clipboard", "paste": "paste-clipboard", "paste-primary": "paste-clipboard"}.get(name)
+            if signal is not None:
+                focus.emit(signal)  # what Ctrl+Insert / Shift+Insert do in the field itself
+            elif name == "select-all-terminal":
+                if isinstance(focus, Gtk.TextView):
+                    focus.emit("select-all", True)
+                else:
+                    focus.select_region(0, -1)
+            return True
+        return False
+
     def reconnect_current(self) -> None:
         tab = self._current_tab()
         if tab:
@@ -2458,6 +2695,9 @@ class TerminalNotebook(Gtk.Box):
             self.duplicate_tab(tab)
 
     def duplicate_tab(self, tab: TerminalTab) -> None:
+        if getattr(tab, "is_local", False):  # another shell in the same folder
+            self.new_local_terminal(cwd=tab.current_directory())
+            return
         if self.on_duplicate_session is not None:
             self.on_duplicate_session(tab)
         else:
@@ -2552,6 +2792,40 @@ class TerminalNotebook(Gtk.Box):
     def _on_broadcast_include_toggled(self, tab: TerminalTab, active: bool) -> None:
         self._broadcast_included[tab] = active
         self._update_broadcast_ui()
+
+    def macro_targets(self, source: TerminalTab) -> List[TerminalTab]:
+        """Sessions a macro run from ``source`` types into: ``source`` first, then what typed input reaches.
+
+        The same rule as typed input (:func:`broadcast_target_tabs`): with broadcast on and ``source``
+        included, every other included, connected terminal session (in tab order); otherwise only
+        ``source``. ``[]`` when ``source`` is not a connected terminal session.
+        """
+
+        if source not in self._tabs or not getattr(source, "is_terminal", False) \
+                or not self._tab_status.get(source, False):
+            return []
+        if not self._broadcast_mode:
+            return [source]
+        others = broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included, self._tab_status)
+        return [source] + self._in_tab_order(others, source)
+
+    def macro_unreachable(self, source: TerminalTab) -> List[TerminalTab]:
+        """Sessions included in the broadcast that a macro from ``source`` skips because they are not connected."""
+
+        if not self._broadcast_mode or source not in self._tabs:
+            return []
+        everyone = {tab: True for tab in self._terminal_tabs()}
+        reachable = set(broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included,
+                                              self._tab_status))
+        if not self._tab_status.get(source, False):
+            return []
+        wanted = broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included, everyone)
+        return self._in_tab_order([tab for tab in wanted if tab not in reachable], source)
+
+    def _in_tab_order(self, tabs: List[TerminalTab], source: TerminalTab) -> List[TerminalTab]:
+        order = {tab: index for index, tab in enumerate(self._ordered_tabs())}
+        unique = [tab for tab in dict.fromkeys(tabs) if tab is not source]
+        return sorted(unique, key=lambda tab: order.get(tab, len(order)))
 
     def _on_tab_input(self, source: TerminalTab, data: str) -> None:
         if source is not self._current_tab():

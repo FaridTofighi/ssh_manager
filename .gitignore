@@ -1,5 +1,30 @@
-.aider*
+# Python
 __pycache__/
 *.py[cod]
-.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
 .venv/
+venv/
+
+# Tool caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node (only used for local tooling)
+node_modules/
+
+# Default output of tools/ui_snapshots.py without a target folder
+docs/ui-snapshots/
+
+# Editors, OS and assistants
+.idea/
+.vscode/
+*.swp
+.DS_Store
+.aider*

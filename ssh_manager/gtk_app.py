@@ -22,7 +22,7 @@ gi.require_version("Vte", "2.91")
 
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, Pango, Vte  # type: ignore  # noqa: E402,F401
 
-from ssh_manager.config import ConfigManager  # noqa: E402
+from ssh_manager.config import ConfigManager, HostEntry  # noqa: E402
 from ssh_manager.credentials import CredentialStore  # noqa: E402
 from ssh_manager.gtk_terminal import TerminalNotebook  # noqa: E402
 from ssh_manager.gtkui.constants import Icons, TreeColumn  # noqa: E402
@@ -47,7 +47,11 @@ from ssh_manager.gtkui.controllers.session_controller import (  # noqa: E402,F40
     audit_log_key,
     audit_log_value,
 )
-from ssh_manager.gtkui.controllers.shortcuts import register_actions  # noqa: E402
+from ssh_manager.gtkui.controllers.macro_controller import MacroController  # noqa: E402
+from ssh_manager.gtkui.controllers.shortcut_registry import ShortcutRegistry  # noqa: E402
+from ssh_manager.gtkui.controllers.shortcuts import (  # noqa: E402
+    refresh_accel_tooltips, register_actions, set_active_registry,
+)
 from ssh_manager.gtkui.controllers.tree import TreeController  # noqa: E402
 from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
     UI_STATE_FILE,
@@ -59,7 +63,7 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
-from ssh_manager.gtkui.i18n import _  # noqa: E402
+from ssh_manager.gtkui.i18n import _, ngettext  # noqa: E402
 from ssh_manager.gtkui.theme import density as density_tokens  # noqa: E402
 from ssh_manager.gtkui.theme.density import Density  # noqa: E402
 from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager  # noqa: E402
@@ -128,7 +132,8 @@ def _home_relative(path: Path) -> str:
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
-    def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None) -> None:
+    def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None,
+                 startup_host: Optional[HostEntry] = None) -> None:
         Gtk.Application.__init__(self, application_id="org.codex.SSHManager")
         self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
         self._inventory = inventory  # --inventory: another database file
@@ -136,11 +141,17 @@ class SSHManagerApplication(Gtk.Application):
         self._theme = get_theme_manager()
         self._settings = AppSettings.load()
         self._master_password: Optional[str] = None
+        self._startup_host = startup_host  # --rdp / rdp://: opened once the window exists, never saved
 
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
         register_icon_path()
         self._install_css(None)
+
+    def _open_startup_host(self, host: HostEntry) -> bool:
+        if self._window is not None:
+            self._window.sessions.open_unsaved(host)
+        return False
 
     def do_activate(self) -> None:  # type: ignore[override]
         if not self._window:
@@ -159,6 +170,9 @@ class SSHManagerApplication(Gtk.Application):
                                             manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
+            if self._startup_host is not None:
+                host, self._startup_host = self._startup_host, None
+                GLib.timeout_add(500, self._open_startup_host, host)
         self._window.present()
 
     def _ask_startup(self, kind: str, message: str) -> Choice:
@@ -288,6 +302,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._apply_ui_state()
         self.tree.rebuild(refresh=True)
         self.inventory.refresh_git_watch()
+        self.sessions.refresh_rdp_engines()  # FreeRDP clients, in the background (RDP hosts)
         self.creds.warn_if_password_file_locked()
         # Another window/instance changed the store: reload (PRAGMA data_version).
         self._external_poll = GLib.timeout_add_seconds(2, self._check_external_changes)
@@ -333,8 +348,12 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
+        self.macros = MacroController(self)  # terminal macros (encrypted with the master password)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
+        from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
+
+        self.rdp_files = RdpFileActions(self)
         self.host_page = HostPageController(self, history_path=self._ui_state_path.parent / HOST_HISTORY_FILE)
 
     def _build_ui(self) -> None:
@@ -450,6 +469,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         tabs.set_name("terminal-area")
         tabs.on_quick_connect = self.sessions.quick_connect
         tabs.on_new_host = self.hosts.prompt_new_host
+        tabs.input_settings = self._settings.terminal_input  # shared: Preferences changes apply at once
+        tabs.local_shell_settings = self._settings.local_shell
+        tabs.on_terminal_preferences = lambda: self.app_dialogs.open_settings("terminal")
         tabs.on_duplicate_session = lambda tab: self.sessions.open_hosts([tab.host])
         tabs.on_sessions_changed = self._on_sessions_changed
         tabs.set_label_mode(self._ui.tab_label_mode)
@@ -457,12 +479,22 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     def _register_actions(self) -> None:
         tabs, hosts, sessions, dialogs = self.terminal_tabs, self.hosts, self.sessions, self.app_dialogs
+        # The user's shortcuts (Preferences → Keyboard Shortcuts): menus, the shortcuts window and the
+        # accelerators below all read this registry.
+        self.shortcut_registry = ShortcutRegistry(overrides=self._settings.shortcuts)
+        set_active_registry(self.shortcut_registry)
+        self.connect("destroy", lambda *_a: self._release_shortcut_registry())
+
+        def terminal(name: str):  # acts on the focused terminal; in a text field, the field's own action
+            return lambda: tabs.terminal_action(name, self.get_focus())
+
         callbacks = {
             "new-host": hosts.prompt_new_host,
             "new-host-template": hosts.new_host_from_template,
             "new-group": self.groups.create_parent_group,
             "new-child-group": self.groups.create_child_group,
             "quick-connect": sessions.quick_connect,
+            "new-local-tab": tabs.new_local_terminal,
             "focus-search": self.focus_search,
             "refresh": self.inventory.refresh,
             "settings": dialogs.open_settings,
@@ -478,6 +510,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "open-folder": self.inventory.open_inventory_folder,
             "import-mobaxterm": self.importer.open,
             "import-openssh": lambda: self.store_actions.import_openssh(),
+            "import-rdp-files": lambda: self.rdp_files.import_files(),
+            "export-rdp-file": lambda: self.rdp_files.export_selected(),
             "export-openssh": lambda: self.store_actions.export_openssh(),
             "backup-inventory": lambda: self.store_actions.backup_now(),
             "quit": self.close,
@@ -503,8 +537,13 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "split-pane": tabs.toggle_split_current,
             "toggle-stats": tabs.toggle_stats_current,
             "toggle-strip-ansi": tabs.toggle_strip_ansi_copy,
-            "copy": tabs.copy_current,
-            "paste": tabs.paste_current,
+            "copy": terminal("copy"),
+            "paste": terminal("paste"),
+            "paste-primary": terminal("paste-primary"),
+            "terminal-menu": terminal("terminal-menu"),
+            "select-all-terminal": terminal("select-all-terminal"),
+            "clear-scrollback": terminal("clear-scrollback"),
+            "reset-terminal": terminal("reset-terminal"),
             "interrupt": tabs.interrupt_current,
             "font-increase": tabs.increase_font,
             "font-decrease": tabs.decrease_font,
@@ -513,8 +552,28 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "toggle-details": self.toggle_host_details,
             "host-activity": self.host_page.show_activity,
             "toggle-maximize": self.layout.toggle_maximized,
+            **self.macros.callbacks(),
         }
         self._actions = register_actions(self, callbacks)
+        self.shortcut_registry.add_listener(self._on_shortcuts_changed)
+        self.macros.bind()
+        self.macros.start()  # unlocks macros.enc in the background; macro shortcuts follow
+
+    def _on_shortcuts_changed(self) -> None:
+        """The user changed a shortcut: live accelerators, hints, the shortcuts window, the settings file."""
+
+        self.shortcut_registry.apply(self.get_application(), self._actions)
+        self.emit("keys-changed")  # GTK caches the window's key lookup; without this the old keys keep working
+        refresh_accel_tooltips()
+        self.app_dialogs.refresh_shortcuts_window()
+        self._settings.shortcuts = self.shortcut_registry.to_dict()
+        self._settings.save()
+
+    def _release_shortcut_registry(self) -> None:
+        from ssh_manager.gtkui.controllers import shortcuts
+
+        if shortcuts._ACTIVE_REGISTRY is getattr(self, "shortcut_registry", None):
+            set_active_registry(None)
 
     # ------------------------------------------------------------ feedback
     def _log_event(self, message: str, success: object) -> None:
@@ -752,6 +811,21 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # -------------------------------------------------------------- signals
     def _on_delete_event(self, *_args) -> bool:
+        desktops = sum(1 for tab in self.terminal_tabs.tabs() if getattr(tab, "rdp_connected", lambda: False)())
+        if desktops and not self._confirm(
+            _("Disconnect the remote desktops?"),
+            detail=_("{n} remote desktop sessions are open. Disconnect them and quit?").format(n=desktops),
+            confirm_label=_("Disconnect and _Quit"),
+        ):
+            return True  # keep the window open
+        busy = sum(1 for tab in self.terminal_tabs.tabs() if getattr(tab, "foreground_job_running", lambda: False)())
+        if busy and not self._confirm(
+            _("Quit while programs are running?"),
+            detail=ngettext("A process is still running in a local terminal. Quit anyway?",
+                            "Processes are still running in {n} local terminals. Quit anyway?", busy).format(n=busy),
+            confirm_label=_("_Quit"),
+        ):
+            return True  # keep the window open
         running = sum(getattr(tab, "running_transfers", lambda: 0)() for tab in self.terminal_tabs.tabs())
         if running and not self._confirm(
             _("Cancel the transfers?"),
@@ -773,3 +847,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._toasts.shutdown()
         self.inventory.shutdown()
         self.host_page.shutdown()
+        runtime = getattr(self.sessions, "_rdp_runtime", None)
+        if runtime is not None:
+            runtime.stop_all()  # no FreeRDP client outlives the window

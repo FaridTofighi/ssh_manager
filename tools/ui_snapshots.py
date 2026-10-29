@@ -1530,10 +1530,94 @@ def run(out_dir: Path) -> None:
                            *(int(round(v * scale)) for v in (900, 650)))
             window.destroy()
 
+    def _rdp_report():
+        """A synthetic engine report: FreeRDP 3.15 found, no gtk-frdp, X11 (never the real computer's)."""
+
+        from ssh_manager.rdp.engines import (ClientBinary, EngineReport, Platform, build_engines, choose_engine,
+                                             parse_help_options)
+
+        options = parse_help_options((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
+        clients = [ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)]
+        platform = Platform("x11", True, "", "", False, "debian")
+        built = build_engines(clients, platform)
+        chosen, note = choose_engine(built)
+        return EngineReport(platform, clients, built, chosen, note)
+
+    def host_rdp_dialog(window, page: str) -> Gtk.Dialog:
+        """An RDP host's pages (synthetic address, domain and shared folder)."""
+
+        from ssh_manager.config import HostEntry
+        from ssh_manager.rdp import engines
+
+        engines.store_report(_rdp_report())
+        host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "CORP\\alice"}, protocol="rdp",
+                         metadata={"rdp": {"v": 1, "domain": "CORP", "keyboard_layout": "fa-IR",
+                                           "drives": [{"name": "work", "path": "/tmp", "read_only": True}],
+                                           "gateway": {"host": "gw.acme.test", "port": 443}}})
+        dialog = HostDialog(window, host, credentials=window._credential_store.list(), metadata=host.metadata,
+                            profiles=window._profiles, rdp_ssh_hosts=[("ssh-1", "bastion (10.0.0.1)")])
+        dialog.layout.show_page(page)
+        return dialog
+
+    for dark in (False, True):
+        for page in ("rdp", "rdp_display", "rdp_devices", "rdp_connection"):
+            name = f"dialog-host-{page.replace('_', '-')}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _host_rdp(dark=dark, page=page, name=name) -> None:
+                from ssh_manager.gtkui.theme import density
+
+                window = _make_window(app, base, dark)
+                dialog = host_rdp_dialog(window, page)
+                _pump()
+                scale = density.active().dialog_scale
+                capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (900, 650)))
+                window.destroy()
+
+    @scenario("dialog-host-rdp-compact")
+    def _host_rdp_compact() -> None:
+        from ssh_manager.gtkui.theme import density
+
+        window = _make_window(app, base, False, "compact")
+        dialog = host_rdp_dialog(window, "rdp")
+        _pump()
+        scale = density.active().dialog_scale
+        capture_dialog(dialog, out_dir / "dialog-host-rdp-compact.png", *(int(round(v * scale)) for v in (900, 650)))
+        window.destroy()
+
+    for dark in (False, True):
+        name = f"dialog-rdp-diagnostics-{'dark' if dark else 'light'}"
+
+        @scenario(name)
+        def _rdp_diagnostics(dark=dark, name=name) -> None:
+            from ssh_manager.gtkui.dialogs.rdp_diagnostics import RdpDiagnosticsDialog
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = RdpDiagnosticsDialog(window, report=_rdp_report())
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in (560, 480)))
+            window.destroy()
+
     def settings_transfer_dialog(window) -> Gtk.Dialog:
         dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
         dialog.layout.show_page("file_transfer")
         return dialog
+
+    for dark in (False, True):
+        @scenario(f"dialog-settings-remote-desktop-{'dark' if dark else 'light'}")
+        def _settings_rdp(dark=dark) -> None:
+            from ssh_manager.gtkui.theme import density
+
+            window = _make_window(app, base, dark)
+            dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
+            dialog.layout.show_page("remote_desktop")
+            _pump()
+            scale = density.active().dialog_scale
+            capture_dialog(dialog, out_dir / f"dialog-settings-remote-desktop-{'dark' if dark else 'light'}.png",
+                           *(int(round(v * scale)) for v in (820, 620)))
+            window.destroy()
 
     for dark in (False, True):
         @scenario(f"dialog-settings-file-transfer-{'dark' if dark else 'light'}")
@@ -1680,6 +1764,66 @@ def run(out_dir: Path) -> None:
             _show_log(window)
             capture_window(window, out_dir / f"{name}.png", 1280, 800)
             window.destroy()
+
+    def _rdp_session_scene(window, state: str) -> None:
+        """An RDP session card (external FreeRDP window) in one state; nothing is started."""
+
+        from ssh_manager.config import HostEntry
+        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
+        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
+        from ssh_manager.gtkui.theme.tokens import ConnectionStatus
+        from ssh_manager.trust import TrustStore
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="sshm-snap-rdp-"))
+        host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "CORP\\alice"}, protocol="rdp",
+                         parent_group="staging", child_group="", metadata={"rdp": {"v": 1}})
+        runtime = RdpRuntime(trust_store=TrustStore(tmp / "pins.json"), reap=False)
+        tab = RdpSessionTab(host, lambda *a: None, runtime=runtime, autostart=False)
+        window.terminal_tabs.add_page(tab)
+        tab.facts["engine"].set_text("External window · xfreerdp3 3.15.0")
+        tab.facts["security"].set_text("Network Level Authentication (CredSSP + TLS)")
+        if state == "connected":
+            tab.facts["certificate"].set_text("Trusted · AA:BB:CC:DD:EE:FF:00:11…")
+            tab.facts["elapsed"].set_text("0:12:07")
+            tab._set_status(ConnectionStatus.CONNECTED, "Connected · the remote desktop is in its own window")
+        elif state == "failed":
+            tab._set_status(ConnectionStatus.FAILED, "The account is locked out. Ask an administrator to unlock it; "
+                            "trying again now keeps it locked.", banner=True, error=True)
+        elif state == "reconnecting":
+            tab._reconnecting = True
+            tab._set_status(ConnectionStatus.CONNECTING, "Connection lost: The connection to the server failed. "
+                            "Reconnecting… (attempt 2 of 5)")
+        elif state == "embedded":
+            from ssh_manager.rdp.engines import ENGINE_LABELS, Engine, binary_capabilities, ClientBinary
+            from ssh_manager.rdp.engines import parse_help_options as parse
+
+            options = parse((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
+            client = ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)
+            tab.engine = Engine("xfreerdp-embed", ENGINE_LABELS["xfreerdp-embed"], True, binary=client,
+                                capabilities=binary_capabilities(client, embedded=True))
+            from ssh_manager.gtkui.rdp.display import Surface
+
+            tab._surface_factory = lambda _engine: Surface()  # offscreen rendering has no X window for a Gtk.Socket
+            tab._install_surface(tab.engine)
+            tab._embedded_child = 1  # no FreeRDP here: the empty remote area with the toolbar
+            tab.facts["certificate"].set_text("Trusted · AA:BB:CC:DD:EE:FF:00:11…")
+            tab._statusbar.size_label.set_text("1280×744")
+            tab._set_status(ConnectionStatus.CONNECTED, "Connected")
+        else:
+            tab._set_status(ConnectionStatus.CONNECTING, "Checking the server…")
+        _pump(30)
+
+    for dark in (False, True):
+        for state in ("connecting", "connected", "failed", "reconnecting", "embedded"):
+            name = f"rdp-session-{state}-{'dark' if dark else 'light'}"
+
+            @scenario(name)
+            def _rdp_session(dark=dark, state=state, name=name) -> None:
+                window = _make_window(app, base, dark, "compact")
+                _rdp_session_scene(window, state)
+                capture_window(window, out_dir / f"{name}.png", 1280, 800)
+                window.destroy()
 
     for dark in (False, True):
         for dens in ("comfortable", "compact"):

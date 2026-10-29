@@ -33,7 +33,7 @@ class RegistryTests(unittest.TestCase):
     def test_built_in_kinds(self) -> None:
         self.assertEqual([k.id for k in protocols.all_kinds()][:4], ["ssh", "ftp", "ftps", "sftp"])
         self.assertEqual({k.id: k.default_port for k in protocols.all_kinds()}, {"ssh": 22, "ftp": 21, "ftps": 21,
-                                                                                 "sftp": 22})
+                                                                                 "sftp": 22, "rdp": 3389})
         self.assertTrue(protocols.SSH.terminal and not protocols.SFTP.terminal)
         self.assertFalse(protocols.FTP.encrypted)
         self.assertEqual(protocols.FTP.icon, "sshm-transfer")
@@ -43,9 +43,9 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(protocols.is_ssh(HostEntry("a")))
         self.assertEqual(protocols.badge_for(HostEntry("a")), "")  # SSH stays unmarked
         self.assertEqual(protocols.badge_for(ftp_host(protocol="sftp")), "SFTP")
-        future = ftp_host(protocol="rdp")
+        future = ftp_host(protocol="vnc")  # not built in (RDP is, since the RDP work)
         self.assertIsNone(protocols.kind_for(future))
-        self.assertEqual(protocols.badge_for(future), "RDP")
+        self.assertEqual(protocols.badge_for(future), "VNC")
         self.assertFalse(protocols.can_open(future))
 
     def test_validate(self) -> None:
@@ -336,9 +336,9 @@ class WindowTests(unittest.TestCase):
         self.assertFalse(any("cannot open" in note for note in self.notes), self.notes)
 
     def test_unknown_protocol_is_a_message_not_an_exception(self) -> None:
-        future = ftp_host("future", protocol="rdp")
+        future = ftp_host("future", protocol="vnc")
         self.win.sessions.open_hosts([future])
-        self.assertTrue(any("cannot open" in note and "rdp" in note for note in self.notes), self.notes)
+        self.assertTrue(any("cannot open" in note and "vnc" in note for note in self.notes), self.notes)
 
     def test_tree_row_shows_the_protocol_pill(self) -> None:
         view = self.win.tree_view

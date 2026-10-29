@@ -49,6 +49,7 @@ from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import level_icon  # noqa: E402
+from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 
 
 def _compact() -> bool:
@@ -132,6 +133,7 @@ class PageBar(Gtk.Box):
 
         self.on_info: Callable[[], None] = lambda: None
         self.info = IconButton(Icons.INFO, _("Host details (Ctrl+I)"), css_classes=("page-more",))
+        set_accel_tooltip(self.info, _("Host details"), "toggle-details")
         self.info.connect("clicked", lambda *_: self.on_info())
         self.pack_end(self.info, False, False, 0)
 

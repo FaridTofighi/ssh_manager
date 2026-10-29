@@ -1,4 +1,4 @@
-"""Trust decisions for file-transfer connections: TLS certificates and SFTP host keys.
+"""Trust decisions: TLS certificates (FTPS, RDP) and SFTP host keys.
 
 Everything shown comes from the network (subject, issuer, fingerprints): it
 is set as plain label text, never markup. A *changed* certificate or host
@@ -89,3 +89,32 @@ def trust_host_key(parent: Optional[Gtk.Window], host_label: str, key_type: str,
           "It is remembered in ~/.ssh/known_hosts, like ssh does."),
         [(_("Key type"), key_type), (_("Fingerprint"), fingerprint)],
         accept_label=_("_Connect"), dangerous=False).ask()
+
+
+TRUST_ONCE = 1
+
+
+def rdp_trust_choice(parent: Optional[Gtk.Window], host_label: str, info: CertificateInfo) -> str:
+    """First connection to an RDP server: ``"once"``, ``"remember"`` or ``"cancel"`` (Escape = cancel)."""
+
+    dialog = TrustDialog(
+        parent, _("Trust the certificate of “{host}”?").format(host=host_label),
+        _("Remote Desktop servers usually have a certificate no authority vouches for. Compare the SHA-256 "
+          "fingerprint with the server's administrator before you trust it. A certificate you remember is "
+          "checked on every connection; if it ever changes, you are warned."),
+        _certificate_details(info), accept_label=_("Trust and _Remember"), dangerous=False)
+    dialog.add_secondary(_("Trust _Once"), TRUST_ONCE)
+    response = dialog.run_and_destroy()
+    if response == TRUST_ONCE:
+        return "once"
+    return "remember" if is_accept(response) else "cancel"
+
+
+def confirm_unchecked_certificate(parent: Optional[Gtk.Window], host_label: str) -> bool:
+    """Policy "Do not check": asked on every connection (Cancel is the default)."""
+
+    return TrustDialog(
+        parent, _("Connect to “{host}” without checking its certificate?").format(host=host_label),
+        _("This host is set to not check the server's certificate. Anyone between you and the server could "
+          "pretend to be it and read your password. The tab shows “Certificate not verified” while connected."),
+        [], accept_label=_("Connect _Without Checking"), dangerous=True).ask()
