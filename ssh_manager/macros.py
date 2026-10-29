@@ -549,6 +549,69 @@ def decrypt_payload(raw: bytes, key: bytes) -> List[Macro]:
     return macros
 
 
+# ------------------------------------------------------------- version 2 (keybox)
+VERSION_KEYBOX = 2
+CIPHER_KEYBOX = "aes-256-gcm"
+
+
+def file_version(raw: bytes) -> int:
+    """The ``version`` of a ``macros.enc`` (``0`` when it cannot be told)."""
+
+    try:
+        value = json.loads(raw.decode("utf-8")).get("version")
+    except (UnicodeDecodeError, ValueError, AttributeError):
+        return 0
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _v2_header(keybox_id: str) -> dict:
+    return {"format": FORMAT, "version": VERSION_KEYBOX, "keybox_id": keybox_id, "cipher": CIPHER_KEYBOX}
+
+
+def encrypt_v2(macros: Sequence[Macro], key: bytes, keybox_id: str) -> bytes:
+    """Version 2: the keybox's ``macros`` subkey, AES-256-GCM, the header (with ``keybox_id``) authenticated."""
+
+    from .aead import seal
+
+    header = _v2_header(keybox_id)
+    nonce, data = seal(key, json.dumps({"macros": [m.to_dict() for m in macros]},
+                                       separators=(",", ":")).encode("utf-8"), header)
+    return (json.dumps(dict(header, nonce=nonce, data=data), indent=1) + "\n").encode("utf-8")
+
+
+def decrypt_v2(raw: bytes, key: bytes, keybox_id: str) -> List[Macro]:
+    from .aead import AeadError, open_sealed
+
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise MacroFileError("damaged") from None
+    if not isinstance(document, dict) or document.get("format") != FORMAT:
+        raise MacroFileError("damaged")
+    version = document.get("version")
+    if version != VERSION_KEYBOX:
+        raise MacroFileError("unsupported" if isinstance(version, int) and version > VERSION_KEYBOX else "damaged")
+    if document.get("cipher") != CIPHER_KEYBOX:
+        raise MacroFileError("unsupported")
+    if document.get("keybox_id") != keybox_id:
+        raise MacroFileError("foreign")  # it belongs to a different key
+    try:
+        plain = open_sealed(key, document.get("nonce"), document.get("data"), _v2_header(keybox_id))
+    except AeadError:
+        raise MacroFileError("tampered") from None
+    try:
+        payload = json.loads(plain.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise MacroFileError("damaged") from None
+    macros: List[Macro] = []
+    for entry in payload.get("macros", []) if isinstance(payload, dict) else []:
+        try:
+            macros.append(Macro.from_dict(entry))
+        except MacroError:
+            LOGGER.warning("macros: an unreadable entry was skipped")
+    return macros
+
+
 def _write_private(path: Path, data: bytes) -> None:
     """``data`` to ``path`` atomically: a 0600 temporary file in the same folder, fsync, rename."""
 
@@ -600,6 +663,7 @@ class MacroStore:
         self._seen_digest: Optional[str] = None  # the file as last read or written (external changes)
         self._deleted: Dict[str, float] = {}
         self.disabled = False
+        self._v2: Optional[Tuple[bytes, str]] = None  # (the keybox's macros subkey, keybox id)
 
     # ----------------------------------------------------------- state
     @property
@@ -608,7 +672,11 @@ class MacroStore:
 
     @property
     def unlocked(self) -> bool:
-        return self._key is not None and not self.disabled
+        return (self._key is not None or self._v2 is not None) and not self.disabled
+
+    @property
+    def on_keybox(self) -> bool:
+        return self._v2 is not None
 
     @property
     def iterations(self) -> int:
@@ -621,9 +689,52 @@ class MacroStore:
         """Forget the key and the macros (the app is closing)."""
 
         self._key = None
+        self._v2 = None
         self._macros.clear()
 
     # -------------------------------------------------------- unlocking
+    def unlock_with_key(self, key: bytes, keybox_id: str) -> None:
+        """Open a version 2 file (or prepare a new one) with the keybox's ``macros`` subkey.
+
+        A version 1 file (its own password) raises ``MacroFileError("legacy")``: the migration converts it.
+        Any failure leaves the file untouched.
+        """
+
+        raw = self._read_raw()
+        if raw is None:
+            macros: List[Macro] = []
+        elif file_version(raw) == VERSION:
+            raise MacroFileError("legacy")
+        else:
+            macros = decrypt_v2(raw, key, keybox_id)
+        self._key = self._salt = None
+        self._v2 = (bytes(key), keybox_id)
+        self._macros = {macro.id: macro for macro in macros}
+        self._seen_digest = hashlib.sha256(raw).hexdigest() if raw is not None else None
+        self.disabled = False
+
+    def adopt_key(self, key: bytes, keybox_id: str) -> int:
+        """Version 1 (unlocked with its password) → version 2, verified by reading it back.
+
+        The version 1 file is kept as ``macros.enc.pre-keybox`` until the migration's clean-up.
+        Returns how many macros were moved; on any failure the version 1 file stays in place.
+        """
+
+        if self._key is None or self.disabled:
+            raise MacroWriteError("locked")
+        raw = self._read_raw()
+        if raw is not None:
+            _write_private(self.path.with_name(self.path.name + ".pre-keybox"), raw)
+        expected = {m.id: m.to_dict() for m in self.list_sorted()}
+        data = encrypt_v2(self.list_sorted(), key, keybox_id)
+        if {m.id: m.to_dict() for m in decrypt_v2(data, key, keybox_id)} != expected:
+            raise MacroWriteError("verify")
+        self._write(data)
+        if {m.id: m.to_dict() for m in decrypt_v2(self.path.read_bytes(), key, keybox_id)} != expected:
+            raise MacroWriteError("verify")
+        self._key = self._salt = None
+        self._v2 = (bytes(key), keybox_id)
+        return len(expected)
     def unlock(self, password: str) -> None:
         """Open the file (or prepare a new one) with ``password``; ``MacroFileError`` leaves the file untouched."""
 
@@ -669,6 +780,7 @@ class MacroStore:
 
         self._macros.clear()
         self._key = None
+        self._v2 = None
         self.disabled = True
 
     # ------------------------------------------------------------ queries
@@ -736,10 +848,13 @@ class MacroStore:
     def save(self) -> None:
         """Encrypt and write; merges what another SSH Manager wrote meanwhile (newest ``modified`` wins)."""
 
-        if self.disabled or self._key is None or self._salt is None:
+        if self.disabled or (self._v2 is None and (self._key is None or self._salt is None)):
             raise MacroWriteError("locked")
         self._merge_external()
-        data = encrypt_payload(self.list_sorted(), self._key, self._salt, self._iterations)
+        if self._v2 is not None:
+            data = encrypt_v2(self.list_sorted(), *self._v2)
+        else:
+            data = encrypt_payload(self.list_sorted(), self._key, self._salt, self._iterations)
         self._write(data)
 
     def _merge_external(self) -> None:
@@ -752,10 +867,14 @@ class MacroStore:
         raw = self._read_raw()
         if raw is None or hashlib.sha256(raw).hexdigest() == self._seen_digest:
             return
-        _header_dict, salt, iterations = read_header(raw)
-        if salt != self._salt or iterations != self._iterations:
-            raise MacroWriteError("changed_key")  # another instance changed the master password
-        for theirs in decrypt_payload(raw, self._key):  # type: ignore[arg-type]
+        if self._v2 is not None:
+            theirs_all = decrypt_v2(raw, *self._v2)
+        else:
+            _header_dict, salt, iterations = read_header(raw)
+            if salt != self._salt or iterations != self._iterations:
+                raise MacroWriteError("changed_key")  # another instance changed the master password
+            theirs_all = decrypt_payload(raw, self._key)  # type: ignore[arg-type]
+        for theirs in theirs_all:
             ours = self._macros.get(theirs.id)
             if theirs.id in self._deleted and self._deleted[theirs.id] >= theirs.modified:
                 continue
@@ -778,8 +897,13 @@ class MacroStore:
         self._seen_digest = hashlib.sha256(data).hexdigest()
 
     def rekey(self, new_password: str) -> None:
-        """Re-encrypt with a key derived from ``new_password`` (new salt). On failure the old file stays valid."""
+        """Re-encrypt with a key derived from ``new_password`` (new salt). On failure the old file stays valid.
 
+        Version 1 only: a version 2 file is on the keybox, whose password change re-wraps the key instead.
+        """
+
+        if self._v2 is not None:
+            return
         if self.disabled or self._key is None:
             raise MacroWriteError("locked")
         salt = os.urandom(SALT_BYTES)
@@ -826,5 +950,6 @@ def default_macros_path() -> Path:
 __all__ = [
     "Macro", "MacroError", "MacroFileError", "MacroWriteError", "MacroRecorder", "MacroPlayer", "MacroStore",
     "KEYS", "KEY_NAMES", "parse_input", "normalize_steps", "step_bytes", "duration_ms", "derive_key",
-    "encrypt_payload", "decrypt_payload", "read_header", "default_macros_path",
+    "encrypt_payload", "decrypt_payload", "read_header", "default_macros_path", "encrypt_v2", "decrypt_v2",
+    "file_version",
 ]

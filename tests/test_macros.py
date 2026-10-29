@@ -432,3 +432,88 @@ class PlayerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyboxMacroTests(StoreCase):
+    """Version 2: the keybox's ``macros`` subkey, the keybox id authenticated; version 1 only for migration."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from ssh_manager import keybox as K
+
+        self.box = K.Keybox.create("pw", self.folder / "keybox.json", scrypt_n=2 ** 15)
+        self.key = self.box.subkey("macros")
+
+    def v2(self) -> MacroStore:
+        store = MacroStore(self.path)
+        store.unlock_with_key(self.key, self.box.id)
+        return store
+
+    def test_round_trip_and_format(self) -> None:
+        store = self.v2()
+        store.add(sample())
+        store.save()
+        raw = self.path.read_bytes()
+        header = json.loads(raw)
+        self.assertEqual((header["version"], header["keybox_id"], header["cipher"]), (2, self.box.id, "aes-256-gcm"))
+        self.assertNotIn("kdf", header)  # no per-file key derivation
+        for sentinel in (SECRET, NAME, TEXT, SHORTCUT):
+            self.assertNotIn(sentinel.encode(), raw)
+        again = self.v2()
+        self.assertEqual(again.list_sorted()[0].steps, sample().steps)
+        again.update(again.list_sorted()[0].copy())
+        again.save()
+        self.assertTrue(again.on_keybox)
+        again.rekey("ignored")  # a version 2 store has nothing to re-key
+        self.assertEqual(len(self.v2()), 1)
+
+    def test_refusals_leave_the_file_untouched(self) -> None:
+        store = self.v2()
+        store.add(sample())
+        store.save()
+        original = json.loads(self.path.read_text())
+
+        def flip(text):
+            data = bytearray(base64.b64decode(text))
+            data[0] ^= 1
+            return base64.b64encode(bytes(data)).decode()
+
+        for change, kind in ((lambda d: d.update(keybox_id=base64.b64encode(b"y" * 16).decode()), "foreign"),
+                             (lambda d: d.update(data=flip(d["data"])), "tampered"),
+                             (lambda d: d.update(version=3), "unsupported"),
+                             (lambda d: d.update(cipher="fernet"), "unsupported")):
+            changed = json.loads(json.dumps(original))
+            change(changed)
+            self.path.write_text(json.dumps(changed))
+            before = self.path.read_bytes()
+            with self.subTest(kind=kind), self.assertRaises(MacroFileError) as caught:
+                MacroStore(self.path).unlock_with_key(self.key, self.box.id)
+            self.assertEqual(caught.exception.kind, kind)
+            self.assertEqual(self.path.read_bytes(), before)
+
+    def test_version_1_is_converted_and_kept_until_clean_up(self) -> None:
+        legacy = self.saved()  # version 1, its own password
+        with self.assertRaises(MacroFileError) as caught:
+            MacroStore(self.path).unlock_with_key(self.key, self.box.id)
+        self.assertEqual(caught.exception.kind, "legacy")
+        v1_bytes = self.path.read_bytes()
+        self.assertEqual(legacy.adopt_key(self.key, self.box.id), 1)
+        self.assertEqual(self.path.with_name("macros.enc.pre-keybox").read_bytes(), v1_bytes)
+        converted = self.v2()
+        self.assertEqual([m.name for m in converted.list_sorted()], [NAME])
+        self.assertEqual(converted.list_sorted()[0].steps, sample().steps)
+
+    def test_a_failed_conversion_keeps_version_1(self) -> None:
+        legacy = self.saved()
+        v1_bytes = self.path.read_bytes()
+        real = M._write_private
+
+        def fail_main(path, data):
+            if path.name == "macros.enc":
+                raise OSError(28, "No space left on device")
+            real(path, data)
+
+        with mock.patch.object(M, "_write_private", side_effect=fail_main), self.assertRaises(MacroWriteError):
+            legacy.adopt_key(self.key, self.box.id)
+        self.assertEqual(self.path.read_bytes(), v1_bytes)
+        self.assertEqual(len(self.store()), 1)  # still opens with its password

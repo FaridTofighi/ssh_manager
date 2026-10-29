@@ -216,8 +216,12 @@ class MacroController:
         }
 
     def start(self) -> None:
-        """Unlock the macros with the master password the user typed at start-up (in the background)."""
+        """Open the macros with the keybox's ``macros`` key (or, before the keybox, the typed master password)."""
 
+        keybox = getattr(self.win, "keybox", None)
+        if keybox is not None and not keybox.locked:
+            self.unlock_with_keybox(keybox)
+            return
         password = self._master_password()
         if password is None:
             self.state = "locked"
@@ -254,16 +258,38 @@ class MacroController:
 
         threading.Thread(target=work, name="macro-unlock", daemon=True).start()
 
+    def unlock_with_keybox(self, keybox, then: Optional[Callable[[], None]] = None) -> None:
+        """No key derivation (the keybox is unlocked already): synchronous."""
+
+        if then is not None:
+            self._after_unlock.append(then)
+        try:
+            self.store.unlock_with_key(keybox.subkey("macros"), keybox.id)
+            error: Optional[str] = None
+        except MacroFileError as exc:
+            error = exc.kind
+        self._unlocked(error)
+
     def _unlocked(self, error: Optional[str]) -> bool:
         if getattr(self.win, "closing", False):
             return False
-        if error is None:
+        if error == "legacy":  # the migration converts it: not damaged, just not there yet
+            self.store.keep_damaged()
+            self.state = "disabled"
+            self._after_unlock.clear()
+            self._notify(_("Macros will be available once the migration to the new key is finished "
+                           "(Settings → Security)."), Level.WARNING)
+        elif error is None:
             self.state = "ready"
         else:
             LOGGER.warning("macros: %s cannot be opened (%s)", self.store.path.name, error)
             if self.ask_damaged(self.win, error) == "empty":
                 self.store.start_empty()
                 self.state = "locked"
+                keybox = getattr(self.win, "keybox", None)
+                if keybox is not None and not keybox.locked:
+                    self.unlock_with_keybox(keybox)
+                    return False
                 password = self._master_password()
                 if password is not None:
                     self.unlock(password)
