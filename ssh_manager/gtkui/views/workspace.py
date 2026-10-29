@@ -48,7 +48,7 @@ class SessionToolbar(ActionBar):
         self.broadcast = IconToggleButton(
             Icons.BROADCAST,
             _("Broadcast input to all included sessions (Ctrl+Shift+B)"),
-            css_classes=("danger-toggle",),
+            css_classes=("broadcast-toggle",),
         )
         self.add_start(self.tile, self.broadcast)
         self.add_separator()
@@ -91,7 +91,7 @@ class BroadcastStrip(Gtk.Revealer):
         self.set_transition_duration(get_theme_manager().motion_ms(Motion.FAST))
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         box.get_style_context().add_class("broadcast-strip")
-        icon = make_icon(Icons.WARNING, Size.ICON)
+        icon = make_icon(Icons.BROADCAST, Size.ICON)  # the mode's own icon, not a warning
         box.pack_start(icon, False, False, 0)
         self._label = Gtk.Label()
         self._label.set_xalign(0.0)

@@ -162,9 +162,9 @@ popover.sm-popover list, popover.sm-popover list:backdrop {
     background-color: @sm_accent_tint;
     color: @sm_accent_text;
 }
-.sm-window button.toolbar-icon.danger-toggle:checked {
-    background-color: @sm_danger_strong;
-    color: @sm_on_danger;
+.sm-window button.toolbar-icon.broadcast-toggle:checked {
+    background-color: @sm_broadcast;
+    color: @sm_broadcast_bg;
 }
 button.toolbar-icon {
     padding: ${xs}px;
@@ -746,9 +746,16 @@ notebook.session-tabs > stack {
     color: @sm_broadcast_fg;
     padding: ${xs}px ${m}px;
     font-weight: 600;
-    border-bottom: 1px solid alpha(@sm_danger, 0.3);
+    border-bottom: 1px solid alpha(@sm_broadcast, 0.35);
 }
-.broadcast-active { border: 2px solid @sm_danger; border-radius: ${r_md}px; }
+/* Broadcast is violet, never the red of errors (its Stop button is not destructive either). */
+.broadcast-strip button.destructive-action {
+    background-color: @sm_broadcast;
+    background-image: none;
+    border-color: @sm_broadcast;
+    color: @sm_broadcast_bg;
+}
+.broadcast-active { border: 2px solid @sm_pane_border_broadcast; border-radius: ${r_md}px; }
 
 /* Panes shown together (split pane, tile mode): border on every side, a canvas
    gutter between panes, a header and a footer per pane. A plain pane has a 1px
@@ -770,7 +777,7 @@ notebook.session-tabs > stack {
 .pane-frame.failed { border-color: @sm_danger; }
 .pane-frame.focused { border: 2px solid @sm_pane_border_focus; padding: 0; }
 .pane-frame.broadcast { border: 2px solid @sm_pane_border_broadcast; padding: 0; }
-/* Focused and broadcasting: danger border with an accent inner ring (the padding). */
+/* Focused and broadcasting: broadcast border with an accent inner ring (the padding). */
 .pane-frame.broadcast.focused {
     border: 1px solid @sm_pane_border_broadcast;
     padding: 1px;
@@ -793,8 +800,8 @@ notebook.session-tabs > stack {
 .pane-title { font-weight: 600; font-size: ${fs_body}em; }
 .pane-address { font-family: $mono_fonts; font-size: ${fs_caption}em; color: @sm_text_muted; }
 .pane-badge {
-    background-color: @sm_danger_strong;
-    color: @sm_on_danger;
+    background-color: alpha(@sm_broadcast, 0.12);
+    color: @sm_broadcast;
     border-radius: ${r_pill}px;
     padding: 0 ${s}px;
     font-size: ${fs_badge}em;
@@ -813,12 +820,12 @@ notebook.session-tabs > stack {
     font-weight: 500;
 }
 .sm-window button.broadcast-chip:hover { background-color: @sm_bg_hover; }
-/* Checked = included in broadcast; it turns red only while broadcast is on. */
+/* Checked = included in broadcast; it turns violet only while broadcast is on. */
 .sm-window button.broadcast-chip:checked { background-color: @sm_bg_hover; color: @sm_text_primary; }
 .sm-window .pane-frame.broadcasting button.broadcast-chip:checked {
-    background-color: alpha(@sm_danger, 0.15);
-    border-color: alpha(@sm_danger, 0.55);
-    color: @sm_danger;
+    background-color: alpha(@sm_broadcast, 0.14);
+    border-color: alpha(@sm_broadcast, 0.5);
+    color: @sm_broadcast;
 }
 .pane-footer {
     background-color: @sm_pane_header_bg;

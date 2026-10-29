@@ -13,7 +13,7 @@ States (CSS classes on the frame's styled box, ``frame.style()``; all token colo
 
 * ``focused``   — 2 px accent outline (1 px border + 1 px inset ring, so the
   content does not move), accent-tinted header;
-* ``broadcast`` — 2 px danger outline and a ``BROADCAST`` badge (with an
+* ``broadcast`` — 2 px violet outline and a ``BROADCAST`` badge (with an
   accent inner ring when it is also focused);
 * ``failed`` / ``disconnected`` — 1 px danger / warning border; the footer and
   the header tooltip spell the status out.

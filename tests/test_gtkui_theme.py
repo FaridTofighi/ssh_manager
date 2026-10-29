@@ -404,3 +404,25 @@ class BroadcastColourTests(unittest.TestCase):
                 tint = over(palette.broadcast, palette.pane_header_bg, alpha)
                 with self.subTest(palette=name, alpha=alpha):
                     self.assertGreaterEqual(contrast_ratio(palette.broadcast, tint), 4.5)
+
+    def test_no_red_in_broadcast_styling_and_red_stays_for_errors(self) -> None:
+        import re
+
+        from ssh_manager.gtkui.theme.tokens import PALETTES
+
+        for name, palette in PALETTES.items():
+            css = build_css(palette)
+            self.assertEqual(unresolved_color_refs(css), set())
+            body = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+            rules = re.findall(r"([^{}]+)\{([^{}]*)\}", body)
+            broadcast = [(sel.strip(), decl) for sel, decl in rules if "broadcast" in sel]
+            self.assertGreaterEqual(len(broadcast), 6, name)
+            for selector, declarations in broadcast:
+                with self.subTest(palette=name, selector=selector):
+                    self.assertNotRegex(declarations, r"sm_(danger|danger_strong|on_danger)\b")
+            styles = {sel.strip(): decl for sel, decl in rules}
+            self.assertIn("@sm_danger", styles[".pane-frame.failed"])
+            self.assertIn("@sm_broadcast", styles[".pane-badge"])  # the BROADCAST badge
+            self.assertIn("@sm_danger", styles[".statusbar .stat-critical"])
+            self.assertTrue(any("destructive-action" in sel and "@sm_danger" in decl for sel, decl in rules
+                                if "broadcast" not in sel))
