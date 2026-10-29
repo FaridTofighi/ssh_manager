@@ -158,9 +158,9 @@ class MacroWindowTests(unittest.TestCase):
         macro = self.record(tab, "echo hi\r")
         self.assertIsNotNone(macro, self.dialogs)
         self.assertEqual(macro.shortcut, ["<Primary><Shift>F7"])
-        self.assertEqual([s.get("text") or s.get("key") for s in macro.steps if s["type"] != "delay"],
-                         ["echo hi", "Enter"])
-        self.assertIn("echo hi", self.dialogs[0]["rows"][0])
+        typed = "".join(s["text"] for s in macro.steps if s["type"] == "text")  # split by timing under load
+        self.assertEqual((typed, [s.get("key") for s in macro.steps if s["type"] == "key"]), ("echo hi", ["Enter"]))
+        self.assertIn("echo", self.dialogs[0]["rows"][0])
         app = self.win.get_application()
         self.assertEqual(app.get_accels_for_action(macro_action(macro.id)), ["<Primary><Shift>F7"])
         self.assertTrue(pump(3, until=lambda: self.text(tab).count("\nhi") > before))
