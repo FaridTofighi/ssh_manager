@@ -175,6 +175,8 @@ class Palette:
     focus_ring: str
     chip_bg: str
     avatar_bg: str
+    # Broadcast input has its own hue (violet): unmistakable, but not the red of errors.
+    broadcast: str  # the strip's line, the chip, the BROADCAST badge
     broadcast_bg: str
     broadcast_fg: str
     # Group and host icons (gtkui/tree_icons.py), in every row state: white on dark,
@@ -290,8 +292,9 @@ LIGHT = Palette(
     focus_ring="#176B4D",
     chip_bg="#F1F4F2",
     avatar_bg="#233B32",
-    broadcast_bg="#FDECEA",
-    broadcast_fg="#8F1D14",
+    broadcast="#5B47B8",
+    broadcast_bg="#F0EDFB",
+    broadcast_fg="#3B2D86",
     icon_default="#18231F",  # = text_primary; a white icon on light would need a dark tile (not done)
     # success / text_muted reach only 2.7:1 on the selected row; nearest shades that reach 3:1.
     badge_connected="#2A9D6A",
@@ -301,7 +304,7 @@ LIGHT = Palette(
     shadow_popover="rgba(24, 35, 31, 0.12)",
     pane_border="#868F8A",
     pane_border_focus="#176B4D",
-    pane_border_broadcast="#B42318",
+    pane_border_broadcast="#6A55C9",
     pane_header_bg="#FFFFFF",
     pane_header_bg_focus="#EAF5EF",
     pane_gutter="#F5F7F6",
@@ -343,8 +346,9 @@ DARK = Palette(
     focus_ring="#5CCB9C",
     chip_bg="#25272B",
     avatar_bg="#3F4A45",
-    broadcast_bg="#4A1A16",
-    broadcast_fg="#FFDAD5",
+    broadcast="#B3A6F5",
+    broadcast_bg="#2A2550",
+    broadcast_fg="#E4DFFC",
     icon_default="#FFFFFF",
     badge_connected="#48C48D",
     badge_unknown="#8A9098",
@@ -353,7 +357,7 @@ DARK = Palette(
     shadow_popover="rgba(0, 0, 0, 0.45)",
     pane_border="#5E6269",
     pane_border_focus="#1F7A57",
-    pane_border_broadcast="#F07A6E",
+    pane_border_broadcast="#9C8CF0",
     pane_header_bg="#212226",
     pane_header_bg_focus="#202A25",
     pane_gutter="#121315",
@@ -472,6 +476,12 @@ CONTRAST_PAIRS: List[Tuple[str, str, float]] = [
     ("on_accent", "accent_hover", AA_TEXT),
     ("on_danger", "danger_strong", AA_TEXT),
     ("broadcast_fg", "broadcast_bg", AA_TEXT),
+    ("broadcast", "broadcast_bg", AA_UI),
+    ("broadcast", "bg_surface", AA_UI),
+    ("broadcast", "bg_canvas", AA_UI),
+    ("broadcast", "bg_window", AA_UI),
+    ("pane_border_broadcast", "bg_surface", AA_UI),
+    ("pane_border_broadcast", "bg_canvas", AA_UI),
     ("on_accent", "avatar_bg", AA_TEXT),
     ("tab_inactive", "bg_surface", AA_UI),
     ("text_muted", "bg_surface", AA_UI),

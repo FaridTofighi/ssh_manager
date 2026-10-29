@@ -194,7 +194,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
     CHROMATIC = {
         "accent", "accent_hover", "accent_pressed", "accent_text", "accent_soft_border", "focus_ring",
         "on_accent", "success", "warning", "danger", "danger_strong", "on_danger", "info",
-        "badge_connected", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
+        "badge_connected", "broadcast", "broadcast_bg", "broadcast_fg", "shadow", "shadow_popover",
         "pane_border_focus", "pane_border_broadcast", "pane_dim",
     }
     OLD_GREEN = ("#17201C", "#0F1613", "#131B18", "#1C2722", "#1B2521", "#202C27", "#18382B", "#27332E", "#33423B")
@@ -350,3 +350,57 @@ class NeutralDarkStateTests(unittest.TestCase):
                 self.assertGreaterEqual(contrast_ratio(DARK.focus_ring, getattr(DARK, layer)), 3.0)
         # Disabled text stays visible (decorative contrast) on surfaces.
         self.assertGreaterEqual(contrast_ratio(DARK.text_disabled, DARK.bg_surface), 3.0)
+
+
+class BroadcastColourTests(unittest.TestCase):
+    """Broadcast has its own violet identity: readable, and never mistaken for an error, focus or info."""
+
+    ROLES = ("broadcast", "broadcast_bg", "broadcast_fg", "pane_border_broadcast")
+
+    @staticmethod
+    def hue(color: str) -> float:
+        import colorsys
+
+        from ssh_manager.gtkui.theme.tokens import parse_hex
+
+        r, g, b = (c / 255.0 for c in parse_hex(color))
+        return colorsys.rgb_to_hsv(r, g, b)[0] * 360.0
+
+    def test_every_palette_defines_the_roles_and_they_pass_contrast(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import CONTRAST_PAIRS, PALETTES, contrast_report
+
+        for pair in (("broadcast_fg", "broadcast_bg"), ("broadcast", "bg_surface"), ("broadcast", "broadcast_bg"),
+                     ("pane_border_broadcast", "bg_surface")):
+            self.assertIn(pair, [(fg, bg) for fg, bg, _minimum in CONTRAST_PAIRS])
+        for name, palette in PALETTES.items():
+            for role in self.ROLES:
+                with self.subTest(palette=name, role=role):
+                    self.assertTrue(getattr(palette, role).startswith("#"))
+                    self.assertIn(f"@define-color sm_{role} ", build_css(palette))
+            for fg, bg, ratio, minimum in contrast_report(palette):
+                if "broadcast" in fg or "broadcast" in bg:
+                    with self.subTest(palette=name, pair=(fg, bg)):
+                        self.assertGreaterEqual(ratio, minimum)
+
+    def test_a_hue_of_its_own(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import PALETTES
+
+        for name, palette in PALETTES.items():
+            for role in ("broadcast", "pane_border_broadcast", "broadcast_fg"):
+                for other in ("danger", "danger_strong", "warning", "info", "accent", "pane_border_focus", "success"):
+                    distance = abs(self.hue(getattr(palette, role)) - self.hue(getattr(palette, other))) % 360
+                    with self.subTest(palette=name, role=role, other=other):
+                        self.assertGreaterEqual(min(distance, 360 - distance), 30)
+
+    def test_badge_and_chip_text_on_their_tint(self) -> None:
+        from ssh_manager.gtkui.theme.tokens import PALETTES, parse_hex
+
+        def over(color: str, background: str, alpha: float) -> str:
+            mixed = (round(alpha * f + (1 - alpha) * b) for f, b in zip(parse_hex(color), parse_hex(background)))
+            return "#" + "".join(f"{c:02X}" for c in mixed)
+
+        for name, palette in PALETTES.items():
+            for alpha in (0.12, 0.14):  # the BROADCAST badge, the checked chip
+                tint = over(palette.broadcast, palette.pane_header_bg, alpha)
+                with self.subTest(palette=name, alpha=alpha):
+                    self.assertGreaterEqual(contrast_ratio(palette.broadcast, tint), 4.5)
