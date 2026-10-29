@@ -2793,6 +2793,40 @@ class TerminalNotebook(Gtk.Box):
         self._broadcast_included[tab] = active
         self._update_broadcast_ui()
 
+    def macro_targets(self, source: TerminalTab) -> List[TerminalTab]:
+        """Sessions a macro run from ``source`` types into: ``source`` first, then what typed input reaches.
+
+        The same rule as typed input (:func:`broadcast_target_tabs`): with broadcast on and ``source``
+        included, every other included, connected terminal session (in tab order); otherwise only
+        ``source``. ``[]`` when ``source`` is not a connected terminal session.
+        """
+
+        if source not in self._tabs or not getattr(source, "is_terminal", False) \
+                or not self._tab_status.get(source, False):
+            return []
+        if not self._broadcast_mode:
+            return [source]
+        others = broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included, self._tab_status)
+        return [source] + self._in_tab_order(others, source)
+
+    def macro_unreachable(self, source: TerminalTab) -> List[TerminalTab]:
+        """Sessions included in the broadcast that a macro from ``source`` skips because they are not connected."""
+
+        if not self._broadcast_mode or source not in self._tabs:
+            return []
+        everyone = {tab: True for tab in self._terminal_tabs()}
+        reachable = set(broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included,
+                                              self._tab_status))
+        if not self._tab_status.get(source, False):
+            return []
+        wanted = broadcast_target_tabs(self._terminal_tabs(), source, self._broadcast_included, everyone)
+        return self._in_tab_order([tab for tab in wanted if tab not in reachable], source)
+
+    def _in_tab_order(self, tabs: List[TerminalTab], source: TerminalTab) -> List[TerminalTab]:
+        order = {tab: index for index, tab in enumerate(self._ordered_tabs())}
+        unique = [tab for tab in dict.fromkeys(tabs) if tab is not source]
+        return sorted(unique, key=lambda tab: order.get(tab, len(order)))
+
     def _on_tab_input(self, source: TerminalTab, data: str) -> None:
         if source is not self._current_tab():
             self._on_tab_activated(source)  # typing into a pane makes it the broadcast source
