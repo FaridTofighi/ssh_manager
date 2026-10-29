@@ -162,6 +162,11 @@ that direct file mode follows `Include` directives.
 - **Local terminal**: `+` after the last tab, or Ctrl+Shift+T, opens your own
   shell in a tab, like gnome-terminal (split, zoom, copy/paste and transcripts
   as in SSH tabs). See `docs/terminal.md`.
+- **Macros**: the ● button in the session toolbar records what you type in a
+  terminal; Stop asks for a name and an optional shortcut. Run a macro with its
+  shortcut (in a focused terminal) or from *More session actions → Run Macro*;
+  *Manage Macros…* edits and deletes them. Macros (passwords typed at prompts
+  included) are stored encrypted with the master password. See `docs/macros.md`.
 - **Terminal mouse**: Shift+right-click opens the terminal menu (also in vim,
   tmux, htop …), right-click opens it too unless a program uses the mouse,
   middle-click and Shift+Insert paste the selection, and selected text is
@@ -262,6 +267,7 @@ authentication.
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
 - `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
+- `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
 - `docs/ui-before/`, `docs/ui-after/` — screenshots; regenerate the latter with

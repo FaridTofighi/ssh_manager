@@ -6,6 +6,27 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Terminal macros
+
+Details: `docs/macros.md`.
+
+- **Record macro** (● in the session toolbar, *More session actions → Record
+  Macro*): records what you type in the active terminal (text, pastes, named
+  keys, pauses); passwords typed at prompts become masked secret steps. Stop
+  asks for a name and an optional shortcut and shows the steps.
+- **Run** a macro with its shortcut (only while a terminal has the focus) or
+  from *Run Macro ▸*; it types into the current tab's active terminal only
+  (never through broadcast), with a banner and **Stop**.
+- **Manage Macros…**: run, edit (name, shortcut, timing, steps), duplicate,
+  delete.
+- **Shortcuts:** a macro's shortcut is checked against every action and macro
+  ("already assigned to “…”", Replace / Choose Another). New configurable
+  actions: *Record macro / stop recording*, *Manage macros*, *Stop the running
+  macro* (no default keys).
+- **Security:** `macros.enc` is encrypted with the master password (PBKDF2-
+  SHA256, 600 000 iterations, Fernet); without a master password macros cannot
+  be saved, and the master password cannot be turned off while macros exist.
+
 ## Terminals: gnome-terminal mouse, configurable shortcuts, a local shell
 
 Details: `docs/terminal.md`.
