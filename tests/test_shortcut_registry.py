@@ -85,5 +85,45 @@ class RegistryTests(unittest.TestCase):
             self.assertEqual(AppSettings.load(path).shortcuts, {})
 
 
+
+class ExtraEntryTests(unittest.TestCase):
+    """Macros' shortcuts: extra entries (never in the settings) that take part in conflicts and apply()."""
+
+    def test_conflicts_titles_and_settings(self) -> None:
+        from ssh_manager.gtkui.controllers.shortcut_registry import ExtraEntry
+
+        registry = ShortcutRegistry()
+        changes = []
+        registry.add_listener(lambda: changes.append(1))
+        registry.set_extras({"macro:a1": ExtraEntry("Deploy", "Macros", "win.run-macro('a1')", ("<Control><Alt>d",))})
+        self.assertEqual(changes, [1])
+        self.assertEqual(registry.effective_accels("macro:a1"), (canonical("<Primary><Alt>d"),))
+        self.assertEqual(registry.conflicts("<Primary><Alt>d"), ["macro:a1"])
+        self.assertEqual(registry.conflicts("<Primary><Alt>d", ignoring="macro:a1"), [])
+        self.assertEqual(registry.title("macro:a1"), "Deploy")
+        self.assertEqual(registry.title("copy"), "Copy")
+        self.assertTrue(registry.is_extra("macro:a1"))
+        self.assertEqual(registry.to_dict(), {})  # stored in the encrypted macro file, not the settings
+        registry.set_extras(registry.extras())  # unchanged: no notification
+        self.assertEqual(changes, [1])
+        registry.set_extras({"macro:a2": ExtraEntry("Copyish", "Macros", "win.run-macro('a2')", ("<Primary><Shift>c",))})
+        self.assertEqual(sorted(registry.conflicts("<Primary><Shift>c")), ["copy", "macro:a2"])
+
+    def test_apply_sets_and_frees_the_accelerators(self) -> None:
+        from unittest import mock
+
+        from ssh_manager.gtkui.controllers.shortcut_registry import ExtraEntry
+
+        registry = ShortcutRegistry()
+        app = mock.Mock()
+        registry.set_extras({"macro:a1": ExtraEntry("A", "Macros", "win.run-macro('a1')", ("F7",))})
+        registry.apply(app, [])
+        app.set_accels_for_action.assert_called_with("win.run-macro('a1')", ["F7"])
+        app.reset_mock()
+        registry.set_extras({})
+        registry.apply(app, [])
+        app.set_accels_for_action.assert_called_once_with("win.run-macro('a1')", [])  # a deleted macro frees it
+
+
 if __name__ == "__main__":
     unittest.main()

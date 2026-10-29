@@ -26,6 +26,16 @@ from ..theme.tokens import Space  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .confirm import confirm  # noqa: E402
 
+
+def show_message(parent: Optional[Gtk.Window], title: str, detail: str) -> None:
+    dialog = Gtk.MessageDialog(transient_for=parent, modal=True, message_type=Gtk.MessageType.INFO,
+                               buttons=Gtk.ButtonsType.OK, text=title)
+    dialog.format_secondary_text(detail)
+    try:
+        dialog.run()
+    finally:
+        dialog.destroy()
+
 TERMINAL_INPUT_MODS = Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.MOD1_MASK | Gdk.ModifierType.SUPER_MASK
 
 
@@ -64,10 +74,10 @@ class ShortcutEditor:
 
     def __init__(self, registry: ShortcutRegistry) -> None:
         self.registry = ShortcutRegistry(overrides=registry.to_dict())
+        self.registry.set_extras(registry.extras(), notify=False)  # macros: for conflicts, changed elsewhere
 
     def title(self, name: str) -> str:
-        spec = self.registry.spec(name)
-        return spec.title if spec else name
+        return self.registry.title(name)
 
     def assign(self, name: str, accel: str, *, append: bool = False, replace: bool = False,
                force: bool = False) -> AssignResult:
@@ -82,8 +92,8 @@ class ShortcutEditor:
         if not value:
             return AssignResult(False, invalid=True)
         conflicts = self.registry.conflicts(value, ignoring=name)
-        if conflicts and not replace:
-            return AssignResult(False, conflicts=conflicts)
+        if conflicts and (not replace or any(self.registry.is_extra(c) for c in conflicts)):
+            return AssignResult(False, conflicts=conflicts)  # a macro's shortcut changes only in Manage Macros
         if steals_terminal_input(value) and not force:
             return AssignResult(False, conflicts=conflicts, steals_input=True)
         for other in conflicts:
@@ -195,6 +205,22 @@ class ShortcutsPage(Gtk.Box):
         for spec in ACTIONS:
             if self.editor.registry.spec(spec.name) is not None:
                 self.listbox.add(self._row(spec))
+        for name, entry in self.editor.registry.extras().items():  # macros: changed in Manage Macros
+            row = Gtk.ListBoxRow()
+            row.name, row.group, row.title = "", entry.group, entry.title
+            row.extra = name
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+            box.set_border_width(Space.XS)
+            label = Gtk.Label(label=entry.title)
+            label.set_xalign(0.0)
+            box.pack_start(label, True, True, 0)
+            hint = Gtk.Label(label=_("{keys} (change it in Manage Macros)").format(
+                keys=accel_text(entry.accels) or _("No shortcut")))
+            hint.get_style_context().add_class("dim-label")
+            box.pack_end(hint, False, False, 0)
+            row.add(box)
+            row.set_activatable(False)
+            self.listbox.add(row)
         for group, title, accels in FIXED_SHORTCUTS:
             row = Gtk.ListBoxRow()
             row.name, row.group, row.title = "", group, title
@@ -307,6 +333,13 @@ class ShortcutsPage(Gtk.Box):
         replace = force = False
         while not result.ok and not result.invalid:
             label = accel_text([canonical(accel)])
+            macros = [c for c in result.conflicts if self.editor.registry.is_extra(c)]
+            if macros:
+                show_message(self._parent(), _("{key} is already used").format(key=label),
+                             _("The macro “{macro}” uses this shortcut. Change the macro's shortcut in "
+                               "Manage Macros first, or choose another one.").format(
+                                 macro=", ".join(self.editor.title(m) for m in macros)))
+                return result
             if result.conflicts and not replace:
                 others = ", ".join(self.editor.title(other) for other in result.conflicts)
                 if not confirm(self._parent(), _("{key} is already used").format(key=label),

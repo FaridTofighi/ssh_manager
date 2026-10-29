@@ -54,6 +54,7 @@ G_HOSTS = _("Hosts and Groups")
 G_SESSIONS = _("Sessions")
 G_TERMINAL = _("Terminal")
 G_VIEW = _("View")
+G_MACROS = _("Macros")
 
 ACTIONS: List[ActionSpec] = [
     # General
@@ -126,6 +127,11 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("toggle-details", _("Host details"), G_VIEW, ("<Primary>i", "F9")),
     ActionSpec("host-activity", _("Host activity"), G_VIEW),
     ActionSpec("toggle-maximize", _("Focus mode (terminal only)"), G_VIEW, ("F11", "<Primary><Shift>m")),
+    # Macros (each macro's own shortcut is an extra registry entry: win.run-macro('<id>'))
+    ActionSpec("macro-record-toggle", _("Record macro / stop recording"), G_MACROS),
+    ActionSpec("macro-manage", _("Manage macros"), G_MACROS),
+    ActionSpec("macro-stop-playback", _("Stop the running macro"), G_MACROS),
+    ActionSpec("run-macro", _("Run macro"), G_MACROS, parameter="s"),
 ]
 
 GOTO_TAB_ACCELS = tuple((f"<Alt>{n}", n) for n in range(1, 10))
@@ -279,6 +285,7 @@ def build_shortcuts_window(parent: Optional[Gtk.Window],
         section.add(group)
     window.add(section)
     window._sshm_rows, window._sshm_groups = rows, groups  # type: ignore[attr-defined]
+    _sync_extra_rows(window)
     titlebar = window.get_titlebar()
     if on_customize is not None and isinstance(titlebar, Gtk.HeaderBar):
         button = Gtk.Button.new_with_mnemonic(_("_Customize…"))
@@ -305,6 +312,35 @@ def refresh_shortcuts_window(window: Gtk.ShortcutsWindow) -> None:
             rows[spec.name] = row
         row.set_property("accelerator", accelerator)
         row.set_visible(bool(accelerator))
+    _sync_extra_rows(window)
+
+
+def _sync_extra_rows(window: Gtk.ShortcutsWindow) -> None:
+    """The macros' shortcuts (registry extras): one row each; rows of deleted macros are hidden."""
+
+    rows: Dict[str, Gtk.ShortcutsShortcut] = getattr(window, "_sshm_rows", {})
+    groups: Dict[str, Gtk.ShortcutsGroup] = getattr(window, "_sshm_groups", {})
+    registry = _ACTIVE_REGISTRY
+    extras = registry.extras() if registry is not None else {}
+    for name, entry in extras.items():
+        group = groups.get(entry.group)
+        if group is None:
+            continue
+        row = rows.get(name)
+        if row is None:
+            row = rows[name] = Gtk.ShortcutsShortcut(title=entry.title, accelerator=" ".join(entry.accels))
+            group.add(row)
+        row.set_property("title", entry.title)
+        row.set_property("accelerator", " ".join(entry.accels))
+        row.set_visible(bool(entry.accels))
+    for name, row in rows.items():
+        if name.startswith("macro:") and name not in extras:
+            row.set_visible(False)
+    macros = groups.get(G_MACROS)
+    if macros is not None:
+        visible = [spec.name for spec in ACTIONS if spec.group == G_MACROS and effective_accels(spec)]
+        visible += [name for name, entry in extras.items() if entry.accels]
+        macros.set_visible(bool(visible))
 
 
 _EXTRA_SHORTCUTS: Dict[str, List[Tuple[str, str]]] = {
