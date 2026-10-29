@@ -72,13 +72,56 @@ to the password-change detection.
 * *More session actions → Run Macro ▸* (each with its shortcut hint).
 * *Manage Macros… → Run*.
 
-It runs on the **active terminal of the current tab only**: never on other
-tabs, and not through broadcast even when broadcast input is on. It needs a
-running session ("Open a connected session first." otherwise). A banner shows
-"Running macro “<name>” (step i/n)" with **Stop**; it also stops when the
-session ends or the tab closes. One macro at a time per tab; none while
-recording. With *Ask before running it* the macro asks "Run macro “<name>” in
-<host>?" first.
+### Which sessions
+
+A macro types into the sessions that typed input would reach, nothing else
+(`TerminalNotebook.macro_targets`, which uses the same rule as broadcast
+input, `broadcast_target_tabs`):
+
+| Broadcast | The current session is… | The macro runs on |
+|---|---|---|
+| off | — | the current session |
+| on | included | the current session and every other session that is included and connected |
+| on | excluded | the current session only (like typing in an excluded session) |
+
+Sessions excluded from the broadcast never receive it, and file browsers and
+remote desktops never take part. Local terminals are excluded from the
+broadcast by default. In a split tab it is the active pane (the focused one
+for a shortcut). The current session must be connected ("Open a connected
+session first." otherwise).
+
+* **A snapshot:** the sessions are chosen when the run starts. Turning
+  broadcast off, excluding a session or opening a new one affects only the
+  next run.
+* **Independent:** every session has its own player with the recorded timing;
+  a slow session never holds the others up. A session that disconnects or
+  closes during the run drops out, and the others go on.
+* **Exactly once:** the steps go straight to each terminal, never through the
+  broadcast mirroring, so no session gets them twice. Macro input is never
+  recorded into another macro and never reaches the password-change detection.
+* **Busy sessions:** a session that is already running a macro is skipped
+  (and named at the end). If the current session is busy, nothing starts ("A
+  macro is already running in this session."). Other sessions can run their
+  own macros meanwhile.
+
+**Asking first:** before a run on two or more sessions, SSH Manager asks "Run
+macro “<name>” on N sessions?" with the list of sessions. *Cancel* runs nothing
+anywhere. *Don't ask again for multi-session runs* turns the question off; the
+checkbox *Ask before running a macro on several sessions* in Manage Macros
+turns it back on (`settings.json`: `macros.confirm_multi_session`, default
+`true`). A single session is never asked, unless the macro has *Ask before
+running it* ("Run macro “<name>” in <host>?"). When both apply, there is only
+the multi-session question.
+
+**While it runs** every session shows "Running macro “<name>” (step i/n)".
+**Stop** stops that session only; the current session's banner also has
+**Stop All**, which stops the run everywhere. At the end of a run on several
+sessions one message says "Macro “<name>” finished on N sessions.", or "…
+finished on X of N sessions; <sessions> did not complete." with the reason
+for each (disconnected, busy, closed, stopped). No macro runs while one is
+being recorded. A recording captures only what you type into the recorded
+terminal; with broadcast on its banner adds "Broadcast is on: what you type
+is also sent to N other sessions."
 
 **Timing:** *As recorded* waits the recorded pauses; *Fast* sends a step every
 100 ms and ignores them.

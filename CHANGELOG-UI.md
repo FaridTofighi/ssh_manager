@@ -10,13 +10,19 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 Details: `docs/macros.md`.
 
+- Macros run on all broadcast-enabled sessions; sessions excluded from the
+  broadcast never receive them. Runs on several sessions ask first (*Don't ask
+  again* / Manage Macros → *Ask before running a macro on several sessions*),
+  every session has Stop, the current one Stop All, and one message reports
+  the result.
+
 - **Record macro** (● in the session toolbar, *More session actions → Record
   Macro*): records what you type in the active terminal (text, pastes, named
   keys, pauses); passwords typed at prompts become masked secret steps. Stop
   asks for a name and an optional shortcut and shows the steps.
 - **Run** a macro with its shortcut (only while a terminal has the focus) or
-  from *Run Macro ▸*; it types into the current tab's active terminal only
-  (never through broadcast), with a banner and **Stop**.
+  from *Run Macro ▸*; it types into the current session (and, with broadcast,
+  the included ones), with a banner and **Stop**.
 - **Manage Macros…**: run, edit (name, shortcut, timing, steps), duplicate,
   delete.
 - **Shortcuts:** a macro's shortcut is checked against every action and macro
