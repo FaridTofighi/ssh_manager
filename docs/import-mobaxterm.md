@@ -8,7 +8,8 @@ the file is executed, connected to or resolved (no DNS, no ping).
 
 Code: `ssh_manager/importers/mobaxterm.py` (pure Python: parse, plan, map
 credentials, commit), `gtkui/dialogs/mobaxterm_import.py` (the wizard) and
-`gtkui/controllers/mobaxterm_import.py` (entry point).
+`gtkui/controllers/mobaxterm_import.py` (entry point). To move an inventory between SSH Manager
+installations, use SSH Manager's own export instead (`docs/export-import.md`).
 
 ## The `.mxtsessions` format
 

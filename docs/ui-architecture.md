@@ -29,7 +29,8 @@ ssh_manager/
                         host_dialog, preferences, credentials, vault, group_picker,
                         child_group_chooser (New Host / drop on a top-level group: search +
                         list of its child groups, "Create new group"), config_viewer, password,
-                        bulk_tag
+                        bulk_tag, native_export / native_import (the .sshm export dialog and
+                        import wizard)
     views/              header (top bar), sidebar, session_tree, host_page, workspace, statusbar
     controllers/
       ui_state.py           UiState + load/save (tolerant)                 (GTK-free)
@@ -49,6 +50,8 @@ ssh_manager/
       app_dialogs.py        settings, credentials, vault, config file, about, shortcuts
       layout.py             sidebar visibility and width, focus mode, narrow variant, brand alignment
       colors.py             per-item tree colors
+      native_transfer.py    NativeTransferController: .sshm export (dialog, worker write) and import
+                            (wizard, then colours / smart groups saved after the commit)
       host_page.py          HostPageController: page content, ready state, tabs, latency, history
 ```
 

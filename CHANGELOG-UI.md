@@ -6,6 +6,22 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## SSH Manager export and import (.sshm)
+
+Details: `docs/export-import.md`.
+
+- **Export** (app menu → Export → SSH Manager Export, a group's Export Group…, a
+  host's Export Selected Hosts…): groups and subgroups at any depth, hosts of
+  every protocol with their settings, colours, notes and tags, credential
+  references (name and username), smart groups if wanted — never passwords,
+  vault entries, keys, certificate pins or macros. Optional passphrase
+  (AES-256-GCM). The export report lists what was removed.
+- **Import** (app menu → Import → From SSH Manager Export, or the empty
+  sidebar): a wizard like the MobaXterm one — destination, colour policy,
+  protocols, groups to import, a credential for each user found (matching
+  credentials suggested), the same conflict rules (skip / copy / update), one
+  transaction. Export → import → export gives the same file.
+
 ## Large inventories: the group chooser
 
 - New Host on a large group now opens a searchable group chooser; dialogs can

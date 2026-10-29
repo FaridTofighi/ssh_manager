@@ -203,6 +203,12 @@ that direct file mode follows `Include` directives.
   sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
+- **SSH Manager export (.sshm)**: app menu → Export → SSH Manager Export, or
+  Export Group… / Export Selected Hosts… in the sidebar, writes groups,
+  subgroups, hosts of every protocol, colours and credential references (never
+  passwords; optionally encrypted with a passphrase). Import → From SSH Manager
+  Export brings them back with a wizard (credentials per user, colours, the
+  same conflict rules as the MobaXterm import). See `docs/export-import.md`.
 - **Messages** appear as toasts; the activity button in the header keeps every
   message and can filter to the current host.
 - **Keyboard shortcuts**: press Ctrl+? or F1 for the full list. The most
@@ -263,6 +269,7 @@ authentication.
 - `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
 - `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
+- `docs/export-import.md` — SSH Manager's own export / import (.sshm): format, security, wizard, limits
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
