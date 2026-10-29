@@ -24,10 +24,12 @@ ssh_manager/
                         Layout/FontScale views), stylesheet generator, fonts, css_dark/css_light,
                         loader, terminal_schemes
     widgets/            chips, status_dot, dot, toast, empty_state, ready_state, secret_entry,
-                        icon_button, menus, forms, icons (SvgIcon)
+                        icon_button, menus, forms, icons (SvgIcon), searchable_list
     dialogs/            base, confirm, prompt, files, secrets, settings_layout, list_manager,
                         host_dialog, preferences, credentials, vault, group_picker,
-                        config_viewer, password, bulk_tag
+                        child_group_chooser (New Host / drop on a top-level group: search +
+                        list of its child groups, "Create new group"), config_viewer, password,
+                        bulk_tag
     views/              header (top bar), sidebar, session_tree, host_page, workspace, statusbar
     controllers/
       ui_state.py           UiState + load/save (tolerant)                 (GTK-free)
@@ -193,6 +195,11 @@ brand block exactly as wide as the sidebar so the two dividers line up.
    call `set_response_validator(lambda r: not is_accept(r) or section.validate())`.
 3. Provide an `ask()` that runs, reads the values, destroys the dialog and
    returns a result. Call it from a controller.
+4. Never put a list that grows with the inventory (groups, hosts) into a
+   message: use `widgets/searchable_list.py` (one `TreeView`, filtered) or
+   "first N … (+M more)". `BaseDialog` caps any dialog at 85 % of the
+   monitor's work area (the body scrolls) and `PromptDialog` scrolls long
+   messages, but that is a safety net.
 
 ### A new action, shortcut or menu entry
 

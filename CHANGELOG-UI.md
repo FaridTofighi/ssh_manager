@@ -6,6 +6,15 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Large inventories: the group chooser
+
+- New Host on a large group now opens a searchable group chooser; dialogs can
+  no longer outgrow the screen. (New Host, or dropping hosts, on a top-level
+  group with a thousand child groups used to open a prompt listing all of
+  them, taller than the screen.) Type to filter, pick a group, or type a new
+  name to create it. The Move / Copy group picker uses the same list when
+  there are more than 30 groups.
+
 ## Broadcast colour
 
 - Broadcast mode now uses a violet highlight instead of the red error colour:
