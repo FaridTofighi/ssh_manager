@@ -51,6 +51,9 @@ def dialog_height(height: int) -> int:
     return height if height <= 0 else int(round(height * density_tokens.active().dialog_scale))
 
 
+MAX_SCREEN_FRACTION = 0.85  # of the monitor's work area
+
+
 class BaseDialog(Gtk.Dialog):
     """``Gtk.Dialog`` with the application's layout and button conventions."""
 
@@ -95,6 +98,49 @@ class BaseDialog(Gtk.Dialog):
         self.primary_button: Optional[Gtk.Button] = None
         self.connect("response", self._on_response)
         self.connect("map", self._on_map)
+
+    # ------------------------------------------------------- fit the screen
+    def do_show(self) -> None:  # type: ignore[override]
+        self._fit_to_screen()
+        Gtk.Dialog.do_show(self)
+
+    def _work_area_height(self) -> int:
+        display = self.get_display()
+        parent = self.get_transient_for()
+        monitor = None
+        if parent is not None and parent.get_window() is not None:
+            monitor = display.get_monitor_at_window(parent.get_window())
+        monitor = monitor or display.get_primary_monitor() or (display.get_monitor(0) if display.get_n_monitors() else None)
+        return monitor.get_workarea().height if monitor is not None else 0
+
+    def _fit_to_screen(self) -> None:
+        """Never taller than 85 % of the work area: the body scrolls, the buttons stay on screen."""
+
+        if getattr(self, "_fitted", False):
+            return
+        limit = int(self._work_area_height() * MAX_SCREEN_FRACTION)
+        _minimum, natural = self.get_preferred_height()
+        if not limit or natural <= limit:
+            return
+        self._fitted = True
+        content = self.get_content_area()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            action_area = self.get_action_area()
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=content.get_spacing())
+        for child in [c for c in content.get_children() if c is not action_area]:
+            expand, fill, padding, _pack = content.query_child_packing(child)
+            content.remove(child)
+            body.pack_start(child, expand, fill, padding)
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_vexpand(True)
+        scroller.add(body)
+        scroller.show_all()
+        content.pack_start(scroller, True, True, 0)
+        content.reorder_child(scroller, 0)
+        width, _height = self.get_default_size()
+        self.set_default_size(width, limit)
 
     # --------------------------------------------------------------- content
     @property

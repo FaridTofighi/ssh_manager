@@ -286,5 +286,68 @@ class GroupPickerTests(unittest.TestCase):
         self.assertIsNone(one_big._parent_list)
         self.assertEqual(one_big.selected(), ("P1", "c000.conf", False))
 
+
+@unittest.skipUnless(display_available(), "needs a display")
+class ScreenFitTests(unittest.TestCase):
+    """No dialog may outgrow the screen: its buttons always stay inside the monitor."""
+
+    def work_area(self, dialog):
+        return dialog._work_area_height()
+
+    def assert_fits(self, dialog):
+        from gi.repository import Gtk  # type: ignore
+
+        dialog.show_all()
+        pump(0.2)
+        limit = self.work_area(dialog)
+        width, height = dialog.get_size()
+        self.assertLessEqual(height, limit * 0.85 + 1)
+        buttons = [b for b in dialog.get_action_area().get_children() if isinstance(b, Gtk.Button)]
+        self.assertTrue(buttons)
+        for button in buttons:
+            _x, y = button.translate_coordinates(dialog, 0, 0)
+            self.assertGreaterEqual(y, 0)
+            self.assertLessEqual(y + button.get_allocated_height(), height)
+
+    def test_a_dialog_with_a_huge_body_keeps_its_buttons_on_screen(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        from ssh_manager.gtkui.dialogs.base import BaseDialog
+
+        dialog = BaseDialog(None, "Huge")
+        self.addCleanup(dialog.destroy)
+        label = Gtk.Label(label=" ".join(["word"] * 1000))  # 5 000 characters
+        label.set_line_wrap(True)
+        label.set_max_width_chars(40)
+        dialog.add_body(label)
+        dialog.add_cancel()
+        dialog.add_primary("_OK")
+        self.assert_fits(dialog)
+        self.assertTrue(dialog._fitted)
+
+    def test_prompt_messages_scroll_and_are_bounded(self) -> None:
+        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+
+        dialog = PromptDialog(None, "Long", "x" * 10000)
+        self.addCleanup(dialog.destroy)
+        self.assert_fits(dialog)
+        text = dialog.message_scroller.get_child().get_child().get_text()
+        self.assertTrue(text.endswith("(+8000 more)"))
+        self.assertLessEqual(dialog.message_scroller.get_allocated_height(), 160 + 4)
+
+    def test_short_prompt_messages_look_as_before(self) -> None:
+        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+
+        dialog = PromptDialog(None, "Short", "Name of the new group:")
+        self.addCleanup(dialog.destroy)
+        dialog.show_all()
+        pump(0.2)
+        scroller = dialog.message_scroller
+        label = scroller.get_child().get_child()
+        adjustment = scroller.get_vadjustment()
+        self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 1)  # nothing to scroll
+        self.assertLessEqual(abs(scroller.get_allocated_height() - label.get_allocated_height()), 1)
+        self.assertFalse(getattr(dialog, "_fitted", False))
+
 if __name__ == "__main__":
     unittest.main()

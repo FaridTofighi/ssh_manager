@@ -17,6 +17,16 @@ from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 
 
+MESSAGE_MAX_HEIGHT = 160  # px; longer messages scroll
+MESSAGE_MAX_CHARS = 2000  # a safety net: callers should never put long lists into a message
+
+
+def _bounded(message: str) -> str:
+    if len(message) <= MESSAGE_MAX_CHARS:
+        return message
+    return message[:MESSAGE_MAX_CHARS].rstrip() + "… " + _("(+{n} more)").format(n=len(message) - MESSAGE_MAX_CHARS)
+
+
 class PromptDialog(BaseDialog):
     """Ask for one line of text (or a secret)."""
 
@@ -35,14 +45,22 @@ class PromptDialog(BaseDialog):
     ) -> None:
         BaseDialog.__init__(self, parent, title, size=DialogSize.SMALL, resizable=False)
         if message:
-            label = Gtk.Label(label=message)
+            label = Gtk.Label(label=_bounded(message))
             label.set_xalign(0.0)
             label.set_line_wrap(True)
             label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
             label.set_selectable(True)
             label.set_can_focus(False)
             label.set_max_width_chars(52)
-            self.add_body(label)
+            # A long message scrolls instead of growing the dialog past the screen; a short one
+            # keeps its natural height (no scroll bar).
+            scroller = Gtk.ScrolledWindow()
+            scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            scroller.set_propagate_natural_height(True)
+            scroller.set_max_content_height(MESSAGE_MAX_HEIGHT)
+            scroller.add(label)
+            self.message_scroller = scroller
+            self.add_body(scroller)
 
         if secret:
             self._control: Gtk.Widget = SecretEntry(placeholder)
