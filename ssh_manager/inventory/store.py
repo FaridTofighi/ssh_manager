@@ -533,6 +533,13 @@ class InventoryStore:
                        (new_parent_id, name, _fold(name), time.time(), group_id))
         return GroupRow(group_id, new_parent_id, name, group.position, group.note)
 
+    def set_position(self, kind: str, item_id: str, position: int) -> None:
+        """The sidebar order of a group or host (``kind``: ``"group"`` / ``"host"``); used by imports."""
+
+        table = {"group": "groups", "host": "hosts"}[kind]
+        with self.transaction():
+            self._exec(f"UPDATE {table} SET position=? WHERE id=?", (int(position), item_id))
+
     def count_hosts(self, group_id: str, *, recursive: bool = True) -> int:
         ids = [group_id] + (self.descendants(group_id) if recursive else [])
         marks = ",".join("?" * len(ids))

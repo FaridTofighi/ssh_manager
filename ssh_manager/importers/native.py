@@ -430,12 +430,15 @@ class _Reader:
                           Severity.INFO)
         options = _clean_values(item.get("options")) if isinstance(item.get("options"), dict) else {}
         options = self.options(options, label)
-        metadata = _clean_values(metadata_rest)
-        if isinstance(notes, str):
-            if len(notes) > MAX_NOTE:
+        cleaned = _clean_values(metadata_rest)
+        metadata = {}
+        for key in (item.get("metadata") or {}) if isinstance(item.get("metadata"), dict) else {}:
+            if key != "notes":
+                metadata[key] = cleaned[key]
+            elif isinstance(notes, str) and len(notes) > MAX_NOTE:
                 self.warn(Code.NOTE_TOO_LONG, f"The notes of '{label}' are too long; left out.")
-            else:
-                metadata["notes"] = _clean_text(notes)
+            elif isinstance(notes, str):
+                metadata["notes"] = _clean_text(notes)  # in its place: a round trip keeps the order
         metadata.pop("vault_id", None)  # an id of another computer's vault means nothing here
         via_ref = ""
         if isinstance(metadata.get("rdp"), dict):
@@ -916,8 +919,145 @@ __all__ = [
     "suggest_credentials", "apply_mapping", "NativeJob", "Issue", "Code", "NativeFormatError",
     "CredentialMissingError", "ImportCancelled", "ImportReport", "ImportStatus", "ConflictPolicy", "Destination",
     "ExistingInventory", "group_color_key", "host_color_key", "MAX_HOSTS", "MAX_DEPTH", "MAX_FILE_BYTES",
-    "render_native_report", "save_native_report",
+    "render_native_report", "save_native_report", "commit_native", "NativeImportReport", "merge_smart_groups",
 ]
+
+
+# --------------------------------------------------------------------- commit
+FAILED_PREFIX = "Import failed, no changes were made"
+
+
+@dataclass
+class NativeImportReport(ImportReport):
+    """:class:`ImportReport` plus what the caller saves after the database commit (UI state, smart groups)."""
+
+    group_colors: Dict[str, str] = field(default_factory=dict)
+    host_colors: Dict[str, str] = field(default_factory=dict)
+    smart_groups: List[Dict[str, str]] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+
+def commit_native(
+    job: NativeJob,
+    manager,
+    credential_store,
+    *,
+    progress: Optional[Callable[[int, int], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
+) -> NativeImportReport:
+    """Write the job in **one** store transaction (groups, hosts, updates, tunnels, bindings) or change nothing.
+
+    Host ids are chosen before writing, so an RDP host's ``via_ssh`` can point to a host of the same import.
+    Credentials and the destination are re-checked first. Afterwards (outside the transaction) the
+    host-specific credentials are created without a password; the colours and smart groups are returned for
+    the caller to save — only after a successful commit, under the final names.
+    """
+
+    import uuid
+
+    from ..inventory.manager import host_columns
+
+    plan = job.plan
+    parents = plan.top_level
+    if job.nothing_to_do:
+        return NativeImportReport(ImportStatus.NOTHING, "Nothing new to import: every host already exists.")
+    if plan.destination_missing:
+        return NativeImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: the destination group does not exist.")
+    if any(cid and credential_store.get(cid) is None for _entry, cid in job.bindings):
+        return NativeImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: a chosen credential was deleted meanwhile.")
+    store = manager.store
+    if job.updates:
+        manager.backup_before("before-import-overwrite")
+    total = len(plan.groups) + 1
+
+    def check_cancel() -> None:
+        if should_cancel is not None and should_cancel():
+            raise ImportCancelled()
+
+    for _path, entry, _host in job.inserts:
+        entry.id = uuid.uuid4().hex  # known before writing: tunnels and bindings refer to it
+    ids_by_ref = {host.file.ref: entry.id for _p, entry, host in job.inserts if host.file.ref}
+    ids_by_ref.update({host.file.ref: entry.id for entry, host in job.updates if host.file.ref})
+    for entry, ref in job.tunnels:
+        rdp = dict(entry.metadata.get("rdp") or {})
+        rdp["via_ssh"] = ids_by_ref[ref]
+        entry.metadata["rdp"] = rdp
+    try:
+        with store.transaction():
+            if plan.options.destination is Destination.EXISTING_GROUP:
+                target_id = plan.existing.group_id(plan.options.target_group)
+                if target_id is None or store.get_group(target_id) is None:
+                    raise LookupError("the destination group was deleted meanwhile")
+            group_ids: Dict[Tuple[str, ...], str] = {}
+            for index, group in enumerate(plan.groups):
+                check_cancel()
+                parent_id = group_ids.get(_cf(group.path[:-1])) if len(group.path) > 1 else None
+                found = store.find_child(parent_id, group.path[-1])
+                if found is None:
+                    if group.exists:
+                        raise LookupError(f"the group '{' / '.join(group.path)}' was deleted meanwhile")
+                    found = store.create_group(parent_id, group.path[-1], note=group.note)
+                    if group.position:
+                        store.set_position("group", found.id, group.position)
+                group_ids[_cf(group.path)] = found.id
+                if progress is not None:
+                    progress(index + 1, total)
+            check_cancel()
+            store.add_hosts_bulk(manager._new_host(group_ids[_cf(path)], entry) for path, entry, _h in job.inserts)
+            for _path, entry, host in job.inserts:
+                if host.file.position:
+                    store.set_position("host", entry.id, host.file.position)
+            for entry, _host in job.updates:
+                hostname, port, user, rest = host_columns(entry.options)
+                store.update_host(entry.id, hostname=hostname, port=port, user=user, options=rest,
+                                  metadata=dict(entry.metadata), protocol=entry.protocol)
+            binding_map = {entry.id: cid for entry, cid in job.bindings if entry.id}
+            if binding_map:
+                credential_store.bind_many(binding_map)  # a failure rolls the database back as well
+            check_cancel()
+            if progress is not None:
+                progress(total, total)
+    except ImportCancelled:
+        manager.refresh()
+        return NativeImportReport(ImportStatus.CANCELLED, "Import cancelled, no changes were made.")
+    except Exception as exc:  # sqlite3.Error, InventoryError, SecureStoreError, KeyError, LookupError…
+        manager.refresh()
+        return NativeImportReport(ImportStatus.FAILED, f"{FAILED_PREFIX}: {exc}" if str(exc) else FAILED_PREFIX)
+    warnings: List[str] = []
+    failed_private = 0
+    for entry, username in job.private:
+        try:
+            credential_store.create_private(entry.id, username, None, label=entry.alias)
+        except Exception:  # SecureStoreError: the host simply has no host-specific entry yet
+            failed_private += 1
+    if failed_private:
+        warnings.append(f"{failed_private} host(s) could not be marked as using a host-specific password.")
+    manager.refresh()
+    new_groups = len(plan.new_groups)
+    message = f"Imported {job.host_count} host(s)"
+    if job.overwritten:
+        message += f", updated {job.overwritten}"
+    message += f"; {new_groups} new group(s)."
+    return NativeImportReport(ImportStatus.SUCCESS, message, job.host_count, new_groups, parents,
+                              group_colors=dict(job.group_colors), host_colors=dict(job.host_colors),
+                              smart_groups=list(job.smart_groups), warnings=warnings)
+
+
+def merge_smart_groups(existing: Sequence[object], incoming: Sequence[Mapping[str, str]]) -> Tuple[list, int]:
+    """``(existing + the incoming ones whose name is new, how many were added)`` (names compared case-insensitively)."""
+
+    from ..smart_groups import SmartGroup
+
+    names = {str(getattr(g, "name", "")).casefold() for g in existing}
+    merged = list(existing)
+    added = 0
+    for item in incoming:
+        name = item.get("name", "").strip()
+        if name and name.casefold() not in names:
+            merged.append(SmartGroup(name=name, query=item.get("query", "").strip()))
+            names.add(name.casefold())
+            added += 1
+    return merged, added
 
 
 # --------------------------------------------------------------------- report
