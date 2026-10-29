@@ -96,6 +96,10 @@ class AppDialogs:
         self.win._ui.latency_probe = values.latency_probe
         self.win.host_page.set_latency_enabled(values.latency_probe)
         settings = self.win._settings
+        macros = getattr(self.win, "macros", None)
+        if values.master_password_disabled and not settings.master_password_disabled and macros is not None \
+                and not macros.allow_disabling_master_password():
+            values.master_password_disabled = False  # macros are never stored unencrypted
         master_toggled = values.master_password_disabled != settings.master_password_disabled
         settings.host_key_policy = values.host_key_policy
         settings.connect_timeout = values.connect_timeout
@@ -134,6 +138,8 @@ class AppDialogs:
                 self.win.creds.rekey_password_file(None)
             elif self.win._master_password:
                 self.win.creds.rekey_password_file(self.win._master_password)
+                if macros is not None:
+                    macros.master_password_enabled()
             elif self.win._secure_store.uses_file_backend:
                 self.win._notify_info(_("Saved passwords will be encrypted after the next master password unlock."))
         self.win.terminal_tabs.set_appearance(values.terminal_appearance)
@@ -239,6 +245,9 @@ class AppDialogs:
         new_password = dialog.ask()
         if new_password is None:
             return
+        macros = getattr(self.win, "macros", None)
+        if macros is not None and not macros.rekey(new_password):
+            return  # the macros stay readable with the old password, which stays in use
         self.win._settings.master_password_hash = hash_master_password(new_password)
         self.win._settings.save()
         self.win._master_password = new_password

@@ -395,6 +395,7 @@ class TerminalTab(SessionPage):
         self._panes: ActivePane = ActivePane()
         self.on_activated: Optional[Callable[["TerminalTab"], None]] = None  # a pane of this tab became active
         self._input_observer: Optional[Callable[[TerminalTab, str], None]] = None
+        self._macro_feeding = False  # macro playback is writing: not user input (password heuristics, broadcast)
         self._profile = profile
         self._strip_ansi_on_copy = False
         self._appearance = appearance
@@ -429,6 +430,12 @@ class TerminalTab(SessionPage):
         self._banner_alive = True
         self._banner.connect("destroy", self._on_banner_destroy)
         self.pack_start(self._banner, False, False, 0)
+
+    def attach_info_bar(self, bar: Gtk.Widget) -> None:
+        """Show ``bar`` (macro recording / playback) right below the connection banner."""
+
+        self.pack_start(bar, False, False, 0)
+        self.reorder_child(bar, self.get_children().index(self._banner) + 1)
 
     def _build_terminal_area(self) -> None:
         self._terminal = self._create_terminal()
@@ -984,6 +991,23 @@ class TerminalTab(SessionPage):
         if term and data:
             term.feed_child(data.encode("utf-8"))
 
+    def is_session_active(self) -> bool:
+        """The ssh process (or the local shell) runs."""
+
+        return bool(self._session_active)
+
+    def macro_send(self, term: Vte.Terminal, data: bytes = b"", paste: Optional[str] = None) -> None:
+        """Macro playback: straight to ``term`` (no broadcast; VTE's ``commit`` is ignored meanwhile)."""
+
+        self._macro_feeding = True
+        try:
+            if paste is not None:
+                term.paste_text(paste)  # honours the program's bracketed-paste mode
+            elif data:
+                term.feed_child(data)
+        finally:
+            self._macro_feeding = False
+
     def send_interrupt(self) -> None:
         term = self._active_terminal()
         if term:
@@ -1238,6 +1262,8 @@ class TerminalTab(SessionPage):
             self._stage_detected_password_change(password, term)
 
     def _on_terminal_commit(self, term: Vte.Terminal, text: str, _length: int) -> None:
+        if getattr(self, "_macro_feeding", False):
+            return  # a macro, not the user: never fed to the password-change heuristics
         if self._last_key_input:
             last_term, last_text, last_time = self._last_key_input
             if last_term is term and last_text == text and time.monotonic() - last_time < 0.25:
@@ -2118,6 +2144,10 @@ class TerminalNotebook(Gtk.Box):
         self.on_strip_changed: Optional[Callable[[], None]] = None  # session strip shown/hidden
         self.on_toggle_focus_mode: Optional[Callable[[], None]] = None
         self._status_dock: Optional[Gtk.Box] = None
+        # Terminal macros (gtkui/controllers/macro_controller.py): the toolbar's Record button and the
+        # macro entries of the "More session actions" menu.
+        self.on_record_clicked: Optional[Callable[[], None]] = None
+        self.macro_menu: Optional[Callable[[], List[MenuSection]]] = None
 
         self._build_toolbar()
         self._build_strip()
@@ -2139,6 +2169,7 @@ class TerminalNotebook(Gtk.Box):
         }
         bar.save.connect("clicked", lambda *_: self.save_current_transcript())
         bar.reconnect.connect("clicked", lambda *_: self.reconnect_current())
+        bar.record.connect("clicked", lambda *_: self.on_record_clicked() if self.on_record_clicked else None)
         bar.set_overflow(self._overflow_menu_spec())
         # In tabs mode the toolbar lives at the right end of the session strip
         # (the notebook's tab row); in tile mode it gets this row of its own.
@@ -2320,11 +2351,25 @@ class TerminalNotebook(Gtk.Box):
             MenuSection("view", [
                 MenuItemSpec(_("_Focus Mode"), self._toggle_focus_mode, Icons.MAXIMIZE, "F11"),
             ]),
+            *(self.macro_menu() if self.macro_menu is not None else []),
             MenuSection("close", [
                 MenuItemSpec(_("Close _Other Sessions"), lambda: self.close_others(self._current_tab())),
                 MenuItemSpec(_("_Close Session"), self.close_current, Icons.CLOSE, "Ctrl+W"),
             ]),
         ]
+
+    def refresh_overflow_menu(self) -> None:
+        """Rebuild "More session actions" (the macros changed)."""
+
+        self._toolbar.set_overflow(self._overflow_menu_spec())
+
+    def set_macro_recording(self, tab: Optional[TerminalTab], recording: bool, status: str = "") -> None:
+        """The toolbar's Record / Stop state and the red dot on the recorded tab's label."""
+
+        self._toolbar.set_recording(recording, status)
+        label = self._tab_labels.get(tab) if tab is not None else None
+        if label is not None:
+            label.set_recording(recording)
 
     # ----------------------------------------------------------------- tab api
     @property

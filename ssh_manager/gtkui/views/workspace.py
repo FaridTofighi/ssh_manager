@@ -54,6 +54,13 @@ class SessionToolbar(ActionBar):
         self.add_separator()
         self.stats = IconToggleButton(Icons.STATS, _("Show remote CPU, memory and disk"))
         self.add_start(self.stats)
+        self.add_separator()
+        # Terminal macros: Record ↔ Stop (●); the label shows the time and steps while recording.
+        self.record = IconButton(Icons.RECORD, _("Record macro"))
+        self.record_status = Gtk.Label()
+        self.record_status.get_style_context().add_class("macro-recording-status")
+        self.record_status.set_no_show_all(True)
+        self.add_start(self.record, self.record_status)
 
         self.more = IconMenuButton(Icons.MORE, _("More session actions"))
         self.reconnect = IconButton(Icons.RECONNECT, _("Reconnect (Ctrl+Shift+R)"))
@@ -61,6 +68,18 @@ class SessionToolbar(ActionBar):
 
     def set_overflow(self, sections) -> None:
         self.more.set_popup(build_menu(sections))
+
+    def set_recording(self, recording: bool, status: str = "") -> None:
+        """The Record button becomes Stop (●) with ``status`` (elapsed time, steps) next to it."""
+
+        self.record.set_icon(Icons.STOP if recording else Icons.RECORD)
+        tooltip = _("Stop recording the macro") if recording else _("Record macro")
+        self.record.set_tooltip_text(tooltip)
+        set_accessible_name(self.record, tooltip)
+        context = self.record.get_style_context()
+        (context.add_class if recording else context.remove_class)("macro-recording")
+        self.record_status.set_text(status)
+        self.record_status.set_visible(recording)
 
 
 class BroadcastStrip(Gtk.Revealer):
@@ -143,6 +162,11 @@ class SessionTab(Gtk.EventBox):
         self.activity.set_tooltip_text(_("New output"))
         self.activity.set_no_show_all(True)
         box.pack_start(self.activity, False, False, 0)
+        self.recording = Gtk.Label(label="●")
+        self.recording.get_style_context().add_class("macro-recording-dot")
+        self.recording.set_tooltip_text(_("Recording a macro"))
+        self.recording.set_no_show_all(True)
+        box.pack_start(self.recording, False, False, 0)
         self.close_button = IconButton(Icons.CLOSE, _("Close session (Ctrl+W)"), on_close)
         self.close_button.set_can_focus(False)  # the tab itself takes focus; Delete closes
         box.pack_start(self.close_button, False, False, 0)
@@ -183,6 +207,9 @@ class SessionTab(Gtk.EventBox):
 
     def set_activity(self, active: bool) -> None:
         self.activity.set_visible(active)
+
+    def set_recording(self, recording: bool) -> None:
+        self.recording.set_visible(recording)
 
     def set_current(self, current: bool) -> None:
         self._current = current

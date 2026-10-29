@@ -117,6 +117,8 @@ class Icons:
     MEMORY = "sshm-stats"
     DISK = "sshm-server"
     INTERRUPT = "sshm-interrupt"
+    RECORD = "sshm-record"  # terminal macros: record / stop
+    STOP = "sshm-stop"
     DETAILS = "sshm-info"
     OPEN_FOLDER = "sshm-folder-open"  # file chooser actions (Import…)
     TAG = "sshm-tag"

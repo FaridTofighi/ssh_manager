@@ -91,6 +91,7 @@ _SEQUENCE_TO_KEY: Dict[str, str] = {seq: name for name, seqs in KEYS.items() for
 _ESCAPE_SEQUENCES = sorted((s for s in _SEQUENCE_TO_KEY if s.startswith("\x1b") and len(s) > 1), key=len, reverse=True)
 _ERASE = ("\x7f", "\x08")  # Backspace and Ctrl+H both erase the previous character in a line
 _PASTE_START, _PASTE_END = "\x1b[200~", "\x1b[201~"
+_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1bO.")
 
 
@@ -144,8 +145,8 @@ class Macro:
         if not isinstance(data, dict):
             raise MacroError("not_a_macro")
         macro = cls()
-        if isinstance(data.get("id"), str) and data["id"]:
-            macro.id = data["id"]
+        if isinstance(data.get("id"), str) and _ID_RE.fullmatch(data["id"]):
+            macro.id = data["id"]  # it becomes part of an action name: win.run-macro('<id>')
         if isinstance(data.get("name"), str):
             macro.name = data["name"]
         shortcut = data.get("shortcut")

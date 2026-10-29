@@ -47,6 +47,7 @@ from ssh_manager.gtkui.controllers.session_controller import (  # noqa: E402,F40
     audit_log_key,
     audit_log_value,
 )
+from ssh_manager.gtkui.controllers.macro_controller import MacroController  # noqa: E402
 from ssh_manager.gtkui.controllers.shortcut_registry import ShortcutRegistry  # noqa: E402
 from ssh_manager.gtkui.controllers.shortcuts import (  # noqa: E402
     refresh_accel_tooltips, register_actions, set_active_registry,
@@ -347,6 +348,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.groups = GroupActions(self)
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
+        self.macros = MacroController(self)  # terminal macros (encrypted with the master password)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -550,9 +552,12 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "toggle-details": self.toggle_host_details,
             "host-activity": self.host_page.show_activity,
             "toggle-maximize": self.layout.toggle_maximized,
+            **self.macros.callbacks(),
         }
         self._actions = register_actions(self, callbacks)
         self.shortcut_registry.add_listener(self._on_shortcuts_changed)
+        self.macros.bind()
+        self.macros.start()  # unlocks macros.enc in the background; macro shortcuts follow
 
     def _on_shortcuts_changed(self) -> None:
         """The user changed a shortcut: live accelerators, hints, the shortcuts window, the settings file."""
