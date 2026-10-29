@@ -5,6 +5,7 @@ import os
 import stat
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.gtk_window_fixture import display_available
@@ -155,6 +156,235 @@ class ExportFlowTests(unittest.TestCase):
         collect(menu)
         self.assertIn("SSH Manager Export (.sshm)…", labels)
 
+
+
+@unittest.skipUnless(display_available(), "needs a display")
+class ImportWizardTests(unittest.TestCase):
+    """The wizard end to end against the sandbox window's real inventory and credential store."""
+
+    def setUp(self) -> None:
+        import tempfile
+
+        from ssh_manager import native_format as F
+        from ssh_manager.exporters.native import build_export
+        from tests.gtk_window_fixture import WindowSandbox
+        from tests.native_fixture import build_rich, make_store
+
+        self.sandbox = WindowSandbox(store=True)
+        self.addCleanup(self.sandbox.close)
+        self.win = self.sandbox.window
+        self.manager = self.win.manager
+        self.creds = self.win._credential_store
+        self.ops = self.creds.add("Ops account", "deploy", "pw")  # matches the file's credential reference
+        source_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(source_dir.cleanup)
+        source = make_store(Path(source_dir.name))
+        self.addCleanup(source.close)
+        _ids, gc, hc, creds, vault = build_rich(source)
+        doc, _ = build_export(source, group_colors=gc, host_colors=hc, credential_for=creds.get,
+                              vault_label=vault.get)
+        self.plain = self.sandbox.root / "rich.sshm"
+        self.plain.write_bytes(F.dump_document(doc))
+        self.encrypted = self.sandbox.root / "rich-protected.sshm"
+        self.encrypted.write_bytes(F.encrypt_document(F.dump_document(doc), "open sesame"))
+
+    def wizard(self):
+        from ssh_manager.gtkui.dialogs.native_import import NativeImportDialog
+
+        dialog = NativeImportDialog(self.win, self.manager, self.creds, report_dir=self.sandbox.root / "reports",
+                                    group_colors=self.win.colors.group_colors,
+                                    host_colors=self.win.colors.host_colors)
+        self.addCleanup(dialog.destroy)
+        dialog.confirm = lambda *a, **kw: True
+        return dialog
+
+    def next(self, dialog) -> None:
+        from ssh_manager.gtkui.dialogs.native_import import RESPONSE_NEXT
+
+        self.assertTrue(dialog.next_button.get_sensitive(), f"Next is disabled on {dialog.step.name}")
+        dialog.response(RESPONSE_NEXT)
+        dialog.wait()
+
+    def counts(self):
+        store = self.manager.store
+        return len(store.list_groups()), len(store.list_hosts())
+
+    def test_end_to_end_under_an_existing_group(self) -> None:
+        from ssh_manager.gtkui.dialogs.native_import import NONE_ID, Step
+
+        before = self.counts()
+        dialog = self.wizard()
+        dialog.load_file(self.plain)
+        dialog.wait()
+        self.assertIn("9 hosts", dialog.file_summary.get_text())
+        self.assertIn("intact", dialog.file_summary.get_text())
+        self.next(dialog)
+        self.assertEqual(dialog.step, Step.OPTIONS)
+        dialog.under_radio.set_active(True)
+        self.assertFalse(dialog.next_button.get_sensitive())  # no group chosen yet
+        self.assertTrue(dialog.destination.select_value("staging"))
+        self.next(dialog)
+        self.assertEqual(dialog.step, Step.SELECT)
+        windows = next(g for g in dialog.document.groups if g.name == "Windows")
+        dialog.set_group_active(windows.key, False)  # the RDP host is left out
+        self.assertIn("8 hosts selected", dialog.selection_label.get_text())
+        self.next(dialog)
+        self.assertEqual(dialog.step, Step.CREDENTIALS)
+        self.assertEqual(dialog.rows["deploy"].combo.get_active_id(), self.ops.id)  # matched
+        self.assertEqual(dialog.rows["deploy"].status.get_text(), "matched")
+        self.assertFalse(dialog.next_button.get_sensitive())  # the other users are undecided
+        dialog.default_combo.set_active_id(NONE_ID)
+        self.assertTrue(dialog.next_button.get_sensitive())
+        self.next(dialog)
+        self.assertEqual(dialog.step, Step.CONFLICTS)
+        self.assertEqual(dialog.conflict_summary.get_text(), "None of the hosts exists yet.")
+        self.next(dialog)
+        self.assertEqual(dialog.step, Step.REVIEW)
+        self.assertIn("8 hosts to import", dialog.review_summary.get_text())
+        self.next(dialog)
+        dialog.wait()
+        self.assertEqual(dialog.report.status.value, "success", dialog.report.message)
+        groups, hosts = self.counts()
+        self.assertEqual(hosts, before[1] + 8)
+        store = self.manager.store
+        self.assertIsNotNone(store.find_group(["staging", "Prod", "Databases", "Replicas"]))
+        self.assertIsNone(store.find_group(["staging", "Windows"]))
+        web = store.find_host(store.find_group(["staging", "Prod"]).id, "web-01")  # the sandbox has its own web-01
+        self.assertEqual(self.creds.binding_for_host(web.id), self.ops.id)
+        self.assertEqual(dialog.report.group_colors["staging/Prod"], "#aa0000")
+        warnings = self.win.native.apply_after_commit(dialog.report)
+        self.assertEqual(warnings, [])
+        self.assertEqual(self.win.colors.group_colors["staging/Prod/Databases/Replicas"], "#0000aa")
+        self.assertEqual(self.win.colors.group_color_for("staging", "Prod/Databases"), "#00aa00")
+
+    def run_to(self, dialog, step_name):
+        dialog.load_file(self.plain)
+        dialog.wait()
+        while dialog.step.name != step_name:
+            if dialog.step.name == "CREDENTIALS":
+                dialog.default_combo.set_active_id("__none__")
+            self.next(dialog)
+
+    def test_top_level_then_again_reports_the_conflicts(self) -> None:
+        first = self.wizard()
+        self.run_to(first, "REVIEW")
+        self.next(first)
+        first.wait()
+        self.assertEqual(first.report.status.value, "success")
+        state = self.counts()
+        again = self.wizard()
+        self.run_to(again, "CONFLICTS")
+        self.assertEqual(again.conflict_summary.get_text(), "9 hosts of the file already exist.")
+        self.next(again)
+        self.assertIn("Nothing new to import.", again.review_notes.get_text())
+        self.assertFalse(again.next_button.get_sensitive())  # Import is off: nothing would change
+        self.assertEqual(self.counts(), state)
+
+    def test_encrypted_file_asks_for_the_passphrase(self) -> None:
+        dialog = self.wizard()
+        dialog.load_file(self.encrypted)
+        dialog.wait()
+        self.assertTrue(dialog.pass_box.get_visible())
+        self.assertIsNone(dialog.document)
+        dialog.pass_entry.set_text("wrong")
+        dialog.unlock()
+        dialog.wait()
+        self.assertEqual(dialog.file_error.get_text(), "The passphrase is wrong, or the file was changed.")
+        self.assertFalse(dialog.unlock_button.get_sensitive())  # a short pause before the next try
+        self.assertTrue(pump(3, until=dialog.unlock_button.get_sensitive))
+        dialog.pass_entry.set_text("open sesame")
+        dialog.unlock()
+        dialog.wait()
+        self.assertIsNotNone(dialog.document)
+        self.assertEqual(dialog.pass_entry.get_text(), "")  # not kept
+
+    def test_cancel_at_every_step_changes_nothing(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        before = self.counts()
+        for steps in range(6):
+            dialog = self.wizard()
+            dialog.load_file(self.plain)
+            dialog.wait()
+            for _step in range(steps):
+                if dialog.step.name == "CREDENTIALS":
+                    dialog.default_combo.set_active_id("__none__")
+                self.next(dialog)
+            dialog.response(Gtk.ResponseType.CANCEL)
+            self.assertEqual(self.counts(), before, steps)
+
+    def test_a_large_file_stays_responsive(self) -> None:
+        from tests.test_native_commit import big_document
+
+        large = self.sandbox.root / "large.sshm"
+        large.write_bytes(big_document(5000, per_group=5))
+        dialog = self.wizard()
+        started = time.monotonic()
+        dialog.load_file(large)
+        dialog.wait()
+        self.assertLess(time.monotonic() - started, 3.0)
+        self.assertEqual(len(dialog.group_store), 1000)  # one model row per group, no widget per row
+        started = time.monotonic()
+        dialog.group_search.set_text("Group 00999")
+        dialog._filter_groups()
+        self.assertLess(time.monotonic() - started, 1.0)
+
+
+@unittest.skipUnless(display_available(), "needs a display")
+class ImportControllerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from tests.gtk_window_fixture import WindowSandbox
+
+        self.sandbox = WindowSandbox(store=True)
+        self.addCleanup(self.sandbox.close)
+        self.win = self.sandbox.window
+
+    def test_colours_are_saved_after_the_commit_and_failures_are_warnings(self) -> None:
+        from ssh_manager.importers.native import ImportStatus, NativeImportReport
+
+        report = NativeImportReport(ImportStatus.SUCCESS, "ok", 1, 1, ["prod"],
+                                    group_colors={"prod": "#123456"}, host_colors={"prod::web.conf::web-01": "#654321"})
+
+        class FakeWizard:
+            def __init__(self, *a, **kw):
+                self.report, self.busy = report, False
+
+            def run(self):
+                return 0
+
+            def destroy(self):
+                pass
+
+        with mock.patch("ssh_manager.gtkui.dialogs.native_import.NativeImportDialog", FakeWizard), \
+                mock.patch.object(self.win, "_save_ui_state") as save, \
+                mock.patch.object(self.win.tree, "reveal_imported") as reveal:
+            self.win.lookup_action("import-native").activate(None)
+        save.assert_called_once()
+        reveal.assert_called_once_with(["prod"])
+        self.assertEqual(self.win.colors.group_colors["prod"], "#123456")
+        self.assertIn("Imported 1 host from the SSH Manager export.", [m.text for m in self.win._toasts.history.items()])
+        with mock.patch.object(self.win, "_save_ui_state", side_effect=OSError("disk full")):
+            warnings = self.win.native.apply_after_commit(report)
+        self.assertEqual(warnings, ["The hosts were imported, but their colours could not be saved."])
+
+    def test_entry_points(self) -> None:
+        self.assertIsNotNone(self.win.lookup_action("import-native"))
+        link = self.win.sidebar.native_import_link if hasattr(self.win, "sidebar") else None
+        if link is None:
+            link = next(w for w in _walk(self.win) if getattr(w, "get_label", lambda: "")() ==
+                        "Import an SSH Manager e_xport…")
+        with mock.patch.object(self.win.native, "import_file") as opened:
+            link.clicked()
+        opened.assert_called_once()
+
+
+def _walk(widget):
+    from gi.repository import Gtk  # type: ignore
+
+    yield widget
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            yield from _walk(child)
 
 if __name__ == "__main__":
     unittest.main()

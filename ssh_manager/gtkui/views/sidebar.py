@@ -110,6 +110,7 @@ class SidebarView(Gtk.Box):
         self.on_add_host: Callable[[], None] = lambda: None
         self.on_open_folder: Callable[[], None] = lambda: None
         self.on_import_mobaxterm: Callable[[], None] = lambda: None
+        self.on_import_native: Callable[[], None] = lambda: None
         self.on_escape_to_tree: Callable[[], None] = lambda: None
         self.on_bulk_connect: Callable[[], None] = lambda: None
         self.on_bulk_move: Callable[[], None] = lambda: None
@@ -155,6 +156,8 @@ class SidebarView(Gtk.Box):
             on_link=lambda: self.on_open_folder(),
             compact=True,
         )
+        self.native_import_link = self.first_run.add_link(_("Import an SSH Manager e_xport…"),
+                                                          lambda: self.on_import_native())
         self.stack.add_named(self.first_run, TreePage.EMPTY.value)
         self.pack_start(self.stack, True, True, 0)
         self.pack_end(self._build_footer(), False, False, 0)

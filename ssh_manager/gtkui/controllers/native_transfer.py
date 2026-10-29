@@ -217,4 +217,73 @@ class NativeTransferController:
                          action=lambda: show_text(self.win, _("Export Report"), render_export_report(report)))
 
 
+    # ================================================================ import
+    def import_file(self, path: Optional[str] = None) -> None:
+        """The import wizard; afterwards the colours and smart groups are saved, the tree refreshed once."""
+
+        from ...importers.native import ImportStatus
+        from ..dialogs.native_import import NativeImportDialog
+        from .mobaxterm_import import import_report_dir
+
+        if self.wizard is not None:
+            self.wizard.present()
+            return
+        if getattr(self.win.manager, "store", None) is None:
+            self.win._notify_info(_("SSH Manager exports are imported into the SSH Manager inventory; this window "
+                                    "shows a folder inventory."))
+            return
+        if self.win.manager.read_only:
+            self.win.ensure_editable_inventory()  # explains why
+            return
+        self.wizard = NativeImportDialog(self.win, self.win.manager, self.win._credential_store,
+                                         report_dir=import_report_dir(), group_colors=self.win.colors.group_colors,
+                                         host_colors=self.win.colors.host_colors)
+        try:
+            if path:
+                self.wizard.load_file(Path(path))
+            self.wizard.run()
+            if self.wizard.busy:  # closed while writing: wait for the rollback
+                self.wizard.wait()
+            report = self.wizard.report
+        finally:
+            self.wizard.destroy()
+            self.wizard = None
+        if report is None:
+            return
+        LOGGER.info("SSH Manager import: %s, %d host(s), %d group(s)", report.status.value, report.hosts,
+                    report.groups)
+        if report.status is ImportStatus.SUCCESS:
+            warnings = self.apply_after_commit(report)
+            self.win.tree.rebuild()
+            self.win.tree.reveal_imported(report.parents)
+            self.win._notify(ngettext("Imported {n} host from the SSH Manager export.",
+                                      "Imported {n} hosts from the SSH Manager export.", report.hosts).format(
+                n=report.hosts), Level.SUCCESS)
+            for warning in warnings + list(report.warnings):
+                self.win._notify_warning(warning)
+        elif report.status is ImportStatus.FAILED:
+            self.win._notify(_("The import failed; no changes were made."), Level.ERROR)
+
+    def apply_after_commit(self, report) -> List[str]:
+        """Colours (one UI-state save) and smart groups, after the database commit. Returns warnings."""
+
+        warnings: List[str] = []
+        if report.group_colors or report.host_colors:
+            self.win.colors.group_colors.update(report.group_colors)
+            self.win.colors.host_colors.update(report.host_colors)
+            try:
+                self.win._save_ui_state()
+            except Exception as exc:  # the inventory import itself stays committed
+                LOGGER.warning("SSH Manager import: the colours could not be saved (%s)", type(exc).__name__)
+                warnings.append(_("The hosts were imported, but their colours could not be saved."))
+        if report.smart_groups:
+            from ...importers.native import merge_smart_groups
+            from ...smart_groups import load_smart_groups, save_smart_groups
+
+            merged, added = merge_smart_groups(load_smart_groups(), report.smart_groups)
+            if added and not save_smart_groups(merged):
+                warnings.append(_("The smart groups could not be saved."))
+        return warnings
+
+
 __all__ = ["NativeTransferController", "app_version", "show_text"]

@@ -83,6 +83,19 @@ class EmptyState(Gtk.Box):
             self.pack_start(buttons, False, False, 0)
         self.apply_density()
 
+    def add_link(self, label: str, on_link: Callable[[], None]) -> Gtk.Button:
+        """One more flat action under the buttons."""
+
+        button = Gtk.Button.new_with_mnemonic(label)
+        button.set_relief(Gtk.ReliefStyle.NONE)
+        button.get_style_context().add_class("flat")
+        button.connect("clicked", lambda _b: on_link())
+        if self._buttons.get_parent() is None:
+            self.pack_start(self._buttons, False, False, 0)
+        self._buttons.pack_start(button, False, False, 0)
+        button.show()
+        return button
+
     def apply_density(self) -> None:
         """Spacing and icon size from the active density preset."""
 

@@ -440,6 +440,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.on_add_host = self.hosts.prompt_new_host
         sidebar.on_open_folder = self.inventory.open_inventory_folder
         sidebar.on_import_mobaxterm = lambda: self.importer.open()
+        sidebar.on_import_native = lambda: self.native.import_file()
         sidebar.on_escape_to_tree = lambda: self.tree_view.grab_focus()
         sidebar.on_bulk_connect = self.actions.bulk_connect_selected
         sidebar.on_bulk_move = self.actions.bulk_move_selected
@@ -517,6 +518,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "export-rdp-file": lambda: self.rdp_files.export_selected(),
             "export-openssh": lambda: self.store_actions.export_openssh(),
             "export-native": lambda: self.native.export(),
+            "import-native": lambda: self.native.import_file(),
             "backup-inventory": lambda: self.store_actions.backup_now(),
             "quit": self.close,
             "host-connect": sessions.connect_current_item,

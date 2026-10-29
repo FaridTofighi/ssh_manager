@@ -71,6 +71,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("export-rdp-file", _("Export the selected RDP host as a .rdp file"), G_GENERAL),
     ActionSpec("export-openssh", _("Export to OpenSSH config"), G_GENERAL),
     ActionSpec("export-native", _("Export as SSH Manager file (.sshm)"), G_GENERAL),
+    ActionSpec("import-native", _("Import an SSH Manager export (.sshm)"), G_GENERAL),
     ActionSpec("backup-inventory", _("Back up the inventory"), G_GENERAL),
     ActionSpec("refresh", _("Reload configuration"), G_GENERAL, ("F5",)),
     ActionSpec("settings", _("Settings"), G_GENERAL, ("<Primary>comma",)),
