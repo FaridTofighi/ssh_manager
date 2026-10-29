@@ -121,7 +121,7 @@ class SentinelTests(unittest.TestCase):
         self.assertEqual(with_sentinel(argv, []), argv)
 
     def test_resolution_repr_hides_the_password(self) -> None:
-        text = repr(PasswordResolution(SECRET, "credential", "c1")) + str(PasswordResolution(SECRET, "vault"))
+        text = repr(PasswordResolution(SECRET, "credential", "c1")) + str(PasswordResolution(SECRET, "host"))
         self.assertNotIn(SECRET, text)
 
 
@@ -136,7 +136,7 @@ class ResolutionTests(unittest.TestCase):
         self.secure = SecureStore(self.keyring)
         self.creds = CredentialStore(self.secure, path=Path(self.tmp.name) / "credentials.json")
         self.cred = self.creds.add("Ops", "ops", "credential-pw")
-        self.win = SimpleNamespace(_credential_store=self.creds, _secure_store=self.secure, _vault=None,
+        self.win = SimpleNamespace(_credential_store=self.creds, _secure_store=self.secure,
                                    _notify=lambda *a, **k: None, manager=SimpleNamespace())
         self.controller = CredentialController(self.win)
         self.host = HostEntry("web", {"hostname": "web.internal", "user": "alice"}, parent_group="p", child_group="c")

@@ -36,7 +36,7 @@ from ...config import HostEntry  # noqa: E402
 from ...credentials import Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_option  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
-from ...vault import VaultEntry  # noqa: E402
+from ...legacy_vault import LEGACY_METADATA_KEYS  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 from ..validation import validate_alias, validate_hostname, validate_port  # noqa: E402
@@ -116,8 +116,6 @@ class HostDialog(BaseDialog):
         credentials: Optional[List[Credential]] = None,
         selected_credential_id: Optional[str] = None,
         metadata: Optional[Dict[str, object]] = None,
-        vault_entries: Optional[List[VaultEntry]] = None,
-        vault_unlocked: bool = False,
         template_defaults: Optional[Dict[str, str]] = None,
         profiles: Optional[Dict[str, SessionProfile]] = None,
         alias_validator: Optional[Callable[[str], Optional[str]]] = None,
@@ -153,13 +151,12 @@ class HostDialog(BaseDialog):
         self._changing_password = False  # "Change…" pressed: the entry is shown
         self._suppress_password_events = False
         self._last_credential_id = selected_credential_id or ""
-        self._vault_entries = list(vault_entries or [])
         self._profiles = profiles or {}
         meta = dict(metadata or (host.metadata if host else {}) or {})
         self._metadata = meta
         self._sections: Dict[str, FormSection] = {}
 
-        self._build_fields(meta, selected_credential_id, vault_unlocked)
+        self._build_fields(meta, selected_credential_id)
         self.layout = SettingsPageLayout()
         self._build_pages()
         self.add_body(self.layout, expand=True)
@@ -261,7 +258,7 @@ class HostDialog(BaseDialog):
                                              protocol=kind.badge if kind else self._protocol))
 
     # ------------------------------------------------------------ fields
-    def _build_fields(self, meta: Dict[str, object], credential_id: Optional[str], vault_unlocked: bool) -> None:
+    def _build_fields(self, meta: Dict[str, object], credential_id: Optional[str]) -> None:
         self.alias_entry = entry(placeholder=_("web-01"))
         self.hostname_entry = entry(placeholder=_("example.com or 10.0.0.5"))
         self.user_entry = entry(placeholder=_("ubuntu"))
@@ -292,9 +289,6 @@ class HostDialog(BaseDialog):
         self._credential_combo = _combo([(c.id, f"{c.name} ({c.username})") for c in self._credential_choices], credential_id)
         self._credential_combo.connect("changed", self._on_credential_changed)
         self._build_password_fields()
-        self._vault_combo = _combo([(e.id, f"{e.label} ({e.username})") for e in self._vault_entries], str(meta.get("vault_id", "") or ""))
-        self._vault_combo.set_sensitive(vault_unlocked and bool(self._vault_entries))
-        self._vault_combo.connect("changed", lambda *_: self._apply_identity_source())
         self._profile_combo = _combo([(pid, prof.name) for pid, prof in self._profiles.items()],
                                      str(meta.get("default_session_profile_id", "") or ""))
 
@@ -409,11 +403,9 @@ class HostDialog(BaseDialog):
 
     def _page_credentials(self, labels: Gtk.SizeGroup) -> None:
         creds = self.layout.new_page("credentials", _("Credentials"),
-                                     _("Reuse a saved credential or vault entry; its username replaces the User field."))
+                                     _("Reuse a saved credential; its username replaces the User field."))
         sec = FormSection()
         sec.add(_("_Credential"), self._credential_combo, label_group=labels)
-        sec.add(_("_Vault entry"), self._vault_combo, label_group=labels,
-                help_text=_("Unlock the vault to choose an entry.") if not self._vault_combo.get_sensitive() else "")
         sec.add(_("Session _profile"), self._profile_combo, label_group=labels)
         creds.append(sec)
         self._sections["credentials"] = sec
@@ -661,8 +653,7 @@ class HostDialog(BaseDialog):
 
     def _apply_identity_source(self) -> None:
         cred = self._selected_credential()
-        vault_entry = next((e for e in self._vault_entries if e.id == (self._vault_combo.get_active_id() or None)), None)
-        source = vault_entry.username if vault_entry else (cred.username if cred else None)
+        source = cred.username if cred else None
         if source is not None:
             self.user_entry.set_text(source)
         self.user_entry.set_sensitive(source is None)
@@ -740,9 +731,9 @@ class HostDialog(BaseDialog):
             "service": self.service_entry.get_text().strip(),
             "notes": self.notes_entry.get_text().strip(),
         }
-        vault_id = self._vault_combo.get_active_id() or ""
-        if vault_id:
-            metadata["vault_id"] = vault_id
+        for key in LEGACY_METADATA_KEYS:  # not converted yet: kept as it is until the migration runs
+            if self._metadata.get(key):
+                metadata[key] = self._metadata[key]
         profile_id = self._profile_combo.get_active_id() or ""
         if profile_id:
             metadata["default_session_profile_id"] = profile_id

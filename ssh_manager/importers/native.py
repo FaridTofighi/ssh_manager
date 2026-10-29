@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from ..config import HostEntry
+from ..legacy_vault import LEGACY_METADATA_KEYS
 from ..native_format import (
     ENCRYPTED_FORMAT,
     FORMAT,
@@ -101,7 +102,6 @@ class Code(str, Enum):
     TUNNEL_DROPPED = "tunnel_dropped"
     KEY_FILE_MISSING = "key_file_missing"
     HOST_SPECIFIC = "host_specific_password"
-    VAULT_REFERENCE = "vault_reference"
     FIELD_CLEANED = "field_cleaned"
 
 
@@ -127,7 +127,6 @@ class FileHost:
     position: int = 0
     credential_ref: str = ""  # a shared credential of the file's "credentials" list
     host_specific: bool = False
-    vault_label: Optional[str] = None
     via_ssh_ref: str = ""
 
 
@@ -439,7 +438,8 @@ class _Reader:
                 self.warn(Code.NOTE_TOO_LONG, f"The notes of '{label}' are too long; left out.")
             elif isinstance(notes, str):
                 metadata["notes"] = _clean_text(notes)  # in its place: a round trip keeps the order
-        metadata.pop("vault_id", None)  # an id of another computer's vault means nothing here
+        for legacy in LEGACY_METADATA_KEYS:  # an id of another computer's removed store means nothing here
+            metadata.pop(legacy, None)
         via_ref = ""
         if isinstance(metadata.get("rdp"), dict):
             rdp = dict(metadata["rdp"])
@@ -457,14 +457,11 @@ class _Reader:
             else:
                 self.warn(Code.INVALID_CREDENTIAL, f"'{label}' refers to a credential that is not in the file; "
                                                    "ignored.", Severity.INFO)
-        vault = item.get("vault")
-        vault_label = _clean_text(vault["label"]) if isinstance(vault, dict) and isinstance(vault.get("label"), str) \
-            else None
         ref = item.get("ref") if isinstance(item.get("ref"), str) else ""
         self.host_count += 1
         return FileHost(ref, item["alias"], protocol, hostname, port, user, options, metadata,
                         self.color(item.get("color"), label), self.position(item.get("position")), credential_ref,
-                        host_specific, vault_label, via_ref)
+                        host_specific, via_ref)
 
     def options(self, options: Dict[str, Any], label: str) -> Dict[str, Any]:
         kept: Dict[str, Any] = {}
@@ -571,14 +568,6 @@ class NativePlan:
     @property
     def host_specific(self) -> int:
         return sum(1 for h in self.hosts if h.file.host_specific)
-
-    @property
-    def vault_labels(self) -> Dict[str, int]:
-        labels: Dict[str, int] = {}
-        for host in self.hosts:
-            if host.file.vault_label is not None:
-                labels[host.file.vault_label] = labels.get(host.file.vault_label, 0) + 1
-        return labels
 
 
 def _excluded(key: Tuple[int, ...], excluded: Set[Tuple[int, ...]]) -> bool:
@@ -904,9 +893,6 @@ def apply_mapping(
     if plan.host_specific:
         issues.append(Issue(Severity.INFO, Code.HOST_SPECIFIC,
                             f"{len(private)} host(s) will ask for their password on first connect."))
-    for label, count in sorted(plan.vault_labels.items()):
-        issues.append(Issue(Severity.INFO, Code.VAULT_REFERENCE,
-                            f"{count} host(s) used a vault entry (“{label}”); choose the entry in the host dialog."))
     names = {cid: str(getattr(credentials[cid], "name", cid)) for cid in resolved.values() if cid}
     smart = list(plan.document.smart_groups) if options.import_smart_groups else []
     return NativeJob(plan, inserts, updates, bindings, private, kept_tunnels, group_colors, host_colors, issues,

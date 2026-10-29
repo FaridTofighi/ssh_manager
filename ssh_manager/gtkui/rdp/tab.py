@@ -11,7 +11,7 @@ certificate, size, time connected, the connection log, **Focus Window**,
 
 One connection attempt:
 
-1. **Password:** the stored one (vault → credential → host password), or the
+1. **Password:** the stored one (credential → host password), or the
    password dialog ("Ask every time", or nothing stored).
 2. **Probe** (worker thread): reachable? which security? which certificate?
 3. **Trust** (:mod:`ssh_manager.rdp.trust_flow`): a pinned certificate

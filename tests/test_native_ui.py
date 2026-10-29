@@ -180,9 +180,8 @@ class ImportWizardTests(unittest.TestCase):
         self.addCleanup(source_dir.cleanup)
         source = make_store(Path(source_dir.name))
         self.addCleanup(source.close)
-        _ids, gc, hc, creds, vault = build_rich(source)
-        doc, _ = build_export(source, group_colors=gc, host_colors=hc, credential_for=creds.get,
-                              vault_label=vault.get)
+        _ids, gc, hc, creds, _unused = build_rich(source)
+        doc, _ = build_export(source, group_colors=gc, host_colors=hc, credential_for=creds.get)
         self.plain = self.sandbox.root / "rich.sshm"
         self.plain.write_bytes(F.dump_document(doc))
         self.encrypted = self.sandbox.root / "rich-protected.sshm"

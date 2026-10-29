@@ -1,4 +1,4 @@
-"""Credential bindings, vault entries, permissions and password persistence for hosts."""
+"""Credential bindings, permissions and password persistence for hosts."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from ...credentials import KEEP, Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
 from ...secure_store import FileKeyring, KeyringError, SecureStoreError  # noqa: E402
-from ...vault import VaultEntry, VaultError  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
@@ -29,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class CredentialController:
-    """Credential bindings, vault entries, permissions and password persistence for hosts."""
+    """Credential bindings, permissions and password persistence for hosts."""
 
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
@@ -140,12 +139,6 @@ class CredentialController:
     def credential_for_host(self, host: HostEntry) -> Optional[Credential]:
         return self.win._credential_store.credential_for_host(self.credential_key(host))
 
-    def vault_entry_for_host(self, host: HostEntry) -> Optional[VaultEntry]:
-        vault_id = host.metadata.get("vault_id")
-        if not vault_id or not getattr(self.win, "_vault", None) or not self.win._vault.unlocked:
-            return None
-        return self.win._vault.get_entry(vault_id)
-
     def profile_for_host(self, host: HostEntry) -> Optional[SessionProfile]:
         pid = host.metadata.get("default_session_profile_id")
         if not pid:
@@ -159,8 +152,7 @@ class CredentialController:
         """Persist a password changed inside an active terminal session.
 
         A host with its own (private) password gets only that updated; other
-        hosts keep the previous behaviour (per-host secret, bound credential,
-        vault entry).
+        hosts keep the previous behaviour (per-host secret, bound credential).
         """
 
         if self.private_credential_for_host(host) is not None:
@@ -193,42 +185,18 @@ class CredentialController:
             except SecureStoreError as exc:
                 LOGGER.warning("credential password update failed: %s", exc)
 
-        vault_entry = self.vault_entry_for_host(host)
-        if vault_entry:
-            required_sources_ok = False
-            try:
-                self.win._vault.update_entry(
-                    VaultEntry(
-                        vault_entry.id,
-                        vault_entry.label,
-                        vault_entry.username,
-                        password,
-                    )
-                )
-                saved_any = True
-                required_sources_ok = True
-            except VaultError as exc:
-                LOGGER.warning("vault password update failed: %s", exc)
-
         return saved_any and required_sources_ok
 
     def host_with_resolved_identity(self, host: HostEntry) -> HostEntry:
         cred = self.credential_for_host(host)
-        vault_entry = self.vault_entry_for_host(host)
-        if not cred and not vault_entry:
+        if not cred:
             return host
-
-        if vault_entry:
-            return with_user(host, vault_entry.username)
-        if cred and cred.username:  # a host-specific credential may leave User to the host / ssh
+        if cred.username:  # a host-specific credential may leave User to the host / ssh
             return with_user(host, cred.username)
         return host
 
     def credential_password_for_host(self, host: HostEntry) -> Optional[str]:
         cred = self.credential_for_host(host)
-        vault_entry = self.vault_entry_for_host(host)
-        if vault_entry:
-            return vault_entry.password
         if cred:
             try:
                 return self.win._credential_store.get_password(cred.id)
@@ -239,15 +207,12 @@ class CredentialController:
     def resolve_password(self, host: HostEntry) -> PasswordResolution:
         """The password for connecting to ``host`` and its source — read only, never writes a store.
 
-        Order: the bound vault entry (when unlocked) → the bound credential's
-        password → the legacy ``(host, port, user)`` secret (existing users) → none.
+        Order: the bound credential's password → the legacy ``(host, port, user)``
+        secret (existing users) → none.
         A host-specific password is the bound (private) credential; its source
         is ``"host"`` instead of ``"credential"``.
         """
 
-        vault_entry = self.vault_entry_for_host(host)
-        if vault_entry and vault_entry.password:
-            return PasswordResolution(vault_entry.password, "vault", None)
         cred = self.credential_for_host(host)
         if cred:
             try:
@@ -278,9 +243,6 @@ class CredentialController:
         cred = self.credential_for_host(host)
         if cred and cred.username:
             return cred.username
-        vault_entry = self.vault_entry_for_host(host)
-        if vault_entry:
-            return vault_entry.username
         return host_option(host, "user") or ""
 
     # ------------------------------------------------ host-specific passwords
@@ -401,7 +363,6 @@ class CredentialController:
         """What "Save this password for this host?" would do for ``host`` now."""
 
         current = self.find_current_host(host) or host
-        vault_entry = self.vault_entry_for_host(current)
         cred = self.credential_for_host(current)
         blocker = self._save_blocker(current)
         shared_name = ""
@@ -413,7 +374,6 @@ class CredentialController:
         return SaveContext(
             can_save=not blocker,
             reason=blocker,
-            vault_label=vault_entry.label if vault_entry else ("vault" if current.metadata.get("vault_id") else ""),
             credential_name=shared_name,
             has_private=bool(cred and cred.private),
         )
@@ -520,31 +480,21 @@ class CredentialController:
             else {
                 "allow_plaintext_host_passwords": True,
                 "warn_on_plaintext_host_passwords": True,
-                "prefer_vault_for_passwords": True,
             }
         )
         if not self.host_has_plaintext_password(host):
             return True
-        if host.metadata.get("vault_id"):
-            return True
         allow_plain = bool(policy.get("allow_plaintext_host_passwords", True))
         warn_plain = bool(policy.get("warn_on_plaintext_host_passwords", True))
-        prefer_vault = bool(policy.get("prefer_vault_for_passwords", True))
 
         if allow_plain:
             if warn_plain:
-                message = (
-                    "This host stores a password in plain text. Consider using the credential vault instead."
-                    if prefer_vault
-                    else "This host stores a password in plain text."
-                )
-                self.win._notify_warning(message)
+                self.win._notify_warning(_("This host stores a password in plain text. Consider using a "
+                                           "credential instead."))
             return True
 
-        message = (
-            "Plain-text passwords are disallowed by the current secrets policy. "
-            "Use the credential vault instead or confirm to bypass."
-        )
+        message = _("Plain-text passwords are disallowed by the current secrets policy. "
+                    "Use a credential instead or confirm to bypass.")
         if self.confirm_policy_override(message):
             return True
         self.win._notify(_("Host save cancelled by secrets policy."), Level.WARNING)

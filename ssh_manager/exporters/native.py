@@ -11,8 +11,8 @@ audit (:func:`audit_options` / :func:`audit_metadata`) also removes anything in
 a host's own data that could be one: option and metadata keys named like a
 password, token or secret; ``SSHPASS`` / ``sshpass -p`` / ``--password`` values
 inside ``ProxyCommand`` / ``LocalCommand`` (replaced by :data:`REDACTED`, the
-command itself stays); TLS certificate pins; vault entry ids (the label is
-exported); the RDP gateway's local credential id. Every removal is counted in
+command itself stays); TLS certificate pins; the RDP gateway's local
+credential id; links left by removed features. Every removal is counted in
 the :class:`ExportReport`, which names fields and hosts, never values.
 
 Colours come from the UI state: groups by ``"<top>"`` or ``"<top>/<child>/<…>"``,
@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+from ..legacy_vault import LEGACY_METADATA_KEYS
 from ..native_format import FORMAT, VERSION, integrity_hash
 
 REDACTED = "<removed>"
@@ -57,7 +58,6 @@ class ExportReport:
     colors_invalid: int = 0
     credentials: int = 0
     host_specific: int = 0
-    vault_labels: int = 0
     removed: Dict[str, int] = field(default_factory=dict)  # field description → count
     flagged: List[str] = field(default_factory=list)  # "alias: ProxyCommand" (a secret token was removed)
     identity_files: List[str] = field(default_factory=list)  # "alias: path" (the keys themselves are not exported)
@@ -154,16 +154,14 @@ def _strip_secret_keys(value: Any, where: str, report: ExportReport, section: st
 
 
 def audit_metadata(metadata: Mapping[str, Any], alias: str, report: ExportReport, *, notes: bool,
-                   tunnel_ref: Callable[[str], Optional[str]]) -> Tuple[Dict[str, Any], Optional[str]]:
-    """``(metadata without secrets, vault id or None)``."""
+                   tunnel_ref: Callable[[str], Optional[str]]) -> Dict[str, Any]:
+    """The metadata without secrets (and without links of removed features)."""
 
     kept: Dict[str, Any] = {}
-    vault_id: Optional[str] = None
     for key, value in metadata.items():
         name = str(key)
-        if name == "vault_id":
-            vault_id = value if isinstance(value, str) and value else None
-            report.removal("vault entry id (the label is exported)")
+        if name in LEGACY_METADATA_KEYS:
+            report.removal("link to a removed feature")
             continue
         if not notes and name in ("notes", "tags"):
             continue
@@ -197,7 +195,7 @@ def audit_metadata(metadata: Mapping[str, Any], alias: str, report: ExportReport
         else:
             value = _strip_secret_keys(value, name, report, name)
         kept[name] = value
-    return kept, vault_id
+    return kept
 
 
 # --------------------------------------------------------------------- export
@@ -211,7 +209,6 @@ def build_export(
     group_colors: Optional[Mapping[str, str]] = None,
     host_colors: Optional[Mapping[str, str]] = None,
     credential_for: Callable[[str], Optional[object]] = lambda _host_id: None,
-    vault_label: Callable[[str], Optional[str]] = lambda _vault_id: None,
     smart_groups: Sequence[Mapping[str, str]] = (),
     app_version: str = "",
     now: Optional[float] = None,
@@ -290,7 +287,7 @@ def build_export(
         report.hosts += 1
         report.by_protocol[protocol] = report.by_protocol.get(protocol, 0) + 1
         host_options = audit_options(host.options, host.alias, report)
-        metadata, vault_id = audit_metadata(host.metadata, host.alias, report, notes=options.notes,
+        metadata = audit_metadata(host.metadata, host.alias, report, notes=options.notes,
                                             tunnel_ref=refs.get)
         node: Dict[str, Any] = {"ref": refs[host.id], "alias": host.alias, "protocol": protocol}
         if host.hostname:
@@ -317,9 +314,6 @@ def build_export(
                         "name": str(getattr(credential, "name", "")),
                         "username": str(getattr(credential, "username", ""))})
                 node["credential"] = {"ref": credentials[cred_id][0], "mode": "shared"}
-        if vault_id is not None:
-            node["vault"] = {"label": vault_label(vault_id) or ""}
-            report.vault_labels += 1
         return node
 
     def group_node(group: Any) -> Dict[str, Any]:
@@ -363,8 +357,7 @@ def render_export_report(report: ExportReport) -> str:
     lines += [f"Colours: {report.colors}" + (f" ({report.colors_invalid} unreadable, left out)"
                                             if report.colors_invalid else ""),
               f"Credentials referenced (name and username only): {report.credentials}",
-              f"Hosts with a host-specific password (not exported): {report.host_specific}",
-              f"Hosts using a vault entry (label only): {report.vault_labels}"]
+              f"Hosts with a host-specific password (not exported): {report.host_specific}"]
     if report.removed:
         lines += ["", "Removed (could hold a secret)"] + [f"  {what}: {count}"
                                                          for what, count in sorted(report.removed.items())]
@@ -376,7 +369,7 @@ def render_export_report(report: ExportReport) -> str:
         lines += [f"  {item}" for item in report.identity_files]
     if report.warnings:
         lines += ["", "Warnings"] + [f"  {item}" for item in report.warnings]
-    lines += ["", "Not exported: passwords, vault entries, private keys, certificate pins, macros, "
+    lines += ["", "Not exported: passwords, private keys, certificate pins, macros, "
                   "the master password, application settings, history and window state."]
     return "\n".join(lines) + "\n"
 

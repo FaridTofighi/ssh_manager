@@ -310,14 +310,12 @@ class RoundTripPlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = make_store(Path(tmp))
             self.addCleanup(store.close)
-            _ids, gc, hc, creds, vault = build_rich(store)
-            doc, _ = build_export(store, group_colors=gc, host_colors=hc, credential_for=creds.get,
-                                  vault_label=vault.get)
+            _ids, gc, hc, creds, _unused = build_rich(store)
+            doc, _ = build_export(store, group_colors=gc, host_colors=hc, credential_for=creds.get)
             plan = N.plan_native(N.read_native(F.dump_document(doc)))
             self.assertEqual(len(plan.hosts), 9)
             job = N.apply_mapping(plan, {}, {}, key_exists=lambda _p: False)
             self.assertEqual(len(job.tunnels), 1)
-            self.assertIn("vault_reference", codes(job.issues))
             self.assertIn("key_file_missing", codes(job.issues))
             text = N.render_native_report(plan, job, source_name="x.sshm")
             self.assertIn("Hosts planned: 9", text)

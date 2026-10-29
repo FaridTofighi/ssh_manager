@@ -378,16 +378,15 @@ class HostPageController:
     def auth_for(self, host):
         creds = self.win.creds
         credential = creds.credential_for_host(host)
-        vault = bool(host.metadata.get("vault_id"))
         has_password = False
-        if not credential and not vault:
+        if not credential:
             try:
                 hostname, port, user = host_connection_params(host)
                 has_password = bool(self.win._secure_store.get(hostname, port, user))
             except Exception:  # locked store, keyring errors
                 has_password = False
         private = bool(credential and credential.private)
-        return auth_summary(host, credential_name=credential.name if credential and not private else "", vault=vault,
+        return auth_summary(host, credential_name=credential.name if credential and not private else "",
                             has_password=has_password, host_specific=private)
 
     def latency_key(self, host) -> Optional[Tuple[str, int]]:

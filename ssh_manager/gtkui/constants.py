@@ -84,7 +84,7 @@ class Icons:
     RESTORE = "sshm-restore"
     CREDENTIALS = "sshm-key"
     KEY = "sshm-key"
-    VAULT = "sshm-lock"
+    LOCK = "sshm-lock"
     CONFIG_FILE = "sshm-file-conf"
     SHARED = "sshm-globe"
     GIT_UPDATE = "sshm-download"

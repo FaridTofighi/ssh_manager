@@ -79,7 +79,6 @@ from ssh_manager.profiles import SessionProfile, built_in_profiles  # noqa: E402
 from ssh_manager.secure_store import SecureStore  # noqa: E402
 from ssh_manager.settings import AppSettings  # noqa: E402
 from ssh_manager.templates import built_in_templates  # noqa: E402
-from ssh_manager.vault import CredentialVault, default_vault_path  # noqa: E402
 
 # Re-exported dialogs (moved to ssh_manager.gtkui.dialogs).
 from ssh_manager.gtkui.dialogs.config_viewer import ConfigViewerDialog  # noqa: E402,F401
@@ -87,7 +86,6 @@ from ssh_manager.gtkui.dialogs.credentials import CredentialEditDialog, Credenti
 from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.host_dialog import HostDialog  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog  # noqa: E402,F401
-from ssh_manager.gtkui.dialogs.vault import VaultDialog  # noqa: E402,F401
 
 from ssh_manager.gtkui.health import compute_health  # noqa: E402
 from ssh_manager.gtkui.host_history import HOST_HISTORY_FILE  # noqa: E402
@@ -170,6 +168,8 @@ class SSHManagerApplication(Gtk.Application):
                                             manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
+            # Once per start (the application only: windows built by tests never ask).
+            GLib.idle_add(lambda: self._window and self._window.legacy_migration.offer_at_startup())
             if self._startup_host is not None:
                 host, self._startup_host = self._startup_host, None
                 GLib.timeout_add(500, self._open_startup_host, host)
@@ -318,7 +318,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._master_password = master_password
         self._secure_store = SecureStore.with_default_backend(master_password=master_password)
         self._credential_store = CredentialStore(self._secure_store)
-        self._vault = CredentialVault(default_vault_path())
         self._password_dialog = PasswordDialog()
         self._profiles: Dict[str, SessionProfile] = {p.id: p for p in built_in_profiles()}
         self._toasts = ToastController()
@@ -352,6 +351,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         from ssh_manager.gtkui.controllers.native_transfer import NativeTransferController
 
         self.native = NativeTransferController(self)  # SSH Manager's own export / import (.sshm)
+        from ssh_manager.gtkui.legacy_vault import LegacyMigration
+
+        self.legacy_migration = LegacyMigration(self)  # the removed feature's entries → Credentials (once)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -505,7 +507,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "app-menu": self._header.open_app_menu,
             "shortcuts": dialogs.show_shortcuts,
             "credentials": dialogs.open_credentials,
-            "vault": dialogs.open_vault,
             "config-file": dialogs.open_config_file,
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,

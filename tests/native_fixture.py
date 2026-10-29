@@ -21,7 +21,10 @@ def make_store(folder: Path) -> InventoryStore:
 
 
 def build_rich(store: InventoryStore):
-    """Returns ``(ids, group_colors, host_colors, credentials_by_host_id, vault_labels)``."""
+    """Returns ``(ids, group_colors, host_colors, credentials_by_host_id, unused)``.
+
+    ``web-01`` keeps a link left by the removed Credential Vault (``vault_id``): it must never be exported.
+    """
 
     prod = store.create_group(None, "Prod", note="production servers")
     databases = store.create_group(prod.id, "Databases")
@@ -67,4 +70,4 @@ def build_rich(store: InventoryStore):
     pg = FakeCredential("cred-pg", "Postgres", "postgres")
     private = FakeCredential("cred-private", "host:web", "deploy", private=True)
     credentials = {web.id: shared, sftp.id: shared, db1.id: pg, db2.id: pg, bastion.id: private}
-    return ids, group_colors, host_colors, credentials, {"VAULT-" + SENTINEL: "Ops vault entry"}
+    return ids, group_colors, host_colors, credentials, {}

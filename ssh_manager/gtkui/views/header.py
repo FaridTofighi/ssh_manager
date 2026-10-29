@@ -54,7 +54,6 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     main = Gio.Menu()
     main.append(_("Settings"), "win.settings")
     main.append(_("Credentials"), "win.credentials")
-    main.append(_("Credential Vault"), "win.vault")
     main.append(_("SSH Config File"), "win.config-file")
     menu.append_section(None, main)
 

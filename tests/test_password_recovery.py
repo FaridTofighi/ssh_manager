@@ -104,7 +104,7 @@ class FlowTests(unittest.TestCase):
         self.assertIsNotNone(fresh.on_authenticated("sentinel", SaveContext())[0])
 
     def test_stored_source_success_is_never_offered(self) -> None:
-        for source in ("vault", "credential", "host", "legacy", "session", "manual"):
+        for source in ("credential", "host", "legacy", "session", "manual"):
             flow = PasswordFlow("web")
             flow.attempt(source, "pw")
             self.assertEqual(flow.on_authenticated("sentinel", SaveContext()), (None, ""), source)
@@ -122,12 +122,12 @@ class FlowTests(unittest.TestCase):
         self.assertTrue(offer.message.startswith("Login appears to have succeeded"))
         self.assertIn("Other hosts are not changed.", offer.message)
 
-    def test_vault_overrides_and_is_explained(self) -> None:
+    def test_a_shared_credential_is_named_not_overridden(self) -> None:
         flow = self.flow()
         flow.attempt("retry", SECRET)
-        offer, notice = flow.on_authenticated("sentinel", SaveContext(vault_label="Prod vault"))
-        self.assertIsNone(offer)
-        self.assertIn("vault entry ‘Prod vault’, which overrides", notice)
+        offer, notice = flow.on_authenticated("sentinel", SaveContext(credential_name="Ops"))
+        self.assertIsNotNone(offer)  # the host gets its own password; the credential stays as it is
+        self.assertEqual(notice, "")
 
     def test_read_only_offers_session_only(self) -> None:
         offer = SaveOffer("web", True, SaveContext(can_save=False, reason="The inventory is read-only."))
@@ -140,7 +140,7 @@ class FlowTests(unittest.TestCase):
     def test_first_prompt_and_phrases(self) -> None:
         self.assertEqual(PasswordRequest("web", TARGET, 1).message, "Enter the password for ops@web.internal:22.")
         self.assertEqual(source_phrase("host"), "saved password (host-specific password)")
-        self.assertEqual(source_phrase("vault"), "saved password (vault entry)")
+        self.assertEqual(source_phrase("credential", "Ops"), "saved password (credential ‘Ops’)")
         self.assertEqual(source_phrase("legacy"), "saved password")
         self.assertEqual(source_phrase("retry"), "password you entered")
 
@@ -167,7 +167,7 @@ class ControllerTests(unittest.TestCase):
         self.notes = []
         self.rebuilds = []
         self.win = SimpleNamespace(
-            _credential_store=self.store, _secure_store=self.secure, _vault=None,
+            _credential_store=self.store, _secure_store=self.secure,
             _notify=lambda message, *a, **k: self.notes.append(message),
             _settings=SimpleNamespace(),
             manager=SimpleNamespace(allows_display_names=True, read_only=False, tree={"Acme": {"prod": self.group}}),
@@ -237,14 +237,14 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(self.creds.save_host_password(self.web, SECRET)[0], "blocked")
         self.assertIsNone(self.store.private_for_host("h-web"))
 
-    def test_context_names_the_shared_credential_and_a_vault(self) -> None:
+    def test_context_names_the_shared_credential(self) -> None:
         context = self.creds.password_save_context(self.web)
         self.assertEqual((context.can_save, context.credential_name, context.has_private), (True, "Ops", False))
         self.creds.save_host_password(self.web, SECRET)
         context = self.creds.password_save_context(self.web)
         self.assertEqual((context.credential_name, context.has_private), ("Ops", True))
-        self.web.metadata["vault_id"] = "v1"
-        self.assertTrue(self.creds.password_save_context(self.web).vault_label)
+        self.web.metadata["vault_id"] = "v1"  # a link left by the removed feature changes nothing
+        self.assertEqual(self.creds.password_save_context(self.web).credential_name, "Ops")
 
     def test_describe_password_source(self) -> None:
         self.assertEqual(self.creds.describe_password_source(PasswordResolution("x", "credential", self.shared.id)),
@@ -466,16 +466,16 @@ class TabFlowTests(unittest.TestCase):
         self.login(tab)
         self.assertEqual(self.offers, [])
 
-    def test_vault_entry_overrides(self) -> None:
-        tab = self.tab(service=FakeService(context=SaveContext(vault_label="Prod vault")))
+    def test_a_host_with_a_shared_credential_is_offered_its_own_password(self) -> None:
+        tab = self.tab(service=FakeService(context=SaveContext(credential_name="Ops")))
         self.started(tab)
         self.denied(tab)
         self.fire_retry(tab)
         self.requests[-1].on_done(SECRET)
         self.started(tab)
         self.login(tab)
-        self.assertEqual(self.offers, [])
-        self.assertTrue(any("overrides" in message for message in self.logs))
+        self.assertEqual(len(self.offers), 1)
+        self.assertFalse(any("overrides" in message for message in self.logs))
 
     def test_read_only_host_offers_session_only(self) -> None:
         tab = self.tab(service=FakeService(context=SaveContext(can_save=False, reason="The inventory is read-only.")))

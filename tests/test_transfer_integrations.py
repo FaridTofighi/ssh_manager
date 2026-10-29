@@ -283,7 +283,7 @@ class TabDiagnosticsTests(unittest.TestCase):
                          protocol="ftp", id="h-files")
         with mock.patch("ssh_manager.gtkui.file_browser.tab.default_log_path", return_value=log_path):
             tab = FileBrowserTab(host, lambda *_a: None, app_settings=settings,
-                                 password_provider=lambda: PasswordResolution("s3cret pass", "vault"),
+                                 password_provider=lambda: PasswordResolution("s3cret pass", "credential"),
                                  state=BrowserState(Path(tmp.name) / "fb.json"),
                                  local_home=tmp.name)
         self.addCleanup(lambda: tab.get_parent() is None and tab.destroy())

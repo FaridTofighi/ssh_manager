@@ -462,7 +462,6 @@ class AppSettings:
         defaults = {
             "allow_plaintext_host_passwords": True,
             "warn_on_plaintext_host_passwords": True,
-            "prefer_vault_for_passwords": True,
             "rotation_hint_days": 90,
         }
         for key, value in (self.secrets_policy or {}).items():

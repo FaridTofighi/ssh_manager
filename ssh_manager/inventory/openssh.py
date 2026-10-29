@@ -29,6 +29,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from ..config import GroupConfig, HostEntry, load_config_tree, parse_ssh_config_file
 from ..persistence import write_text_atomic
+from ..legacy_vault import LEGACY_METADATA_KEYS
 
 MAX_SOURCE_BYTES = 20 * 1024 * 1024
 DEFAULT_EXPORT = Path("~/.config/ssh-manager/ssh_config")
@@ -311,7 +312,7 @@ def safe_alias(alias: str, taken: Set[str]) -> str:
 
 
 _EXPORT_ORDER = ("hostname", "user", "port", "identityfile", "proxyjump", "proxycommand")
-_APP_ONLY = {"tags", "tag", "environment", "owner", "service", "notes", "vault_id", "credential_id",
+_APP_ONLY = {"tags", "tag", "environment", "owner", "service", "notes", *LEGACY_METADATA_KEYS, "credential_id",
              "default_session_profile_id", "session_profile_id", "permissions", "password", "passphrase"}
 
 

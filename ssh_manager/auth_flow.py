@@ -1,7 +1,7 @@
 """SSH password authentication: resolution, outcome classification, verified-success sentinel (no GTK).
 
 * :class:`PasswordResolution` — which password a connect uses and where it
-  came from (vault entry, bound credential, legacy per-host secret, none).
+  came from (bound credential, legacy per-host secret, none).
 * :func:`classify_exit` — what a failed ``ssh``/``sshpass`` run means. Only
   :attr:`AuthOutcome.AUTH_FAILED` may lead to a password prompt.
 * :func:`sentinel_options` — ``-o PermitLocalCommand=yes -o LocalCommand=…``:
@@ -38,7 +38,7 @@ HEURISTIC_DELAY_S = 3  # fallback: alive this long without failure text = probab
 # ------------------------------------------------------------------ resolution
 @dataclass(frozen=True)
 class PasswordResolution:
-    """The password for a connect and its source (``vault`` | ``credential`` | ``legacy`` | ``none``)."""
+    """The password for a connect and its source (``credential`` | ``host`` | ``legacy`` | ``none``)."""
 
     password: Optional[str]
     source: str = "none"
@@ -211,8 +211,6 @@ def source_phrase(source: str, credential_name: str = "") -> str:
         return f"saved password (credential ‘{credential_name}’)" if credential_name else "saved password (credential)"
     if source == "host":
         return "saved password (host-specific password)"
-    if source == "vault":
-        return "saved password (vault entry)"
     if source in ("legacy", "stored"):
         return "saved password"
     if source == "session":
@@ -259,7 +257,6 @@ class SaveContext:
 
     can_save: bool = True  # False: can_edit=false, read-only inventory or secrets policy
     reason: str = ""  # why saving is not possible (shown in the dialog)
-    vault_label: str = ""  # a vault entry is bound: it overrides, never offer
     credential_name: str = ""  # the shared credential that stays unchanged
     has_private: bool = False  # the host already has its own password
 
@@ -351,7 +348,7 @@ class PasswordFlow:
         """``(offer or None, notice)`` after a verified (``sentinel``) or probable (``heuristic``) login.
 
         Only a password typed in this tab is offered, once per tab, and not
-        when it equals the stored one or a vault entry overrides it.
+        when it equals the stored one.
         """
 
         self.attempts = 0
@@ -360,9 +357,6 @@ class PasswordFlow:
         if self.stored is not None and self.typed == self.stored:
             return None, ""  # it is already saved: say nothing
         self.offered = True
-        if context.vault_label:
-            return None, (f"‘{self.alias}’ uses the vault entry ‘{context.vault_label}’, which overrides a saved "
-                          "password; update the vault entry to change it.")
         return SaveOffer(self.alias, method == "sentinel", context), ""
 
     def decide(self, decision: Decision) -> None:

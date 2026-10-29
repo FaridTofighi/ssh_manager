@@ -65,10 +65,7 @@ class CommitCase(unittest.TestCase):
         source_dir, target_dir = Path(self.tmp.name) / "a", Path(self.tmp.name) / "b"
         self.source = make_store(source_dir)
         self.addCleanup(self.source.close)
-        self.ids, self.group_colors, self.host_colors, creds, self.vault = build_rich(self.source)
-        # Vault entries belong to one computer; the round trip uses an inventory without one.
-        web = self.source.get_host(self.ids["web"])
-        self.source.update_host(web.id, metadata={k: v for k, v in web.metadata.items() if k != "vault_id"})
+        self.ids, self.group_colors, self.host_colors, creds, _unused = build_rich(self.source)
         self.source_creds = creds
         self.target = make_store(target_dir)
         self.addCleanup(self.target.close)

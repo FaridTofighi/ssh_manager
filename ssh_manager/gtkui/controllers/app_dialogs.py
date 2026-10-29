@@ -1,4 +1,4 @@
-"""Application-level dialogs: settings, credentials, vault, config file, about, shortcuts."""
+"""Application-level dialogs: settings, credentials, config file, about, shortcuts."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from ..dialogs.credentials import CredentialManagerDialog  # noqa: E402
 from ..dialogs.files import choose_save_file  # noqa: E402
 from ..dialogs.preferences import PreferencesDialog, PreferencesValues  # noqa: E402
 from ..dialogs.secrets import NewSecretDialog  # noqa: E402
-from ..dialogs.vault import VaultDialog  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
 from .shortcuts import build_shortcuts_window, refresh_shortcuts_window  # noqa: E402
@@ -35,7 +34,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AppDialogs:
-    """Application-level dialogs: settings, credentials, vault, config file, about, shortcuts."""
+    """Application-level dialogs: settings, credentials, config file, about, shortcuts."""
 
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
@@ -187,16 +186,16 @@ class AppDialogs:
             self.win._notify(_("Export failed: {error}").format(error=exc), Level.WARNING)
 
     def open_credentials(self) -> None:
-        CredentialManagerDialog(self.win, self.win._credential_store).run_and_destroy()
+        dialog = CredentialManagerDialog(self.win, self.win._credential_store)
+        migration = getattr(self.win, "legacy_migration", None)
+        if migration is not None:
+            migration.add_import_button(dialog)
+        dialog.run_and_destroy()
         self.win.tree.update_details()
 
     def open_config_file(self) -> None:
         path = self.win.inventory.resolve_config_view_path()
         ConfigViewerDialog(self.win, path).run_and_destroy()
-
-    def open_vault(self) -> None:
-        VaultDialog(self.win, self.win._vault).run_and_destroy()
-        self.win.tree.update_details()
 
     def show_shortcuts(self) -> None:
         # One window per main window, hidden on close (see build_shortcuts_window).

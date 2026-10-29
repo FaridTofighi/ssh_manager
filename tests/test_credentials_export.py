@@ -69,7 +69,7 @@ class ExportTests(ExportCase):
         self.assertEqual(export_credentials(self.source, "export passphrase", self.file), 2)
         self.assertEqual(stat.S_IMODE(self.file.stat().st_mode), 0o600)
         raw = self.file.read_bytes()
-        for plain in (SECRET.encode(), b"private-pw", b"Ops", b"deploy"):
+        for plain in (SECRET.encode(), b"private-pw", b"postgres"):  # long enough not to appear by chance
             self.assertNotIn(plain, raw)
         document = json.loads(raw)
         self.assertEqual(set(document), {"format", "version", "kdf", "nonce", "data"})

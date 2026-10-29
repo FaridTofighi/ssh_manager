@@ -22,13 +22,12 @@ class ExportCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.store = make_store(Path(self.tmp.name))
         self.addCleanup(self.store.close)
-        self.ids, self.group_colors, self.host_colors, self.creds, self.vault = build_rich(self.store)
+        self.ids, self.group_colors, self.host_colors, self.creds, _unused = build_rich(self.store)
 
     def export(self, **kw):
         kw.setdefault("group_colors", self.group_colors)
         kw.setdefault("host_colors", self.host_colors)
         kw.setdefault("credential_for", self.creds.get)
-        kw.setdefault("vault_label", self.vault.get)
         kw.setdefault("now", 1_800_000_000)
         return build_export(self.store, **kw)
 
@@ -108,7 +107,7 @@ class StructureTests(ExportCase):
                               ("#11223344", "#11223344"), ("red", None), ("rgb(300,0,0)", None), ("", None)):
             self.assertEqual(normalize_color(raw), expected, raw)
 
-    def test_credentials_vault_and_tunnels(self) -> None:
+    def test_credentials_and_tunnels(self) -> None:
         doc, report = self.export()
         self.assertEqual(doc["credentials"], [{"ref": "c1", "name": "Ops account", "username": "deploy"},
                                               {"ref": "c2", "name": "Postgres", "username": "postgres"}])
@@ -117,12 +116,14 @@ class StructureTests(ExportCase):
         self.assertEqual(self.host(self.find(doc["groups"], "Files"), "sftp-1")["credential"],
                          {"ref": "c1", "mode": "shared"})  # deduplicated
         self.assertEqual(self.host(prod, "bastion")["credential"], {"mode": "host-specific"})
-        self.assertEqual(self.host(prod, "web-01")["vault"], {"label": "Ops vault entry"})
+        self.assertNotIn("vault", self.host(prod, "web-01"))  # a link of the removed feature is never exported
+        self.assertNotIn("vault_id", self.host(prod, "web-01")["metadata"])
         rdp = self.host(self.find(doc["groups"], "Windows"), "dc-01")["metadata"]["rdp"]
         self.assertEqual(rdp["via_ssh_ref"], self.host(prod, "bastion")["ref"])
         self.assertNotIn("via_ssh", rdp)
         self.assertEqual(rdp["gateway"], {"host": "", "port": 443})
-        self.assertEqual((report.credentials, report.host_specific, report.vault_labels), (2, 1, 1))
+        self.assertEqual((report.credentials, report.host_specific), (2, 1))
+        self.assertEqual(report.removed["link to a removed feature"], 1)
         # A tunnel host outside the export: the tunnel is dropped, with a warning.
         only_windows, report = self.export(scope="groups", group_id=self.ids["windows"])
         self.assertEqual([g["name"] for g in only_windows["groups"]], ["Windows"])

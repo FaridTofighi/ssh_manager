@@ -363,9 +363,7 @@ class PreferencesDialog(BaseDialog):
         self._allow_plaintext_check.set_active(bool(policy.get("allow_plaintext_host_passwords", True)))
         self._warn_plaintext_check = Gtk.CheckButton.new_with_mnemonic(_("_Warn when saving plain-text passwords"))
         self._warn_plaintext_check.set_active(bool(policy.get("warn_on_plaintext_host_passwords", True)))
-        self._prefer_vault_check = Gtk.CheckButton.new_with_mnemonic(_("_Prefer the credential vault for passwords"))
-        self._prefer_vault_check.set_active(bool(policy.get("prefer_vault_for_passwords", True)))
-        for check in (self._allow_plaintext_check, self._warn_plaintext_check, self._prefer_vault_check):
+        for check in (self._allow_plaintext_check, self._warn_plaintext_check):
             sec.add_widget(check)
         self._rotation_spin = _spin(1, 3650, 1, float(policy.get("rotation_hint_days", 90)))
         sec.add(_("Suggest _rotation after (days)"), self._rotation_spin, label_group=self._labels)
@@ -565,7 +563,6 @@ class PreferencesDialog(BaseDialog):
             secrets_policy={
                 "allow_plaintext_host_passwords": self._allow_plaintext_check.get_active(),
                 "warn_on_plaintext_host_passwords": self._warn_plaintext_check.get_active(),
-                "prefer_vault_for_passwords": self._prefer_vault_check.get_active(),
                 "rotation_hint_days": int(self._rotation_spin.get_value()),
             },
             enable_audit_logging=self._audit_enable.get_active(),

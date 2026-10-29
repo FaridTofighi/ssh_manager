@@ -201,7 +201,7 @@ class ControllerTests(unittest.TestCase):
         self.store = CredentialStore(self.secure, path=self.path)
         self.shared = self.store.add("Ops", "ops", "shared-pw")
         self.notes = []
-        self.win = SimpleNamespace(_credential_store=self.store, _secure_store=self.secure, _vault=None,
+        self.win = SimpleNamespace(_credential_store=self.store, _secure_store=self.secure,
                                    _notify=lambda message, *a, **k: self.notes.append(message),
                                    manager=SimpleNamespace(allows_display_names=True))
         self.creds = CredentialController(self.win)

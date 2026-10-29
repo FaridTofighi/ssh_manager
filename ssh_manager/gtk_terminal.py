@@ -357,7 +357,7 @@ class TerminalTab(SessionPage):
         self._paramiko_mode = not autostart
         self._password_provider = None
         self._resolution: PasswordResolution = NO_PASSWORD  # the last resolution (for messages; never logged)
-        self._password_source: str = "none"  # vault | credential | legacy | session | prompt | retry | manual | none
+        self._password_source: str = "none"  # credential | host | legacy | session | prompt | retry | manual | none
         # Passwords live only in memory: the one sent in this attempt, and a typed one that worked in this tab.
         self._attempt_password: Optional[str] = None
         self._session_password: Optional[str] = None
@@ -1308,7 +1308,7 @@ class TerminalTab(SessionPage):
             return GLib.SOURCE_REMOVE
         return True
 
-    _PASSWORD_SOURCES = {"vault", "credential", "host", "legacy", "session", "prompt", "retry", "stored"}
+    _PASSWORD_SOURCES = {"credential", "host", "legacy", "session", "prompt", "retry", "stored"}
 
     def _handle_auth_failure_retry(self) -> bool:
         """The password was rejected: stop the child and ask again. Stored secrets are never touched."""
@@ -1465,7 +1465,7 @@ class TerminalTab(SessionPage):
         """Decide which password (if any) sshpass should send. Returns ``(proceed, password)``.
 
         Order: an explicit override (the retry prompt) → a typed password that already
-        worked in this tab → the resolution (vault → credential → legacy). Nothing is saved.
+        worked in this tab → the resolution (credential → legacy). Nothing is saved.
         """
 
         helper_available = shutil.which("sshpass") is not None

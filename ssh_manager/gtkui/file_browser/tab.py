@@ -6,7 +6,7 @@ and the status bar the window docks.
 
 Connecting runs in the connection's worker. The password follows the SSH
 rules (``docs/passwords.md``):
-- the resolved password (vault → credential → host-specific → legacy) goes first;
+- the resolved password (credential → host-specific → legacy) goes first;
 - an ``AuthError`` opens the same retry dialog as a terminal (at most 3);
 - a typed password that logged in is offered once: "Save this password for this host?";
 - nothing is saved silently.
@@ -351,7 +351,7 @@ class FileBrowserTab(SessionPage):
                 detail = self.server.tls_version or (self.server.host_key.split(" ", 1)[0] if self.server.host_key
                                                      else "")
             text = _("Encrypted") + (f" · {detail}" if detail else "")
-            icon, tip = Icons.VAULT, _("The connection is encrypted.")
+            icon, tip = Icons.LOCK, _("The connection is encrypted.")
         self.security_label.set_text(text)
         self.security_label.set_tooltip_text(tip)
         self.security_kind = "plain" if icon == Icons.WARNING else "encrypted"

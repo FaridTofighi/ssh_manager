@@ -163,3 +163,87 @@ class ConversionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from tests.gtk_window_fixture import display_available  # noqa: E402
+
+
+@unittest.skipUnless(display_available(), "needs a display")
+class MigrationDialogTests(unittest.TestCase):
+    """The start-up offer and the Credentials manager's button, against a sandboxed window."""
+
+    def setUp(self) -> None:
+        from tests.gtk_window_fixture import WindowSandbox
+
+        self.sandbox = WindowSandbox(store=True)
+        self.addCleanup(self.sandbox.close)
+        self.win = self.sandbox.window
+        store = self.win.manager.store
+        web = store.find_host(store.find_group(["prod", "web.conf"]).id, "web-01")
+        store.update_host(web.id, metadata=dict(web.metadata, vault_id="v1"))
+        self.win.manager.refresh()
+        self.web_id = web.id
+        self.path = LV.legacy_vault_path()
+        self.assertTrue(str(self.path).startswith(str(self.sandbox.root)))  # never the real one
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_old_vault(self.path, "vault-pw", [("v1", "Web login", "deploy", SECRET)])
+        self.migration = self.win.legacy_migration
+        self.asked = []
+        self.migration.ask_move = lambda: self.asked.append("move") or True
+        self.migration.ask_password = lambda verify: (self.asked.append("password"), "vault-pw")[1] \
+            if verify("vault-pw") else None
+        self.migration.ask_delete = lambda report: self.asked.append(("delete", report.entries)) or True
+        self.migration.message = lambda *a: self.asked.append(("message", a[0]))
+
+    def test_move_now_with_the_vault_password_then_delete(self) -> None:
+        self.migration.offer_at_startup()
+        self.assertEqual(self.asked, ["move", "password", ("delete", 1)])
+        self.assertFalse(self.path.exists())
+        resolution = self.win.creds.resolve_password(self.win.tree.find_host_by_alias("web-01"))
+        self.assertEqual((resolution.password, resolution.source), (SECRET, "credential"))
+        self.assertNotIn("vault_id", self.win.manager.store.get_host(self.web_id).metadata)
+        self.migration.offer_at_startup()  # once per session
+        self.assertEqual(len(self.asked), 3)
+
+    def test_the_master_password_is_tried_silently(self) -> None:
+        self.win._master_password = "vault-pw"
+        self.migration.offer_at_startup()
+        self.assertEqual(self.asked, ["move", ("delete", 1)])
+
+    def test_later_and_declined_deletion_keep_the_file(self) -> None:
+        self.migration.ask_move = lambda: False
+        before = self.path.read_bytes()
+        self.migration.offer_at_startup()
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.win._credential_store.list(), [])
+        self.migration.offered = False
+        self.migration.ask_move = lambda: True
+        self.migration.ask_delete = lambda report: False
+        self.migration.offer_at_startup()
+        self.assertTrue(self.path.exists())  # declined: kept, nothing depends on it
+        self.assertEqual([c.name for c in self.win._credential_store.list()], ["Web login"])
+
+    def test_a_wrong_password_or_cancel_changes_nothing(self) -> None:
+        self.migration.ask_password = lambda verify: "x" if verify("wrong") else None
+        self.migration.offer_at_startup()
+        self.assertTrue(self.path.exists())
+        self.assertIn("vault_id", self.win.manager.store.get_host(self.web_id).metadata)
+        self.assertEqual(self.win._credential_store.list(), [])
+
+    def test_the_credentials_manager_offers_the_import_only_while_the_file_exists(self) -> None:
+        from ssh_manager.gtkui.dialogs.credentials import CredentialManagerDialog
+
+        dialog = CredentialManagerDialog(self.win, self.win._credential_store)
+        self.addCleanup(dialog.destroy)
+        button = self.migration.add_import_button(dialog)
+        self.assertEqual(button.get_label(), "Import _old vault…")
+        button.clicked()
+        self.assertFalse(button.get_visible())
+        self.assertIsNone(self.migration.add_import_button(dialog))
+
+    def test_the_removed_feature_is_gone_from_the_window(self) -> None:
+        from ssh_manager.gtkui.controllers.shortcuts import ACTION_BY_NAME
+
+        self.assertNotIn("vault", ACTION_BY_NAME)
+        self.assertIsNone(self.win.lookup_action("vault"))
+        self.assertFalse(hasattr(self.win, "_vault"))

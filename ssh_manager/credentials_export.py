@@ -1,6 +1,6 @@
 """Encrypted export / import of shared credentials (``*.sshcred``) — no GTK.
 
-Replaces the removed vault's export. The file is always encrypted with an
+Moves credentials between installations. The file is always encrypted with an
 export passphrase (never the master password implicitly):
 
 ``{"format": "ssh-manager-credentials-export", "version": 1, "kdf": {"name": "scrypt", "n": 32768, "r": 8,

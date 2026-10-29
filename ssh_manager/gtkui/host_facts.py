@@ -83,7 +83,6 @@ def format_latency(ms: Optional[float], *, failed: bool = False) -> str:
 class AuthKind(str, Enum):
     KEY = "key"
     PASSWORD = "password"
-    VAULT = "vault"
     CREDENTIAL = "credential"
     AGENT = "agent"
 
@@ -134,7 +133,6 @@ def auth_summary(
     host,
     *,
     credential_name: str = "",
-    vault: bool = False,
     has_password: bool = False,
     key_type: Optional[str] = None,
     host_specific: bool = False,
@@ -144,8 +142,6 @@ def auth_summary(
     ``host_specific``: the bound credential is the host's own (private) password.
     """
 
-    if vault:
-        return AuthSummary(AuthKind.VAULT, _("Vault"), caption=_("Using vault credential"))
     if host_specific:
         return AuthSummary(AuthKind.CREDENTIAL, _("Host-specific password"),
                            caption=_("Using a password specific to this host"))

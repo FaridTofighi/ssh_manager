@@ -31,6 +31,8 @@ LOGGER = logging.getLogger(__name__)
 FILE_NAME = "vault.json"
 ITERATIONS = 200_000
 VAULT_ID = "vault_id"
+# Host metadata the removed feature wrote: kept as it is until the conversion, never exported or used.
+LEGACY_METADATA_KEYS = (VAULT_ID,)
 
 
 class LegacyVaultError(Exception):
@@ -274,5 +276,5 @@ def secure_delete_vault_files(path: Path) -> bool:
     return all([secure_delete(p) for p in vault_files(path)])
 
 
-__all__ = ["LegacyEntry", "LegacyVaultError", "ConversionReport", "legacy_vault_path", "read_legacy_vault",
+__all__ = ["LEGACY_METADATA_KEYS", "LegacyEntry", "LegacyVaultError", "ConversionReport", "legacy_vault_path", "read_legacy_vault",
            "convert_vault", "secure_delete", "secure_delete_vault_files", "vault_files", "binding_key"]

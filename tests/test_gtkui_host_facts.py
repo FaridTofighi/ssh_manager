@@ -76,7 +76,6 @@ class AuthTests(unittest.TestCase):
         keyed = host(identityfile="/nonexistent/id_ed25519")
         summary = auth_summary(keyed)
         self.assertEqual((summary.kind, summary.label, summary.caption), (AuthKind.KEY, "SSH key", "Using ed25519 authentication"))
-        self.assertEqual(auth_summary(keyed, vault=True).kind, AuthKind.VAULT)
         self.assertEqual(auth_summary(keyed, credential_name="ops").label, "Credential: ops")
         self.assertEqual(auth_summary(host(), has_password=True).caption, "Using password authentication")
         self.assertEqual(auth_summary(host()).label, "Agent")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Mapping, Optional
 
 from .config import HostEntry
+from .legacy_vault import LEGACY_METADATA_KEYS
 
 
 _CONNECTION_OPTIONS = {
@@ -27,7 +28,7 @@ _APP_ONLY_OPTIONS = {
     "owner",
     "service",
     "notes",
-    "vault_id",
+    *LEGACY_METADATA_KEYS,
     "credential_id",
     "default_session_profile_id",
     "session_profile_id",

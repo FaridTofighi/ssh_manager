@@ -134,7 +134,7 @@ class NativeTransferController:
             document, report = build_export(
                 store, scope=scope, group_id=group_id, host_ids=host_ids, options=options,
                 group_colors=self.win.colors.group_colors, host_colors=self.win.colors.host_colors,
-                credential_for=self._credential_for, vault_label=self._vault_label,
+                credential_for=self._credential_for,
                 smart_groups=[{"name": g.name, "query": g.query} for g in smart], app_version=app_version())
         except LookupError as exc:
             self.win._notify_error(str(exc))
@@ -166,14 +166,6 @@ class NativeTransferController:
             return self.win._credential_store.credential_for_host(host_id)
         except Exception:  # a locked keyring: no reference
             return None
-
-    def _vault_label(self, vault_id: str) -> Optional[str]:
-        vault = getattr(self.win, "_vault", None)
-        try:
-            entry = vault.get_entry(vault_id) if vault is not None and vault.unlocked else None
-        except Exception:
-            entry = None
-        return entry.label if entry is not None else None
 
     @property
     def busy(self) -> bool:

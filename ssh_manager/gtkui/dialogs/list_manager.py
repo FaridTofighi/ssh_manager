@@ -1,4 +1,4 @@
-"""Shared list-management dialog (credentials, vault entries, …)."""
+"""Shared list-management dialog (credentials, …)."""
 
 from __future__ import annotations
 

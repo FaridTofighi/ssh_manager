@@ -92,8 +92,6 @@ class HostActions:
             transfer_backend_factory=lambda candidate, cred_id, original=host: self.transfer_backend(
                 candidate, cred_id, original),
             metadata=host.metadata if host else {},
-            vault_entries=self.win._vault.entries() if self.win._vault.unlocked else [],
-            vault_unlocked=self.win._vault.unlocked,
             profiles=self.win._profiles,
             alias_validator=validators_for(self.win.manager)["alias"],
             rdp_ssh_hosts=self.tunnel_hosts(exclude=getattr(host, "id", "") if host else ""),

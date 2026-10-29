@@ -101,7 +101,7 @@ class NativeExportDialog(BaseDialog):
         self.notice.set_line_wrap(True)
         self.add_body(self.notice)
         help_text = Gtk.Label(label=_(
-            "Never exported: passwords, vault entries, private keys, certificate pins, macros, the master "
+            "Never exported: passwords, private keys, certificate pins, macros, the master "
             "password, application settings, history and window state."))
         help_text.set_xalign(0.0)
         help_text.set_line_wrap(True)

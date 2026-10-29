@@ -786,10 +786,6 @@ class NativeImportDialog(BaseDialog):
             hints.append(ngettext("{n} host will ask for its password on first connect.",
                                   "{n} hosts will ask for their password on first connect.",
                                   self.plan.host_specific).format(n=self.plan.host_specific))
-        for vault_label, number in sorted((self.plan.vault_labels if self.plan else {}).items()):
-            hints.append(ngettext("{n} host used a vault entry (“{label}”); choose the entry in the host dialog "
-                                  "later.", "{n} hosts used a vault entry (“{label}”); choose the entry in the host "
-                                  "dialog later.", number).format(n=number, label=vault_label))
         self.credentials_hint.set_text(" ".join(hints))
         self.credentials_error.hide()
         self._sync_buttons()

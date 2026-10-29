@@ -259,7 +259,7 @@ class Connector:
         provider = getattr(self, "_password_provider", None)
         stored_password: Optional[str] = None
         resolution: Optional[PasswordResolution] = None
-        if provider is not None:  # the same resolution as the terminal (vault → credential → legacy)
+        if provider is not None:  # the same resolution as the terminal (credential → legacy)
             try:
                 resolution = provider()
                 stored_password = resolution.password
