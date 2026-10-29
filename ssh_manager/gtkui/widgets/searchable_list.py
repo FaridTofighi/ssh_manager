@@ -31,7 +31,7 @@ class SearchableList(Gtk.Box):
     def __init__(self, items: Sequence[Tuple[str, str]] = (), *, allow_new: bool = False,
                  initial: Optional[str] = None, search_label: str = "", list_label: str = "",
                  placeholder: str = "", new_label: str = "",
-                 on_activate: Optional[Callable[[], None]] = None) -> None:
+                 on_activate: Optional[Callable[[], None]] = None, min_height: int = LIST_MIN_HEIGHT) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
         self.allow_new = allow_new
         self.new_label = new_label or _("Create new group “{name}”")
@@ -69,7 +69,7 @@ class SearchableList(Gtk.Box):
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_shadow_type(Gtk.ShadowType.IN)
-        scroller.set_min_content_height(LIST_MIN_HEIGHT)
+        scroller.set_min_content_height(min_height)
         scroller.set_vexpand(True)
         scroller.add(self.view)
         self.scroller = scroller

@@ -28,6 +28,7 @@ class GroupActions:
 
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
+        self._last_child: dict = {}  # top-level group → the child group chosen last (the chooser's selection)
 
     @property
     def _store_names(self) -> bool:
@@ -331,20 +332,25 @@ class GroupActions:
             self.win.creds.unbind_credential_prefix(f"{parent}::{child}::")
             self.win.tree.rebuild(refresh=True)
 
-    def prompt_child_destination(self, parent: str) -> Optional[Tuple[str, bool]]:
-        children = sorted(self.win.manager.tree.get(parent, {}).keys(), key=lambda name: name.lower())
-        if children:
-            listing = ", ".join(children)
-            message = f"Child filename under {parent} (existing: {listing})"
-            default = children[0]
-        else:
-            message = f"Create a child filename under {parent}"
-            default = ""
-        name = self.win._prompt_text("Move to child group", message, default)
-        if not name:
-            return None
-        child = self.normalize_group_filename(name)
-        if not child:
-            return None
-        create_child = child not in children
-        return child, create_child
+    def prompt_child_destination(self, parent: str, *, title: Optional[str] = None, message: Optional[str] = None,
+                                 accept_label: str = "") -> Optional[Tuple[str, bool]]:
+        """``(child, create_child)``: a child group of ``parent`` chosen (or typed) in a searchable list.
+
+        The groups are never put into the message: a top-level group may have a thousand of them.
+        """
+
+        from gi.repository import Gtk  # type: ignore
+
+        from ..dialogs.child_group_chooser import ChildGroupChooserDialog
+
+        children = sorted((name for name in self.win.manager.tree.get(parent, {}) if name), key=str.lower)
+        dialog = ChildGroupChooserDialog(
+            self.win if isinstance(self.win, Gtk.Window) else None,
+            title or _("Move to child group"),
+            message or _("Choose a child group of “{parent}”, or type a new name to create it.").format(parent=parent),
+            parent, children, initial=self._last_child.get(parent), accept_label=accept_label,
+            normalize=self.normalize_group_filename, validator=validators_for(self.win.manager)["child_path"])
+        choice = dialog.ask()
+        if choice is not None:
+            self._last_child[parent] = choice[0]
+        return choice

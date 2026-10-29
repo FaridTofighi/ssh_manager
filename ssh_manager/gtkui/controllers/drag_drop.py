@@ -203,7 +203,10 @@ class DragDropController:
             target_parent, target_child, create_child = target["parent"], target["child"], False
         elif target.get("type") == RowKind.PARENT.value:
             target_parent = target["parent"]
-            choice = win.groups.prompt_child_destination(target_parent)
+            choice = win.groups.prompt_child_destination(
+                target_parent, title=_("Move to child group"),
+                message=_("Choose the child group of “{parent}” to move the hosts to, or type a new name to create it.")
+                .format(parent=target_parent), accept_label=_("_Move"))
             if not choice:
                 return False
             target_child, create_child = choice

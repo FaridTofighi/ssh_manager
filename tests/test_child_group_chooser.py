@@ -123,5 +123,168 @@ class ChooserTests(unittest.TestCase):
         self.assertLess(natural, SCREEN[1] * 0.7)
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class LargeGroupRegressionTests(unittest.TestCase):
+    def make_groups(self, children, *, store_names=True):
+        from gi.repository import Gtk  # type: ignore
+
+        from ssh_manager.gtkui.controllers.group_actions import GroupActions
+        from ssh_manager.gtkui.dialogs.prompt import prompt_text
+
+        win = Gtk.Window()
+        self.addCleanup(win.destroy)
+        win.manager = mock.Mock(tree={"Fanap-infra2026": {name: object() for name in children}},
+                                allows_display_names=store_names)
+        win._prompt_text = lambda title, message, default="", **kw: prompt_text(win, title, message, default, **kw)
+        return GroupActions(win)
+
+    def test_new_host_on_a_group_with_1500_children_fits_the_screen(self) -> None:
+        from gi.repository import Gtk  # type: ignore
+
+        names = child_names(1500)
+        groups = self.make_groups(names)
+        seen = {}
+
+        def measure(dialog):
+            dialog.show_all()
+            pump(0.1)
+            _minimum, natural = dialog.get_preferred_height()
+            seen["height"] = natural
+            seen["labels"] = labels_of(dialog)
+            seen["buttons"] = [b for b in dialog.get_action_area().get_children() if isinstance(b, Gtk.Button)]
+            return Gtk.ResponseType.CANCEL
+
+        with mock.patch.object(Gtk.Dialog, "run", measure):
+            self.assertIsNone(groups.prompt_child_destination("Fanap-infra2026"))
+        self.assertLess(seen["height"], SCREEN[1] * 0.7)
+        self.assertGreaterEqual(len(seen["buttons"]), 2)  # accept and cancel are there (and on screen: see above)
+        text = "\n".join(seen["labels"])
+        for name in names[:50] + names[-50:]:
+            self.assertNotIn(name, text)
+
+
+    def test_the_title_and_message_never_list_the_groups(self) -> None:
+        from ssh_manager.gtkui.dialogs import child_group_chooser
+
+        names = child_names(40)
+        groups = self.make_groups(names)
+        groups._last_child["Fanap-infra2026"] = names[7]
+        seen = {}
+
+        def capture(dialog_self):
+            seen["title"], seen["selected"] = dialog_self.get_title(), dialog_self.selected()
+            seen["labels"] = labels_of(dialog_self)
+            return names[3], False
+
+        with mock.patch.object(child_group_chooser.ChildGroupChooserDialog, "ask", capture):
+            self.assertEqual(groups.prompt_child_destination("Fanap-infra2026", title="T"), (names[3], False))
+        self.assertEqual(seen["title"], "T")
+        self.assertEqual(seen["selected"], (names[7], False))  # the last choice, not the first of 40
+        self.assertFalse(any(name in "\n".join(seen["labels"]) for name in names))
+        self.assertEqual(groups._last_child["Fanap-infra2026"], names[3])
+
+
+class CallSiteTests(unittest.TestCase):
+    """New Host on a top-level group and dropping hosts on one both use the chooser."""
+
+    def window(self):
+        from ssh_manager.gtkui.constants import RowKind
+
+        win = mock.Mock()
+        win.ensure_editable_inventory.return_value = True
+        win.manager.tree = {"Top": {"a.conf": object(), "b.conf": object()}}
+        win.manager.allows_display_names = False
+        win.manager.create_child_group.return_value = (True, "created")
+        win.manager.move_hosts.return_value = (True, "moved")
+        win.tree.current_item.return_value = (RowKind.PARENT.value, {"parent": "Top"})
+        return win
+
+    def answer(self, choice):
+        from ssh_manager.gtkui.dialogs import child_group_chooser
+
+        self.asked = []
+
+        def ask(dialog_self):
+            self.asked.append((dialog_self.get_title(), dialog_self.parent_group))
+            return choice
+
+        return mock.patch.object(child_group_chooser.ChildGroupChooserDialog, "ask", ask)
+
+    def setUp(self) -> None:
+        if not display_available():
+            self.skipTest("needs a display")
+
+    def test_new_host_in_an_existing_and_in_a_new_child_group(self) -> None:
+        from ssh_manager.gtkui.controllers.group_actions import GroupActions
+        from ssh_manager.gtkui.controllers.host_actions import HostActions
+
+        win = self.window()
+        win.groups = GroupActions(win)
+        hosts = HostActions(win)
+        with self.answer(("b.conf", False)), mock.patch.object(hosts, "create_host_in_group") as create:
+            hosts.create_host_in_current_group()
+        create.assert_called_once_with("Top", "b.conf")
+        win.manager.create_child_group.assert_not_called()
+        self.assertEqual(self.asked, [("New Host — choose a group", "Top")])
+        with self.answer(("new.conf", True)), mock.patch.object(hosts, "create_host_in_group") as create:
+            hosts.create_host_in_current_group()
+        win.manager.create_child_group.assert_called_once_with("Top", "new.conf")
+        create.assert_called_once_with("Top", "new.conf")
+        with self.answer(None), mock.patch.object(hosts, "create_host_in_group") as create:
+            hosts.create_host_in_current_group()  # cancelled
+        create.assert_not_called()
+
+    def test_dropping_hosts_on_a_top_level_group(self) -> None:
+        from ssh_manager.gtkui.controllers.drag_drop import DragDropController
+        from ssh_manager.gtkui.controllers.group_actions import GroupActions
+
+        win = self.window()
+        win.groups = GroupActions(win)
+        drops = DragDropController(win)
+        items = [{"parent": "Other", "child": "x.conf", "alias": "web-01"}]
+        with self.answer(("new.conf", True)):
+            drops._drop_hosts(items, {"type": "parent", "parent": "Top"})
+        self.assertEqual(self.asked, [("Move to child group", "Top")])
+        win.manager.move_hosts.assert_called_once_with([("Other", "x.conf", "web-01")], "Top", "new.conf",
+                                                       create_child=True)
+
+
+@unittest.skipUnless(display_available(), "needs a display")
+class GroupPickerTests(unittest.TestCase):
+    def picker(self, tree, **kw):
+        from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
+
+        manager = mock.Mock(tree=tree, allows_display_names=False)
+        dialog = GroupPickerDialog(None, manager, "Move", **kw)
+        self.addCleanup(dialog.destroy)
+        return dialog
+
+    def test_small_inventories_keep_the_combo_boxes(self) -> None:
+        dialog = self.picker({"P1": {"a.conf": 1, "b.conf": 1}, "P2": {"c.conf": 1}})
+        self.assertIsNone(dialog._parent_list)
+        self.assertIsNone(dialog._child_list)
+        self.assertEqual(dialog.selected(), ("P1", "a.conf", False))
+        dialog._parent_combo.set_active(1)
+        self.assertEqual(dialog.selected(), ("P2", "c.conf", False))
+
+    def test_large_ones_use_the_searchable_list_with_the_same_answers(self) -> None:
+        children = {f"c{i:03d}.conf": 1 for i in range(200)}
+        parents = {f"P{i:02d}": dict(children) for i in range(40)}
+        dialog = self.picker(parents, initial_parent="P05", initial_child="c150.conf", allow_new_child=True)
+        self.assertIsNotNone(dialog._parent_list)
+        self.assertIsNotNone(dialog._child_list)
+        self.assertEqual(dialog.selected(), ("P05", "c150.conf", False))
+        dialog._child_list.select_value("c007.conf")
+        self.assertEqual(dialog.selected(), ("P05", "c007.conf", False))
+        dialog._parent_list.select_value("P39")
+        self.assertEqual(dialog.selected(), ("P39", "c000.conf", False))  # like the combo: the first child
+        dialog._new_child_entry.set_text("fresh.conf")
+        self.assertEqual(dialog.selected(), ("P39", "fresh.conf", True))
+        _minimum, natural = dialog.get_preferred_height()
+        self.assertLess(natural, SCREEN[1] * 0.7)
+        one_big = self.picker({"P1": dict(children), "P2": {"x.conf": 1}})  # 2 parents: combo; children: list
+        self.assertIsNone(one_big._parent_list)
+        self.assertEqual(one_big.selected(), ("P1", "c000.conf", False))
+
 if __name__ == "__main__":
     unittest.main()

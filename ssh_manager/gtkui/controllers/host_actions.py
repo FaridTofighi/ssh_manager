@@ -382,8 +382,8 @@ class HostActions:
         elif kind == RowKind.CHILD_FOLDER.value:
             folder = data.get("child", "") or ""
             name = self.win._prompt_text(
-                "Select subgroup",
-                f"Subgroup under {parent}/{folder}:",
+                _("Select subgroup"),
+                _("Subgroup under {path}:").format(path=f"{parent}/{folder}"),
                 "",
             )
             if not name:
@@ -398,7 +398,10 @@ class HostActions:
                     return
             self.create_host_in_group(parent, child)
         elif kind == RowKind.PARENT.value:
-            choice = self.win.groups.prompt_child_destination(parent)
+            choice = self.win.groups.prompt_child_destination(
+                parent, title=_("New Host — choose a group"),
+                message=_("Choose the child group of “{parent}” for the new host, or type a new name to create it.")
+                .format(parent=parent))
             if not choice:
                 return
             child, create_child = choice
