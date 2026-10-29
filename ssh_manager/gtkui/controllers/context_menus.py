@@ -23,6 +23,8 @@ class TreeMenuCallbacks(Protocol):
     def copy_scp_command(self) -> None: ...
     def open_files_selected(self) -> None: ...
     def export_rdp_file(self) -> None: ...
+    def export_group(self) -> None: ...
+    def export_selected_hosts(self) -> None: ...
     def wake_and_connect(self) -> None: ...
     def edit_selected(self) -> None: ...
     def duplicate_selected(self) -> None: ...
@@ -83,6 +85,8 @@ def host_menu(
             MenuItemSpec(_("Change Host _Color…"), cb.change_host_color, Icons.COLOR),
             MenuItemSpec(_("Clear Host Color"), cb.clear_color, Icons.CLEAR),
             MenuItemSpec(_("_Forget Password"), cb.forget_password, Icons.FORGET),
+            MenuItemSpec(_("E_xport Selected Hosts…"), cb.export_selected_hosts, Icons.SAVE,
+                         tooltip=_("As an SSH Manager file (.sshm); no passwords")),
         ]),
         MenuSection("destructive", [
             MenuItemSpec(_("_Delete Host…"), cb.delete_selected, Icons.DELETE, accels.get("host-delete", ""),
@@ -124,6 +128,8 @@ def group_menu(
     sections.append(MenuSection("organize", [
         MenuItemSpec(_("Change Group _Color…"), cb.change_group_color, Icons.COLOR),
         MenuItemSpec(_("Clear Group Color"), cb.clear_color, Icons.CLEAR),
+        MenuItemSpec(_("E_xport Group…"), cb.export_group, Icons.SAVE,
+                     tooltip=_("This group and its subgroups as an SSH Manager file (.sshm); no passwords")),
     ]))
     if kind is RowKind.PARENT:
         sections.append(MenuSection("destructive", [

@@ -349,6 +349,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.inventory = InventoryController(self)
         self.app_dialogs = AppDialogs(self)
         self.macros = MacroController(self)  # terminal macros (encrypted with the master password)
+        from ssh_manager.gtkui.controllers.native_transfer import NativeTransferController
+
+        self.native = NativeTransferController(self)  # SSH Manager's own export / import (.sshm)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -513,6 +516,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "import-rdp-files": lambda: self.rdp_files.import_files(),
             "export-rdp-file": lambda: self.rdp_files.export_selected(),
             "export-openssh": lambda: self.store_actions.export_openssh(),
+            "export-native": lambda: self.native.export(),
             "backup-inventory": lambda: self.store_actions.backup_now(),
             "quit": self.close,
             "host-connect": sessions.connect_current_item,

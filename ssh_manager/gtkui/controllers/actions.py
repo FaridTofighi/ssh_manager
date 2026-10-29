@@ -47,6 +47,12 @@ class WindowActions:
     def export_rdp_file(self) -> None:
         self.win.rdp_files.export_selected()
 
+    def export_group(self) -> None:
+        self.win.native.export("groups")
+
+    def export_selected_hosts(self) -> None:
+        self.win.native.export("hosts")
+
     def wake_and_connect(self) -> None:
         self.win.rdp_files.wake_and_connect()
 
