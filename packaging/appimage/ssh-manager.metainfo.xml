@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.codex.SSHManager</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>SSH Manager</name>
+  <summary>Organise SSH hosts, open terminals, transfer files and connect to remote desktops</summary>
+  <description>
+    <p>
+      SSH Manager keeps SSH, SFTP, FTP/FTPS and RDP hosts in groups, opens SSH sessions in built-in
+      terminals, transfers files in a two-pane browser and shows Windows desktops through FreeRDP.
+      Passwords are kept in an encrypted store or the desktop keyring, never in plain files.
+    </p>
+  </description>
+  <launchable type="desktop-id">ssh-manager.desktop</launchable>
+  <categories>
+    <category>Network</category>
+    <category>RemoteAccess</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

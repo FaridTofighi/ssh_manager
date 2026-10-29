@@ -1,0 +1,101 @@
+# Build image for the SSH Manager AppImage (used only to build; nothing here runs on the user's machine).
+#
+# Ubuntu 22.04 (glibc 2.35) so the AppImage runs on Ubuntu 22.04+, Debian 12+, Fedora 38+ and other
+# current distributions. Every input is pinned: the base image by digest, apt by a dated snapshot of
+# the Ubuntu archive, FreeRDP / appimagetool / the AppImage runtime by version and SHA-256.
+#
+#   docker build -f packaging/appimage/Dockerfile.build -t ssh-manager-appimage-build packaging/appimage
+
+FROM ubuntu:22.04@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b
+
+ARG SNAPSHOT=20261020T000000Z
+ARG FREERDP_VERSION=3.32.2
+ARG FREERDP_SHA256=e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
+ARG APPIMAGETOOL_VERSION=1.9.1
+ARG APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+ARG RUNTIME_VERSION=20251108
+ARG RUNTIME_SHA256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
+
+# The base image has no CA certificates: get them once from its default archive, then use only the snapshot.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
+ && printf '%s\n' \
+    "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT} jammy main universe" \
+    "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT} jammy-updates main universe" \
+    "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT} jammy-security main universe" \
+    > /etc/apt/sources.list \
+ && printf '%s\n' 'Acquire::Check-Valid-Until "false";' 'Acquire::Retries "10";' 'Acquire::http::Timeout "120";' \
+    'Acquire::https::Timeout "120";' > /etc/apt/apt.conf.d/99snapshot
+
+# What is bundled (runtime) and what builds it (tools, -dev packages).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-dev python3-venv python3-pip libpython3.10 \
+      libgtk-3-0 libgtk-3-bin gir1.2-gtk-3.0 libgirepository-1.0-1 libgirepository1.0-dev gobject-introspection \
+      gir1.2-glib-2.0 gir1.2-pango-1.0 gir1.2-gdkpixbuf-2.0 gir1.2-atk-1.0 gir1.2-freedesktop \
+      gir1.2-rsvg-2.0 librsvg2-2 librsvg2-common libvte-2.91-0 gir1.2-vte-2.91 \
+      libgdk-pixbuf-2.0-0 libgdk-pixbuf2.0-bin adwaita-icon-theme hicolor-icon-theme shared-mime-info \
+      gsettings-desktop-schemas libglib2.0-bin libcairo2-dev pkg-config \
+      openssh-client sshpass xdotool libxdo3 \
+      build-essential cmake ninja-build meson file binutils patchelf curl xz-utils \
+      libssl-dev zlib1g-dev libx11-dev libxext-dev libxinerama-dev libxcursor-dev libxdamage-dev libxv-dev \
+      libxkbfile-dev libxi-dev libxrandr-dev libxfixes-dev libxrender-dev libxtst-dev libxkbcommon-dev \
+      libasound2-dev libpulse-dev libusb-1.0-0-dev libjpeg-turbo8-dev libkrb5-dev libpcsclite-dev libcjson-dev \
+      xvfb xauth dbus-x11 fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/*
+
+# FreeRDP 3 (not in Ubuntu 22.04): the X11 client only, into /opt/freerdp (copied into the AppDir by build.sh).
+RUN mkdir -p /tmp/freerdp && cd /tmp/freerdp \
+ && curl -fsSLo freerdp.tar.gz "https://github.com/FreeRDP/FreeRDP/releases/download/${FREERDP_VERSION}/freerdp-${FREERDP_VERSION}.tar.gz" \
+ && echo "${FREERDP_SHA256}  freerdp.tar.gz" | sha256sum -c - \
+ && tar xzf freerdp.tar.gz && cmake -S "freerdp-${FREERDP_VERSION}" -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_SKIP_INSTALL_RPATH=ON -DWITH_X11=ON -DWITH_CLIENT_X11=ON -DWITH_CLIENT_SDL=OFF -DWITH_CLIENT_SDL2=OFF \
+      -DWITH_CLIENT_SDL3=OFF -DWITH_WAYLAND=OFF -DWITH_SERVER=OFF -DWITH_SHADOW=OFF -DWITH_PROXY=OFF \
+      -DWITH_SAMPLE=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_MANPAGES=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
+      -DWITH_DSP_FFMPEG=OFF -DWITH_CAIRO=OFF -DWITH_FUSE=OFF -DWITH_CUPS=OFF -DWITH_OSS=OFF -DWITH_ALSA=ON \
+      -DWITH_PULSE=ON -DWITH_PCSC=ON -DWITH_KRB5=ON -DWITH_JPEG=ON -DWITH_WEBVIEW=OFF -DWITH_AAD=ON \
+      -DWITH_FAAD2=OFF -DWITH_FAAC=OFF -DWITH_SOXR=OFF -DWITH_OPUS=OFF -DWITH_LAME=OFF -DWITH_URIPARSER=OFF \
+      -DWITH_CHANNEL_GFXREDIR=ON -DWITH_CLIENT_CHANNELS=ON -DCHANNEL_URBDRC=ON -DWITH_KEYBOARD_LAYOUT_FROM_FILE=OFF \
+      -DWITH_TIMEZONE_FROM_FILE=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_RC4=ON -DWITH_INTERNAL_MD4=ON -DWITH_INTERNAL_MD5=ON \
+      -DBUILD_TESTING=OFF \
+ && cmake --build build && cmake --install build && cd / && rm -rf /tmp/freerdp
+
+# appimagetool and the static type-2 runtime (no libfuse2 needed on the user's machine).
+RUN mkdir -p /opt/appimage && cd /opt/appimage \
+ && curl -fsSLo appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage" \
+ && curl -fsSLo runtime-x86_64 "https://github.com/AppImage/type2-runtime/releases/download/${RUNTIME_VERSION}/runtime-x86_64" \
+ && printf '%s  %s\n' "${APPIMAGETOOL_SHA256}" appimagetool.AppImage "${RUNTIME_SHA256}" runtime-x86_64 | sha256sum -c - \
+ && chmod +x appimagetool.AppImage && ./appimagetool.AppImage --appimage-extract >/dev/null \
+ && mv squashfs-root appimagetool && rm appimagetool.AppImage \
+ && ln -s /opt/appimage/appimagetool/AppRun /usr/local/bin/appimagetool
+
+# Late additions in their own layer (keeps the FreeRDP layer cached): GTK reads the desktop's
+# settings (fonts, dark style) through dconf's GIO module, strace is used by the hygiene check, and
+# keyring's libsecret backend needs libsecret with its typelib, and GNOME asks every GTK app to load
+# canberra-gtk-module (event sounds).
+RUN apt-get update && apt-get install -y --no-install-recommends dconf-gsettings-backend strace libharfbuzz-gobject0 \
+      libsecret-1-0 gir1.2-secret-1 libcanberra-gtk3-module libcanberra-pulse \
+ && rm -rf /var/lib/apt/lists/*
+
+# at-spi2-core (ATK, the AT-SPI bridge and client library) from source, against the bundled GLib 2.72:
+# Ubuntu 22.04's 2.38 bridge cannot parse a current desktop's accessibility registry ("atk-bridge:
+# get_device_events_reply: unknown signature"). Only the client libraries are bundled; the registry is
+# the desktop's. Built with the pinned meson from requirements-build.lock (Ubuntu's 0.61 is too old).
+ARG ATSPI_VERSION=2.56.2
+ARG ATSPI_SHA256=e1b1c9836a8947852f7440c32e23179234c76bd98cd9cc4001f376405f8b783b
+COPY requirements-build.lock /tmp/requirements-build.lock
+RUN apt-get update && apt-get install -y --no-install-recommends libdbus-1-dev libxml2-dev \
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m venv /opt/meson \
+ && /opt/meson/bin/pip install -q --no-deps --require-hashes --only-binary=:all: -r /tmp/requirements-build.lock \
+ && mkdir -p /tmp/atspi && cd /tmp/atspi \
+ && curl -fsSLo atspi.tar.xz "https://download.gnome.org/sources/at-spi2-core/${ATSPI_VERSION%.*}/at-spi2-core-${ATSPI_VERSION}.tar.xz" \
+ && echo "${ATSPI_SHA256}  atspi.tar.xz" | sha256sum -c - && tar xf atspi.tar.xz \
+ && /opt/meson/bin/meson setup build "at-spi2-core-${ATSPI_VERSION}" --prefix=/opt/atspi --libdir=lib \
+      --buildtype=release -Dintrospection=disabled -Ddocs=false -Dx11=enabled -Duse_systemd=false \
+      -Dgtk2_atk_adaptor=false \
+ && /opt/meson/bin/meson compile -C build && /opt/meson/bin/meson install -C build \
+ && cd / && rm -rf /tmp/atspi
+
+LABEL org.opencontainers.image.title="ssh-manager-appimage-build"
