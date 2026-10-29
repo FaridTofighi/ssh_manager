@@ -260,9 +260,19 @@ class SecureStore:
             return cls(FileKeyring(master_password=master_password))
         return cls(backend)  # type: ignore[arg-type]
 
+    @classmethod
+    def for_keybox(cls, keybox, path: Optional[Path] = None) -> "SecureStore":
+        """The app's store: ``passwords.json`` v3 encrypted with the keybox (the system keyring is not used)."""
+
+        return cls(EncryptedFileKeyring(keybox, path))
+
     @property
     def uses_file_backend(self) -> bool:
-        return isinstance(self.backend, FileKeyring)
+        return isinstance(self.backend, (FileKeyring, EncryptedFileKeyring))
+
+    @property
+    def saving_disabled(self) -> bool:
+        return isinstance(self.backend, _DisabledBackend)
 
     @staticmethod
     def key(host: str, port: int, username: str) -> str:
@@ -304,3 +314,194 @@ class InMemoryKeyring:
 
     def delete_password(self, service_name: str, username: str) -> None:
         self._store.pop((service_name, username), None)
+
+
+# --------------------------------------------------------------- keybox store
+SECRETS_FORMAT = "ssh-manager-secrets"
+SECRETS_VERSION = 3
+
+
+class EncryptedFileKeyring:
+    """``passwords.json`` version 3: every secret encrypted with the keybox's ``secrets`` subkey.
+
+    ``{"format": "ssh-manager-secrets", "version": 3, "keybox_id": …, "nonce": …, "data": …}``; the header
+    (format, version, keybox_id) is the associated data of AES-256-GCM. A file bound to another keybox,
+    a newer version or a damaged file is never read or overwritten (:attr:`locked`, :attr:`error`).
+    Writes re-read the file under an advisory lock (``passwords.json.lock``), apply the one change and write
+    atomically (0600, the previous file kept as ``.bak``): two app instances never lose each other's changes.
+    """
+
+    def __init__(self, keybox, path: Optional[Path] = None) -> None:
+        self._path = path or _default_store_path()
+        self._key = keybox.subkey("secrets")
+        self._keybox_id = keybox.id
+        self._lock = threading.RLock()
+        self._data: dict[tuple[str, str], str] = {}
+        self._stamp: Optional[tuple] = None
+        self.error = ""
+        with self._lock:
+            self._reload(force=True)
+
+    # ------------------------------------------------------------ properties
+    @property
+    def locked(self) -> bool:
+        return bool(self.error)
+
+    @property
+    def encrypted(self) -> bool:
+        return True
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def count(self) -> int:
+        with self._lock:
+            self._reload()
+            return len(self._data)
+
+    def items(self) -> dict:
+        """A copy of every ``(service, key) → secret`` (migration verification only)."""
+
+        with self._lock:
+            self._reload()
+            return dict(self._data)
+
+    # ---------------------------------------------------------------- file
+    def _header(self) -> dict:
+        return {"format": SECRETS_FORMAT, "version": SECRETS_VERSION, "keybox_id": self._keybox_id}
+
+    def _file_stamp(self) -> Optional[tuple]:
+        try:
+            stat = self._path.stat()
+        except FileNotFoundError:
+            return None
+        return stat.st_mtime_ns, stat.st_size, stat.st_ino
+
+    def _reload(self, force: bool = False) -> None:
+        stamp = self._file_stamp()
+        if not force and stamp == self._stamp:
+            return
+        self._stamp = stamp
+        if stamp is None:
+            self._data, self.error = {}, ""
+            return
+        try:
+            self._data = self._decode(self._path.read_bytes())
+            self.error = ""
+        except KeyringError as exc:
+            self._data = {}
+            self.error = str(exc)
+            LOGGER.warning("Password file %s cannot be opened: %s", self._path.name, exc)
+
+    def _decode(self, raw: bytes) -> dict:
+        from .aead import AeadError, open_sealed
+
+        try:
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            raise KeyringError("The password file is damaged.") from None
+        if not isinstance(document, dict) or document.get("format") != SECRETS_FORMAT:
+            raise KeyringError("The password file is not in the expected format.")
+        version = document.get("version")
+        if not isinstance(version, int) or isinstance(version, bool) or version < SECRETS_VERSION:
+            raise KeyringError("The password file is not in the expected format.")
+        if version > SECRETS_VERSION:
+            raise KeyringError("The password file was written by a newer SSH Manager.")
+        if document.get("keybox_id") != self._keybox_id:
+            raise KeyringError("This file belongs to a different key.")
+        try:
+            plain = open_sealed(self._key, document.get("nonce"), document.get("data"), self._header())
+        except AeadError:
+            raise KeyringError("The password file is damaged or was changed.") from None
+        try:
+            payload = json.loads(plain.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            raise KeyringError("The password file is damaged.") from None
+        return FileKeyring._entries_from_payload(payload.get("secrets", {}) if isinstance(payload, dict) else {})
+
+    def _encode(self, data: dict) -> bytes:
+        from .aead import seal
+
+        payload: dict[str, dict[str, str]] = {}
+        for (svc, user), pwd in data.items():
+            payload.setdefault(svc, {})[user] = pwd
+        nonce, sealed = seal(self._key, json.dumps({"secrets": payload}).encode("utf-8"), self._header())
+        return (json.dumps(dict(self._header(), nonce=nonce, data=sealed), indent=1) + "\n").encode("utf-8")
+
+    def _change(self, apply) -> None:
+        import contextlib
+        import fcntl
+
+        from .keybox import write_private_atomic
+
+        with self._lock:
+            self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            lock_path = self._path.with_name(self._path.name + ".lock")
+            try:
+                handle = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+            except OSError as exc:
+                raise KeyringError(f"The password file cannot be locked ({exc.strerror or exc}).") from None
+            try:
+                with contextlib.suppress(OSError):
+                    fcntl.flock(handle, fcntl.LOCK_EX)
+                self._reload(force=True)  # what another instance wrote meanwhile
+                if self.error:
+                    raise KeyringError("Password file is locked; refusing to overwrite it.")
+                data = dict(self._data)
+                apply(data)
+                try:
+                    write_private_atomic(self._path, self._encode(data))
+                except OSError as exc:
+                    raise KeyringError(str(exc.strerror or exc)) from None
+                self._data = data
+                self._stamp = self._file_stamp()
+            finally:
+                os.close(handle)
+
+    def replace_all(self, data: dict) -> None:
+        """Write exactly ``data`` (migration: the collected legacy secrets)."""
+
+        def apply(current: dict) -> None:
+            current.clear()
+            current.update(data)
+
+        self._change(apply)
+
+    # ------------------------------------------------------------------ api
+    def get_password(self, service_name: str, username: str) -> Optional[str]:
+        with self._lock:
+            self._reload()
+            if self.error:
+                raise KeyringError(self.error)
+            return self._data.get((service_name, username))
+
+    def set_password(self, service_name: str, username: str, password: str) -> None:
+        self._change(lambda data: data.__setitem__((service_name, username), password))
+
+    def delete_password(self, service_name: str, username: str) -> None:
+        with self._lock:
+            self._reload()
+            if (service_name, username) not in self._data and not self.error:
+                return
+        self._change(lambda data: data.pop((service_name, username), None))
+
+
+class _DisabledBackend:
+    """"Don't save passwords": nothing is read, writing says so."""
+
+    def get_password(self, service_name: str, username: str) -> Optional[str]:
+        return None
+
+    def set_password(self, service_name: str, username: str, password: str) -> None:
+        raise KeyringError("Saving passwords is turned off")
+
+    def delete_password(self, service_name: str, username: str) -> None:
+        raise KeyringError("Saving passwords is turned off")
+
+
+class DisabledSecureStore(SecureStore):
+    """Passwords are not saved: ``get`` → ``None``; ``set`` / ``delete`` raise :class:`SecureStoreError`."""
+
+    def __init__(self) -> None:
+        SecureStore.__init__(self, _DisabledBackend())
