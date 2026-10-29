@@ -67,3 +67,28 @@ def append_text(path: Path, text: str, *, mode: int = 0o600) -> None:
             remaining = remaining[written:]
     finally:
         os.close(fd)
+
+
+def write_bytes_private(path: Path, data: bytes, *, mode: int = 0o600) -> None:
+    """``data`` to ``path`` atomically: a temporary file created with ``mode`` in the same folder, fsync, rename.
+
+    The temporary file never exists with wider permissions; it is removed on any failure.
+    """
+
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        view = memoryview(data)
+        while view:
+            view = view[os.write(fd, view):]
+        os.fsync(fd)
+    except BaseException:
+        os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise
+    os.close(fd)
+    try:
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
