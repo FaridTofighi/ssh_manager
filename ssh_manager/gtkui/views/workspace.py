@@ -284,7 +284,6 @@ class SessionStrip(Gtk.Box):
                 item.connect("activate", lambda _i, cb=callback: cb())
                 self.new_menu.append(item)
         self.new_menu.show_all()
-        self.new_menu.attach_to_widget(self, None)
         self.new_menu_button = Gtk.MenuButton()
         self.new_menu_button.set_relief(Gtk.ReliefStyle.NONE)
         self.new_menu_button.set_popup(self.new_menu)
