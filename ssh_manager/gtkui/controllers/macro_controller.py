@@ -7,11 +7,15 @@
   mode, e.g. ``sudo`` or ``read -s`` in a local shell) or when the screen ends
   with a password prompt (ssh keeps its own pty in raw mode, so the remote
   prompt is what tells). Recorded steps live only in the recorder until Save.
-* **Playback** sends the steps to the active terminal of the current tab only,
-  through :meth:`TerminalTab.macro_send`: never to the other tabs, even with
-  broadcast on, and never seen by the password-change heuristics. It runs
-  from the GLib main loop and stops when the user presses Stop, the session
-  ends or the tab closes.
+* **Playback** types into the sessions typed input would reach: the current
+  session, plus (broadcast on, the current session included) every other
+  included, connected session (``TerminalNotebook.macro_targets``, the same
+  rule as broadcast). The set is frozen when the run starts. Each session gets
+  its own player (a *run group*); steps go straight to the terminal through
+  :meth:`TerminalTab.macro_send`, so they are never mirrored a second time and
+  never seen by the password-change heuristics. Players run from the GLib main
+  loop; each stops when its Stop is pressed, its session ends or its tab
+  closes, and *Stop All* stops the group.
 * **The store** (``macros.enc``) is unlocked with the master password typed at
   start-up, in a thread (PBKDF2 takes a few hundred ms). Without a master
   password macros cannot be saved: the user sets one or discards the macro.
@@ -54,7 +58,7 @@ from ..dialogs import macros as dialogs  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
 from ..dialogs.shortcuts_page import accel_text  # noqa: E402
-from ..i18n import _  # noqa: E402
+from ..i18n import _, ngettext  # noqa: E402
 from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
 from .shortcut_registry import ExtraEntry  # noqa: E402
@@ -85,11 +89,28 @@ class _Recording:
         self.last_key = 0.0
 
 
+class _Group:
+    """One macro run: a player per target session (they are not synchronised after the start)."""
+
+    def __init__(self, name: str, source, sessions: int) -> None:
+        self.name = name
+        self.source = source
+        self.sessions = sessions  # every session the run was meant for (skipped ones included)
+        self.playbacks: List["_Playback"] = []
+        self.results: Dict[object, str] = {}  # tab → done | stopped | disconnected | closed | busy
+        self.labels: Dict[object, str] = {}
+
+    @property
+    def running(self) -> bool:
+        return any(p.player is not None and p.player.running for p in self.playbacks)
+
+
 class _Playback:
-    def __init__(self, tab, term: Vte.Terminal, name: str) -> None:
+    def __init__(self, tab, term: Vte.Terminal, name: str, group: Optional[_Group] = None) -> None:
         self.tab = tab
         self.term = term
         self.name = name
+        self.group = group
         self.player: Optional[MacroPlayer] = None
         self.handlers: List[Tuple[object, int]] = []
         self.bar: Optional[Gtk.InfoBar] = None
@@ -121,7 +142,11 @@ class _Sink:
             self._playback.tab.macro_send(self._playback.term, paste=text)
 
 
-def _info_bar(text: str, stop: Callable[[], None], stop_label: str) -> Tuple[Gtk.InfoBar, Gtk.Label]:
+_RESPONSE_STOP_ALL = 1
+
+
+def _info_bar(text: str, stop: Callable[[], None], stop_label: str,
+              stop_all: Optional[Callable[[], None]] = None) -> Tuple[Gtk.InfoBar, Gtk.Label]:
     bar = Gtk.InfoBar()
     bar.set_message_type(Gtk.MessageType.WARNING)
     bar.get_style_context().add_class("macro-bar")
@@ -132,7 +157,12 @@ def _info_bar(text: str, stop: Callable[[], None], stop_label: str) -> Tuple[Gtk
     bar.get_content_area().pack_start(label, True, True, 0)
     button = bar.add_button(stop_label, Gtk.ResponseType.CLOSE)
     button.get_style_context().add_class("destructive-action")
-    bar.connect("response", lambda *_a: stop())
+    if stop_all is not None:
+        everything = bar.add_button(_("Stop _All"), _RESPONSE_STOP_ALL)
+        everything.set_tooltip_text(_("Stop the macro in every session it runs in"))
+        everything.get_style_context().add_class("destructive-action")
+    bar.connect("response", lambda _bar, response: stop_all() if stop_all is not None and
+                response == _RESPONSE_STOP_ALL else stop())
     bar.show_all()
     return bar, label
 
@@ -157,6 +187,8 @@ class MacroController:
         self.state = "locked"  # locked (no master password), unlocking, ready, disabled (file kept unopened)
         self.recording: Optional[_Recording] = None
         self.playbacks: Dict[object, _Playback] = {}
+        self.groups: List[_Group] = []
+        self.ask_run_on_sessions = dialogs.ask_run_on_sessions
         self.ask_damaged = dialogs.ask_damaged_file  # tests replace the dialogs
         self.ask_master_password_needed = dialogs.ask_master_password_needed
         self.run_dialog = dialogs.run_macro_dialog
@@ -330,9 +362,14 @@ class MacroController:
             (tab, tab.connect("status-changed", self._on_recording_status)),
             (tab, tab.connect("destroy", lambda *_a: self._recording_target_gone())),
         ]
-        recording.bar, _label = _info_bar(
-            _("Recording in {host}. Everything you type is saved, including passwords.").format(host=self._label(tab)),
-            self.stop_recording, _("_Stop Recording"))
+        text = _("Recording in {host}. Everything you type is saved, including passwords.").format(
+            host=self._label(tab))
+        mirrored = len(self.win.terminal_tabs.macro_targets(tab)) - 1  # broadcast: what typing reaches
+        if mirrored > 0:
+            text += "\n" + ngettext("Broadcast is on: what you type is also sent to {n} other session.",
+                                    "Broadcast is on: what you type is also sent to {n} other sessions.",
+                                    mirrored).format(n=mirrored)
+        recording.bar, _label = _info_bar(text, self.stop_recording, _("_Stop Recording"))
         tab.attach_info_bar(recording.bar)
         recording.timer = GLib.timeout_add(500, self._tick_recording)
         self.recording = recording
@@ -628,6 +665,8 @@ class MacroController:
             self.run_macro(macro_id, tab=tab, term=focus)
 
     def run_macro(self, macro_id: str, *, tab=None, term: Optional[Vte.Terminal] = None) -> bool:
+        """Run on ``tab`` (default: the current session) and, with broadcast, on the sessions typing reaches."""
+
         if self.state != "ready":
             self._ensure_unlocked(lambda: None)
             return False
@@ -639,19 +678,57 @@ class MacroController:
             return False
         if tab is None:
             tab, term = self._current_terminal()
-        if tab is None or term is None or not tab.is_session_active():
+        notebook = self.win.terminal_tabs
+        targets = notebook.macro_targets(tab) if tab is not None and term is not None else []
+        if not targets or not tab.is_session_active():
             self._notify(_("Open a connected session first."), Level.WARNING)
             return False
-        if tab in self.playbacks:
+        if self._busy(tab):
             self._notify(_("A macro is already running in this session."), Level.WARNING)
             return False
-        if macro.confirm_before_run and not self.confirm(
-                self.win, _("Run macro “{name}” in {host}?").format(name=macro.name, host=self._label(tab)),
-                confirm_label=_("_Run")):
+        busy = [t for t in targets[1:] if self._busy(t)]
+        runnable = [t for t in targets if t not in busy]  # frozen: later broadcast changes do not matter
+        unreachable = notebook.macro_unreachable(tab)
+        if not self._confirm_run(macro, runnable):
             return False
-        playback = _Playback(tab, term, macro.name)
-        playback.bar, playback.label = _info_bar(self._progress_text(playback, 0, 0), lambda: self._stop(playback),
-                                                 _("_Stop"))
+        group = _Group(macro.name, tab, len(targets) + len(unreachable))
+        for skipped, reason in [(t, "busy") for t in busy] + [(t, "disconnected") for t in unreachable]:
+            group.results[skipped] = reason
+            group.labels[skipped] = self._label(skipped)
+        self.groups.append(group)
+        for target in runnable:
+            self._start_playback(group, macro, target, term if target is tab else target.active_terminal,
+                                 stop_all=len(runnable) > 1 and target is tab)
+        self.win.terminal_tabs.refresh_overflow_menu()
+        for playback in list(group.playbacks):  # all start in the same main-loop iteration
+            if playback.player is not None:
+                playback.player.start()
+        return True
+
+    def _busy(self, tab) -> bool:
+        return tab in self.playbacks or any(g.source is tab and g.running for g in self.groups)
+
+    def _confirm_run(self, macro: Macro, runnable: List[object]) -> bool:
+        """One question at most: the multi-session one (it covers "Ask before running it" too)."""
+
+        settings = self.win._settings.macros
+        if len(runnable) > 1 and (settings.confirm_multi_session or macro.confirm_before_run):
+            run, dont_ask = self.ask_run_on_sessions(self.win, macro.name, [self._label(t) for t in runnable])
+            if run and dont_ask and settings.confirm_multi_session:
+                settings.confirm_multi_session = False
+                self.win._settings.save()
+            return run
+        if macro.confirm_before_run:
+            return self.confirm(self.win, _("Run macro “{name}” in {host}?").format(
+                name=macro.name, host=self._label(runnable[0])), confirm_label=_("_Run"))
+        return True
+
+    def _start_playback(self, group: _Group, macro: Macro, tab, term: Vte.Terminal, *, stop_all: bool) -> None:
+        playback = _Playback(tab, term, macro.name, group)
+        group.labels[tab] = self._label(tab)
+        playback.bar, playback.label = _info_bar(
+            self._progress_text(playback, 0, 0), lambda: self._stop(playback), _("_Stop"),
+            (lambda: self.stop_group(group)) if stop_all else None)
         tab.attach_info_bar(playback.bar)
         playback.handlers = [
             (tab, tab.connect("status-changed", lambda _t, _a, connected: None if connected else self._stop(
@@ -663,10 +740,12 @@ class MacroController:
             macro.steps, _Sink(playback), GLib.timeout_add, GLib.source_remove, timing=macro.timing,
             on_progress=lambda index, total: self._progress(playback, index, total),
             on_finished=lambda completed: self._finished(playback, completed))
+        group.playbacks.append(playback)
         self.playbacks[tab] = playback
-        self.win.terminal_tabs.refresh_overflow_menu()
-        playback.player.start()
-        return True
+
+    def stop_group(self, group: _Group) -> None:
+        for playback in list(group.playbacks):
+            self._stop(playback)
 
     def _progress_text(self, playback: _Playback, index: int, total: int) -> str:
         return _("Running macro “{name}” (step {i}/{n})").format(name=playback.name, i=index, n=total)
@@ -692,11 +771,35 @@ class MacroController:
             playback.bar = playback.label = None
         if self.playbacks.get(playback.tab) is playback:
             del self.playbacks[playback.tab]
-        if not getattr(self.win, "closing", False):
+        group = playback.group
+        if group is not None:
+            group.results[playback.tab] = "done" if completed else (playback.reason or "stopped")
+        closing = getattr(self.win, "closing", False)
+        if not closing:
             self.win.terminal_tabs.refresh_overflow_menu()
-            if not completed and playback.reason == "disconnected":
-                self._notify(_("The macro “{name}” stopped: the session ended.").format(name=playback.name),
+        if group is not None and not group.running and group in self.groups:
+            self.groups.remove(group)
+            if not closing:
+                self._group_finished(group)
+
+    def _group_finished(self, group: _Group) -> None:
+        """One toast per run (a single session: only when its session ended under it, as before)."""
+
+        failed = [(tab, reason) for tab, reason in group.results.items() if reason != "done"]
+        if group.sessions <= 1:
+            if failed and failed[0][1] == "disconnected":
+                self._notify(_("The macro “{name}” stopped: the session ended.").format(name=group.name),
                              Level.WARNING)
+            return
+        if not failed:
+            self._notify(_("Macro “{name}” finished on {n} sessions.").format(name=group.name, n=group.sessions),
+                         Level.SUCCESS)
+            return
+        reasons = {"disconnected": _("disconnected"), "busy": _("busy"), "closed": _("closed"),
+                   "stopped": _("stopped")}
+        names = ", ".join(f"{group.labels.get(tab, '?')} ({reasons.get(reason, reason)})" for tab, reason in failed)
+        self._notify(_("Macro “{name}” finished on {done} of {n} sessions; {sessions} did not complete.").format(
+            name=group.name, done=group.sessions - len(failed), n=group.sessions, sessions=names), Level.WARNING)
 
     def stop_playback(self) -> None:
         current = self.win.terminal_tabs.current_tab()
@@ -710,7 +813,9 @@ class MacroController:
             self._ensure_unlocked(self.open_manager)
             return
         window = dialogs.MacrosWindow(self.win, self.store.list_sorted, on_edit=self.edit_macro,
-                                      on_duplicate=self.duplicate_macro, on_delete=self.delete_macro)
+                                      on_duplicate=self.duplicate_macro, on_delete=self.delete_macro,
+                                      confirm_multi_session=(self.win._settings.macros.confirm_multi_session,
+                                                             self.set_confirm_multi_session))
         window.show_all()
         try:
             response = int(window.run())
@@ -719,6 +824,10 @@ class MacroController:
             window.destroy()
         if response == dialogs.RESPONSE_RUN and request:
             self.run_macro(request)
+
+    def set_confirm_multi_session(self, active: bool) -> None:
+        self.win._settings.macros.confirm_multi_session = bool(active)
+        self.win._settings.save()
 
     def edit_macro(self, macro_id: str, parent: Optional[Gtk.Window] = None) -> bool:
         macro = self.store.get(macro_id)

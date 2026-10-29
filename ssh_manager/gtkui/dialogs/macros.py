@@ -508,7 +508,8 @@ class MacrosWindow(BaseDialog):
 
     def __init__(self, parent: Optional[Gtk.Window], list_macros: Callable[[], Sequence[Macro]], *,
                  on_edit: Callable[[str, Gtk.Window], None], on_duplicate: Callable[[str], None],
-                 on_delete: Callable[[str, Gtk.Window], None]) -> None:
+                 on_delete: Callable[[str, Gtk.Window], None],
+                 confirm_multi_session: Optional[Tuple[bool, Callable[[bool], None]]] = None) -> None:
         BaseDialog.__init__(self, parent, _("Macros"), size=DialogSize.LARGE, height=520)
         self._list_macros = list_macros
         self._on_edit, self._on_duplicate, self._on_delete = on_edit, on_duplicate, on_delete
@@ -553,6 +554,14 @@ class MacrosWindow(BaseDialog):
         self.empty.get_style_context().add_class("dim-label")
         self.empty.set_no_show_all(True)
         self.add_body(self.empty)
+        self.multi_session_check: Optional[Gtk.CheckButton] = None
+        if confirm_multi_session is not None:  # settings.json: macros.confirm_multi_session
+            active, changed = confirm_multi_session
+            check = Gtk.CheckButton.new_with_mnemonic(_("_Ask before running a macro on several sessions (broadcast)"))
+            check.set_active(active)
+            check.connect("toggled", lambda button: changed(button.get_active()))
+            self.add_body(check)
+            self.multi_session_check = check
         self.add_button(_("_Close"), Gtk.ResponseType.CLOSE)
         self.set_initial_focus(self.search)
         self.refresh()
@@ -603,6 +612,41 @@ class MacrosWindow(BaseDialog):
             self.response(RESPONSE_RUN)
 
 
+def ask_run_on_sessions(parent: Optional[Gtk.Window], name: str, sessions: Sequence[str]) -> Tuple[bool, bool]:
+    """Before a macro types into several (broadcast) sessions: ``(run, don't ask again)``."""
+
+    dialog = BaseDialog(parent, _("Run Macro"), size=DialogSize.SMALL)
+    heading = Gtk.Label(label=_("Run macro “{name}” on {n} sessions?").format(name=name, n=len(sessions)))
+    heading.set_xalign(0.0)
+    heading.set_line_wrap(True)
+    heading.get_style_context().add_class("section-title")
+    dialog.add_body(heading)
+    listing = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+    for session in sessions:
+        row = Gtk.Label(label=session)
+        row.set_xalign(0.0)
+        row.set_ellipsize(Pango.EllipsizeMode.END)
+        listing.pack_start(row, False, False, 0)
+    scroller = Gtk.ScrolledWindow()
+    scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scroller.set_max_content_height(200)
+    scroller.set_propagate_natural_height(True)
+    scroller.add(listing)
+    set_accessible_name(scroller, _("Sessions"))
+    dialog.add_body(scroller)
+    dont_ask = Gtk.CheckButton.new_with_mnemonic(_("_Don't ask again for multi-session runs"))
+    dialog.add_body(dont_ask)
+    dialog.add_cancel()
+    dialog.add_primary(_("_Run"))
+    dialog.sessions = list(sessions)  # what was shown (tests)
+    dialog.show_all()
+    try:
+        run = is_accept(int(dialog.run()))
+        return run, run and dont_ask.get_active()
+    finally:
+        dialog.destroy()
+
+
 def ask_damaged_file(parent: Optional[Gtk.Window], kind: str) -> str:
     """``"keep"`` (no macros this session, the file untouched) or ``"empty"`` (moved aside, start empty)."""
 
@@ -643,5 +687,5 @@ def ask_master_password_needed(parent: Optional[Gtk.Window]) -> bool:
         dialog.destroy()
 
 
-__all__ = ["MacroDialog", "MacrosWindow", "run_macro_dialog", "describe_step", "ask_damaged_file",
+__all__ = ["MacroDialog", "MacrosWindow", "run_macro_dialog", "describe_step", "ask_damaged_file", "ask_run_on_sessions",
            "ask_master_password_needed", "MASK", "RESPONSE_DISCARD", "RESPONSE_KEEP_RECORDING", "RESPONSE_RUN"]

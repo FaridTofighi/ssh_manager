@@ -346,11 +346,12 @@ class MacroWindowTests(unittest.TestCase):
         window.refresh()
         self.assertEqual(window.names(), ["Alpha", "Beta", "Beta (copy)"])
 
-    def test_broadcast_does_not_spread_playback(self) -> None:
+    def test_a_session_excluded_from_broadcast_runs_its_macro_alone(self) -> None:
+        # Since macros follow broadcast (tests/test_macro_broadcast.py), an excluded session -- local
+        # terminals are excluded by default -- still receives only its own macro.
         first = self.shell()
         second = self.shell()
         self.tabs.set_broadcast_mode(True)
-        self.tabs._focus_tab(first) if hasattr(self.tabs, "_focus_tab") else None
         pump(0.3)
         macro = self.add_macro("Here", steps=[{"type": "text", "text": "echo only-here\r"}])
         self.assertTrue(self.macros.run_macro(macro.id, tab=first, term=first._terminal))
