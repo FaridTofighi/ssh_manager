@@ -716,7 +716,9 @@ class RdpSessionTab(SessionPage):
         from ..dialogs.trust import trust_host_key
 
         label = _("{host} (SSH tunnel)").format(host=exc.hostname)
-        if not trust_host_key(self._window(), label, exc.key_type, exc.fingerprint):
+        if not trust_host_key(self._window(), label, exc.key_type, exc.fingerprint,
+                              other_key_types=getattr(exc, "other_key_types", ()),
+                              other_fingerprints=getattr(exc, "other_fingerprints", ())):
             return self._cancelled(_("The SSH host's key was not accepted."))
         try:
             factory = self._tunnel_factory

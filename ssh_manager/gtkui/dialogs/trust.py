@@ -82,13 +82,24 @@ def trust_certificate(parent: Optional[Gtk.Window], host_label: str, info: Certi
         _certificate_details(info), accept_label=_("_Trust and Connect"), dangerous=False).ask()
 
 
-def trust_host_key(parent: Optional[Gtk.Window], host_label: str, key_type: str, fingerprint: str) -> bool:
-    return TrustDialog(
-        parent, _("Connect to “{host}” for the first time?").format(host=host_label),
-        _("The server's host key is not known yet. Compare the fingerprint with the server's administrator. "
-          "It is remembered in ~/.ssh/known_hosts, like ssh does."),
-        [(_("Key type"), key_type), (_("Fingerprint"), fingerprint)],
-        accept_label=_("_Connect"), dangerous=False).ask()
+def host_key_message(key_type: str, other_key_types=()) -> str:
+    if other_key_types:  # known with other key types: a new key for a known host (OpenSSH asks the same way)
+        return _("You trusted {old} for this host before; the server now presents {new}. Compare the new "
+                 "fingerprint with the server's administrator. If you accept it, it is added to "
+                 "~/.ssh/known_hosts beside the old one.").format(old=", ".join(other_key_types), new=key_type)
+    return _("The server's host key is not known yet. Compare the fingerprint with the server's administrator. "
+             "It is remembered in ~/.ssh/known_hosts, like ssh does.")
+
+
+def trust_host_key(parent: Optional[Gtk.Window], host_label: str, key_type: str, fingerprint: str, *,
+                   other_key_types=(), other_fingerprints=()) -> bool:
+    details = [(_("Key type"), key_type), (_("Fingerprint"), fingerprint)]
+    if other_fingerprints:
+        details.append((_("Trusted before"), "\n".join(other_fingerprints)))
+    title = (_("Trust a new host key for “{host}”?") if other_key_types
+             else _("Connect to “{host}” for the first time?")).format(host=host_label)
+    return TrustDialog(parent, title, host_key_message(key_type, other_key_types), details,
+                       accept_label=_("_Connect"), dangerous=False).ask()
 
 
 TRUST_ONCE = 1

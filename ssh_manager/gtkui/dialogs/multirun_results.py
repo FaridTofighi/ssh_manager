@@ -155,6 +155,13 @@ class ResultsView(Gtk.Box):
         self.notice.set_line_wrap(True)
         self.notice.get_style_context().add_class("form-help")
         output.pack_start(self.notice, False, False, 0)
+        # Host key changed / unknown: the shared host-key dialogs (set by the Run Command dialog).
+        self.on_host_key_details: Callable[[R.HostResult], None] = lambda result: None
+        self.details_button = Gtk.Button.new_with_mnemonic(_("Deta_ils…"))
+        self.details_button.set_halign(Gtk.Align.START)
+        self.details_button.set_no_show_all(True)
+        self.details_button.connect("clicked", lambda *_a: self._host_key_details())
+        output.pack_start(self.details_button, False, False, 0)
         self.stdout_view, self.stderr_view = _text_view(), _text_view()
         set_accessible_name(self.stdout_view, _("Standard output"))
         set_accessible_name(self.stderr_view, _("Standard error"))
@@ -317,8 +324,15 @@ class ResultsView(Gtk.Box):
                 notes.append(_("The output was longer than the limit; only its beginning is shown."))
         self.notice.set_text("\n".join(notes))
         self.notice.set_visible(bool(notes))
+        self.details_button.set_visible(result is not None and result.host_key_error is not None and
+                                        result.status in (R.HOST_KEY_CHANGED, R.HOST_KEY_UNKNOWN))
         self.highlight()
         self._sync()
+
+    def _host_key_details(self) -> None:
+        result = self.results.get(self.selected) if self.selected else None
+        if result is not None and result.host_key_error is not None:
+            self.on_host_key_details(result)
 
     def highlight(self) -> int:
         needle = self.output_search.get_text()

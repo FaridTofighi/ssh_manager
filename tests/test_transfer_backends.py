@@ -549,5 +549,176 @@ class SftpTests(unittest.TestCase):
             self.backend().connect()
 
 
+def _ed25519(folder: Path, name: str = "ed"):
+    """An Ed25519 server key: cryptography → OpenSSH PEM → Paramiko (Paramiko cannot generate Ed25519)."""
+
+    import paramiko
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    path = folder / name
+    path.write_bytes(ed25519.Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, serialization.NoEncryption()))
+    return paramiko.Ed25519Key.from_private_key_file(str(path))
+
+
+@INTEGRATION
+class HostKeyMatchingTests(unittest.TestCase):
+    """The Paramiko host-key check behaves like OpenSSH: steered key types, any matching line, new types."""
+
+    def setUp(self) -> None:
+        import paramiko
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+        (self.dir / "root").mkdir()
+        self.known_hosts = self.dir / "known_hosts"
+        self.ed = _ed25519(self.dir)
+        self.ecdsa = paramiko.ECDSAKey.generate()
+        self.rsa = paramiko.RSAKey.generate(2048)
+
+    def serve(self, *keys):
+        from tests.fake_sftp import FakeSftpServer
+
+        self.server = FakeSftpServer(self.dir / "root", host_key=keys[0], extra_host_keys=keys[1:])
+        self.server.__enter__()
+        self.addCleanup(self.server.__exit__, None, None, None)
+        self.name = f"[127.0.0.1]:{self.server.port}"
+        return self.server
+
+    def line(self, key, hosts: str = "", marker: str = "") -> str:
+        return " ".join(part for part in (marker, hosts or self.name, key.get_name(), key.get_base64()) if part)
+
+    def write(self, *lines: str) -> None:
+        self.known_hosts.write_text("".join(line + "\n" for line in lines))
+
+    def open(self, policy: str = "reject"):
+        """The presented key's type after a full login (the transport is closed again)."""
+
+        from ssh_manager.transfer.sftp import SftpBackend
+
+        backend = SftpBackend("127.0.0.1", self.server.port, "alice", PASSWORD, known_hosts=self.known_hosts,
+                              allow_agent=False, host_key_policy=policy, settings=TransferSettings(timeout_read=5))
+        transport = backend.open_transport("test")
+        try:
+            self.assertTrue(transport.is_authenticated())
+            return transport.get_remote_server_key().get_name()
+        finally:
+            transport.close()
+
+    def test_known_by_ecdsa_or_rsa_only_steers_to_that_type(self) -> None:
+        self.serve(self.ed, self.ecdsa, self.rsa)
+        self.write(self.line(self.ecdsa))
+        self.assertEqual(self.open(), "ecdsa-sha2-nistp256")  # was HostKeyChanged: ed25519 came first
+        self.write(self.line(self.rsa))
+        self.assertEqual(self.open(), "ssh-rsa")
+
+    def test_any_matching_line_of_the_type_is_enough(self) -> None:
+        import paramiko
+
+        self.serve(self.ed)
+        stale = _ed25519(self.dir, "stale")
+        self.write(self.line(stale), self.line(self.ed))  # stale first: only the first was compared
+        self.assertEqual(self.open(), "ssh-ed25519")
+        self.write(self.line(self.ed), self.line(stale))
+        self.assertEqual(self.open(), "ssh-ed25519")
+        self.write(self.line(self.ecdsa, "127.0.0.1"), self.line(paramiko.ECDSAKey.generate()))  # other port: ignored
+        with self.assertRaises(UnknownHostKey):
+            self.open()
+
+    def test_wildcard_and_exact_lines(self) -> None:
+        self.serve(self.ed)
+        stale = _ed25519(self.dir, "stale")
+        self.write(self.line(stale, f"[127.0.0.*]:{self.server.port}"), self.line(self.ed))
+        self.assertEqual(self.open(), "ssh-ed25519")
+        self.write(self.line(stale), self.line(self.ed, f"[127.0.0.?]:{self.server.port},other"))
+        self.assertEqual(self.open(), "ssh-ed25519")
+
+    def test_a_really_changed_key_is_refused_with_its_details(self) -> None:
+        from ssh_manager.known_hosts import fingerprint_sha256
+        from ssh_manager.transfer.sftp import key_fingerprint
+
+        self.serve(self.ed)
+        stale = _ed25519(self.dir, "stale")
+        self.write("# a comment", self.line(self.ecdsa), self.line(stale))
+        with self.assertRaises(HostKeyChanged) as caught:
+            self.open(policy="auto-add")  # never accepted, whatever the policy
+        error = caught.exception
+        self.assertEqual((error.key_type, error.fingerprint), ("ssh-ed25519", key_fingerprint(self.ed)))
+        self.assertEqual(error.old_fingerprints, (fingerprint_sha256(stale.get_base64()),))
+        self.assertEqual(error.line_no, 3)
+        self.assertEqual(self.server.password_attempts, 0)
+
+    def test_only_another_type_known_is_a_new_key_not_a_changed_one(self) -> None:
+        from ssh_manager.known_hosts import fingerprint_sha256
+
+        self.serve(self.ed)
+        self.write(self.line(self.ecdsa))
+        with self.assertRaises(UnknownHostKey) as caught:
+            self.open()
+        self.assertEqual(caught.exception.other_key_types, ["ecdsa-sha2-nistp256"])
+        self.assertEqual(caught.exception.other_fingerprints, [fingerprint_sha256(self.ecdsa.get_base64())])
+        self.assertEqual(self.server.password_attempts, 0)  # reject: never logged in
+        self.assertEqual(self.open(policy="auto-add"), "ssh-ed25519")
+        self.assertEqual(self.known_hosts.read_text(), self.line(self.ecdsa) + "\n")  # auto-add saves nothing
+
+    def test_hashed_entries_steer_and_match(self) -> None:
+        import base64
+        import hashlib
+        import hmac
+
+        self.serve(self.ed, self.ecdsa)
+        salt = os.urandom(20)
+        digest = hmac.new(salt, self.name.encode(), hashlib.sha1).digest()
+        hashed = f"|1|{base64.b64encode(salt).decode()}|{base64.b64encode(digest).decode()}"
+        self.write(self.line(self.ecdsa, hashed))
+        self.assertEqual(self.open(), "ecdsa-sha2-nistp256")
+
+    def test_revoked_keys_are_refused_and_cert_authority_lines_ignored(self) -> None:
+        self.serve(self.ed, self.ecdsa)
+        self.write(self.line(self.ed, marker="@cert-authority"), self.line(self.ecdsa))
+        self.assertEqual(self.open(), "ecdsa-sha2-nistp256")  # the CA line does not steer to ed25519
+        logins = self.server.password_attempts
+        self.write(self.line(self.ecdsa, marker="@revoked"), self.line(self.ecdsa))
+        with self.assertRaises(HostKeyChanged):
+            self.open()
+        self.write(self.line(self.ed, marker="@revoked"))
+        with self.assertRaises(HostKeyChanged):
+            self.open(policy="auto-add")
+        self.assertEqual(self.server.password_attempts, logins)  # refused before logging in
+
+    def test_key_type_order(self) -> None:
+        import socket as socketmod
+
+        import paramiko
+
+        from ssh_manager.known_hosts import KnownHostsFile
+        from ssh_manager.transfer.sftp import SftpBackend
+
+        self.serve(self.ed)
+        backend = SftpBackend("127.0.0.1", self.server.port, known_hosts=self.known_hosts)
+        left, right = socketmod.socketpair()
+        self.addCleanup(left.close)
+        self.addCleanup(right.close)
+
+        def order(*lines):
+            self.write(*lines)
+            transport = paramiko.Transport(left)
+            default = list(transport.get_security_options().key_types)
+            backend._steer_host_key_types(transport, KnownHostsFile(self.known_hosts).lookup("127.0.0.1",
+                                                                                              self.server.port))
+            result = list(transport.get_security_options().key_types)
+            self.assertEqual(sorted(result), sorted(default))  # reordered, never fewer
+            return default, result
+
+        default, result = order()
+        self.assertEqual(result, default)  # nothing known: unchanged
+        _default, rsa = order(self.line(self.rsa))
+        self.assertEqual(rsa[:3], ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"])
+        _default, ecdsa = order(self.line(self.ecdsa))
+        self.assertEqual(ecdsa[0], "ecdsa-sha2-nistp256")
+
+
 if __name__ == "__main__":
     unittest.main()

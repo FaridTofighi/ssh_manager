@@ -146,6 +146,11 @@ class MultiRunDialog(BaseDialog):
         self.add_body(run_row)
 
         self.results = ResultsView()
+        self.results.on_host_key_details = self.host_key_details
+        # Test hooks for Details… (the shared host-key dialogs, then "Re-run this host?").
+        self.show_changed_key: Callable[..., str] = self._show_changed_key
+        self.trust_new_key: Callable[[str, object], bool] = self._trust_new_key
+        self.confirm_rerun: Callable[[str], bool] = self._confirm_rerun
         self.add_body(self.results, expand=True)
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.result_buttons = {}
@@ -430,6 +435,55 @@ class MultiRunDialog(BaseDialog):
 
         write_bytes_private(Path(name), text.encode("utf-8"))  # 0600, atomic
         return name
+
+    # ------------------------------------------------------- host keys
+    def host_key_details(self, result: R.HostResult) -> None:
+        """Details… of a host whose key changed (remove the old key) or is unknown (trust it); then re-run."""
+
+        error = result.host_key_error
+        if error is None:
+            return
+        if result.status == R.HOST_KEY_CHANGED:
+            from ...transfer.backend import HostKeyRevoked
+            from .host_key import changed_key_from_error
+
+            retry = None if isinstance(error, HostKeyRevoked) else (lambda: self.offer_rerun(result))
+            self.show_changed_key(changed_key_from_error(error, result.alias), retry)
+        elif result.status == R.HOST_KEY_UNKNOWN and self.trust_new_key(result.alias, error):
+            from ...transfer.sftp import SftpBackend
+
+            try:
+                SftpBackend(error.hostname, error.port).accept_host_key(error)
+            except OSError as exc:
+                self.controller.win._notify(_("Could not update known_hosts: {error}").format(error=exc),
+                                            Level.WARNING)
+                return
+            self.offer_rerun(result)
+
+    def offer_rerun(self, result: R.HostResult) -> Optional[R.MultiRun]:
+        if self.running or not self.confirm_rerun(result.alias):
+            return None
+        return self.start([result.key])
+
+    def _show_changed_key(self, change, on_retry) -> str:
+        from .host_key import show_host_key_changed
+
+        dialogs = getattr(self.controller.win, "app_dialogs", None)
+        return show_host_key_changed(self, change, on_retry=on_retry,
+                                     open_manager=(lambda: dialogs.open_known_hosts()) if dialogs else None)
+
+    def _trust_new_key(self, alias: str, error) -> bool:
+        from .trust import trust_host_key
+
+        return trust_host_key(self, alias, error.key_type, error.fingerprint,
+                              other_key_types=getattr(error, "other_key_types", ()),
+                              other_fingerprints=getattr(error, "other_fingerprints", ()))
+
+    def _confirm_rerun(self, alias: str) -> bool:
+        from .confirm import confirm
+
+        return confirm(self, _("Re-run this host?"), _("Run the command again on {host}.").format(host=alias),
+                       confirm_label=_("_Re-run"))
 
     def rerun_failed(self) -> Optional[R.MultiRun]:
         keys = self.results.keys_with(R.FAILURES)

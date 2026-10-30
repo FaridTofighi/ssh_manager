@@ -6,6 +6,17 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Host keys in Paramiko connections
+
+- Run Command, file transfer and tunnels no longer report a false "Host key
+  changed" for hosts whose stored key type differs from the first one offered,
+  or that have several lines in known_hosts (now behaves like OpenSSH).
+- A host known only with other key types gets the first-connection question,
+  which names the type trusted before. A key on an `@revoked` line is refused.
+- Run Command: host-key results name the host, the key type and the
+  fingerprints. **Details…** opens the host-key dialog (remove the old key or
+  trust the new one), then offers to re-run that host.
+
 ## SSH keys
 
 - **SSH Keys…** (app menu, Credentials, the host dialog): the keys in

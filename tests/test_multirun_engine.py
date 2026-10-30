@@ -130,6 +130,32 @@ class FailureTests(EngineCase):
         self.assertEqual(result.status, R.HOST_KEY_CHANGED)
         self.assertEqual(self.server.exec_commands, [])  # nothing ran
 
+    def test_host_known_by_another_offered_type_runs(self) -> None:
+        from tests.test_transfer_backends import _ed25519
+
+        ed, rsa = _ed25519(Path(self.tmp.name)), paramiko.RSAKey.generate(2048)
+        server = FakeSftpServer(Path(self.tmp.name), users={"alice": PASSWORD}, host_key=ed,
+                                extra_host_keys=(self.server.host_key, rsa))  # ed25519 first, like OpenSSH servers
+        server.__enter__()
+        self.addCleanup(server.__exit__)
+        key = self.server.host_key  # known_hosts has only the ECDSA key
+        self.known.write_text(f"[127.0.0.1]:{server.port} {key.get_name()} {key.get_base64()}\n")
+        result = self.by_alias(self.run_all("true", self.targets(1, port=server.port)))["host0"]
+        self.assertEqual((result.status, result.message), (R.SUCCESS, ""))  # was "Host key changed"
+
+    def test_changed_key_message_names_host_type_and_fingerprints(self) -> None:
+        from ssh_manager.transfer.backend import HostKeyChanged
+        from ssh_manager.transfer.sftp import key_fingerprint
+
+        stale = paramiko.ECDSAKey.generate()
+        self.known.write_text(f"[127.0.0.1]:{self.server.port} ecdsa-sha2-nistp256 {stale.get_base64()}\n")
+        result = self.by_alias(self.run_all("true", self.targets(1)))["host0"]
+        self.assertEqual(result.status, R.HOST_KEY_CHANGED)
+        for part in (f"[127.0.0.1]:{self.server.port}", "ecdsa-sha2-nistp256", key_fingerprint(self.server.host_key),
+                     key_fingerprint(stale)):
+            self.assertIn(part, result.message)
+        self.assertIsInstance(result.host_key_error, HostKeyChanged)
+
     def test_sudo_hint(self) -> None:
         result = self.by_alias(self.run_all("sudo true; echo 'sudo: a password is required' >&2; exit 1",
                                             self.targets(1)))["host0"]

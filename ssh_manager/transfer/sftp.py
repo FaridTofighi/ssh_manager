@@ -5,7 +5,11 @@
   refused (:class:`HostKeyChanged`); an **unknown** key raises
   :class:`UnknownHostKey` with its fingerprint so the UI can ask, then
   :meth:`SftpBackend.accept_host_key` records it like ``ssh`` does — unless
-  the policy is ``auto-add``, which accepts it for this connection.
+  the policy is ``auto-add``, which accepts it for this connection. As in
+  OpenSSH, the key types stored for the host are offered first, a key is
+  accepted when *any* matching line of its type holds it, a host known only
+  with other key types gets the "unknown key" question, and a key marked
+  ``@revoked`` is refused (:class:`HostKeyRevoked`).
 * **Authentication:** private key (``IdentityFile`` of the host, with an
   optional passphrase), SSH agent, password, and keyboard-interactive with a
   single password prompt. Other prompts (one-time codes) are reported as
@@ -30,19 +34,28 @@ from paramiko import sftp as sftp_proto
 
 from .backend import (
     F_CHMOD, F_MDTM, F_OWNER, F_REST, F_SIZE, F_SYMLINK, NEVER_CANCELLED, AlreadyExists, AuthError, BackendError,
-    CancelToken, Cancelled, Disconnected, EntryKind, HostKeyChanged, NotFound, PermissionDenied, ProtocolError,
+    CancelToken, Cancelled, Disconnected, EntryKind, HostKeyChanged, HostKeyRevoked, NotFound, PermissionDenied,
+    ProtocolError,
     RemoteEntry, RemoteFileBackend, ServerInfo, Timeout, UnknownHostKey, Unsupported, check_remote_path, join,
     redact,
 )
 from .settings import TransferSettings
 
 LogFn = Callable[[str], None]
+RSA_ALGORITHMS = ("rsa-sha2-512", "rsa-sha2-256", "ssh-rsa")  # one ``ssh-rsa`` key, three signature names
 WINDOW_SIZE = 4 * 1024 * 1024
 MAX_PACKET = 64 * 1024
 
 
 def default_known_hosts() -> Path:
     return Path("~/.ssh/known_hosts").expanduser()
+
+
+def _entry_blob(entry) -> Optional[bytes]:
+    try:
+        return base64.b64decode(entry.key_b64.encode("ascii"), validate=True)
+    except (ValueError, UnicodeEncodeError):
+        return None
 
 
 def key_fingerprint(key: paramiko.PKey) -> str:
@@ -153,6 +166,7 @@ class SftpBackend(RemoteFileBackend):
             sock = self._socket()
             transport = paramiko.Transport(sock, default_window_size=WINDOW_SIZE, default_max_packet_size=MAX_PACKET)
             transport.banner_timeout = self.settings.timeout_connect
+            self._steer_host_key_types(transport, self._stored_host_keys())  # before the handshake
             transport.start_client(timeout=self.settings.timeout_connect)
         except BackendError as exc:
             self._note(f"Failed: {exc}")
@@ -211,44 +225,70 @@ class SftpBackend(RemoteFileBackend):
         )
         return self._info
 
+    def _stored_host_keys(self) -> list:
+        """The known_hosts entries for this host (plain, ``[host]:port``, wildcard and hashed names)."""
+
+        from ..known_hosts import KnownHostsError, KnownHostsFile
+
+        try:
+            return KnownHostsFile(self.known_hosts).lookup(self.hostname, self.port)
+        except (OSError, ValueError, KnownHostsError):
+            return []
+
+    @staticmethod
+    def _steer_host_key_types(transport: paramiko.Transport, entries) -> None:
+        """Offer the key types stored for the host first, as OpenSSH does (reordered only, never fewer)."""
+
+        known: List[str] = []
+        for entry in entries:
+            if entry.marker:  # @cert-authority and @revoked lines never steer
+                continue
+            for name in RSA_ALGORITHMS if entry.key_type == "ssh-rsa" else (entry.key_type,):
+                if name not in known:
+                    known.append(name)
+        if not known:
+            return
+        options = transport.get_security_options()
+        default = list(options.key_types)
+        order = [name for name in default if name in known] + [name for name in default if name not in known]
+        if order != default:
+            options.key_types = order
+
     def _check_host_key(self, key: paramiko.PKey) -> None:
-        name = known_hosts_name(self.hostname, self.port)
+        """OpenSSH's rule: any stored line of the presented key's type holding it accepts it."""
+
+        entries = self._stored_host_keys()
+        blob = key.asbytes()
+        if any(entry.marker == "@revoked" and _entry_blob(entry) == blob for entry in entries):
+            raise HostKeyRevoked(fingerprint=key_fingerprint(key), hostname=self.hostname, port=self.port,
+                                 key_type=key.get_name(), known_hosts_path=str(self.known_hosts))
         if self._accepted_key is not None and self._accepted_key == key:
             return
-        known = paramiko.HostKeys()
-        try:
-            if self.known_hosts.exists():
-                known.load(str(self.known_hosts))
-        except (OSError, paramiko.SSHException):
-            pass
-        entries = known.lookup(name) or {}
-        if key.get_name() in entries:
-            if entries[key.get_name()] == key:
-                return
-            raise self._changed(key, entries[key.get_name()], entries)
-        if entries:  # known with another key type: treat like OpenSSH (a changed key is suspicious)
-            raise self._changed(key, next(iter(entries.values())), entries)
+        stored = [entry for entry in entries if not entry.marker]
+        same_type = [entry for entry in stored if entry.key_type == key.get_name()]
+        if any(_entry_blob(entry) == blob for entry in same_type):
+            return
+        if same_type:
+            raise self._changed(key, same_type)
         if self.host_key_policy == "auto-add":
             return
+        # Known only with other key types (or not at all): a new key, as OpenSSH treats it — never "changed".
+        other_types: List[str] = []
+        for entry in stored:
+            if entry.key_type not in other_types:
+                other_types.append(entry.key_type)
         raise UnknownHostKey(hostname=self.hostname, port=self.port, key_type=key.get_name(),
-                             fingerprint=key_fingerprint(key), key=key)
+                             fingerprint=key_fingerprint(key), key=key, other_key_types=other_types,
+                             other_fingerprints=[entry.fingerprint for entry in stored])
 
-    def _changed(self, key: paramiko.PKey, expected: paramiko.PKey, entries) -> HostKeyChanged:
-        """The error with what "Remove old key and retry" needs: the stored entry's file and line."""
+    def _changed(self, key: paramiko.PKey, same_type) -> HostKeyChanged:
+        """The error with what "Remove old key and retry" needs: the first stored entry's file and line."""
 
-        from ..known_hosts import KnownHostsFile
-
-        line_no = 0
-        try:
-            stored = [e for e in KnownHostsFile(self.known_hosts).lookup(self.hostname, self.port) if not e.marker]
-            same_type = [e for e in stored if e.key_type == expected.get_name()]
-            line_no = (same_type or stored)[0].line_no if (same_type or stored) else 0
-        except OSError:
-            pass
-        return HostKeyChanged(fingerprint=key_fingerprint(key), expected=key_fingerprint(expected),
+        first = same_type[0]
+        return HostKeyChanged(fingerprint=key_fingerprint(key), expected=first.fingerprint,
                               hostname=self.hostname, port=self.port, key_type=key.get_name(),
-                              old_fingerprints=[key_fingerprint(k) for k in entries.values()],
-                              known_hosts_path=str(self.known_hosts), line_no=line_no)
+                              old_fingerprints=[entry.fingerprint for entry in same_type],
+                              known_hosts_path=str(self.known_hosts), line_no=first.line_no)
 
     def accept_host_key(self, error: UnknownHostKey, *, remember: bool = True) -> None:
         """The user confirmed the fingerprint: accept it now and (``remember``) append it to known_hosts."""

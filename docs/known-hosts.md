@@ -62,6 +62,9 @@ it.
 
 - **File browser and RDP SSH tunnel:** the same dialog — **Details…**,
   **Remove Old Key and Retry…**, **Close**.
+- **Run Command on Hosts:** the result names the host name and port that
+  were checked, the key presented and the stored fingerprints. **Details…**
+  opens the same dialog, then offers **Re-run this host**.
 - **Test Connection:** shows both fingerprints in its result.
 - **Remote stats:** a background check never opens a dialog. The status bar shows
   "Host key changed", and the log gets one warning per host per session.
@@ -71,6 +74,18 @@ it.
 - **Unknown keys:** accepted for that connection only, and nothing is saved.
 - **Changed keys:** still refused.
 - **Terminals:** follow ssh's own configuration (`StrictHostKeyChecking`).
+
+**How a key is matched (as OpenSSH does).** The connection offers the key
+types stored for the host first, so a server with several keys presents one
+you already trust. Plain, `[host]:port`, wildcard and hashed lines all count.
+A key is accepted when **any** matching line of its type holds it; stale or
+duplicate lines do not matter. It counts as **changed** only when lines of
+its type exist and none matches. A host known **only with other key types**
+(the server no longer offers the trusted type) gets the first-connection
+question, naming the type trusted before. If accepted, the new key is added
+beside the old one. Strict checking still refuses it without asking.
+`@cert-authority` lines are ignored, and a key on an `@revoked` line is
+always refused.
 
 ## The Known Hosts manager
 

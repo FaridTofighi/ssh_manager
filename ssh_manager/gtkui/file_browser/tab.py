@@ -504,7 +504,9 @@ class FileBrowserTab(SessionPage):
             self._set_status(ConnectionStatus.FAILED, _("The certificate was not trusted."))
             return
         if isinstance(exc, UnknownHostKey):
-            if trust_host_key(self._window(), alias, exc.key_type, exc.fingerprint):
+            if trust_host_key(self._window(), alias, exc.key_type, exc.fingerprint,
+                              other_key_types=getattr(exc, "other_key_types", ()),
+                              other_fingerprints=getattr(exc, "other_fingerprints", ())):
                 try:
                     backend.accept_host_key(exc)  # type: ignore[attr-defined]
                 except OSError as os_error:

@@ -29,7 +29,7 @@ import shlex
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..gtkui.i18n import _
@@ -87,6 +87,7 @@ class HostResult:
     stderr_truncated: bool = False
     message: str = ""  # a short human reason (never a traceback, never a secret)
     hint: str = ""
+    host_key_error: Any = field(default=None, repr=False, compare=False)  # for Details… (never exported)
 
     @property
     def first_line(self) -> str:
@@ -131,13 +132,33 @@ def substitute(text: str, target: Target) -> str:
     return _TOKEN.sub(replace_token, text)
 
 
+def _host_key_text(exc: Any, summary: str) -> str:
+    """The summary, then what was checked: host name / port, the presented key, the stored ones."""
+
+    from ..known_hosts import host_pattern
+    from ..transfer.backend import HostKeyRevoked
+
+    if isinstance(exc, HostKeyRevoked):
+        summary = _("The server's host key is marked as revoked in known_hosts; nothing was run.")
+    lines = [summary, _("{host} presents {type} {fingerprint}.").format(
+        host=host_pattern(exc.hostname, exc.port), type=exc.key_type, fingerprint=exc.fingerprint)]
+    stored = list(getattr(exc, "old_fingerprints", ()) or getattr(exc, "other_fingerprints", ()))
+    if getattr(exc, "other_key_types", None):
+        lines.append(_("known_hosts has only {types} for it: {fingerprints}.").format(
+            types=", ".join(exc.other_key_types), fingerprints=", ".join(stored)))
+    elif stored:
+        lines.append(_("Stored in known_hosts: {fingerprints}.").format(fingerprints=", ".join(stored)))
+    return "\n".join(lines)
+
+
 def _classify(exc: BaseException) -> Tuple[str, str]:
     from ..transfer.backend import AuthError, BackendError, HostKeyChanged, Timeout, UnknownHostKey
 
     if isinstance(exc, HostKeyChanged):
-        return HOST_KEY_CHANGED, _("The server's host key has changed; nothing was run.")
+        return HOST_KEY_CHANGED, _host_key_text(exc, _("The server's host key has changed; nothing was run."))
     if isinstance(exc, UnknownHostKey):
-        return HOST_KEY_UNKNOWN, _("The host key is not known yet; connect once in a session to check it.")
+        return HOST_KEY_UNKNOWN, _host_key_text(
+            exc, _("The host key is not known yet; connect once in a session to check it."))
     if isinstance(exc, AuthError):
         return AUTH_FAILED, _("Needs interactive login (no saved password or key was accepted).")
     if isinstance(exc, Timeout):
@@ -273,6 +294,8 @@ class MultiRun:
                 status, message = CANCELLED, ""
             LOGGER.debug("multirun: %s failed (%s)", target.alias, type(exc).__name__)
             changes = dict(status=status, message=message)
+            if status in (HOST_KEY_CHANGED, HOST_KEY_UNKNOWN):
+                changes["host_key_error"] = exc
         finally:
             with self._lock:
                 self._running -= 1

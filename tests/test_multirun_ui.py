@@ -57,6 +57,55 @@ class MultiRunUiCase(unittest.TestCase):
 
 
 class DialogTests(MultiRunUiCase):
+    def test_the_trust_question_names_the_type_trusted_before(self) -> None:
+        from ssh_manager.gtkui.dialogs.trust import host_key_message
+
+        self.assertIn("You trusted ecdsa-sha2-nistp256 for this host before; the server now presents ssh-ed25519.",
+                      host_key_message("ssh-ed25519", ["ecdsa-sha2-nistp256"]))
+        self.assertIn("not known yet", host_key_message("ssh-ed25519"))
+
+    def test_host_key_details_only_for_host_key_statuses(self) -> None:
+        from unittest import mock
+
+        from ssh_manager.multirun import engine as R
+        from ssh_manager.transfer.backend import HostKeyChanged, UnknownHostKey
+
+        keys = self.keys("web-01", "web-02", "db-primary")
+        dialog = self.dialog(keys)
+        targets = self.controller.targets(keys)
+        dialog.results.reset(targets)
+        changed = HostKeyChanged(fingerprint="SHA256:new", expected="SHA256:old", hostname="10.0.0.1", port=22,
+                                 key_type="ssh-ed25519", old_fingerprints=["SHA256:old"])
+        unknown = UnknownHostKey(hostname="10.0.0.2", port=2222, key_type="ssh-ed25519", fingerprint="SHA256:x",
+                                 other_key_types=["ecdsa-sha2-nistp256"], other_fingerprints=["SHA256:y"])
+        rows = [R.HostResult(targets[0].key, targets[0].alias, status=R.HOST_KEY_CHANGED, host_key_error=changed),
+                R.HostResult(targets[1].key, targets[1].alias, status=R.HOST_KEY_UNKNOWN, host_key_error=unknown),
+                R.HostResult(targets[2].key, targets[2].alias, status=R.AUTH_FAILED)]
+        dialog.results.update(rows)
+        shown = {}
+        for row in rows:
+            self.assertTrue(dialog.results.select(row.key))
+            shown[row.status] = dialog.results.details_button.get_visible()
+        self.assertEqual(shown, {R.HOST_KEY_CHANGED: True, R.HOST_KEY_UNKNOWN: True, R.AUTH_FAILED: False})
+
+        seen, asked = [], []
+        dialog.show_changed_key = lambda change, retry: seen.append(change) or retry()
+        dialog.confirm_rerun = lambda alias: asked.append(alias) or False
+        dialog.results.select(rows[0].key)
+        dialog.results.details_button.clicked()
+        self.assertEqual((seen[0].new_fingerprint, seen[0].names, seen[0].old_fingerprints),
+                         ("SHA256:new", [("10.0.0.1", 22)], ("SHA256:old",)))
+        self.assertEqual(asked, [rows[0].alias])  # after removing the old key: "Re-run this host?"
+
+        trusted = []
+        dialog.trust_new_key = lambda alias, error: trusted.append(error.other_key_types) or True
+        with mock.patch("ssh_manager.transfer.sftp.SftpBackend.accept_host_key") as accept:
+            dialog.results.select(rows[1].key)
+            dialog.results.details_button.clicked()
+        accept.assert_called_once_with(unknown)
+        self.assertEqual(trusted, [["ecdsa-sha2-nistp256"]])
+        self.assertEqual(asked, [rows[0].alias, rows[1].alias])
+
     def test_opens_modally_and_closes(self) -> None:
         from gi.repository import GLib, Gtk
 

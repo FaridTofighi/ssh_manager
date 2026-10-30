@@ -50,14 +50,20 @@ class HostKeyError(BackendError):
 
 
 class UnknownHostKey(HostKeyError):
-    """First connection: the user must confirm the fingerprint (``key_type``, ``fingerprint``)."""
+    """First connection: the user must confirm the fingerprint (``key_type``, ``fingerprint``).
+
+    ``other_key_types`` / ``other_fingerprints``: keys of other types stored for the host (it is known, but
+    not with this type: a new key, as OpenSSH treats it, not a changed one).
+    """
 
     default_message = "This server's host key is not known yet."
 
     def __init__(self, message: str = "", technical: str = "", *, hostname: str = "", port: int = 22,
-                 key_type: str = "", fingerprint: str = "", key: Any = None) -> None:
+                 key_type: str = "", fingerprint: str = "", key: Any = None, other_key_types: Any = (),
+                 other_fingerprints: Any = ()) -> None:
         super().__init__(message, technical)
         self.hostname, self.port, self.key_type, self.fingerprint, self.key = hostname, port, key_type, fingerprint, key
+        self.other_key_types, self.other_fingerprints = list(other_key_types), list(other_fingerprints)
 
 
 class HostKeyChanged(HostKeyError):
@@ -81,6 +87,12 @@ class HostKeyChanged(HostKeyError):
     @property
     def new_fingerprint(self) -> str:
         return self.fingerprint
+
+
+class HostKeyRevoked(HostKeyChanged):
+    """The presented key is marked ``@revoked`` in known_hosts: refused whatever the policy, like OpenSSH."""
+
+    default_message = "The server's host key is marked as revoked in known_hosts; the connection was stopped."
 
 
 class TlsError(BackendError):

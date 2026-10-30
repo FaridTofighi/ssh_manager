@@ -258,7 +258,9 @@ class TunnelController:
         from ...transfer.sftp import SftpBackend
         from ..dialogs.trust import trust_host_key
 
-        if not trust_host_key(self.win, alias, exc.key_type, exc.fingerprint):
+        if not trust_host_key(self.win, alias, exc.key_type, exc.fingerprint,
+                              other_key_types=getattr(exc, "other_key_types", ()),
+                              other_fingerprints=getattr(exc, "other_fingerprints", ())):
             return False
         try:
             SftpBackend(exc.hostname, exc.port).accept_host_key(exc)

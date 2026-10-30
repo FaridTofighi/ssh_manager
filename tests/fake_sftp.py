@@ -149,6 +149,7 @@ class _Server(paramiko.ServerInterface):
         self.listeners: dict = {}  # tcpip-forward: port -> listening socket
 
     def check_auth_password(self, username, password):
+        self.owner.password_attempts += 1
         if self.owner.otp_only:
             return paramiko.AUTH_FAILED
         return paramiko.AUTH_SUCCESSFUL if self.owner.users.get(username) == password else paramiko.AUTH_FAILED
@@ -314,10 +315,13 @@ def _bridge(channel, target, stop) -> None:
 
 
 class FakeSftpServer:
-    def __init__(self, root: Path, *, users: Optional[dict] = None, host_key: Optional[paramiko.PKey] = None) -> None:
+    def __init__(self, root: Path, *, users: Optional[dict] = None, host_key: Optional[paramiko.PKey] = None,
+                 extra_host_keys: tuple = ()) -> None:
         self.root = str(root)
         self.users = users or {"alice": "s3cret pass"}
         self.host_key = host_key or paramiko.ECDSAKey.generate()
+        self.extra_host_keys = tuple(extra_host_keys)  # more key types offered (host-key algorithm tests)
+        self.password_attempts = 0  # a client that refused the host key never gets this far
         self.authorized_key: Optional[paramiko.PKey] = None
         self.otp_only = False
         self.allow_forward = True  # direct-tcpip (RDP SSH tunnel tests)
@@ -342,7 +346,8 @@ class FakeSftpServer:
             except (socket.timeout, OSError):
                 continue
             transport = paramiko.Transport(conn)
-            transport.add_server_key(self.host_key)
+            for key in (self.host_key, *self.extra_host_keys):
+                transport.add_server_key(key)
             transport.set_subsystem_handler("sftp", paramiko.SFTPServer, _SftpServer)
             try:
                 transport.start_server(server=_Server(self, transport))
