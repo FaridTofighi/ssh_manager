@@ -211,11 +211,78 @@ class _Server(paramiko.ServerInterface):
         if listener is not None:
             listener.close()
 
+    def check_channel_exec_request(self, channel, command):
+        """``exec`` (Run Command tests): the command really runs here (sh), the channel is its stdin / output."""
+
+        if not self.owner.allow_exec:
+            return False
+        threading.Thread(target=_run_exec, args=(channel, command.decode("utf-8", "replace"), self.owner),
+                         daemon=True).start()
+        return True
+
+    def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
+        self.owner.pty_requests += 1
+        return True
+
+    def check_channel_env_request(self, channel, name, value):
+        return False  # like most sshd configurations (AcceptEnv)
+
     def check_channel_direct_tcpip_request(self, chanid, origin, destination):
         if not self.owner.allow_forward:
             return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
         self.owner.forwards[chanid] = destination
         return paramiko.OPEN_SUCCEEDED
+
+
+def _run_exec(channel, command: str, owner) -> None:
+    import subprocess
+
+    owner.exec_commands.append(command)
+    try:
+        process = subprocess.Popen(command, shell=True, cwd=owner.root, stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError:
+        channel.send_exit_status(127)
+        channel.close()
+        return
+
+    def feed() -> None:
+        try:
+            while True:
+                data = channel.recv(65536)
+                if not data:
+                    break
+                process.stdin.write(data)
+                process.stdin.flush()
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+    def drain(stream, send) -> None:
+        try:
+            for chunk in iter(lambda: stream.read1(65536), b""):
+                send(chunk)
+        except (OSError, ValueError, EOFError):
+            pass
+
+    threads = [threading.Thread(target=feed, daemon=True),
+               threading.Thread(target=drain, args=(process.stdout, channel.sendall), daemon=True),
+               threading.Thread(target=drain, args=(process.stderr, channel.sendall_stderr), daemon=True)]
+    for thread in threads:
+        thread.start()
+    for thread in threads[1:]:
+        thread.join()
+    code = process.wait()
+    try:
+        channel.send_exit_status(code)
+        channel.close()
+    except (OSError, EOFError):
+        pass
+    threads[0].join(1)
 
 
 def _bridge(channel, target, stop) -> None:
@@ -250,6 +317,9 @@ class FakeSftpServer:
         self.otp_only = False
         self.allow_forward = True  # direct-tcpip (RDP SSH tunnel tests)
         self.allow_remote_forward = True  # tcpip-forward (port forwarding tests)
+        self.allow_exec = True  # exec (Run Command tests)
+        self.exec_commands: list = []
+        self.pty_requests = 0
         self.remote_listeners: list = []
         self.forwards: dict = {}  # channel id -> (host, port) asked for
         self.listener = socket.create_server(("127.0.0.1", 0))
