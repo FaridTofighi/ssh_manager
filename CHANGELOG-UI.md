@@ -6,6 +6,26 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Port forwarding (tunnels)
+
+- **Forwards per host:** Local, Remote and Dynamic (SOCKS5). SSH Manager runs
+  them itself, beside the terminal, over one SSH connection per host with the
+  app's usual host-key rules and credentials.
+- **Starting:** by hand, with a session (stopped when the host's last session
+  closes, by default), or with the app (one at a time, one summary of
+  failures).
+- **Tunnels…:** list with an icon and a word for the status (connections,
+  traffic, the last error), Start / Stop, Add, Edit, Delete, Copy Address,
+  Open in Browser, Stop All.
+- **Host dialog → Port Forwarding:** `LocalForward` & co. from the ssh options
+  can be imported as managed forwards; the options themselves stay.
+- **Safety:** loopback only unless "Bind to all interfaces" is chosen, with a
+  warning.
+- **Reconnection:** a lost connection reconnects with backoff; there is a
+  notification when it drops and when it is back.
+- **Status and quitting:** the `⇄ N` chip shows the active tunnels. Quitting
+  asks before stopping running tunnels.
+
 ## Known Hosts and host-key warnings
 
 - **Terminal:** ssh's "REMOTE HOST IDENTIFICATION HAS CHANGED" now shows a

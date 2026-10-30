@@ -171,6 +171,11 @@ that direct file mode follows `Include` directives.
   **Known Hosts…** lists `~/.ssh/known_hosts` with the inventory hosts
   (hashed entries included): delete with Undo, import, export, verify a key
   now. See `docs/known-hosts.md`.
+- **Port forwarding**: Local (`-L`), Remote (`-R`) and Dynamic (SOCKS5)
+  forwards per host, started by hand, with a session or with the app, beside
+  the terminal (they stop without disconnecting). App menu → **Tunnels…** shows
+  them with their status; the `⇄ N` chip counts the active ones. See
+  `docs/port-forwarding.md`.
 - **Local terminal**: `+` after the last tab, or Ctrl+Shift+T, opens your own
   shell in a tab, like gnome-terminal (split, zoom, copy/paste and transcripts
   as in SSH tabs). See `docs/terminal.md`.
@@ -308,6 +313,7 @@ authentication.
 - `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
 - `docs/security.md` — the master password, the key file, unlock modes, the recovery key, the migration, the threat model
 - `docs/known-hosts.md` — SSH host keys: the terminal banner, the Known Hosts manager, hashed entries
+- `docs/port-forwarding.md` — tunnels: Local / Remote / SOCKS forwards, when they run, limits
 - `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
