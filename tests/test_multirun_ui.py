@@ -145,5 +145,96 @@ class DialogTests(MultiRunUiCase):
         self.assertTrue(all(r.status == "cancelled" for r in dialog.results.results.values()))
 
 
+class ResultsTests(MultiRunUiCase):
+    SCRIPT = 'case {alias} in web-02) echo "6.0"; exit 3;; *) echo "6.1"; echo "warn {alias}" >&2;; esac'
+
+    def ran(self):
+        dialog = self.dialog(self.keys())
+        dialog.set_command(self.SCRIPT)
+        dialog.start()
+        self.finish(dialog)
+        return dialog
+
+    def test_filters_output_search_grouping_and_diff(self) -> None:
+        dialog = self.ran()
+        view = dialog.results
+        total = len(view.store)
+        view.set_filter("failed")
+        self.assertEqual([row[3] for row in view.filtered], ["web-02"])
+        self.assertEqual(view.filtered[0][2], "Failed (exit 3)")
+        view.set_filter("succeeded")
+        self.assertEqual(len(view.filtered), total - 1)
+        view.set_filter("all")
+        web01 = self.keys("web-01")[0]
+        self.assertTrue(view.select(web01))
+        self.assertEqual(view.stdout_view.get_buffer().props.text, "6.1\n")
+        self.assertEqual(view.stderr_view.get_buffer().props.text, "warn web-01\n")
+        view.output_search.set_text("WARN")
+        self.assertEqual(view.highlight(), 1)
+        groups = view.rebuild_groups()
+        self.assertEqual([len(g.keys) for g in groups], [total - 1, 1])
+        view.set_grouped(True)
+        labels = [row[0] for row in view.groups]
+        self.assertTrue(labels[0].startswith(f"Same output on {total - 1} hosts: 6.1"))
+        shown = []
+        view.show_diff = lambda title, text: shown.append((title, text))
+        view.set_grouped(False)
+        view.select(self.keys("web-02")[0])
+        diff = view.differences()
+        self.assertIn("-6.1", diff)
+        self.assertIn("+6.0", diff)
+        self.assertEqual(shown[0][0], "Differences: web-02")
+
+    def test_copy_export_rerun_failed_and_sessions(self) -> None:
+        import csv
+        import os
+        import stat
+        from unittest import mock
+
+        dialog = self.ran()
+        tsv = dialog.copy_results()
+        self.assertEqual(tsv.splitlines()[0], "host\tgroup\tstatus\texit\tduration\toutput")
+        target = Path(self.tmp.name) / "out.csv"
+        dialog.choose_export = lambda: str(target)
+        self.assertEqual(dialog.export(), str(target))
+        rows = list(csv.reader(target.open(encoding="utf-8")))
+        self.assertEqual(rows[0][:3], ["host", "group", "status"])
+        self.assertEqual(stat.S_IMODE(os.stat(target).st_mode), 0o600)
+        json_target = Path(self.tmp.name) / "out.json"
+        dialog.choose_export = lambda: str(json_target)
+        dialog.export()
+        self.assertIn('"host": "web-02"', json_target.read_text())
+        self.assertTrue(dialog.result_buttons["rerun_failed"].get_sensitive())
+        before = len(self.server.exec_commands)
+        run = dialog.rerun_failed()
+        self.assertEqual([t.alias for t in run.targets], ["web-02"])  # exactly the failed host
+        self.finish(dialog)
+        self.assertEqual(len(self.server.exec_commands) - before, 1)
+        with mock.patch.object(self.controller, "open_sessions") as sessions:
+            dialog.open_failed_sessions()
+        sessions.assert_called_once_with(self.keys("web-02"))
+
+    def test_results_arrive_in_batches(self) -> None:
+        from ssh_manager.multirun import engine as R
+        from ssh_manager.gtkui.dialogs import multirun as D
+
+        dialog = self.dialog([])
+        targets = [R.Target(key=f"k{i}", alias=f"h{i}", hostname="x") for i in range(1200)]
+        run = R.MultiRun(targets, "true", connect=lambda *a: None)
+        dialog.run = run
+        started = time.perf_counter()
+        dialog.results.reset(targets)
+        for target in targets:
+            run.events.put((target.key, R.HostResult(target.key, target.alias, status=R.SUCCESS, exit_code=0)))
+        dialog._drain()
+        elapsed = time.perf_counter() - started
+        done = sum(1 for r in dialog.results.results.values() if r.status == R.SUCCESS)
+        self.assertEqual(done, D.BATCH)  # one batch per tick, the rest next time
+        self.assertLess(elapsed, 1.0)
+        dialog._drain()
+        dialog._drain()
+        self.assertEqual(sum(1 for r in dialog.results.results.values() if r.status == R.SUCCESS), 1200)
+
+
 if __name__ == "__main__":
     unittest.main()

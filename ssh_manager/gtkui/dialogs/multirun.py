@@ -136,6 +136,19 @@ class MultiRunDialog(BaseDialog):
 
         self.results = ResultsView()
         self.add_body(self.results, expand=True)
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        self.result_buttons = {}
+        for name, label, callback in (("copy", _("_Copy Results"), self.copy_results),
+                                      ("export", _("_Export…"), self.export),
+                                      ("rerun_failed", _("Re-run _Failed Only"), self.rerun_failed),
+                                      ("rerun_all", _("Re-run A_ll"), self.rerun_all),
+                                      ("sessions", _("Open _Sessions to Failed Hosts"), self.open_failed_sessions)):
+            button = Gtk.Button.new_with_mnemonic(label)
+            button.connect("clicked", lambda _b, cb=callback: cb())
+            actions.pack_start(button, False, False, 0)
+            self.result_buttons[name] = button
+        self.add_body(actions)
+        self.choose_export: Callable[[], Optional[str]] = self._choose_export  # test hook
         self.add_primary(_("_Close"), Gtk.ResponseType.CLOSE)
         self.connect("response", self._on_close_response)  # Close and the window's × (BaseDialog lets them pass)
         self.connect("destroy", lambda *_a: self._stop_drain())
@@ -197,6 +210,10 @@ class MultiRunDialog(BaseDialog):
             widget.set_sensitive(not running)
         self.run_button.set_sensitive(not running and bool(self.command_text.strip()) and self.runnable_count > 0)
         self.cancel_button.set_sensitive(running)
+        finished = self.run is not None and not running
+        failed = bool(self.results.keys_with(R.FAILURES)) if finished else False
+        for name, button in getattr(self, "result_buttons", {}).items():
+            button.set_sensitive(finished and (failed or name not in ("rerun_failed", "sessions")))
 
     # ---------------------------------------------------------------- run
     def approve(self, targets: List[R.Target], command: str) -> bool:
@@ -267,7 +284,52 @@ class MultiRunDialog(BaseDialog):
         self.on_finished()
 
     def on_finished(self) -> None:
-        """Hook for the results actions."""
+        if self.results.group_toggle.get_active():
+            self.results.rebuild_groups()
+
+    # ------------------------------------------------------------ results
+    def copy_results(self) -> str:
+        from gi.repository import Gdk  # type: ignore
+
+        from ...multirun.report import to_tsv
+
+        text = to_tsv(self.results.ordered())
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+        return text
+
+    def _choose_export(self) -> Optional[str]:
+        from .files import choose_save_file
+
+        return choose_save_file(self, _("Export Results (.csv, .json or .txt)"), current_name="results.csv")
+
+    def export(self) -> Optional[str]:
+        """The only way output reaches the disk: a file the user chose (CSV, JSON or text by its extension)."""
+
+        from ...multirun import report
+
+        name = self.choose_export()
+        if not name:
+            return None
+        results = self.results.ordered()
+        lower = name.lower()
+        text = report.to_json(results) if lower.endswith(".json") else \
+            report.to_text(results) if lower.endswith(".txt") else report.to_csv(results)
+        from pathlib import Path
+
+        from ...persistence import write_bytes_private
+
+        write_bytes_private(Path(name), text.encode("utf-8"))  # 0600, atomic
+        return name
+
+    def rerun_failed(self) -> Optional[R.MultiRun]:
+        keys = self.results.keys_with(R.FAILURES)
+        return self.start(keys) if keys else None
+
+    def rerun_all(self) -> Optional[R.MultiRun]:
+        return self.start([key for key in self.results.results])
+
+    def open_failed_sessions(self) -> None:
+        self.controller.open_sessions(self.results.keys_with(R.FAILURES))
 
     def _stop_drain(self) -> None:
         if self._drain_id:
