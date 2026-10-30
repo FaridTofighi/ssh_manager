@@ -6,6 +6,24 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Known Hosts and host-key warnings
+
+- **Terminal:** ssh's "REMOTE HOST IDENTIFICATION HAS CHANGED" now shows a
+  warning bar on that tab, with **Details…** and **Remove Old Key and
+  Reconnect…** (confirmed, Cancel by default, backup first, exactly that
+  line). A first connection shows the fingerprint with **Copy Fingerprint**.
+  Nothing is trusted for you: ssh still asks in the terminal.
+- **Known Hosts manager** (app menu → Known Hosts…, a host's Forget Host
+  Key…, the `known-hosts` shortcut action): entries matched to the inventory
+  (hashed ones too), hosts without a key, several keys per host, unmatched
+  hashed entries. Delete with Undo, Import, Export, Verify Host Key Now.
+  Edits are atomic and byte-preserving, with backups.
+- **File browser and RDP SSH tunnels:** a changed key opens the same dialog
+  (Details… / Remove Old Key and Retry…). Remote stats only say "Host key
+  changed", once in the log.
+- **Settings → SSH Security:** auto-add explains what it does. Unknown keys
+  are trusted for that connection only; a changed key is still refused.
+
 ## Status bar: a constant height
 
 - Fixed: refreshing the server resources no longer makes the terminal

@@ -350,6 +350,18 @@ class PreferencesDialog(BaseDialog):
         (self._policy_auto if settings.host_key_policy == "auto-add" else self._policy_strict).set_active(True)
         policy.add_widget(self._policy_strict)
         policy.add_widget(self._policy_auto)
+        # What auto-add does in the code (transfer/sftp.py, connector.py): an unknown key is accepted for that
+        # connection only and never written; a changed key raises; terminals use ssh's own configuration.
+        self._auto_add_hint = Gtk.Label(label=_(
+            "New keys are trusted without asking, for that connection only (file browser, tunnels, the Paramiko "
+            "backend; nothing is saved). A changed key is still refused. Terminals follow ssh's own settings."))
+        self._auto_add_hint.set_xalign(0.0)
+        self._auto_add_hint.set_line_wrap(True)
+        self._auto_add_hint.get_style_context().add_class("form-help")
+        self._auto_add_hint.set_no_show_all(True)
+        self._auto_add_hint.set_visible(self._policy_auto.get_active())
+        self._policy_auto.connect("toggled", lambda button: self._auto_add_hint.set_visible(button.get_active()))
+        policy.add_widget(self._auto_add_hint)
         algorithms = self._section(page, _("Algorithms"), _("Comma-separated lists; leave empty to allow the defaults."))
         self._cipher_entry = entry(", ".join(settings.allowed_ciphers), "aes256-gcm@openssh.com, aes128-ctr")
         self._kex_entry = entry(", ".join(settings.allowed_kex), "curve25519-sha256")

@@ -165,6 +165,12 @@ that direct file mode follows `Include` directives.
   (Ctrl+Alt+T, or the menu next to the `+` after the last tab) for an ad-hoc
   `user@host:port` or an `sftp://`, `ftps://`, `ftp://` or `ssh://` URL (a
   temporary connection; the toast offers **Save to Inventory…**).
+- **Host keys**: when ssh reports a changed or unknown host key, the tab
+  shows a bar with the fingerprints. **Remove Old Key and Reconnect…** asks
+  first and keeps a backup; ssh then asks again in the terminal. App menu →
+  **Known Hosts…** lists `~/.ssh/known_hosts` with the inventory hosts
+  (hashed entries included): delete with Undo, import, export, verify a key
+  now. See `docs/known-hosts.md`.
 - **Local terminal**: `+` after the last tab, or Ctrl+Shift+T, opens your own
   shell in a tab, like gnome-terminal (split, zoom, copy/paste and transcripts
   as in SSH tabs). See `docs/terminal.md`.
@@ -301,6 +307,7 @@ authentication.
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
 - `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
 - `docs/security.md` — the master password, the key file, unlock modes, the recovery key, the migration, the threat model
+- `docs/known-hosts.md` — SSH host keys: the terminal banner, the Known Hosts manager, hashed entries
 - `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts

@@ -154,5 +154,25 @@ class KnownHostsDialogTests(unittest.TestCase):
                 self.assertEqual(self.path.read_bytes(), before)  # never writes
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class PreferencesHintTests(unittest.TestCase):
+    def test_auto_add_hint_follows_the_policy(self) -> None:
+        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+        from ssh_manager.gtkui.theme.loader import ThemeMode
+        from ssh_manager.settings import AppSettings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = AppSettings(config_path=Path(tmp) / "settings.json")
+            dialog = PreferencesDialog(None, ThemeMode.LIGHT, 1.0, 11, settings)
+            self.addCleanup(dialog.destroy)
+            self.assertFalse(dialog._auto_add_hint.get_visible())
+            dialog._policy_auto.set_active(True)
+            self.assertTrue(dialog._auto_add_hint.get_visible())
+            self.assertIn("changed key is still refused", dialog._auto_add_hint.get_text())
+            dialog._policy_strict.set_active(True)
+            self.assertFalse(dialog._auto_add_hint.get_visible())
+            self.assertEqual(dialog.values().host_key_policy, "reject")
+
+
 if __name__ == "__main__":
     unittest.main()
