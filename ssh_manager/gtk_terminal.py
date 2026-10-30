@@ -18,7 +18,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Vte", "2.91")
 
-from gi.repository import Gdk, Gio, GLib, Gtk, Vte, Pango  # type: ignore  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Vte, Pango  # type: ignore  # noqa: E402
 
 from ssh_manager.auth_flow import (
     AUTH_FAILURE_RE,
@@ -291,6 +291,10 @@ class TerminalTab(SessionPage):
     """Single SSH session embedded inside a Vte.Terminal (its signals come from :class:`SessionPage`)."""
 
     __gtype_name__ = "TerminalTab"
+    __gsignals__ = {
+        # ``q`` / the banner's Close on an ended session: the notebook may close its ended broadcast peers too.
+        "close-ended-requested": (GObject.SignalFlags.RUN_LAST, None, ()),
+    }
     is_terminal = True
     kind = "terminal"
 
@@ -991,6 +995,12 @@ class TerminalTab(SessionPage):
         if term and data:
             term.feed_child(data.encode("utf-8"))
 
+    @property
+    def session_ended(self) -> bool:
+        """Not connected and not connecting (the banner offers Reconnect / Close)."""
+
+        return not self._session_active and self._status is not ConnectionStatus.CONNECTING
+
     def is_session_active(self) -> bool:
         """The ssh process (or the local shell) runs."""
 
@@ -1072,7 +1082,7 @@ class TerminalTab(SessionPage):
         if response == _RESPONSE_RECONNECT:
             self.reconnect()
         elif response == _RESPONSE_CLOSE:
-            self._request_close()
+            self._request_close_ended()
 
     def _on_banner_destroy(self, _banner) -> None:
         self._banner_alive = False
@@ -1803,7 +1813,7 @@ class TerminalTab(SessionPage):
 
         if lower == Gdk.KEY_q and modifiers == 0:
             if not self._session_active:
-                self._request_close()
+                self._request_close_ended()
                 return True
         payload = terminal_key_event_payload(event)
         if payload:
@@ -1818,6 +1828,17 @@ class TerminalTab(SessionPage):
 
     def _request_close(self) -> None:
         self.emit("close-requested")
+
+    def _has_handler(self, signal: str) -> bool:
+        return GObject.signal_has_handler_pending(self, GObject.signal_lookup(signal, TerminalTab), 0, False)
+
+    def _request_close_ended(self) -> None:
+        """The user closes this ended session (``q``, the banner): in broadcast, its ended peers go too."""
+
+        if self._has_handler("close-ended-requested"):
+            self.emit("close-ended-requested")
+        else:  # not in a notebook (tests)
+            self._request_close()
 
     def destroy(self) -> None:
         self._stop_stats_updates()
@@ -2424,6 +2445,8 @@ class TerminalNotebook(Gtk.Box):
         tab.connect("status-changed", self._on_tab_status_changed)
         tab.connect("session-closed", self._on_tab_session_closed)
         tab.connect("close-requested", self._on_tab_close_requested)
+        if tab.is_terminal:
+            tab.connect("close-ended-requested", lambda t: self.close_with_broadcast_peers(t))
         tab.on_activated = self._on_tab_activated
         tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
@@ -3066,6 +3089,24 @@ class TerminalNotebook(Gtk.Box):
 
     def _on_tab_close_requested(self, tab: TerminalTab) -> None:
         GLib.idle_add(self._close_tab_after_idle, tab)
+
+    def ended_broadcast_peers(self, tab: SessionPage) -> List[SessionPage]:
+        """The other ended terminal sessions in the broadcast, in tab order; ``[]`` unless broadcast is on and
+        ``tab`` is an included, ended terminal session (sessions still connected are never included)."""
+
+        def ended(page: SessionPage) -> bool:
+            return bool(page.is_terminal and self._broadcast_included.get(page, True)
+                        and getattr(page, "session_ended", False))
+
+        if not self._broadcast_mode or tab not in self._tabs or not ended(tab):
+            return []
+        return [page for page in self._ordered_tabs() if page is not tab and ended(page)]
+
+    def close_with_broadcast_peers(self, tab: SessionPage) -> None:
+        """Close ``tab`` and its ended broadcast peers, each through :meth:`close_tab` (asks, cleans up)."""
+
+        for target in [tab, *self.ended_broadcast_peers(tab)]:
+            GLib.idle_add(self._close_tab_after_idle, target)
 
     def _close_tab_after_idle(self, tab: TerminalTab) -> bool:
         self.close_tab(tab)
