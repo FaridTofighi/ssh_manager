@@ -156,6 +156,8 @@ class _Server(paramiko.ServerInterface):
     def check_auth_publickey(self, username, key):
         if username in self.owner.users and self.owner.authorized_key is not None and key == self.owner.authorized_key:
             return paramiko.AUTH_SUCCESSFUL
+        if username in self.owner.users and key.get_base64() in self.owner.authorized_blobs():
+            return paramiko.AUTH_SUCCESSFUL  # ~/.ssh/authorized_keys of the temp root (key deployment tests)
         return paramiko.AUTH_FAILED
 
     def check_auth_interactive(self, username, submethods):
@@ -239,8 +241,9 @@ def _run_exec(channel, command: str, owner) -> None:
 
     owner.exec_commands.append(command)
     try:
+        env = dict(os.environ, HOME=owner.root)  # "~" is the server's temp root, never the real home
         process = subprocess.Popen(command, shell=True, cwd=owner.root, stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     except OSError:
         channel.send_exit_status(127)
         channel.close()
@@ -382,6 +385,15 @@ class FakeSftpServer:
                     target.close()
 
             threading.Thread(target=bridge, daemon=True).start()
+
+    def authorized_blobs(self) -> set:
+        path = Path(self.root) / ".ssh" / "authorized_keys"
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return set()
+        return {part for line in lines for part in line.split()[1:2]} | {part for line in lines
+                                                                       for part in line.split()[2:3]}
 
     def __enter__(self) -> "FakeSftpServer":
         self._thread.start()
