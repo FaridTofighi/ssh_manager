@@ -159,22 +159,18 @@ macro first.
 usually `~/.config/ssh-manager/`):
 
 ```json
-{"format": "ssh-manager-macros", "version": 1, "kdf": "pbkdf2-sha256",
- "iterations": 600000, "salt": "<base64, 16 bytes>", "cipher": "fernet",
- "data": "<Fernet token>"}
+{"format": "ssh-manager-macros", "version": 2, "keybox_id": "<base64>",
+ "cipher": "aes-256-gcm", "nonce": "<base64, 12 bytes>", "data": "<base64>"}
 ```
 
 * **Everything** (names, shortcuts, descriptions, steps) is inside `data`.
-* **Key:** PBKDF2-HMAC-SHA256 of the master password, 600 000 iterations
-  (stored, so it can be raised later), with a random salt of this file's own
-  (never the master-password hash's). Deriving takes about
-  0.25 s, so it runs in a thread once per session ("Unlocking macros…"); only
-  the derived key is kept in memory, and it is dropped when the window closes.
-* **Cipher:** Fernet (AES-128-CBC + HMAC-SHA256, from `cryptography`). Fernet
-  does not authenticate the plain header, so the encrypted payload repeats
-  `format`, `version`, `kdf`, `iterations` and `salt`; a file whose header
-  differs (e.g. fewer iterations) is rejected. Fewer than 600 000 iterations,
-  another KDF or cipher, or a newer version are refused outright.
+* **Key:** the `macros` subkey of the data key in `keybox.json`, the one key
+  the master password protects (see [`docs/security.md`](security.md)).
+  There is no key derivation per file: once SSH Manager is unlocked, the
+  macros open at once.
+* **Cipher:** AES-256-GCM. The header (`format`, `version`, `keybox_id`,
+  `cipher`) is authenticated. A file of another key, a changed header, a
+  newer version or a damaged file is refused and kept.
 * **Writing:** a temporary file created with mode 0600 in the same folder,
   `fsync`, then rename; the folder is made 0700. The previous file is kept as
   `macros.enc.bak` (also encrypted). Before writing, the file is read again:
@@ -182,24 +178,28 @@ usually `~/.config/ssh-manager/`):
   newest change wins; deletions here stay deleted).
 * **No drafts:** a recording lives in memory only until you save or discard
   it. There are no temporary files, no autosave and no recovery after a crash.
+* **Version 1** (its own key: PBKDF2-HMAC-SHA256 of the master password,
+  600 000 iterations, Fernet) is read only by the migration, which rewrites it
+  as version 2 and keeps the old file as `macros.enc.pre-keybox` until the
+  new one is verified.
 
-`macros.enc` can be copied to another computer by hand; it is useless without
-the master password. **A forgotten master password makes the macros
-unrecoverable.** Macros are not part of any export or backup (OpenSSH,
-MobaXterm, `.rdp`, the inventory backup).
+`macros.enc` can be copied to another computer together with `keybox.json`;
+it is useless without the master password (or the recovery key). **Forgetting
+both makes the macros unrecoverable.** Macros are not part of any export or
+backup (OpenSSH, MobaXterm, `.rdp`, the inventory backup).
 
 ### The master password
 
-* **None set** (or turned off): macros cannot be saved, and never in plain
-  text. Saving offers **Set Master Password…** (create one, or confirm the
-  existing one and turn it back on) or **Discard Macro**.
-* **Changing it** (Settings → Master Password → *Change Master Password…*)
-  re-encrypts `macros.enc` and its backup with a new salt *before* the new
-  password is stored. If that fails, nothing changes and the old password
-  stays in use.
-* **Turning it off** (*Don't ask for the master password on startup*) is
-  refused while macros exist ("The master password stays on: it encrypts your
-  macros…"). Delete the macros first; an empty `macros.enc` is removed then.
+* **None set** (*Don't save passwords*): macros cannot be saved, and never in
+  plain text. Saving offers **Set Master Password…** (it creates the key
+  file) or **Discard Macro**.
+* **Changing it** (Settings → Security → *Change Master Password…*) only
+  re-wraps the key in `keybox.json`; `macros.enc` is not rewritten.
+* **Don't save passwords** is refused while macros exist ("The master
+  password stays on: it encrypts your macros…"). Delete the macros first; an
+  empty `macros.enc` is removed then.
+* **Migration not finished** (safe mode): macros are unavailable until
+  Preferences → Security → *Finish Migration…* has run.
 
 ### When the file cannot be opened
 

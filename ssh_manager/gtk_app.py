@@ -915,3 +915,5 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         runtime = getattr(self.sessions, "_rdp_runtime", None)
         if runtime is not None:
             runtime.stop_all()  # no FreeRDP client outlives the window
+        if getattr(self, "keybox", None) is not None:
+            self.keybox.forget()  # zero the data key (best effort)

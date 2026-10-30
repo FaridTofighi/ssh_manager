@@ -28,11 +28,11 @@ sudo apt install -y \
 |---|---|
 | `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, `gir1.2-vte-2.91` | The GTK window and the built-in terminals (required) |
 | `python3-paramiko` | SFTP, the file browser, and Remote Desktop through an SSH host |
-| `python3-cryptography` | The encrypted password store |
+| `python3-cryptography` | The encrypted password and macro files (required to save passwords) |
 | `python3-pexpect` | Running SSH sessions |
 | `openssh-client`, `sshpass` | `ssh` itself, and filling in saved passwords |
 | `freerdp3-x11` | Remote Desktop (`freerdp2-x11` on older releases). Optional: without it, everything except RDP works |
-| `python3-keyring` | Optional: keeps saved passwords in the desktop keyring |
+| `python3-keyring` | Optional: *Remember on this computer* (no master-password prompt) and moving passwords saved by older versions |
 | `xdotool` | Optional: makes **Focus Window** work when FreeRDP runs in its own window |
 
 The Textual terminal app also needs `python3-textual python3-rich`. The GTK app
@@ -53,8 +53,14 @@ python3 -m ssh_manager
 
 On the first run:
 
-- **Master password:** the app asks you to create one. It unlocks the app and
-  encrypts the passwords stored on this computer.
+- **Master password:** the app asks you to create one (and offers a recovery
+  key). It encrypts the passwords and macros saved on this computer. **Don't
+  Save Passwords** starts without one: every connection asks for its
+  password. Settings → Security changes this later.
+- **Updating from an older version:** passwords saved in the desktop keyring
+  or the old `passwords.json`, and the macros, are moved to the new encrypted
+  files automatically. Nothing is deleted until the move is verified. See
+  `docs/security.md`.
 - **Inventory:** created at `~/.local/share/ssh-manager/inventory.db`.
 - **Importing:** if `~/.ssh/config` or `~/.ssh/conf.d` has hosts, the app
   offers once to import them. MobaXterm exports, OpenSSH config files and
@@ -166,7 +172,7 @@ that direct file mode follows `Include` directives.
   terminal; Stop asks for a name and an optional shortcut. Run a macro with its
   shortcut (in a focused terminal) or from *More session actions → Run Macro*;
   *Manage Macros…* edits and deletes them. Macros (passwords typed at prompts
-  included) are stored encrypted with the master password. See `docs/macros.md`.
+  included) are stored encrypted with the key the master password protects. See `docs/macros.md`.
 - **Terminal mouse**: Shift+right-click opens the terminal menu (also in vim,
   tmux, htop …), right-click opens it too unless a program uses the mouse,
   middle-click and Shift+Insert paste the selection, and selected text is
@@ -250,12 +256,21 @@ that credential is updated as well.
 
 ## Password Storage
 
-Saved passwords go to the system keyring (via the `keyring` package) when one is
-available. Otherwise they are stored in `~/.config/ssh-manager/passwords.json`
-(or under `$XDG_CONFIG_HOME`), encrypted with a key derived from the master
-password. An existing plain-text file is encrypted automatically on the next
-unlock, and the file is re-encrypted when the master password changes. If the
-master password is disabled, the file is kept as private (0600) plain text.
+Saved passwords are stored in `~/.config/ssh-manager/passwords.json` (or under
+`$XDG_CONFIG_HOME`), encrypted with AES-256-GCM. The key is in `keybox.json`,
+itself protected by the master password (scrypt; Argon2id where available)
+and optionally by a recovery key. The desktop keyring is no longer used to
+store passwords, and there is no plain-text mode. **Settings → Security**
+covers the rest:
+
+- change the master password;
+- *Ask for the master password* or *Remember on this computer*;
+- the recovery key and how many passwords are saved;
+- *Don't save passwords*;
+- removing the copies older versions left in the keyring.
+
+The threat model (what this protects against and what it does not) is in
+`docs/security.md`.
 
 Credentials → **Export…** / **Import…** move the shared credentials and their
 passwords between computers in a passphrase-encrypted `.sshcred` file (see
@@ -278,6 +293,7 @@ authentication.
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics
 - `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
+- `docs/security.md` — the master password, the key file, unlock modes, the recovery key, the migration, the threat model
 - `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts
@@ -303,5 +319,5 @@ python3 -m venv --system-site-packages .venv
 
 The app depends on Python plus GTK 3 / VTE GI bindings for the desktop UI.
 Runtime modules used by optional features include Paramiko, Textual, pexpect,
-cryptography, and keyring (for the system keyring; without it, passwords use
-the encrypted file store).
+cryptography (the encrypted password and macro files), and keyring (optional:
+"Remember on this computer" and reading passwords older versions saved there).

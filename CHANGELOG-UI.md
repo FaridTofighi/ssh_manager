@@ -6,6 +6,29 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Saved passwords and macros: one key, protected by the master password
+
+- Saved passwords and macros are now encrypted with one key protected by the
+  master password; the 'don't ask on startup' setting is replaced by
+  'Remember on this computer'; existing data is migrated automatically.
+- **Key file:** `keybox.json` holds the key, wrapped with scrypt (Argon2id
+  where available) and AES-256-GCM. `passwords.json` becomes version 3 and
+  `macros.enc` version 2. The desktop keyring is no longer a password store,
+  and the plain-text password file is gone.
+- **Start-up:** the first run offers **Set Master Password** or **Don't Save
+  Passwords**. Unlocking runs in the background with a growing delay after
+  five wrong tries. **Forgot master password?** uses the recovery key. A
+  missing key file never creates a new key silently.
+- **Settings → Security** replaces Master Password:
+  - change the master password;
+  - when SSH Manager starts;
+  - the recovery key and the saved count;
+  - Don't save passwords;
+  - leftovers of older versions.
+- **Migration:** each step is verified and can be resumed. Nothing old is
+  deleted before its new copy is verified. A failure or *Not Now* starts in
+  safe mode with a banner and **Finish Migration…**. See `docs/security.md`.
+
 ## Credential Vault removed
 
 - The Credential Vault was removed; its entries are moved to Credentials. At

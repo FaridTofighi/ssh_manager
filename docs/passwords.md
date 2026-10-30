@@ -5,6 +5,18 @@ and how it knows a login worked. Code: `ssh_manager/auth_flow.py` (no GTK),
 `CredentialController.resolve_password` and `TerminalTab` in
 `ssh_manager/gtk_terminal.py`.
 
+## Where passwords are stored
+
+Saved passwords live in `passwords.json` (version 3), encrypted with AES-256-GCM
+under one key that the master password protects (`keybox.json`). The OS
+keyring is **no longer a password store**, and there is **no plain-text
+fallback**: either saving is on (the encrypted file) or it is off
+(**Don't save passwords**, every connection asks). Passwords that older
+versions kept in the keyring or in an older `passwords.json` are moved
+automatically at the first start. How the key works, the unlock modes, the
+recovery key, the migration and what this does and does not protect against:
+[`docs/security.md`](security.md).
+
 ## Where the password comes from
 
 Each connection resolves its password once per attempt, **read-only**, in this
@@ -55,7 +67,7 @@ A host-specific password is a **private credential**: an ordinary
 `Credential` with `private: true`, bound 1:1 to the host through the usual
 bindings (`credentials.json`, keyed by the host id; by
 `parent::child::alias` in folder inventories). Its secret is stored like any
-credential's (`credential:<id>` in the keyring or encrypted file).
+credential's (`credential:<id>` in the encrypted password file).
 
 - **Fields:**
   - `based_on` remembers the shared credential it replaced.
@@ -91,8 +103,9 @@ credential's (`credential:<id>` in the keyring or encrypted file).
   "Password: host-specific", and Auth reads "Host-specific password". The tree
   tooltip shows the same line. The value is never shown, logged, exported or
   written to host options or metadata.
-- **Locked store:** with a locked password file or a failing keyring, Save
-  keeps the dialog open with the reason and changes nothing. If saving still
+- **Locked store:** with a password file that cannot be opened, saving
+  turned off, or a migration that has not finished, Save keeps the dialog
+  open with the reason and changes nothing. If saving still
   fails afterwards, "Could not save the password for ‘…’. Nothing was
   changed." is shown and every store is rolled back.
 - **Every connection uses it:** terminal tabs, Reconnect, Duplicate Session,
@@ -194,7 +207,8 @@ The flow is a per-tab state machine (`PasswordFlow` in
 - **Hosts that cannot be edited:** `can_edit=false`, a read-only inventory,
   or a secrets policy that forbids unencrypted passwords. They show **Use for
   this session** instead of **Save for this host**; nothing is written.
-- **Save errors** (locked store, master password, keyring error):
+- **Save errors** (a password file that cannot be opened or written, saving
+  turned off, an unfinished migration):
   - the dialog stays open with the reason and **Retry Save**;
   - the session stays connected;
   - only the error type is logged.

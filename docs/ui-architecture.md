@@ -19,6 +19,8 @@ ssh_manager/
     identity.py         avatar initials of the local user              (GTK-free)
     latency.py          LatencyProbe: threaded, cached TCP connect timing
     host_history.py     HostHistory: last connected + activity (.host_history.json)
+    unlock_flow.py      start-up: set / ask for the master password, recovery key, key file missing
+    migration_flow.py   the dialogs of the move to the key file (ssh_manager/migration.py does it)
     assets/icons/       bundled sshm-*-symbolic.svg outline icons
     theme/              density (Compact/Comfortable presets), tokens (palette; live Space/Size/
                         Layout/FontScale views), stylesheet generator, fonts, css_dark/css_light,
@@ -30,7 +32,7 @@ ssh_manager/
                         child_group_chooser (New Host / drop on a top-level group: search +
                         list of its child groups, "Create new group"), config_viewer, password,
                         bulk_tag, native_export / native_import (the .sshm export dialog and
-                        import wizard)
+                        import wizard), security_page (Settings → Security)
     views/              header (top bar), sidebar, session_tree, host_page, workspace, statusbar
     controllers/
       ui_state.py           UiState + load/save (tolerant)                 (GTK-free)
@@ -48,6 +50,7 @@ ssh_manager/
       group_actions.py      GroupActions: parent/child group CRUD
       inventory.py          reloads, shared inventory polling, Git watch
       app_dialogs.py        settings, credentials, config file, about, shortcuts
+      security.py           SecurityActions: Settings → Security (unlock mode, recovery key, saving off)
       layout.py             sidebar visibility and width, focus mode, narrow variant, brand alignment
       colors.py             per-item tree colors
       native_transfer.py    NativeTransferController: .sshm export (dialog, worker write) and import
