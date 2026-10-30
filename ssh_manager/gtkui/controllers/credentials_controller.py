@@ -15,7 +15,7 @@ from ...config import HostEntry  # noqa: E402
 from ...credentials import KEEP, Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
-from ...secure_store import EncryptedFileKeyring, FileKeyring, KeyringError, SecureStoreError  # noqa: E402
+from ...secure_store import EncryptedFileKeyring, FileKeyring, SecureStoreError  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
@@ -445,23 +445,6 @@ class CredentialController:
         except SecureStoreError as exc:
             self.win._notify(_("Could not remove the stored password. See logs for details."), Level.WARNING)
             LOGGER.warning("forget password failed: %s", exc)
-
-    def rekey_password_file(self, master_password: Optional[str]) -> None:
-        """Re-encrypt the local password file (if used) under a new master password."""
-
-        backend = self.win._secure_store.backend
-        if not isinstance(backend, FileKeyring):
-            return
-        try:
-            backend.rekey(master_password)
-        except KeyringError as exc:
-            LOGGER.warning("password file rekey failed: %s", exc)
-            self.win._notify(_("Could not re-encrypt saved passwords. See logs for details."), Level.WARNING)
-            return
-        if master_password is None:
-            self.win._notify_warning(
-                "Saved passwords are now stored unencrypted because the master password is disabled."
-            )
 
     def warn_if_password_file_locked(self) -> None:
         backend = self.win._secure_store.backend

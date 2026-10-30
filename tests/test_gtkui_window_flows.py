@@ -137,7 +137,7 @@ class WindowFlowTests(unittest.TestCase):
         values = PreferencesValues(
             theme_mode=ThemeMode.LIGHT, terminal_font_scale=1.1, ui_font_size=13,
             host_key_policy="auto-add", connect_timeout=5.0, auth_timeout=6.0, banner_timeout=7.0,
-            use_paramiko_vte=False, master_password_disabled=True, allowed_ciphers=[], allowed_kex=[],
+            use_paramiko_vte=False, allowed_ciphers=[], allowed_kex=[],
             secrets_policy={}, enable_audit_logging=False, audit_log_path="", git_watch_enabled=False,
             git_watch_path="", git_watch_interval=600, terminal_appearance=TerminalAppearanceSettings(),
         )

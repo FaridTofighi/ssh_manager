@@ -386,6 +386,11 @@ class Migration:
             # Only copies whose secret is in the verified new store.
             self.report.keyring_removed = remove_keyring_copies(self.keyring,
                                                                 [k for k in keys if (SERVICE, k) in moved])
+            try:
+                self.keybox.record_migration(dict(self.keybox.migrated or {},
+                                                  keyring_removed=self.report.keyring_removed))
+            except Exception as exc:  # informational only
+                LOGGER.warning("migration: could not record the removal (%s)", type(exc).__name__)
         return self.report
 
 

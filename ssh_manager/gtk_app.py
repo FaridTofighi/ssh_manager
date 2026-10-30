@@ -63,6 +63,7 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.controllers.native_transfer import app_version as current_app_version  # noqa: E402
+from ssh_manager.gtkui.controllers.security import SecurityActions  # noqa: E402
 from ssh_manager.gtkui.migration_flow import MigrationFlow  # noqa: E402
 from ssh_manager.gtkui.unlock_flow import StartupFlow  # noqa: E402
 from ssh_manager.gtkui.i18n import _, ngettext  # noqa: E402
@@ -78,7 +79,7 @@ from ssh_manager.gtkui.widgets.toast import ToastOverlay  # noqa: E402
 from ssh_manager.gtkui.widgets.icon_button import set_accessible_name  # noqa: E402
 from ssh_manager.password_dialog import PasswordDialog  # noqa: E402
 from ssh_manager.profiles import SessionProfile, built_in_profiles  # noqa: E402
-from ssh_manager.secure_store import DISABLED_MIGRATION, DisabledSecureStore, SecureStore  # noqa: E402
+from ssh_manager.secure_store import DISABLED_MIGRATION, DisabledSecureStore, FileKeyring, SecureStore  # noqa: E402
 from ssh_manager.settings import AppSettings  # noqa: E402
 from ssh_manager.templates import built_in_templates  # noqa: E402
 
@@ -299,9 +300,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         elif passwords_off:
             self._master_password = None
             self._secure_store = DisabledSecureStore()
-        else:  # data of an older version not migrated yet, and windows built by tests
+        else:  # windows built by tests and older callers: a local file, never the system keyring
             self._master_password = master_password
-            self._secure_store = SecureStore.with_default_backend(master_password=master_password)
+            self._secure_store = SecureStore(FileKeyring(master_password=master_password))
         self._credential_store = CredentialStore(self._secure_store)
         self._password_dialog = PasswordDialog()
         self._profiles: Dict[str, SessionProfile] = {p.id: p for p in built_in_profiles()}
@@ -347,6 +348,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         from ssh_manager.gtkui.legacy_vault import LegacyMigration
 
         self.legacy_migration = LegacyMigration(self)  # the removed feature's entries → Credentials (once)
+        self.security = SecurityActions(self)  # Preferences → Security
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions

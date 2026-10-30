@@ -164,5 +164,16 @@ class LegacyMigration:
         button.show()
         return button
 
+    # ------------------------------------------------- Preferences → Security
+    def move_button(self, parent: Optional[Gtk.Window], on_done: Callable[[], None]) -> Optional[Gtk.Button]:
+        """**Move the Old Vault…**, while ``vault.json`` exists (``on_done`` refreshes the page)."""
+
+        if not self.pending():
+            return None
+        button = Gtk.Button.new_with_mnemonic(_("Move the Old _Vault…"))
+        button.set_tooltip_text(_("Move the entries of the removed Credential Vault into Credentials"))
+        button.connect("clicked", lambda _b: (self.run(parent), on_done()))
+        return button
+
 
 __all__ = ["LegacyMigration"]

@@ -49,8 +49,6 @@ class MacroWindowTests(unittest.TestCase):
     def setUp(self) -> None:
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.master_auth import hash_master_password
-
         self.sandbox = WindowSandbox(store=True)
         self.addCleanup(self.sandbox.close)
         self.win = self.sandbox.window
@@ -61,9 +59,7 @@ class MacroWindowTests(unittest.TestCase):
         logging.getLogger("ssh_manager").debug("macro test")  # assertLogs needs at least one record
         self.win._settings.local_shell.command = "/bin/sh"
         self.win._settings.local_shell.on_exit = "hold"
-        self.win._settings.master_password_hash = hash_master_password(PASSWORD)
-        self.win._settings.master_password_disabled = False
-        self.win._master_password = PASSWORD
+        self.box = self.sandbox.use_keybox(PASSWORD)
         self.macros.start()
         self.assertTrue(pump(10, until=lambda: self.macros.state == "ready"), self.macros.state)
         self.dialogs = []
@@ -324,7 +320,7 @@ class MacroWindowTests(unittest.TestCase):
         from ssh_manager.macros import MacroStore
 
         reread = MacroStore(self.macros.store.path)
-        reread.unlock(PASSWORD)
+        reread.unlock_with_key(self.box.subkey("macros"), self.box.id)
         self.assertEqual(len(reread), 0)
 
     def test_manage_window_lists_filters_and_runs(self) -> None:
@@ -415,53 +411,48 @@ class MacroWindowTests(unittest.TestCase):
         self.assertIsNone(self.macros.recording)
         offer.assert_called_once()
 
-    def test_disabling_the_master_password_is_blocked_while_macros_exist(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-
+    def test_dont_save_passwords_is_blocked_while_macros_exist(self) -> None:
+        security = self.win.security
+        security.keyring_factory = lambda: None
+        security.confirm = lambda *_a: True
         self.add_macro("Keep me")
-        settings = self.win._settings
-
-        def turn_off():
-            dialog = PreferencesDialog(None, ThemeMode.LIGHT, 1.0, 11, settings)
-            values = dialog.values()
-            dialog.destroy()
-            values.master_password_disabled = True
-            self.win.app_dialogs.apply_preferences(values)
-
-        turn_off()
-        self.assertFalse(settings.master_password_disabled)
+        self.assertFalse(security.set_passwords_off(True))
+        self.assertIsNotNone(self.win.keybox)
         self.assertTrue(self.macros.store.path.exists())
         self.assertTrue(any("master password stays on" in m.text for m in self.win._toasts.history.items()))
-        # With no macros left, the (empty) file is removed and the switch is allowed.
+        # With no macros left, the (empty) file is removed and saving can be turned off.
         for macro in self.macros.store.list_sorted():
             self.macros.delete_macro(macro.id, ask=False)
-        turn_off()
-        self.assertTrue(settings.master_password_disabled)
+        self.assertTrue(security.set_passwords_off(True))
+        self.assertIsNone(self.win.keybox)
+        self.assertTrue(self.win._settings.passwords_off)
         self.assertFalse(self.macros.store.path.exists())
         self.assertFalse(self.macros.store.backup_path.exists())
+        self.assertFalse(self.box.path.exists())
 
-    def test_master_password_change_re_encrypts(self) -> None:
-        from ssh_manager.macros import MacroFileError, MacroStore
+    def test_master_password_change_keeps_the_macros(self) -> None:
+        from ssh_manager import keybox as K
+        from ssh_manager.macros import MacroStore
 
         self.add_macro("Survivor")
+        before = self.macros.store.path.read_bytes()
         with mock.patch("ssh_manager.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
             dialog.return_value.ask.return_value = "a new master password"
             self.win.app_dialogs.change_master_password()
+        self.assertEqual(self.macros.store.path.read_bytes(), before)  # only the key file changes
+        loaded = K.Keybox.load(self.box.path)
+        self.assertFalse(loaded.unlock(PASSWORD))
+        self.assertTrue(loaded.unlock("a new master password"))
         reread = MacroStore(self.macros.store.path)
-        reread.unlock("a new master password")
+        reread.unlock_with_key(loaded.subkey("macros"), loaded.id)
         self.assertEqual([m.name for m in reread.list_sorted()], ["Survivor"])
-        with self.assertRaises(MacroFileError):
-            MacroStore(self.macros.store.path).unlock(PASSWORD)
-        # A failed re-encryption keeps the old password everywhere.
-        stored = self.win._settings.master_password_hash
-        with mock.patch.object(self.macros.store, "rekey", side_effect=__import__(
-                "ssh_manager.macros", fromlist=["MacroWriteError"]).MacroWriteError("OSError")):
+        # A failed write keeps the previous password.
+        with mock.patch("ssh_manager.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
             with mock.patch("ssh_manager.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
                 dialog.return_value.ask.return_value = "third password"
                 self.win.app_dialogs.change_master_password()
-        self.assertEqual(self.win._settings.master_password_hash, stored)
-        self.assertEqual(self.win._master_password, "a new master password")
+        self.assertTrue(K.Keybox.load(self.box.path).unlock("a new master password"))
+        self.assertIsNone(getattr(self.win, "_master_password", None))
 
 
 class SecretDetectionTests(unittest.TestCase):
@@ -499,7 +490,7 @@ class MacroWithoutMasterPasswordTests(unittest.TestCase):
     def setUp(self) -> None:
         from tests.gtk_window_fixture import WindowSandbox
 
-        self.sandbox = WindowSandbox(store=True)  # the sandbox disables the master password
+        self.sandbox = WindowSandbox(store=True)  # no keybox: "Don't save passwords"
         self.addCleanup(self.sandbox.close)
         self.win = self.sandbox.window
         self.win.realize()
@@ -531,32 +522,34 @@ class MacroWithoutMasterPasswordTests(unittest.TestCase):
         self.assertTrue(self.macros.start_recording())
         self.macros._on_key_press(None, None)
         self.macros._on_commit(tab._terminal, "ls", 2)
+        from ssh_manager import keybox as K
+        from ssh_manager.secure_store import EncryptedFileKeyring
+
         with mock.patch.object(self.macros, "ask_master_password_needed", return_value=True), \
-                mock.patch("ssh_manager.gtkui.controllers.macro_controller.NewSecretDialog") as new, \
+                mock.patch("ssh_manager.gtkui.unlock_flow.NewSecretDialog") as new, \
+                mock.patch("ssh_manager.gtkui.unlock_flow.RecoveryKeyDialog") as recovery, \
                 mock.patch.object(self.macros, "run_dialog", return_value=(0, None)) as run:
-            self.win._settings.master_password_hash = ""
             new.return_value.ask.return_value = "fresh master"
+            recovery.return_value.ask.return_value = False  # skipped
             self.macros.stop_recording()
             self.assertTrue(pump(10, until=lambda: run.called))
-        self.assertFalse(self.win._settings.master_password_disabled)
-        self.assertEqual(self.win._master_password, "fresh master")
+        self.assertIsNotNone(self.win.keybox)
+        self.assertIsInstance(self.win._secure_store.backend, EncryptedFileKeyring)
+        self.assertTrue(K.Keybox.load(self.win.keybox.path).unlock("fresh master"))
+        self.assertIsNone(getattr(self.win, "_master_password", None))
 
     def test_a_damaged_file_at_start_up_is_kept(self) -> None:
-        from ssh_manager.master_auth import hash_master_password
-
         path = self.macros.store.path
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b'{"format": "ssh-manager-macros", "version": 1, "trunc')
-        self.win._settings.master_password_hash = hash_master_password(PASSWORD)
-        self.win._settings.master_password_disabled = False
-        self.win._master_password = PASSWORD
+        path.write_bytes(b'{"format": "ssh-manager-macros", "version": 2, "trunc')
+        self.sandbox.use_keybox(PASSWORD)
         with mock.patch.object(self.macros, "ask_damaged", return_value="keep") as ask:
             self.macros.start()
             self.assertTrue(pump(10, until=lambda: self.macros.state != "unlocking"))
         ask.assert_called_once()
         self.assertEqual(ask.call_args.args[1], "damaged")
         self.assertEqual(self.macros.state, "disabled")
-        self.assertEqual(path.read_bytes(), b'{"format": "ssh-manager-macros", "version": 1, "trunc')
+        self.assertEqual(path.read_bytes(), b'{"format": "ssh-manager-macros", "version": 2, "trunc')
         with mock.patch.object(self.macros, "ask_damaged", return_value="empty"):
             self.macros.state = "locked"
             self.macros.start()

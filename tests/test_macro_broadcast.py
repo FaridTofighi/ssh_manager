@@ -34,8 +34,6 @@ class MacroBroadcastTests(unittest.TestCase):
     def setUp(self) -> None:
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.master_auth import hash_master_password
-
         self.sandbox = WindowSandbox(store=True)
         self.addCleanup(self.sandbox.close)
         self.win = self.sandbox.window
@@ -52,9 +50,7 @@ class MacroBroadcastTests(unittest.TestCase):
         script.chmod(script.stat().st_mode | stat.S_IXUSR)
         self.win._settings.local_shell.command = str(script)
         self.win._settings.local_shell.on_exit = "hold"
-        self.win._settings.master_password_hash = hash_master_password(PASSWORD)
-        self.win._settings.master_password_disabled = False
-        self.win._master_password = PASSWORD
+        self.box = self.sandbox.use_keybox(PASSWORD)
         self.macros.start()
         self.assertTrue(pump(10, until=lambda: self.macros.state == "ready"))
         self.asked = []

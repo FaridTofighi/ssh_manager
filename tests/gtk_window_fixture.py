@@ -90,7 +90,6 @@ class WindowSandbox:
 
         self.app = shared_application()
         settings = AppSettings.load()
-        settings.master_password_disabled = True
         self.store = None
         manager = None
         if store:
@@ -104,6 +103,15 @@ class WindowSandbox:
         self.window = SSHManagerWindow(self.app, manager.base_dir if manager else self.base, settings,
                                        manager=manager)
         self.window.host_page.latency.enabled = False  # tests never open sockets
+
+    def use_keybox(self, password: str):
+        """A keybox in the sandbox (the fast minimum key derivation), adopted by the window."""
+
+        from ssh_manager import keybox as K
+
+        box = K.Keybox.create(password, self.root / "config" / "ssh-manager" / "keybox.json", scrypt_n=2 ** 15)
+        self.window.adopt_keybox(box)
+        return box
 
     def close(self) -> None:
         self.window.destroy()

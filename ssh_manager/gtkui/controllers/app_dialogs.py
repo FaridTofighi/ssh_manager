@@ -14,7 +14,6 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
-from ...master_auth import hash_master_password, verify_master_password  # noqa: E402
 from ...persistence import write_json_atomic  # noqa: E402
 from ..dialogs.base import is_accept  # noqa: E402
 from ..dialogs.config_viewer import ConfigViewerDialog  # noqa: E402
@@ -56,6 +55,8 @@ class AppDialogs:
             tab_label_mode=self.win._ui.tab_label_mode,
             inventory=self.inventory_info(),
             shortcuts=getattr(self.win, "shortcut_registry", None),
+            security=getattr(self.win, "security", None),
+            old_file_button=self._old_file_button,
         )
         if page:
             dialog.layout.show_page(page)
@@ -65,6 +66,10 @@ class AppDialogs:
             dialog.destroy()
         if values is not None:
             self.apply_preferences(values)
+
+    def _old_file_button(self, on_done):
+        migration = getattr(self.win, "legacy_migration", None)
+        return migration.move_button(self.win, on_done) if migration is not None else None
 
     def inventory_info(self):
         """Preferences → Inventory (app store only)."""
@@ -95,17 +100,11 @@ class AppDialogs:
         self.win._ui.latency_probe = values.latency_probe
         self.win.host_page.set_latency_enabled(values.latency_probe)
         settings = self.win._settings
-        macros = getattr(self.win, "macros", None)
-        if values.master_password_disabled and not settings.master_password_disabled and macros is not None \
-                and not macros.allow_disabling_master_password():
-            values.master_password_disabled = False  # macros are never stored unencrypted
-        master_toggled = values.master_password_disabled != settings.master_password_disabled
         settings.host_key_policy = values.host_key_policy
         settings.connect_timeout = values.connect_timeout
         settings.auth_timeout = values.auth_timeout
         settings.banner_timeout = values.banner_timeout
         settings.use_paramiko_vte = values.use_paramiko_vte
-        settings.master_password_disabled = values.master_password_disabled
         settings.allowed_ciphers = values.allowed_ciphers
         settings.allowed_kex = values.allowed_kex
         settings.secrets_policy = values.secrets_policy
@@ -132,15 +131,6 @@ class AppDialogs:
                 self.win.sessions.refresh_rdp_engines()
         settings.save()
         self.win._save_ui_state()
-        if master_toggled:
-            if values.master_password_disabled:
-                self.win.creds.rekey_password_file(None)
-            elif self.win._master_password:
-                self.win.creds.rekey_password_file(self.win._master_password)
-                if macros is not None:
-                    macros.master_password_enabled()
-            elif self.win._secure_store.uses_file_backend:
-                self.win._notify_info(_("Saved passwords will be encrypted after the next master password unlock."))
         self.win.terminal_tabs.set_appearance(values.terminal_appearance)
         self.win.inventory.refresh_git_watch()
         self.win._notify(_("Settings saved."), Level.SUCCESS)
@@ -231,31 +221,10 @@ class AppDialogs:
 
     def change_master_password(self) -> None:
         keybox = getattr(self.win, "keybox", None)
-        if keybox is not None:
-            self._change_keybox_password(keybox)
+        if keybox is None:
+            self.win._notify_info(_("No master password is set. Set one in Preferences → Security."))
             return
-        stored = self.win._settings.master_password_hash
-        if not stored:
-            return
-        dialog = NewSecretDialog(
-            self.win,
-            _("Change Master Password"),
-            _("Choose a new master password"),
-            _("Confirm the current password first. Passwords stored on this computer are re-encrypted."),
-            accept_label=_("_Change"),
-            verify_current=lambda text: verify_master_password(text, stored),
-        )
-        new_password = dialog.ask()
-        if new_password is None:
-            return
-        macros = getattr(self.win, "macros", None)
-        if macros is not None and not macros.rekey(new_password):
-            return  # the macros stay readable with the old password, which stays in use
-        self.win._settings.master_password_hash = hash_master_password(new_password)
-        self.win._settings.save()
-        self.win._master_password = new_password
-        self.win.creds.rekey_password_file(None if self.win._settings.master_password_disabled else new_password)
-        self.win._notify(_("Master password updated."), Level.SUCCESS)
+        self._change_keybox_password(keybox)
 
     def _change_keybox_password(self, keybox) -> None:
         """Only the key file changes: the data key is re-wrapped, saved passwords and macros stay as they are."""

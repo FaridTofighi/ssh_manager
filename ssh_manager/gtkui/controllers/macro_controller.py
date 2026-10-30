@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import logging
 import termios
-import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -53,11 +52,9 @@ from ...macros import (  # noqa: E402
     MacroWriteError,
     default_macros_path,
 )
-from ...master_auth import hash_master_password, verify_master_password  # noqa: E402
 from ..constants import Icons  # noqa: E402
 from ..dialogs import macros as dialogs  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
-from ..dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
 from ..dialogs.shortcuts_page import accel_text  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
 from ..menu_spec import MenuItemSpec, MenuSection  # noqa: E402
@@ -196,7 +193,6 @@ class MacroController:
         self.confirm = confirm
         self._after_unlock: List[Callable[[], None]] = []
         self._told_locked = False
-        self.unlock_seconds = 0.0
 
     # =========================================================== set-up
     def bind(self) -> None:
@@ -217,47 +213,14 @@ class MacroController:
         }
 
     def start(self) -> None:
-        """Open the macros with the keybox's ``macros`` key (or, before the keybox, the typed master password)."""
+        """Open the macros with the keybox's ``macros`` key; without a keybox they stay locked."""
 
         keybox = getattr(self.win, "keybox", None)
         if keybox is not None and not keybox.locked:
             self.unlock_with_keybox(keybox)
             return
-        password = self._master_password()
-        if password is None:
-            self.state = "locked"
-            self.sync()
-            return
-        self.unlock(password)
-
-    def _master_password(self) -> Optional[str]:
-        if self.win._settings.master_password_disabled or not self.win._settings.master_password_hash:
-            return None
-        return self.win._master_password or None
-
-    def unlock(self, password: str, then: Optional[Callable[[], None]] = None) -> None:
-        if then is not None:
-            self._after_unlock.append(then)
-        if self.state == "unlocking":
-            return
-        self.state = "unlocking"
+        self.state = "locked"
         self.sync()
-        store = self.store
-
-        def work() -> None:
-            began = time.perf_counter()
-            error: Optional[str] = None
-            try:
-                store.unlock(password)
-            except MacroFileError as exc:
-                error = exc.kind
-            except Exception as exc:  # never the content: only the type
-                LOGGER.warning("macros: unlocking failed (%s)", type(exc).__name__)
-                error = "damaged"
-            self.unlock_seconds = time.perf_counter() - began
-            GLib.idle_add(self._unlocked, error)
-
-        threading.Thread(target=work, name="macro-unlock", daemon=True).start()
 
     def unlock_with_keybox(self, keybox, then: Optional[Callable[[], None]] = None) -> None:
         """No key derivation (the keybox is unlocked already): synchronous."""
@@ -290,10 +253,6 @@ class MacroController:
                 keybox = getattr(self.win, "keybox", None)
                 if keybox is not None and not keybox.locked:
                     self.unlock_with_keybox(keybox)
-                    return False
-                password = self._master_password()
-                if password is not None:
-                    self.unlock(password)
                     return False
             else:
                 self.store.keep_damaged()
@@ -556,17 +515,11 @@ class MacroController:
 
             self.win._notify_error(migration_pending_text())
             return False
-        if getattr(self.win._secure_store, "saving_disabled", False):  # "Don't save passwords": create the keybox
-            keybox = self.create_keybox()
-            if keybox is None:
-                return False
-            self.win.adopt_keybox(keybox)
-            self.unlock_with_keybox(keybox, then)
-            return True
-        password = self.set_master_password()
-        if password is None:
+        keybox = self.create_keybox()  # no keybox ("Don't save passwords"): set a master password now
+        if keybox is None:
             return False
-        self.unlock(password, then)
+        self.win.adopt_keybox(keybox)
+        self.unlock_with_keybox(keybox, then)
         return True
 
     def create_keybox(self):
@@ -574,52 +527,21 @@ class MacroController:
 
         return set_master_password(self.win, self.win._settings, Path(self.win._settings.config_path).parent)
 
-    def set_master_password(self) -> Optional[str]:
-        """Turn the master password on (create one, or confirm the existing one) as Preferences would."""
-
-        settings = self.win._settings
-        if settings.master_password_hash:
-            stored = settings.master_password_hash
-            password = UnlockDialog(self.win, _("Turn On the Master Password"), _("Enter your master password"),
-                                    _("It encrypts your macros and the passwords stored on this computer."),
-                                    lambda text: verify_master_password(text, stored),
-                                    error_text=_("Incorrect master password. Please try again.")).ask()
-        else:
-            password = NewSecretDialog(self.win, _("Set Master Password"), _("Create a master password"),
-                                       _("It encrypts your macros and the passwords stored on this computer."),
-                                       accept_label=_("_Save")).ask()
-            if password is not None:
-                settings.master_password_hash = hash_master_password(password)
-        if password is None:
-            return None
-        settings.master_password_disabled = False
-        settings.save()
-        self.win._master_password = password
-        self.win.creds.rekey_password_file(password)
-        return password
-
     def verify_master(self, text: str) -> bool:
-        return verify_master_password(text, self.win._settings.master_password_hash)
+        """The master password (revealing a secret step): checked against the key file, never kept."""
 
-    def rekey(self, new_password: str) -> bool:
-        """Before the master password changes: re-encrypt the macros (``False``: keep the old password)."""
+        from ...keybox import Keybox, KeyboxError
 
-        if self.state == "unlocking":
-            self.win._notify_error(_("The macros are still being unlocked. Try again in a moment."))
+        keybox = getattr(self.win, "keybox", None)
+        if keybox is None:
             return False
-        if self.state != "ready":
-            return True  # nothing open to re-encrypt (a file that could not be opened stays as it is)
         try:
-            self.store.rekey(new_password)
-        except MacroWriteError as exc:
-            LOGGER.warning("macros: re-encrypting failed (%s)", exc)
-            self.win._notify_error(_("The macros could not be re-encrypted, so the master password was not "
-                                     "changed. Check that the configuration folder can be written."))
+            return Keybox.load(keybox.path).unlock(text)
+        except KeyboxError:
             return False
-        return True
 
-    def allow_disabling_master_password(self) -> bool:
-        """Macros are never stored unencrypted: turning the master password off needs no macros."""
+    def allow_turning_saving_off(self) -> bool:
+        """Macros need the keybox: "Don't save passwords" is possible only without macros."""
 
         if self.state == "ready" and self.store.remove_file_if_empty():
             return True
@@ -628,10 +550,6 @@ class MacroController:
         self.win._notify_error(_("The master password stays on: it encrypts your macros. Delete all macros "
                                  "(Manage Macros) first to turn it off."))
         return False
-
-    def master_password_enabled(self) -> None:
-        if self.state == "locked":
-            self.start()
 
     def _save(self) -> bool:
         try:

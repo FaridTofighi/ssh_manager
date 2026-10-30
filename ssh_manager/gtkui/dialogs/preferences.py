@@ -71,7 +71,6 @@ class PreferencesValues:
     auth_timeout: float
     banner_timeout: float
     use_paramiko_vte: bool
-    master_password_disabled: bool
     allowed_ciphers: List[str]
     allowed_kex: List[str]
     secrets_policy: Dict[str, Any]
@@ -164,6 +163,8 @@ class PreferencesDialog(BaseDialog):
         tab_label_mode: object = TabLabelMode.NAME,
         inventory: Optional[Dict[str, object]] = None,
         shortcuts: object = None,
+        security: object = None,
+        old_file_button: Optional[Callable] = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -174,6 +175,8 @@ class PreferencesDialog(BaseDialog):
             setter(0)
         self._settings = settings
         self._on_reset = on_reset
+        self._security = security
+        self._old_file_button = old_file_button
         self._on_export = on_export
         self._appearance = settings.terminal_appearance or TerminalAppearanceSettings()
         self._custom_font = self._appearance.custom_font
@@ -187,7 +190,7 @@ class PreferencesDialog(BaseDialog):
         self._build_connection()
         self._build_security()
         self._build_secrets()
-        self._build_master_password()
+        self._build_keys()
         self._build_file_transfer()
         self._build_remote_desktop()
         self._build_git()
@@ -368,26 +371,19 @@ class PreferencesDialog(BaseDialog):
         self._rotation_spin = _spin(1, 3650, 1, float(policy.get("rotation_hint_days", 90)))
         sec.add(_("Suggest _rotation after (days)"), self._rotation_spin, label_group=self._labels)
 
-    def _build_master_password(self) -> None:
-        page = self.layout.new_page("master_password", _("Master Password"),
-                                    _("The master password unlocks the app and encrypts locally stored passwords."))
-        sec = self._section(page)
-        self._disable_master_check = Gtk.CheckButton.new_with_mnemonic(_("_Don't ask for the master password on startup"))
-        self._disable_master_check.set_active(self._settings.master_password_disabled)
-        sec.add_widget(self._disable_master_check)
-        warning = Gtk.Label(label=_("When disabled, passwords saved in the local password file are stored unencrypted."))
-        warning.set_xalign(0.0)
-        warning.set_line_wrap(True)
-        warning.get_style_context().add_class("form-help")
-        sec.add_widget(warning)
-        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
-        reset = Gtk.Button.new_with_mnemonic(_("_Change Master Password…"))
-        reset.connect("clicked", lambda *_: self._on_reset and self._on_reset())
+    def _build_keys(self) -> None:
+        page = self.layout.new_page("security", _("Security"),
+                                    _("The master password encrypts saved passwords and macros on this computer."))
+        self.security_page = None
+        if self._security is not None:
+            from .security_page import SecurityPage
+
+            self.security_page = SecurityPage(self._security, self, self._old_file_button)
+            page.append(self.security_page)
         export = Gtk.Button.new_with_mnemonic(_("_Export Settings & Policies…"))
+        export.set_halign(Gtk.Align.START)
         export.connect("clicked", lambda *_: self._on_export and self._on_export())
-        buttons.pack_start(reset, False, False, 0)
-        buttons.pack_start(export, False, False, 0)
-        page.append(buttons)
+        page.append(export)
 
     def _build_file_transfer(self) -> None:
         prefs = self._settings.file_transfer
@@ -557,7 +553,6 @@ class PreferencesDialog(BaseDialog):
             auth_timeout=float(self._auth_timeout_spin.get_value()),
             banner_timeout=float(self._banner_timeout_spin.get_value()),
             use_paramiko_vte=self._paramiko_check.get_active(),
-            master_password_disabled=self._disable_master_check.get_active(),
             allowed_ciphers=[v.strip() for v in self._cipher_entry.get_text().split(",") if v.strip()],
             allowed_kex=[v.strip() for v in self._kex_entry.get_text().split(",") if v.strip()],
             secrets_policy={
