@@ -14,7 +14,7 @@ WORD = re.compile(r"vault", re.IGNORECASE)
 class NoVaultLeftTests(unittest.TestCase):
     def test_code_and_ui_strings(self) -> None:
         found = []
-        for path in sorted((ROOT / "ssh_manager").rglob("*.py")):
+        for path in sorted((ROOT / "ssh_manager").rglob("*.py")) + sorted((ROOT / "tools").rglob("*.py")):
             if path.name in ALLOWED_FILES:
                 continue
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):

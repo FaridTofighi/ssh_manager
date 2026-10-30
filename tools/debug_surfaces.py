@@ -151,7 +151,7 @@ def scenes(app, snap, mode: str, populated: Path, empty: Path) -> Iterator[Tuple
 
 def dialog_factories(base: Path):
     from ssh_manager.config_viewer import ConfigViewerDialog
-    from ssh_manager.gtk_app import CredentialManagerDialog, HostDialog, PreferencesDialog, VaultDialog
+    from ssh_manager.gtk_app import CredentialManagerDialog, HostDialog, PreferencesDialog
     from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window
     from ssh_manager.gtkui.dialogs.confirm import ConfirmDialog
     from ssh_manager.gtkui.dialogs.password import PasswordDialog
@@ -177,7 +177,6 @@ def dialog_factories(base: Path):
         ("dialog-host", host),
         ("dialog-settings", lambda w: PreferencesDialog(w, True, 1.0, 11, w._settings)),
         ("dialog-credentials", lambda w: CredentialManagerDialog(w, w._credential_store)),
-        ("dialog-vault", lambda w: VaultDialog(w, w._vault)),
         ("dialog-config-viewer", config),
         ("dialog-password", lambda _w: PasswordDialog()),
         ("dialog-prompt", lambda w: PromptDialog(w, "Rename", "Name", default="value")),

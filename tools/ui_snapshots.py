@@ -837,7 +837,6 @@ def _make_window(app, base: Path, prefer_dark: bool, density: str = "", *, expan
     from ssh_manager.settings import AppSettings
 
     settings = AppSettings.load()
-    settings.master_password_disabled = True
     ui_state = base / ".ui_state.json"
     ui_state.write_text(
         json.dumps({"prefer_dark": bool(prefer_dark), "density": density or snapshot_density()}), encoding="utf-8"
@@ -862,7 +861,6 @@ def make_window_with_mode(app, base: Path, theme_mode: str, density: str = "", *
         json.dumps({"theme_mode": theme_mode, "density": density or snapshot_density()}), encoding="utf-8"
     )
     settings = AppSettings.load()
-    settings.master_password_disabled = True
     window = SSHManagerWindow(app, base, settings)
     window.host_page.latency.enabled = False
     if expanded:
@@ -1158,7 +1156,6 @@ def run(out_dir: Path) -> None:
             manager.create_parent_group("Staging")
             manager.add_host("Staging", "", HostEntry("stage app", {"hostname": "10.70.0.5"}))
             settings = AppSettings.load()
-            settings.master_password_disabled = True
             window = SSHManagerWindow(app, manager.base_dir, settings, manager=manager)
             window.host_page.latency.enabled = False
             window.tree.select_host(top, "Team A \u2014 EU/Servers", "Web 01 (primary)")
@@ -1217,7 +1214,6 @@ def run(out_dir: Path) -> None:
             manager = StoreConfigManager(InventoryStore(folder / "inventory.db"))
             commit_openssh_import(plan_openssh_import([seed]), manager)
             settings = AppSettings.load()
-            settings.master_password_disabled = True
             window = SSHManagerWindow(app, manager.base_dir, settings, manager=manager)
             window.host_page.latency.enabled = False
             store = window._credential_store
@@ -1501,7 +1497,6 @@ def run(out_dir: Path) -> None:
         CredentialManagerDialog,
         HostDialog,
         PreferencesDialog,
-        VaultDialog,
     )
     from ssh_manager.config_viewer import ConfigViewerDialog
 
@@ -1880,7 +1875,6 @@ def run(out_dir: Path) -> None:
 
     _dialog_scenario("dialog-settings", prefs_dialog, (820, 620))
     _dialog_scenario("dialog-credentials", lambda w: CredentialManagerDialog(w, w._credential_store), (560, 400))
-    _dialog_scenario("dialog-vault", lambda w: VaultDialog(w, w._vault), (560, 460))
     _dialog_scenario("dialog-config-viewer", config_dialog, (800, 600))
 
     menu_capture = getattr(gtk_app, "render_context_menu_preview", None)
