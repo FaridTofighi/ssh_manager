@@ -6,6 +6,27 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## SSH keys
+
+- **SSH Keys…** (app menu, Credentials, the host dialog): the keys in
+  `~/.ssh` and keys added by path, with type, fingerprint, comment,
+  passphrase and the hosts that use each. Generate (Ed25519, RSA 3072 / 4096),
+  Import, Copy / Show Public Key, Derive Public Key, Change Passphrase, Rename,
+  Delete (names the hosts still using it), Show in Folder.
+- **Passphrases:** optionally saved in the encrypted password store. The saved
+  one is typed once at ssh's prompt in the tab and used by Paramiko
+  connections. It is never in arguments, the environment or logs.
+- **Host dialog → Connection:** a key picker (known keys, Browse…, SSH Keys…)
+  that warns when the file does not exist, and **Forward the SSH agent**
+  (off by default, with a warning).
+- **Install SSH Key… / Deploy to Hosts…:** `ssh-copy-id` for many hosts using
+  their saved logins. It appends only if missing and verifies with the key
+  alone; the results table has Retry Failed, Copy Report and an optional Set
+  IdentityFile with Undo.
+- **Settings → Security → SSH agent:** whether an agent is running, and Add
+  Key to Agent… (ssh-add with the passphrase typed on a pty).
+- New window action `ssh-keys.open` (no default shortcut).
+
 ## Run Command on Hosts
 
 - **One command or script on many hosts**, with no tabs.

@@ -177,6 +177,12 @@ that direct file mode follows `Include` directives.
   export them (CSV/JSON/text) and re-run failed hosts. It asks first on more
   than 5 hosts or for disruptive commands. Saved commands are encrypted. See
   `docs/multi-run.md`.
+- **SSH keys**: App menu → **SSH Keys…** lists, generates (Ed25519 / RSA,
+  passphrase optional and savable encrypted), imports, renames and deletes
+  keys. **Install SSH Key…** on hosts or groups works like `ssh-copy-id`
+  for many hosts, with a check that the key then works. The host dialog
+  picks a key and can turn on ForwardAgent for that host. Settings →
+  Security adds keys to the ssh-agent. See `docs/ssh-keys.md`.
 - **Port forwarding**: Local (`-L`), Remote (`-R`) and Dynamic (SOCKS5)
   forwards per host, started by hand, with a session or with the app, beside
   the terminal (they stop without disconnecting). App menu → **Tunnels…** shows
@@ -319,6 +325,7 @@ authentication.
 - `docs/terminal.md` — terminal mouse and clipboard, configurable shortcuts, the local shell
 - `docs/security.md` — the master password, the key file, unlock modes, the recovery key, the migration, the threat model
 - `docs/known-hosts.md` — SSH host keys: the terminal banner, the Known Hosts manager, hashed entries
+- `docs/ssh-keys.md` — SSH keys: the list, generating, passphrases, installing on hosts, the agent, ForwardAgent
 - `docs/port-forwarding.md` — tunnels: Local / Remote / SOCKS forwards, when they run, limits
 - `docs/multi-run.md` — Run Command on Hosts: sending the script, results, safety checks, saved commands, limits
 - `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
