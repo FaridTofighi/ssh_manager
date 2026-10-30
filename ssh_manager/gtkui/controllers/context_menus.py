@@ -34,6 +34,8 @@ class TreeMenuCallbacks(Protocol):
     def clear_color(self) -> None: ...
     def forget_password(self) -> None: ...
     def forget_host_key(self) -> None: ...
+    def run_command_on_selection(self) -> None: ...
+    def run_command_on_group(self) -> None: ...
     def delete_selected(self) -> None: ...
     def connect_child_group(self) -> None: ...
     def connect_parent_group(self) -> None: ...
@@ -74,6 +76,8 @@ def host_menu(
                          tooltip=_("Send a Wake-on-LAN packet, then connect")),
             MenuItemSpec(_("Export as ._rdp File…"), cb.export_rdp_file, Icons.SAVE, visible=is_rdp,
                          tooltip=_("For other Remote Desktop clients; no password is stored")),
+            MenuItemSpec(_("Run Command on These _Hosts…"), cb.run_command_on_selection, Icons.TERMINAL,
+                         visible=is_ssh, tooltip=_("One non-interactive command on the selected hosts, no tabs")),
             MenuItemSpec(_("Copy SSH Command"), cb.copy_ssh_command, Icons.TERMINAL),
             MenuItemSpec(_("Copy SCP Command"), cb.copy_scp_command, Icons.COPY),
         ]),
@@ -112,6 +116,8 @@ def group_menu(
     sections: List[MenuSection] = [
         MenuSection("connect", [
             MenuItemSpec(_("Connect _All"), connect, Icons.CONNECT, sensitive=has_hosts),
+            MenuItemSpec(_("Run Command on These _Hosts…"), cb.run_command_on_group, Icons.TERMINAL,
+                         sensitive=has_hosts),
         ]),
         MenuSection("edit", [
             MenuItemSpec(_("New _Host…"), cb.create_host_in_current_group, Icons.NEW, sensitive=editable),

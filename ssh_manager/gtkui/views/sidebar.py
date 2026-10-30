@@ -107,6 +107,7 @@ class SidebarView(Gtk.Box):
         self.on_smart_group_activated: Callable[[int], None] = lambda _i: None
         self.on_save_smart_group: Callable[[], None] = lambda: None
         self.on_delete_smart_group: Callable[[int], None] = lambda _i: None
+        self.on_run_on_matches: Callable[[], None] = lambda: None
         self.on_add_host: Callable[[], None] = lambda: None
         self.on_open_folder: Callable[[], None] = lambda: None
         self.on_import_mobaxterm: Callable[[], None] = lambda: None
@@ -462,6 +463,11 @@ class SidebarView(Gtk.Box):
         clear.connect("clicked", lambda *_: self.filter_entry.set_text(""))
         actions.pack_end(clear, False, False, 0)
         box.pack_start(actions, False, False, 0)
+        self.run_on_matches_button = Gtk.Button.new_with_mnemonic(_("Run _Command on the Matching Hosts…"))
+        self.run_on_matches_button.set_tooltip_text(_("One non-interactive command on every host the search or "
+                                                      "filter shows"))
+        self.run_on_matches_button.connect("clicked", lambda *_: self.on_run_on_matches())
+        box.pack_start(self.run_on_matches_button, False, False, 0)
 
     def _build_filter_chip(self) -> Gtk.Widget:
         self._filter_chip_revealer = Gtk.Revealer()

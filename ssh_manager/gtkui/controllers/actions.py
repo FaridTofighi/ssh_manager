@@ -93,6 +93,12 @@ class WindowActions:
     def forget_password(self) -> None:
         self.win.creds.forget_password()
 
+    def run_command_on_selection(self) -> None:
+        self.win.multirun.open_for_selection()
+
+    def run_command_on_group(self) -> None:
+        self.win.multirun.open_for_group()
+
     def forget_host_key(self) -> None:
         host = self.win.tree.selected_host()
         if host is not None:

@@ -350,6 +350,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         self.tunnels = TunnelController(self)  # port forwarding (its own SSH connections)
         self.tunnels.listeners.append(self._update_tunnel_chip)
+        from ssh_manager.gtkui.controllers.multirun import MultiRunController
+
+        self.multirun = MultiRunController(self)  # one command on many hosts, no tabs
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -504,6 +507,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.on_filter_changed = self.tree.on_filter_text_changed
         sidebar.on_smart_group_activated = self.tree.on_smart_group_activated
         sidebar.on_save_smart_group = self.tree.save_current_filter_as_group
+        sidebar.on_run_on_matches = lambda: self.multirun.open_for_matches()
         sidebar.on_delete_smart_group = self.tree.delete_smart_group
         sidebar.on_add_host = self.hosts.prompt_new_host
         sidebar.on_open_folder = self.inventory.open_inventory_folder
@@ -575,6 +579,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "credentials": dialogs.open_credentials,
             "known-hosts": dialogs.open_known_hosts,
             "tunnels.open": dialogs.open_tunnels,
+            "multirun.open": lambda: self.multirun.open_for_selection(),
             "config-file": dialogs.open_config_file,
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,
