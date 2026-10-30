@@ -344,6 +344,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         self.native = NativeTransferController(self)  # SSH Manager's own export / import (.sshm)
         self.security = SecurityActions(self)  # Preferences → Security
+        from ssh_manager.gtkui.controllers.tunnels import TunnelController
+
+        self.tunnels = TunnelController(self)  # port forwarding (its own SSH connections)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -561,6 +564,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "shortcuts": dialogs.show_shortcuts,
             "credentials": dialogs.open_credentials,
             "known-hosts": dialogs.open_known_hosts,
+            "tunnels.open": dialogs.open_tunnels,
             "config-file": dialogs.open_config_file,
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,
@@ -887,6 +891,10 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             confirm_label=_("_Quit"),
         ):
             return True  # keep the window open
+        tunnels = getattr(self, "tunnels", None)
+        if tunnels is not None and not tunnels.confirm_quit(
+                lambda title, detail: self._confirm(title, detail=detail, confirm_label=_("Stop and _Quit"))):
+            return True  # keep the window open
         running = sum(getattr(tab, "running_transfers", lambda: 0)() for tab in self.terminal_tabs.tabs())
         if running and not self._confirm(
             _("Cancel the transfers?"),
@@ -911,5 +919,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         runtime = getattr(self.sessions, "_rdp_runtime", None)
         if runtime is not None:
             runtime.stop_all()  # no FreeRDP client outlives the window
+        tunnels = getattr(self, "tunnels", None)
+        if tunnels is not None:
+            tunnels.shutdown()  # no listener or SSH connection outlives the window
         if getattr(self, "keybox", None) is not None:
             self.keybox.forget()  # zero the data key (best effort)

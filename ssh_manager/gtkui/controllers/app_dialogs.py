@@ -193,6 +193,11 @@ class AppDialogs:
                                   notify=lambda text, level, **kw: toasts.notify(text, level, **kw))
         dialog.ask()
 
+    def open_tunnels(self) -> None:
+        from ..dialogs.tunnels import TunnelsDialog
+
+        TunnelsDialog(self.win, self.win.tunnels).ask()
+
     def open_credentials(self) -> None:
         dialog = CredentialManagerDialog(self.win, self.win._credential_store)
         dialog.run_and_destroy()

@@ -79,6 +79,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("shortcuts", _("Keyboard shortcuts"), G_GENERAL, ("<Primary>question", "F1")),
     ActionSpec("credentials", _("Credentials"), G_GENERAL),
     ActionSpec("known-hosts", _("Known hosts (SSH host keys)"), G_GENERAL),
+    ActionSpec("tunnels.open", _("Tunnels (port forwarding)"), G_GENERAL),
     ActionSpec("config-file", _("SSH config file"), G_GENERAL),
     ActionSpec("open-shared", _("Open shared inventory"), G_GENERAL),
     ActionSpec("git-check", _("Check for Git updates"), G_GENERAL),
