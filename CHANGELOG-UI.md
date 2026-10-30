@@ -6,6 +6,13 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Status bar: a constant height
+
+- Fixed: refreshing the server resources no longer makes the terminal
+  content jump (the status bar keeps a constant height).
+- The spinner shown while fetching keeps a fixed slot and is only hidden by
+  transparency.
+
 ## Broadcast: close or reconnect every ended session at once
 
 - In broadcast mode, q (close) and r (reconnect) on an ended session now

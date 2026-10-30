@@ -328,13 +328,16 @@ with a token report.
 | `.info-bar`, `.info-label`, `.info-value`, `.info-live`, `button.info-copy` | Info bar | Connection facts, docked live stats |
 | `.empty-state`, `.ready-state`, `.empty-card`, `.empty-title`, `.empty-description`, `.empty-caption`, `button.hero` | Empty states | Ready to connect and other placeholders |
 | `notebook.session-tabs`, `.session-strip-actions`, `.session-toolbar-row`, `.terminal-card` | Terminal tab | Session strip, toolbar, terminal card |
-| `.statusbar`, `.stat-warn`, `.stat-critical`, `.stat-icon` | Live stats | Warn at 80 %, critical at 90 % |
+| `.statusbar`, `.stat-warn`, `.stat-critical`, `.stat-icon` | Live stats | Warn at 80 %, critical at 90 %; one height in every state (`min-height`, a fixed 12 px spinner slot) |
 | `.broadcast-strip`, `.broadcast-active`, `button.broadcast-toggle` | Workspace | Broadcast strip (violet, the broadcast icon); a single session's outline while broadcasting in tabs mode; the toolbar toggle |
 | `.pane-frame` (`.focused`, `.broadcast`, `.broadcasting`, `.failed`, `.disconnected`), `.pane-header`, `.pane-footer`, `.pane-dim`, `.pane-gutter`, `paned.pane-split`, `button.broadcast-chip` | Panes | Split panes and tiles (see "Panes" below) |
 | `button.primary` / `.suggested-action`, `button.outlined`, `.destructive-action` | Buttons | Primary, secondary, destructive |
 | `popover.sm-popover`, `.popover-menu-item`, `menuitem .menu-icon`, `.accel-hint`, `menuitem.destructive` | Menus | Popovers and menus |
 | `.chip`, `.chip.accent`, `.badge`, `.status-dot.*`, `.toast*`, `.level-*`, `.caps`, `.mono` | Shared | Chips, counters, status, toasts, type helpers |
 | `.section-title`, `.section-description`, `.form-help`, `.form-error`, `entry.invalid`, `.settings-sidebar` | Dialogs | Forms and settings |
+
+Widgets next to a terminal must never change size at runtime; reserve space instead of show/hide (a
+terminal that gains or loses a row reflows and its content jumps).
 
 ## Components
 

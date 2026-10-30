@@ -738,7 +738,9 @@ notebook.session-tabs > stack {
     color: @sm_text_secondary;
     padding: 2px ${s}px;
     font-size: ${fs_caption}em;
+    min-height: ${icon_small}px; /* one height whatever it shows: the terminal above never resizes */
 }
+.statusbar spinner { min-width: ${icon_small}px; min-height: ${icon_small}px; }
 .statusbar .stat-warn { color: @sm_warning; font-weight: bold; }
 .statusbar .stat-critical { color: @sm_danger; font-weight: bold; }
 .broadcast-strip {
@@ -1052,7 +1054,7 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "button_large": size.BUTTON_LARGE, "hero": size.HERO_BUTTON, "host_tile": size.HOST_TILE,
         "empty_card": size.EMPTY_CARD, "badge": size.BADGE,
         "button_min": size.BUTTON_MIN, "toolbar_button": size.TOOLBAR_BUTTON, "entry": size.ENTRY,
-        "menu_row": size.MENU_ROW, "filter_button": size.FILTER_BUTTON,
+        "menu_row": size.MENU_ROW, "filter_button": size.FILTER_BUTTON, "icon_small": size.ICON_SMALL,
         "primary_min_width": size.PRIMARY_MIN_WIDTH,
         "add_host_pad_start": tokens.sidebar.ADD_HOST_PAD_START, "add_host_pad_end": tokens.sidebar.ADD_HOST_PAD_END,
         "search_text_inset": tokens.sidebar.SEARCH_TEXT_INSET,

@@ -54,6 +54,21 @@ def apply_stat_level(label: object, percent: Optional[float]) -> None:
         ctx.add_class(level)
 
 
+def set_spinner_busy(spinner: object, busy: bool) -> None:
+    """Turn the stats spinner on or off without changing its size: it always keeps its slot.
+
+    Showing / hiding it changed the bar's height, which resized the terminal above it by a row on every
+    refresh. Objects without ``set_opacity`` (test doubles) only get ``start`` / ``stop``.
+    """
+
+    action = getattr(spinner, "start" if busy else "stop", None)
+    if callable(action):
+        action()
+    set_opacity = getattr(spinner, "set_opacity", None)
+    if callable(set_opacity):
+        set_opacity(1.0 if busy else 0.0)
+
+
 def _stat(icon_name: str, accessible: str) -> tuple:
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
     image = make_icon(icon_name, Size.ICON_SMALL, css_class="stat-icon")
@@ -82,8 +97,14 @@ class SessionStatusBar(Gtk.Box):
         self.pack_start(self.size_label, False, False, 0)
 
         self.stats_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.M)
+        # Widgets next to a terminal never change size at runtime: the spinner keeps a fixed slot and is
+        # only made transparent when idle (see set_spinner_busy).
         self.spinner = Gtk.Spinner()
-        self.spinner.set_no_show_all(True)
+        self.spinner.set_size_request(Size.ICON_SMALL, Size.ICON_SMALL)
+        self.spinner.set_halign(Gtk.Align.CENTER)
+        self.spinner.set_valign(Gtk.Align.CENTER)
+        self.spinner.set_opacity(0.0)
+        self.spinner.show()
         self.stats_box.pack_start(self.spinner, False, False, 0)
         cpu_box, self.cpu_label = _stat(Icons.CPU, _("CPU usage"))
         mem_box, self.mem_label = _stat(Icons.MEMORY, _("Memory usage"))

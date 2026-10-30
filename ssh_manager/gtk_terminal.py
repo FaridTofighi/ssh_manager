@@ -68,7 +68,7 @@ from ssh_manager.gtkui.controllers.shortcuts import accel_label  # noqa: E402
 from ssh_manager.gtkui.view_models import status_text
 from ssh_manager.gtkui.theme.loader import get_theme_manager
 from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level, Motion, Size, Space
-from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level
+from ssh_manager.gtkui.views.statusbar import SessionStatusBar, apply_stat_level, set_spinner_busy
 from ssh_manager.gtkui.views.workspace import (
     BroadcastStrip,
     SessionStrip,
@@ -492,8 +492,7 @@ class TerminalTab(SessionPage):
             label.set_text(text)
             label.set_tooltip_text(None)
             apply_stat_level(label, None)
-        self._info_spinner.stop()
-        self._info_spinner.hide()
+        set_spinner_busy(self._info_spinner, False)
         if hasattr(self, "_statusbar"):
             self._statusbar.set_stats_visible(False)
 
@@ -1995,8 +1994,7 @@ class TerminalTab(SessionPage):
             if self._stats_updating:
                 return True
             self._stats_updating = True
-        self._info_spinner.show()
-        self._info_spinner.start()
+        set_spinner_busy(self._info_spinner, True)
         threading.Thread(target=self._fetch_stats_thread, daemon=True).start()
         return True
 
@@ -2076,8 +2074,7 @@ class TerminalTab(SessionPage):
         self._start_stats_updates()
 
     def _apply_stats_result(self, data: Optional[Dict[str, float]]) -> bool:
-        self._info_spinner.stop()
-        self._info_spinner.hide()
+        set_spinner_busy(self._info_spinner, False)
         with self._stats_lock:
             self._stats_updating = False
         if not isinstance(data, dict):
