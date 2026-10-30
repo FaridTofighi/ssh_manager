@@ -143,7 +143,7 @@ class ReadTests(unittest.TestCase):
 
     def test_unknown_keys_and_hand_edited_ids_are_handled(self) -> None:
         doc = N.read_native(raw(document([group("G", [host("r", protocol="rdp", metadata={
-            "rdp": {"v": 1, "via_ssh": "deadbeef", "via_ssh_ref": "j"}, "vault_id": "abc", "new_feature": True})],
+            "rdp": {"v": 1, "via_ssh": "deadbeef", "via_ssh_ref": "j"}, "new_feature": True})],
             future_group_key=True)], future_top_key={"x": 1})))
         rdp_host = doc.hosts()[0]
         self.assertEqual(rdp_host.metadata, {"rdp": {"v": 1}, "new_feature": True})

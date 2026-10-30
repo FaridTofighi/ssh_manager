@@ -190,7 +190,3 @@ rerun finds what is already done and continues.
 **If it is interrupted** (crash, power loss), the next start sees the marker
 or the `*.pre-keybox` copies. It asks for the master password, runs the
 steps again and cleans up.
-
-The old store of separate entries with their own password and file is handled
-by its own move into Credentials (see `docs/passwords.md`). It works through
-whichever password store is active, so it can still run after this migration.

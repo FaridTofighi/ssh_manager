@@ -243,8 +243,6 @@ class ControllerTests(unittest.TestCase):
         self.creds.save_host_password(self.web, SECRET)
         context = self.creds.password_save_context(self.web)
         self.assertEqual((context.credential_name, context.has_private), ("Ops", True))
-        self.web.metadata["vault_id"] = "v1"  # a link left by the removed feature changes nothing
-        self.assertEqual(self.creds.password_save_context(self.web).credential_name, "Ops")
 
     def test_describe_password_source(self) -> None:
         self.assertEqual(self.creds.describe_password_source(PasswordResolution("x", "credential", self.shared.id)),

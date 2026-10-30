@@ -177,8 +177,6 @@ class SSHManagerApplication(Gtk.Application):
                                             migration_pending=started.unfinished, manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
-            # Once per start (the application only: windows built by tests never ask).
-            GLib.idle_add(lambda: self._window and self._window.legacy_migration.offer_at_startup())
             if self._startup_host is not None:
                 host, self._startup_host = self._startup_host, None
                 GLib.timeout_add(500, self._open_startup_host, host)
@@ -345,9 +343,6 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         from ssh_manager.gtkui.controllers.native_transfer import NativeTransferController
 
         self.native = NativeTransferController(self)  # SSH Manager's own export / import (.sshm)
-        from ssh_manager.gtkui.legacy_vault import LegacyMigration
-
-        self.legacy_migration = LegacyMigration(self)  # the removed feature's entries → Credentials (once)
         self.security = SecurityActions(self)  # Preferences → Security
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)

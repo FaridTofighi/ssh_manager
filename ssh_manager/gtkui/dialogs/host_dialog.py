@@ -36,7 +36,6 @@ from ...config import HostEntry  # noqa: E402
 from ...credentials import Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_option  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
-from ...legacy_vault import LEGACY_METADATA_KEYS  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 from ..validation import validate_alias, validate_hostname, validate_port  # noqa: E402
@@ -731,9 +730,6 @@ class HostDialog(BaseDialog):
             "service": self.service_entry.get_text().strip(),
             "notes": self.notes_entry.get_text().strip(),
         }
-        for key in LEGACY_METADATA_KEYS:  # not converted yet: kept as it is until the migration runs
-            if self._metadata.get(key):
-                metadata[key] = self._metadata[key]
         profile_id = self._profile_combo.get_active_id() or ""
         if profile_id:
             metadata["default_session_profile_id"] = profile_id

@@ -212,26 +212,6 @@ class MatrixTests(MigrationCase):
         result = self.flow(keyring=None).run()
         self.assert_finished(result, {"web.internal:22:deploy": FILE_SECRET})
 
-    def test_f_old_file_of_part_a_is_left_and_converts_afterwards(self) -> None:
-        from tests.test_legacy_vault import write_old_vault
-        from ssh_manager import legacy_vault as LV
-
-        self.fx.with_hash().with_keyring_secrets()
-        old = self.fx.dir / "vault.json"
-        write_old_vault(old, OLD, [("v1", "Box", "root", "vault-pw-sentinel")])
-        raw = old.read_bytes()
-        result = self.flow().run()
-        self.assertEqual(old.read_bytes(), raw)
-        box = self.fx.unlocked()
-        creds = CredentialStore(SecureStore.for_keybox(box, self.fx.dir / "passwords.json"),
-                                self.fx.dir / "credentials.json")
-        report = LV.convert_vault(LV.read_legacy_vault(old, OLD), creds, self.fx.manager)
-        self.assertEqual(len(report.created), 1)
-        self.assertNotIn(b"vault-pw-sentinel", (self.fx.dir / "passwords.json").read_bytes())
-        found = [c for c in creds.list() if c.username == "root"]
-        self.assertEqual(creds.get_password(found[0].id), "vault-pw-sentinel")
-        self.assertFalse(result.unfinished)
-
     def test_g_macros_v1(self) -> None:
         self.fx.with_hash().with_macros()
         result = self.flow(keyring=None).run()
@@ -258,10 +238,8 @@ class MatrixTests(MigrationCase):
 
     def test_i_everything_at_once(self) -> None:
         self.fx.with_hash().with_keyring_secrets().with_encrypted_file().with_macros()
-        (self.fx.dir / "vault.json").write_text("{}")
         result = self.flow().run()
         self.assertEqual((result.report.from_file, result.report.from_keyring, result.report.macros), (1, 2, 1))
-        self.assertTrue((self.fx.dir / "vault.json").exists())
         # the file entry and the keyring entry of the same host: the file wins
         self.assert_finished(result, {f"credential:{self.fx.cred_id}": CRED_SECRET,
                                       "web.internal:22:deploy": FILE_SECRET})

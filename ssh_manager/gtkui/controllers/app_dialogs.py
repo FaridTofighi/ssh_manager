@@ -56,7 +56,6 @@ class AppDialogs:
             inventory=self.inventory_info(),
             shortcuts=getattr(self.win, "shortcut_registry", None),
             security=getattr(self.win, "security", None),
-            old_file_button=self._old_file_button,
         )
         if page:
             dialog.layout.show_page(page)
@@ -66,10 +65,6 @@ class AppDialogs:
             dialog.destroy()
         if values is not None:
             self.apply_preferences(values)
-
-    def _old_file_button(self, on_done):
-        migration = getattr(self.win, "legacy_migration", None)
-        return migration.move_button(self.win, on_done) if migration is not None else None
 
     def inventory_info(self):
         """Preferences → Inventory (app store only)."""
@@ -177,9 +172,6 @@ class AppDialogs:
 
     def open_credentials(self) -> None:
         dialog = CredentialManagerDialog(self.win, self.win._credential_store)
-        migration = getattr(self.win, "legacy_migration", None)
-        if migration is not None:
-            migration.add_import_button(dialog)
         dialog.run_and_destroy()
         self.win.tree.update_details()
 

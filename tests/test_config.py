@@ -323,7 +323,7 @@ class ConfigMutationTests(unittest.TestCase):
             ok, message = manager.add_host(
                 "prod",
                 "hosts.conf",
-                HostEntry(alias="app", metadata={"owner": "team\n# meta vault_id=bad"}),
+                HostEntry(alias="app", metadata={"owner": "team\n# meta other=bad"}),
             )
             self.assertFalse(ok)
             self.assertIn("line breaks", message)

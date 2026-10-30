@@ -54,7 +54,6 @@ class SshCommandTests(unittest.TestCase):
                 "hostname": "app.internal",
                 "user": "root",
                 "tags": "prod,web",
-                "vault_id": "vault-entry",
                 "password": "secret",
                 "PasswordAuthentication": "no",
                 "NumberOfPasswordPrompts": 1,
@@ -68,7 +67,6 @@ class SshCommandTests(unittest.TestCase):
         rendered = " ".join(command)
 
         self.assertNotIn("tags=", rendered)
-        self.assertNotIn("vault_id=", rendered)
         self.assertNotIn("password=secret", rendered)
         self.assertIn("PasswordAuthentication=no", command)
         self.assertIn("NumberOfPasswordPrompts=1", command)

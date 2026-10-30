@@ -116,14 +116,11 @@ class StructureTests(ExportCase):
         self.assertEqual(self.host(self.find(doc["groups"], "Files"), "sftp-1")["credential"],
                          {"ref": "c1", "mode": "shared"})  # deduplicated
         self.assertEqual(self.host(prod, "bastion")["credential"], {"mode": "host-specific"})
-        self.assertNotIn("vault", self.host(prod, "web-01"))  # a link of the removed feature is never exported
-        self.assertNotIn("vault_id", self.host(prod, "web-01")["metadata"])
         rdp = self.host(self.find(doc["groups"], "Windows"), "dc-01")["metadata"]["rdp"]
         self.assertEqual(rdp["via_ssh_ref"], self.host(prod, "bastion")["ref"])
         self.assertNotIn("via_ssh", rdp)
         self.assertEqual(rdp["gateway"], {"host": "", "port": 443})
         self.assertEqual((report.credentials, report.host_specific), (2, 1))
-        self.assertEqual(report.removed["link to a removed feature"], 1)
         # A tunnel host outside the export: the tunnel is dropped, with a warning.
         only_windows, report = self.export(scope="groups", group_id=self.ids["windows"])
         self.assertEqual([g["name"] for g in only_windows["groups"]], ["Windows"])
@@ -234,7 +231,6 @@ class SecretAuditTests(ExportCase):
         for blob in (raw, text.encode(), "\n".join(logs.output).encode(), encrypted):
             self.assertNotIn(SENTINEL.encode(), blob)
             self.assertNotIn(base64.b64encode(SENTINEL.encode()), blob)
-        self.assertNotIn(b"VAULT-", raw)
         self.assertNotIn(b"gw-", raw)
         self.assertIn("web-01: proxycommand", report.flagged)
         self.assertIn("web-01: ~/.ssh/id_ed25519", report.identity_files)

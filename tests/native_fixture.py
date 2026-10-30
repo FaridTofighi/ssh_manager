@@ -21,10 +21,7 @@ def make_store(folder: Path) -> InventoryStore:
 
 
 def build_rich(store: InventoryStore):
-    """Returns ``(ids, group_colors, host_colors, credentials_by_host_id, unused)``.
-
-    ``web-01`` keeps a link left by the removed Credential Vault (``vault_id``): it must never be exported.
-    """
+    """Returns ``(ids, group_colors, host_colors, credentials_by_host_id, unused)``."""
 
     prod = store.create_group(None, "Prod", note="production servers")
     databases = store.create_group(prod.id, "Databases")
@@ -42,7 +39,7 @@ def build_rich(store: InventoryStore):
                  "proxycommand": f"sshpass -p {SENTINEL} ssh -W %h:%p jump"},
         metadata={"tags": ["web", "frontend"], "notes": "main site", "environment": "production",
                   "owner": "ops", "service": "nginx", "permissions": {"read_only": True},
-                  "default_session_profile_id": "profile-1", "vault_id": "VAULT-" + SENTINEL}))
+                  "default_session_profile_id": "profile-1"}))
     db1 = store.add_host(NewHost(databases.id, "db-01", "db1.internal", 22, "postgres"))
     db2 = store.add_host(NewHost(replicas.id, "db-02", "db2.internal", None, "postgres"))
     dc = store.add_host(NewHost(

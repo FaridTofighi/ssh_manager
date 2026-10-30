@@ -28,17 +28,6 @@ order (`PasswordResolution.source`):
    `(host name, port, user)`;
 3. **none:** nothing is stored.
 
-<!-- legacy-migration-note -->
-**Moved from the Credential Vault.** The vault (its own password and file,
-`vault.json`) was removed. At the first start after the update its entries
-are moved into Credentials: each becomes a shared credential (an existing one
-with the same username and password is reused), the hosts that used it are
-bound to it, everything is verified, and only then does SSH Manager offer to
-delete the old file. *Later* keeps everything and asks again at the next
-start; meanwhile the Credentials manager has **Import old vault…**. Code:
-`ssh_manager/legacy_vault.py` (migration only).
-<!-- /legacy-migration-note -->
-
 Resolving never writes. Older versions copied the credential's password into
 the legacy per-host secret on every connect; that is gone, so a shared
 credential stays the single source of its password.

@@ -1,8 +1,8 @@
 """Preferences → Security (replaces "Master Password"); the actions are in ``controllers/security.py``.
 
 Rows: change the master password; how SSH Manager unlocks (ask / remember on this computer); the
-recovery key; how many passwords are saved; the leftovers of older versions (move the old file,
-remove the old keyring copies, finish an interrupted migration); **Don't save passwords**.
+recovery key; how many passwords are saved; the leftovers of older versions (remove the old keyring
+copies, finish an interrupted migration); **Don't save passwords**.
 """
 
 from __future__ import annotations
@@ -31,12 +31,10 @@ def _help(text: str) -> Gtk.Label:
 class SecurityPage(Gtk.Box):
     """Rebuilt from ``actions.state()`` after every action."""
 
-    def __init__(self, actions, parent: Optional[Gtk.Window] = None,
-                 old_file_button: Optional[Callable[[Callable[[], None]], Optional[Gtk.Widget]]] = None) -> None:
+    def __init__(self, actions, parent: Optional[Gtk.Window] = None) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         self.actions = actions
         self.parent = parent
-        self.old_file_button = old_file_button
         self.state = None
         self.refresh()
 
@@ -152,17 +150,13 @@ class SecurityPage(Gtk.Box):
         self.refresh()
 
     def _leftovers_section(self, state) -> None:
-        old_file = self.old_file_button(self.refresh) if self.old_file_button else None
-        if not state.keyring_leftovers and old_file is None:
+        if not state.keyring_leftovers:
             return
         section = FormSection(_("From Older Versions"))
-        if state.keyring_leftovers:
-            section.add_widget(_help(_("Copies of saved passwords are still in the system keyring.")))
-            self.leftovers_button = self._button(_("Remove Old Copies from the System _Keyring"),
-                                                 self.actions.remove_keyring_copies)
-            section.add_widget(self.leftovers_button)
-        if old_file is not None:
-            section.add_widget(old_file)
+        section.add_widget(_help(_("Copies of saved passwords are still in the system keyring.")))
+        self.leftovers_button = self._button(_("Remove Old Copies from the System _Keyring"),
+                                             self.actions.remove_keyring_copies)
+        section.add_widget(self.leftovers_button)
         self.pack_start(section, False, False, 0)
 
 

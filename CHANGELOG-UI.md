@@ -6,6 +6,13 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Old Credential Vault converter removed
+
+- Removed the converter for the old Credential Vault. Update through the
+  previous release first if you still have a `vault.json`.
+- A `vault.json` left in the configuration folder is ignored: no dialog, and
+  the file is not touched.
+
 ## Saved passwords and macros: one key, protected by the master password
 
 - Saved passwords and macros are now encrypted with one key protected by the

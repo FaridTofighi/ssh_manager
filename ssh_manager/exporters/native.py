@@ -26,7 +26,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from ..legacy_vault import LEGACY_METADATA_KEYS
 from ..native_format import FORMAT, VERSION, integrity_hash
 
 REDACTED = "<removed>"
@@ -155,14 +154,11 @@ def _strip_secret_keys(value: Any, where: str, report: ExportReport, section: st
 
 def audit_metadata(metadata: Mapping[str, Any], alias: str, report: ExportReport, *, notes: bool,
                    tunnel_ref: Callable[[str], Optional[str]]) -> Dict[str, Any]:
-    """The metadata without secrets (and without links of removed features)."""
+    """The metadata without secrets."""
 
     kept: Dict[str, Any] = {}
     for key, value in metadata.items():
         name = str(key)
-        if name in LEGACY_METADATA_KEYS:
-            report.removal("link to a removed feature")
-            continue
         if not notes and name in ("notes", "tags"):
             continue
         if name == "transfer" and isinstance(value, dict):

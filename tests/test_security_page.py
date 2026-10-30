@@ -35,7 +35,7 @@ class SecurityPageTests(unittest.TestCase):
     def page(self):
         from ssh_manager.gtkui.dialogs.security_page import SecurityPage
 
-        page = SecurityPage(self.actions, self.win, self.win.app_dialogs._old_file_button)
+        page = SecurityPage(self.actions, self.win)
         self.addCleanup(page.destroy)
         return page
 
@@ -119,26 +119,14 @@ class SecurityPageTests(unittest.TestCase):
         self.assertIsNone(page.leftovers_button)
         self.assertEqual(self.win._credential_store.get_password(cred.id), "moved-pw")
 
-    def test_pending_migration_and_the_old_file(self) -> None:
+    def test_pending_migration(self) -> None:
         self.win.migration_pending = True
         self.win._secure_store = DisabledSecureStore("migration")
-        (self.box.path.parent / "vault.json").write_text("{}")
         page = self.page()
         self.assertIsNotNone(page.finish_button)
         self.assertIsNone(page.change_button)
         self.assertIsNone(page.off_switch)
         self.assertEqual(page.saved_label.get_text(), "Unavailable until the migration is finished.")
-        labels = []
-
-        def collect(widget):
-            if hasattr(widget, "get_label") and widget.get_label():
-                labels.append(widget.get_label())
-            if hasattr(widget, "get_children"):
-                for child in widget.get_children():
-                    collect(child)
-
-        collect(page)
-        self.assertIn("Move the Old _Vault…", labels)
         self.assertTrue(self.win.security_banner.get_visible() or not self.win.get_mapped())
         with mock.patch.object(self.win, "finish_migration", return_value=True) as finish:
             page.finish_button.clicked()

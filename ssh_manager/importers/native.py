@@ -33,7 +33,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from ..config import HostEntry
-from ..legacy_vault import LEGACY_METADATA_KEYS
 from ..native_format import (
     ENCRYPTED_FORMAT,
     FORMAT,
@@ -438,8 +437,6 @@ class _Reader:
                 self.warn(Code.NOTE_TOO_LONG, f"The notes of '{label}' are too long; left out.")
             elif isinstance(notes, str):
                 metadata["notes"] = _clean_text(notes)  # in its place: a round trip keeps the order
-        for legacy in LEGACY_METADATA_KEYS:  # an id of another computer's removed store means nothing here
-            metadata.pop(legacy, None)
         via_ref = ""
         if isinstance(metadata.get("rdp"), dict):
             rdp = dict(metadata["rdp"])

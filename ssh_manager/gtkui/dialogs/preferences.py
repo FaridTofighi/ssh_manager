@@ -164,7 +164,6 @@ class PreferencesDialog(BaseDialog):
         inventory: Optional[Dict[str, object]] = None,
         shortcuts: object = None,
         security: object = None,
-        old_file_button: Optional[Callable] = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -176,7 +175,6 @@ class PreferencesDialog(BaseDialog):
         self._settings = settings
         self._on_reset = on_reset
         self._security = security
-        self._old_file_button = old_file_button
         self._on_export = on_export
         self._appearance = settings.terminal_appearance or TerminalAppearanceSettings()
         self._custom_font = self._appearance.custom_font
@@ -378,7 +376,7 @@ class PreferencesDialog(BaseDialog):
         if self._security is not None:
             from .security_page import SecurityPage
 
-            self.security_page = SecurityPage(self._security, self, self._old_file_button)
+            self.security_page = SecurityPage(self._security, self)
             page.append(self.security_page)
         export = Gtk.Button.new_with_mnemonic(_("_Export Settings & Policies…"))
         export.set_halign(Gtk.Align.START)
