@@ -62,7 +62,8 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
 )
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
-from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
+from ssh_manager.gtkui.controllers.native_transfer import app_version as current_app_version  # noqa: E402
+from ssh_manager.gtkui.migration_flow import MigrationFlow  # noqa: E402
 from ssh_manager.gtkui.unlock_flow import StartupFlow  # noqa: E402
 from ssh_manager.gtkui.i18n import _, ngettext  # noqa: E402
 from ssh_manager.gtkui.theme import density as density_tokens  # noqa: E402
@@ -74,10 +75,10 @@ from ssh_manager.gtkui.views.header import HeaderView  # noqa: E402
 from ssh_manager.gtkui.views.session_tree import SessionTreeView, new_tree_store  # noqa: E402
 from ssh_manager.gtkui.views.sidebar import SidebarView  # noqa: E402
 from ssh_manager.gtkui.widgets.toast import ToastOverlay  # noqa: E402
-from ssh_manager.master_auth import hash_master_password, master_hash_needs_upgrade, verify_master_password  # noqa: E402
+from ssh_manager.gtkui.widgets.icon_button import set_accessible_name  # noqa: E402
 from ssh_manager.password_dialog import PasswordDialog  # noqa: E402
 from ssh_manager.profiles import SessionProfile, built_in_profiles  # noqa: E402
-from ssh_manager.secure_store import DisabledSecureStore, SecureStore  # noqa: E402
+from ssh_manager.secure_store import DISABLED_MIGRATION, DisabledSecureStore, SecureStore  # noqa: E402
 from ssh_manager.settings import AppSettings  # noqa: E402
 from ssh_manager.templates import built_in_templates  # noqa: E402
 
@@ -139,7 +140,6 @@ class SSHManagerApplication(Gtk.Application):
         self._window: Optional[SSHManagerWindow] = None
         self._theme = get_theme_manager()
         self._settings = AppSettings.load()
-        self._master_password: Optional[str] = None
         self._startup_host = startup_host  # --rdp / rdp://: opened once the window exists, never saved
 
     def do_startup(self) -> None:  # type: ignore[override]
@@ -154,12 +154,10 @@ class SSHManagerApplication(Gtk.Application):
 
     def do_activate(self) -> None:  # type: ignore[override]
         if not self._window:
-            started = StartupFlow(self._settings, Path(self._settings.config_path).parent).run()
+            config_dir = Path(self._settings.config_path).parent
+            started = StartupFlow(self._settings, config_dir).run()
             if started is None:
                 self.quit()
-                return
-            if started.migrate and not self._ensure_master_password():
-                self.quit()  # data of an older version: the previous unlock until it is migrated
                 return
             manager = None
             if self._base_dir is None:
@@ -169,9 +167,13 @@ class SSHManagerApplication(Gtk.Application):
                     return
                 manager = StoreConfigManager(store)
             base = manager.base_dir if manager is not None else self._base_dir
-            self._window = SSHManagerWindow(self, base, self._settings, master_password=self._master_password,
-                                            keybox=started.keybox, passwords_off=started.passwords_off,
-                                            manager=manager)
+            if started.migrate or started.resume:  # data of an older version: move it (or start in safe mode)
+                flow = MigrationFlow(self._settings, config_dir, manager or ConfigManager(base),
+                                     app_version=current_app_version())
+                started = flow.run() if started.migrate else flow.resume(started.keybox, started.typed)
+            self._window = SSHManagerWindow(self, base, self._settings, keybox=started.keybox,
+                                            passwords_off=started.passwords_off,
+                                            migration_pending=started.unfinished, manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
             # Once per start (the application only: windows built by tests never ask).
@@ -208,46 +210,6 @@ class SSHManagerApplication(Gtk.Application):
         response = dialog.run()
         dialog.destroy()
         return buttons[response][1] if 0 <= response < len(buttons) else Choice.QUIT
-
-    def _ensure_master_password(self) -> bool:
-        if self._settings.master_password_disabled:
-            return True
-        if not self._settings.master_password_hash:
-            return self._prompt_set_master_password()
-        return self._prompt_master_auth()
-
-    def _prompt_master_auth(self) -> bool:
-        stored = self._settings.master_password_hash
-        password = UnlockDialog(
-            None,
-            _("Unlock SSH Manager"),
-            _("Enter your master password"),
-            _("It protects saved SSH credentials."),
-            lambda text: verify_master_password(text, stored),
-            error_text=_("Incorrect master password. Please try again."),
-        ).ask()
-        if password is None:
-            return False
-        if master_hash_needs_upgrade(stored):
-            self._settings.master_password_hash = hash_master_password(password)
-            self._settings.save()
-        self._master_password = password
-        return True
-
-    def _prompt_set_master_password(self) -> bool:
-        password = NewSecretDialog(
-            None,
-            _("Set Master Password"),
-            _("Create a master password"),
-            _("It unlocks SSH Manager and encrypts passwords stored on this computer."),
-            accept_label=_("_Save"),
-        ).ask()
-        if password is None:
-            return False
-        self._settings.master_password_hash = hash_master_password(password)
-        self._settings.save()
-        self._master_password = password
-        return True
 
     def _install_css(self, prefer_dark: Optional[bool] = True) -> None:
         """Load the stylesheet; ``True``/``False`` force dark/light, ``None`` follows the system."""
@@ -293,6 +255,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         master_password: Optional[str] = None,
         keybox=None,
         passwords_off: bool = False,
+        migration_pending: bool = False,
         manager=None,
     ) -> None:
         Gtk.ApplicationWindow.__init__(self, application=app)
@@ -303,7 +266,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.get_style_context().add_class("sm-window")
 
         self.closing = False
-        self._init_services(base_dir, settings, master_password, manager, keybox=keybox, passwords_off=passwords_off)
+        self._init_services(base_dir, settings, master_password, manager, keybox=keybox, passwords_off=passwords_off,
+                           migration_pending=migration_pending)
         self._init_controllers()
         self._build_ui()
         self._register_actions()
@@ -320,12 +284,16 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
     # ---------------------------------------------------------------- setup
     def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str], manager=None,
-                       *, keybox=None, passwords_off: bool = False) -> None:
+                       *, keybox=None, passwords_off: bool = False, migration_pending: bool = False) -> None:
         # The app store (StoreConfigManager) by default; a folder inventory for --base-dir and tests.
         self.manager = manager if manager is not None else ConfigManager(base_dir)
         self._settings = settings
         self.keybox = keybox  # the unlocked keybox (saved passwords and macros), or None
-        if keybox is not None:
+        self.migration_pending = migration_pending
+        if migration_pending:  # safe mode: the old data untouched, saved passwords unavailable
+            self._master_password = None
+            self._secure_store = DisabledSecureStore(DISABLED_MIGRATION)
+        elif keybox is not None:
             self._master_password = None  # never kept once the keybox is open
             self._secure_store = SecureStore.for_keybox(keybox)
         elif passwords_off:
@@ -403,7 +371,11 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._paned.pack2(right_box, resize=True, shrink=False)
         self._paned.connect("notify::position", self.layout.on_paned_position)
         self._toast_overlay = ToastOverlay(self._toasts)
-        self._toast_overlay.add(self._paned)
+        self.security_banner = self._build_security_banner()
+        main = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        main.pack_start(self.security_banner, False, False, 0)
+        main.pack_start(self._paned, True, True, 0)
+        self._toast_overlay.add(main)
         self.add(self._toast_overlay)
 
         self._apply_theme_mode(self._theme_mode)
@@ -418,6 +390,65 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             part.set_no_show_all(True)
         self.connect("size-allocate", self.layout.on_size_allocate)
         self.connect("key-press-event", self._on_window_key_press)
+
+    def _build_security_banner(self) -> Gtk.InfoBar:
+        """Persistent while the move to the keybox has not finished (safe mode)."""
+
+        from ssh_manager.gtkui.controllers.credentials_controller import migration_pending_text
+
+        bar = Gtk.InfoBar()
+        bar.set_message_type(Gtk.MessageType.WARNING)
+        label = Gtk.Label(label=migration_pending_text())
+        label.set_xalign(0.0)
+        label.set_line_wrap(True)
+        bar.get_content_area().pack_start(label, True, True, 0)
+        label.show()
+        bar.add_button(_("_Finish Migration…"), Gtk.ResponseType.ACCEPT)
+        bar.connect("response", lambda _bar, response: response == Gtk.ResponseType.ACCEPT and self.finish_migration())
+        bar.set_no_show_all(True)
+        bar.set_visible(self.migration_pending)
+
+        def name_close_button(widget: Gtk.Widget) -> None:  # GtkInfoBar's own (hidden) close button
+            if isinstance(widget, Gtk.Button) and not widget.get_label():
+                widget.set_tooltip_text(_("Close"))
+                set_accessible_name(widget, _("Close"))
+            elif isinstance(widget, Gtk.Container):
+                widget.forall(name_close_button)
+
+        bar.forall(name_close_button)
+        return bar
+
+    def finish_migration(self) -> bool:
+        """Safe mode → run the move again (it resumes); ``True`` when the new stores are in use."""
+
+        from ssh_manager.gtkui.migration_flow import MigrationFlow
+
+        config_dir = Path(self._settings.config_path).parent
+        flow = MigrationFlow(self._settings, config_dir, self.manager, app_version=current_app_version(), parent=self)
+        if self.keybox is None and (config_dir / "keybox.json").exists():
+            result = StartupFlow(self._settings, config_dir).run()  # unlock it first
+            if result is None or result.keybox is None:
+                return False
+            result = flow.resume(result.keybox, result.typed)
+        elif self.keybox is not None:
+            result = flow.resume(self.keybox)
+        else:
+            result = flow.run()
+        if result.unfinished:
+            self.keybox = result.keybox or self.keybox
+            return False
+        if result.passwords_off:
+            self._secure_store = DisabledSecureStore()
+            self._credential_store._secure_store = self._secure_store
+        elif result.keybox is not None:
+            self.adopt_keybox(result.keybox)
+        self.migration_pending = False
+        self.security_banner.hide()
+        macros = getattr(self, "macros", None)
+        if macros is not None and result.keybox is not None:
+            macros.unlock_with_keybox(result.keybox)
+        self._notify(_("Saved passwords and macros are now encrypted with your master password."), Level.SUCCESS)
+        return True
 
     def _build_header(self) -> None:
         self._header = HeaderView(self._toasts.history)

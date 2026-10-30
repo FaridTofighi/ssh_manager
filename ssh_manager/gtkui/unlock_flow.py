@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -75,6 +75,9 @@ class StartupResult:
     passwords_off: bool = False
     migrate: bool = False  # older data to move (the migration flow runs next)
     resume: bool = False  # the keybox exists, the migration did not finish
+    unfinished: bool = False  # safe mode: the move failed or was put off (old data untouched)
+    typed: Optional[str] = field(default=None, repr=False)  # the password just typed (resume only; dropped after)
+    report: Any = None
 
 
 class RecoveryKeyDialog(BaseDialog):
@@ -172,6 +175,7 @@ class StartupFlow:
         self.config_dir = Path(config_dir or _default_config_dir())
         self.keybox_path = self.config_dir / "keybox.json" if config_dir is not None else default_keybox_path()
         self.keyring_factory = keyring_factory
+        self._typed: Optional[str] = None
         self.ask_first_run: Callable[[], tuple] = self._ask_first_run
         self.ask_password: Callable[[Keybox], tuple] = self._ask_password
         self.ask_recovery_code: Callable[[], Optional[str]] = self._ask_recovery_code
@@ -202,7 +206,9 @@ class StartupFlow:
             return None
         if not self.unlock(keybox):
             return None
-        return StartupResult(keybox=keybox, resume=decision is Startup.RESUME)
+        resume = decision is Startup.RESUME
+        typed, self._typed = (self._typed if resume else None), None
+        return StartupResult(keybox=keybox, resume=resume, typed=typed)
 
     # ------------------------------------------------------------- first run
     def first_run(self) -> Optional[StartupResult]:
@@ -251,6 +257,7 @@ class StartupFlow:
         while True:
             password, forgot = self.ask_password(keybox)
             if password is not None:
+                self._typed = password  # kept only to finish an interrupted migration
                 return True  # the dialog unlocked the keybox while verifying
             if not forgot:
                 return False

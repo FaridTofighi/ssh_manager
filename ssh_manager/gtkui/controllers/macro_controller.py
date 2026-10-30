@@ -551,6 +551,11 @@ class MacroController:
             return False
         if not self.ask_master_password_needed(self.win):
             return False
+        if getattr(self.win._secure_store, "reason", "") == "migration":
+            from .credentials_controller import migration_pending_text
+
+            self.win._notify_error(migration_pending_text())
+            return False
         if getattr(self.win._secure_store, "saving_disabled", False):  # "Don't save passwords": create the keybox
             keybox = self.create_keybox()
             if keybox is None:

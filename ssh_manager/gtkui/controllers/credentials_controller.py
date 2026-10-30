@@ -27,6 +27,11 @@ if TYPE_CHECKING:  # pragma: no cover
 LOGGER = logging.getLogger(__name__)
 
 
+def migration_pending_text() -> str:
+    return _("Saved passwords could not be moved. Nothing was lost. Try again from Preferences → Security → "
+             "Finish migration.")
+
+
 class CredentialController:
     """Credential bindings, permissions and password persistence for hosts."""
 
@@ -264,6 +269,8 @@ class CredentialController:
 
         backend = self.win._secure_store.backend
         if getattr(self.win._secure_store, "saving_disabled", False):
+            if getattr(self.win._secure_store, "reason", "") == "migration":
+                return migration_pending_text()
             return _("Saving passwords is turned off. Set a master password in Preferences → Security to save them.")
         if isinstance(backend, EncryptedFileKeyring) and backend.locked:
             return _("Saved passwords cannot be opened ({reason}). Nothing was changed.").format(

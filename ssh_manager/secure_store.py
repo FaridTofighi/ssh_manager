@@ -487,21 +487,40 @@ class EncryptedFileKeyring:
         self._change(lambda data: data.pop((service_name, username), None))
 
 
+DISABLED_OFF = "off"  # "Don't save passwords"
+DISABLED_MIGRATION = "migration"  # the move to the keybox did not finish: the old data is left untouched
+
+
 class _DisabledBackend:
-    """"Don't save passwords": nothing is read, writing says so."""
+    """Nothing is read, writing says why."""
+
+    def __init__(self, reason: str = DISABLED_OFF) -> None:
+        self.reason = reason
+
+    def _refuse(self) -> None:
+        if self.reason == DISABLED_MIGRATION:
+            raise KeyringError("Saved passwords are unavailable until the migration is finished")
+        raise KeyringError("Saving passwords is turned off")
 
     def get_password(self, service_name: str, username: str) -> Optional[str]:
         return None
 
     def set_password(self, service_name: str, username: str, password: str) -> None:
-        raise KeyringError("Saving passwords is turned off")
+        self._refuse()
 
     def delete_password(self, service_name: str, username: str) -> None:
-        raise KeyringError("Saving passwords is turned off")
+        self._refuse()
 
 
 class DisabledSecureStore(SecureStore):
-    """Passwords are not saved: ``get`` → ``None``; ``set`` / ``delete`` raise :class:`SecureStoreError`."""
+    """Passwords are not saved: ``get`` → ``None``; ``set`` / ``delete`` raise :class:`SecureStoreError`.
 
-    def __init__(self) -> None:
-        SecureStore.__init__(self, _DisabledBackend())
+    ``reason``: :data:`DISABLED_OFF` (the user's choice) or :data:`DISABLED_MIGRATION` (safe mode).
+    """
+
+    def __init__(self, reason: str = DISABLED_OFF) -> None:
+        SecureStore.__init__(self, _DisabledBackend(reason))
+
+    @property
+    def reason(self) -> str:
+        return self.backend.reason
