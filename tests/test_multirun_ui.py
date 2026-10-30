@@ -145,6 +145,32 @@ class DialogTests(MultiRunUiCase):
         self.assertTrue(all(r.status == "cancelled" for r in dialog.results.results.values()))
 
 
+class SafetyTests(MultiRunUiCase):
+    def test_runs_are_confirmed_above_five_hosts_or_when_dangerous(self) -> None:
+        from ssh_manager.inventory.store import NewHost
+
+        asked = []
+        dialog = self.dialog(self.keys("web-01"))
+        dialog.confirm_run = lambda targets, command: asked.append((len(targets), command)) or False
+        dialog.set_command("uptime")
+        dialog.start()
+        self.finish(dialog)
+        self.assertEqual(asked, [])  # one host, harmless: no question
+        dialog.set_command("sudo reboot")
+        self.assertIsNone(dialog.start())  # declined: nothing runs
+        self.assertEqual(asked, [(1, "sudo reboot")])
+        store = self.sandbox.store
+        group = store.create_group(None, "Six")
+        for index in range(6):
+            store.add_host(NewHost(group.id, f"six-{index}", "127.0.0.1", 22, "u"))
+        self.win.manager.refresh()
+        many = self.dialog([k for k, h in self.controller.host_by_key().items() if h.alias.startswith("six-")])
+        many.confirm_run = lambda targets, command: asked.append((len(targets), command)) or False
+        many.set_command("uptime")
+        self.assertIsNone(many.start())
+        self.assertEqual(asked[-1], (6, "uptime"))
+
+
 class ResultsTests(MultiRunUiCase):
     SCRIPT = 'case {alias} in web-02) echo "6.0"; exit 3;; *) echo "6.1"; echo "warn {alias}" >&2;; esac'
 

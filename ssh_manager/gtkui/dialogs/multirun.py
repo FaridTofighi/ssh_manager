@@ -38,6 +38,7 @@ class MultiRunDialog(BaseDialog):
         self.run: Optional[R.MultiRun] = None
         self._drain_id = 0
         self.confirm_cancel: Callable[[], bool] = self._confirm_cancel  # test hook
+        self.confirm_run: Callable[[List[R.Target], str], bool] = self._confirm_run  # test hook
         self.choose_targets: Callable[[], Optional[set]] = self._choose_targets  # test hook
         if controller.dialog_size:
             self.set_default_size(*controller.dialog_size)
@@ -312,9 +313,18 @@ class MultiRunDialog(BaseDialog):
 
     # ---------------------------------------------------------------- run
     def approve(self, targets: List[R.Target], command: str) -> bool:
-        """Confirmations before a run (see the safety checks); ``True`` to run."""
+        """More than 5 hosts, or a command matching a dangerous pattern: ask first (``True`` to run)."""
 
-        return True
+        from ...multirun.safety import needs_confirmation
+
+        if not needs_confirmation(len(targets), command):
+            return True
+        return self.confirm_run(targets, command)
+
+    def _confirm_run(self, targets: List[R.Target], command: str) -> bool:
+        from .multirun_confirm import RunConfirmDialog
+
+        return RunConfirmDialog(self, targets, command).ask()
 
     def start(self, keys: Optional[Sequence[str]] = None) -> Optional[R.MultiRun]:
         command = self.command_text
