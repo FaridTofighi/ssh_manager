@@ -194,8 +194,12 @@ class ForwardDialog(BaseDialog):
         self.primary_button.set_sensitive(result.ok)
 
     def ask(self) -> Optional[Forward]:
-        response = self.run_and_destroy()
-        return self.forward() if is_accept(response) and self.validation().ok else None
+        self.show_all()
+        try:  # read the fields before the dialog is destroyed
+            response = self.run()
+            return self.forward() if is_accept(response) and self.validation().ok else None
+        finally:
+            self.destroy()
 
 
 class HostPickerDialog(BaseDialog):
@@ -205,16 +209,20 @@ class HostPickerDialog(BaseDialog):
         from ..widgets.searchable_list import SearchableList
 
         BaseDialog.__init__(self, parent, _("Add Forward"), size=DialogSize.SMALL)
-        self.list = SearchableList(list(hosts), search_label=_("Search hosts"), list_label=_("Hosts"),
+        # ``hosts`` are (alias, key) pairs; the list takes (value, label): the key is returned, the alias shown.
+        self.list = SearchableList([(key, alias) for alias, key in hosts], search_label=_("Search hosts"), list_label=_("Hosts"),
                                    placeholder=_("Search hosts"), on_activate=lambda: self.response(Gtk.ResponseType.OK))
         self.add_body(self.list, expand=True)
         self.add_cancel()
         self.add_primary(_("_Next"))
 
     def ask(self) -> Optional[str]:
-        response = self.run_and_destroy()
-        value, _new = self.list.selected()
-        return value if is_accept(response) and value else None
+        self.show_all()
+        try:  # the selection is gone once the dialog is destroyed
+            chosen = self.list.selected() if is_accept(self.run()) else None
+        finally:
+            self.destroy()
+        return chosen[0] if chosen and chosen[0] else None
 
 
 # ------------------------------------------------------------ the manager

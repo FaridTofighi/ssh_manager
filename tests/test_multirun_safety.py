@@ -84,6 +84,7 @@ class ConfirmDialogTests(unittest.TestCase):
         dialog.hosts.entry.set_text("host-0042")
         dialog.hosts.refilter()
         self.assertEqual(len(dialog.hosts.filter), 1)
+        self.assertEqual(tuple(dialog.hosts.filter[0])[:2], ("host-0042   Prod/web", "k42"))  # name shown, key kept
         self.assertIsNotNone(Gtk)
 
 

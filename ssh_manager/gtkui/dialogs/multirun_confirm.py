@@ -54,7 +54,7 @@ class RunConfirmDialog(BaseDialog):
         self.advisory_label.set_text(_("This check only looks for some known patterns; it never means a command "
                                        "is safe."))
         self.add_body(self.advisory_label)
-        items = [(f"{t.alias}   {t.group}" if t.group else t.alias, t.key) for t in targets]
+        items = [(t.key, f"{t.alias}   {t.group}" if t.group else t.alias) for t in targets]  # (value, label)
         self.hosts = SearchableList(items, search_label=_("Search the hosts"), list_label=_("Hosts the command runs on"),
                                     placeholder=_("Search the hosts"), min_height=8 * 24)
         self.hosts.scroller.set_max_content_height(8 * 24)

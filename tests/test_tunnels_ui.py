@@ -166,6 +166,27 @@ class EditorTests(TunnelsUiCase):
         dialog.with_session.set_active(True)
         self.assertTrue(dialog.stop_last.get_active())  # follows "with a session" until the user changes it
 
+    def test_host_picker_and_editor_answer_after_closing(self) -> None:
+        from gi.repository import Gtk
+
+        from ssh_manager.gtkui.dialogs.tunnels import ForwardDialog, HostPickerDialog
+
+        def picker(choose, response=Gtk.ResponseType.OK):
+            dialog = HostPickerDialog(None, [("web-01", "key-1"), ("web-02", "key-2")])  # (alias, key)
+            self.assertEqual([row[0] for row in dialog.list.filter], ["web-01", "web-02"])  # names shown, not keys
+            if choose:
+                dialog.list.select_value(choose)
+            dialog.run = lambda: response  # what the user answered; ask() then destroys the dialog
+            return dialog.ask()
+
+        self.assertEqual(picker("key-2"), "key-2")  # crashed: the selection was read after destroy
+        self.assertIsNone(picker(""))  # nothing chosen
+        self.assertIsNone(picker("key-1", Gtk.ResponseType.CANCEL))
+        editor = ForwardDialog(None, None, host_id="key-1", others=[], host_label="web-01")
+        editor.dest_host.set_text("db.internal")
+        editor.run = lambda: Gtk.ResponseType.OK
+        self.assertEqual(editor.ask().dest_host, "db.internal")
+
     def test_quit_with_running_tunnels_asks(self) -> None:
         forward = self.forward()
         self.controller.save(self.host, [forward])
