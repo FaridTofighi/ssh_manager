@@ -23,6 +23,7 @@ from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 from ...multirun import engine as R  # noqa: E402
 from ...multirun import report as P  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
+from ..theme.loader import current_palette  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 
@@ -43,7 +44,8 @@ def _text_view() -> Gtk.TextView:
     view.set_cursor_visible(False)
     view.set_monospace(True)
     view.set_wrap_mode(Gtk.WrapMode.NONE)
-    view.get_buffer().create_tag("match", background="#f5d76e", foreground="#000000")
+    palette = current_palette()  # theme colours, never literals
+    view.get_buffer().create_tag("match", background=palette.warning, foreground=palette.bg_canvas)
     return view
 
 
