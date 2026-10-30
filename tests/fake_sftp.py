@@ -142,9 +142,11 @@ class _SftpServer(SFTPServerInterface):
 
 
 class _Server(paramiko.ServerInterface):
-    def __init__(self, owner: "FakeSftpServer") -> None:
+    def __init__(self, owner: "FakeSftpServer", transport=None) -> None:
         self.owner = owner
         self.root = owner.root
+        self.transport = transport
+        self.listeners: dict = {}  # tcpip-forward: port -> listening socket
 
     def check_auth_password(self, username, password):
         if self.owner.otp_only:
@@ -175,11 +177,68 @@ class _Server(paramiko.ServerInterface):
                 paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
         return paramiko.OPEN_SUCCEEDED if kind == "session" else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
+    def check_port_forward_request(self, address, port):
+        """``tcpip-forward`` (remote forwards): listen on 127.0.0.1 and hand each connection back as a channel."""
+
+        if not self.owner.allow_remote_forward:
+            return False
+        listener = socket.create_server(("127.0.0.1", port))
+        real = listener.getsockname()[1]
+        self.listeners[real] = listener
+        self.owner.remote_listeners.append(listener)
+
+        def accept() -> None:
+            listener.settimeout(0.2)
+            while not self.owner._stop.is_set():
+                try:
+                    conn, peer = listener.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    return
+                try:
+                    channel = self.transport.open_forwarded_tcpip_channel(peer, (address, real))
+                except Exception:
+                    conn.close()
+                    continue
+                threading.Thread(target=_bridge, args=(channel, conn, self.owner._stop), daemon=True).start()
+
+        threading.Thread(target=accept, daemon=True).start()
+        return real
+
+    def cancel_port_forward_request(self, address, port):
+        listener = self.listeners.pop(port, None)
+        if listener is not None:
+            listener.close()
+
     def check_channel_direct_tcpip_request(self, chanid, origin, destination):
         if not self.owner.allow_forward:
             return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
         self.owner.forwards[chanid] = destination
         return paramiko.OPEN_SUCCEEDED
+
+
+def _bridge(channel, target, stop) -> None:
+    import select
+
+    try:
+        while not stop.is_set():
+            ready, _w, _x = select.select([channel, target], [], [], 0.5)
+            if channel in ready:
+                data = channel.recv(65536)
+                if not data:
+                    break
+                target.sendall(data)
+            if target in ready:
+                data = target.recv(65536)
+                if not data:
+                    break
+                channel.sendall(data)
+    except OSError:
+        pass
+    finally:
+        channel.close()
+        target.close()
 
 
 class FakeSftpServer:
@@ -190,6 +249,8 @@ class FakeSftpServer:
         self.authorized_key: Optional[paramiko.PKey] = None
         self.otp_only = False
         self.allow_forward = True  # direct-tcpip (RDP SSH tunnel tests)
+        self.allow_remote_forward = True  # tcpip-forward (port forwarding tests)
+        self.remote_listeners: list = []
         self.forwards: dict = {}  # channel id -> (host, port) asked for
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.port = self.listener.getsockname()[1]
@@ -208,7 +269,7 @@ class FakeSftpServer:
             transport.add_server_key(self.host_key)
             transport.set_subsystem_handler("sftp", paramiko.SFTPServer, _SftpServer)
             try:
-                transport.start_server(server=_Server(self))
+                transport.start_server(server=_Server(self, transport))
             except (paramiko.SSHException, EOFError, OSError):
                 continue
             self._transports.append(transport)
@@ -258,6 +319,8 @@ class FakeSftpServer:
 
     def __exit__(self, *_exc) -> None:
         self._stop.set()
+        for listener in self.remote_listeners:
+            listener.close()
         for transport in self._transports:
             transport.close()
         self.listener.close()
