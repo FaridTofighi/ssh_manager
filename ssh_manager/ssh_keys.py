@@ -459,6 +459,7 @@ class DeployResult:
     alias: str = ""
     status: str = QUEUED
     message: str = ""
+    verified: bool = False  # a login with only this key worked afterwards
 
     @property
     def finished(self) -> bool:
@@ -498,15 +499,23 @@ def deploy_public_key(transport: Any, line: str, *, timeout: float = 20.0) -> De
     if code != 0:
         return DeployResult(status=FAILED, message=_("~/.ssh could not be prepared: {error}").format(
             error=err.strip()[:200] or code))
-    updated, changed = authorized_keys_add(current, line)
+    _updated, changed = authorized_keys_add(current, line)
     if not changed:
         return DeployResult(status=ALREADY_PRESENT, message=_("The key was already installed."))
-    addition = updated[len(current):]
-    script = f"cat >> ~/.ssh/authorized_keys <<'SSHM_KEY_EOF'\n{addition}SSHM_KEY_EOF\nchmod 600 ~/.ssh/authorized_keys\n"
-    code, _out, err = _exec(transport, script, timeout)
+    blob = _KEY_TOKEN.search(line).group(2)  # base64: safe inside single quotes
+    # Check again and append under a lock: two hosts of the inventory can be one server.
+    script = (
+        'F="$HOME/.ssh/authorized_keys"\nexec 9>>"$F"\ncommand -v flock >/dev/null 2>&1 && flock 9\n'
+        f"if grep -v '^[[:space:]]*#' \"$F\" | grep -q -F -- '{blob}'; then echo SSHM_PRESENT; else\n"
+        '  [ -s "$F" ] && [ "$(tail -c 1 "$F" | od -An -tx1 | tr -d \' \')" != "0a" ] && printf \'\\n\' >> "$F"\n'
+        f"  cat >> \"$F\" <<'SSHM_KEY_EOF'\n{line.strip()}\nSSHM_KEY_EOF\n  echo SSHM_ADDED\nfi\n"
+        'chmod 600 "$F"\n')
+    code, out, err = _exec(transport, script, timeout)
     if code != 0:
         return DeployResult(status=FAILED, message=_("authorized_keys could not be written: {error}").format(
             error=err.strip()[:200] or code))
+    if "SSHM_PRESENT" in out:
+        return DeployResult(status=ALREADY_PRESENT, message=_("The key was already installed."))
     return DeployResult(status=INSTALLED, message=_("Installed."))
 
 
@@ -591,10 +600,12 @@ class DeployRun:
                 except Exception:
                     pass
         message = result.message
+        verified = False
         if result.status in (INSTALLED, ALREADY_PRESENT):
             check = None
             try:
                 check = self.verify(target, self.timeout)
+                verified = True
                 message += " " + _("The key login works.")
             except Exception as exc:
                 status, reason = _deploy_classify(exc)
@@ -605,7 +616,7 @@ class DeployRun:
                         check.close()
                     except Exception:
                         pass
-        self._set(target.key, status=result.status, message=message)
+        self._set(target.key, status=result.status, message=message, verified=verified)
 
 
 __all__ = ["KeyInfo", "KeyError_", "scan_ssh_dir", "read_key_info", "fingerprint_sha256", "generate_key",

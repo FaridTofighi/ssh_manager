@@ -216,7 +216,30 @@ class SshKeysController:
     def open_dialog(self, *, select: str = "") -> None:
         from ..dialogs.ssh_keys import SshKeysDialog
 
-        SshKeysDialog(self.win, self, select=select).ask()
+        dialog = SshKeysDialog(self.win, self, select=select)
+        dialog.deploy = lambda info: self.open_deploy(key=info, parent=dialog)
+        dialog.ask()
+
+    def open_deploy(self, *, key: Optional[K.KeyInfo] = None, hosts=(), parent=None) -> None:
+        from ..dialogs.ssh_keys_deploy import DeployKeyDialog
+
+        keys = [self.win.creds.credential_key(host) for host in hosts]
+        DeployKeyDialog(parent or self.win, self.win, key=key, host_keys=keys).ask()
+
+    def deploy_to_selection(self) -> None:
+        self.open_deploy(hosts=self.win.tree.selected_hosts())
+
+    def deploy_to_group(self) -> None:
+        from ..constants import RowKind
+
+        kind, data = self.win.tree.current_item()
+        if kind == RowKind.PARENT.value:
+            hosts = self.win.tree.hosts_in_parent_group(data["parent"])
+        elif kind in (RowKind.CHILD.value, RowKind.CHILD_FOLDER.value):
+            hosts = self.win.tree.hosts_in_child_group(data["parent"], data["child"])
+        else:
+            hosts = self.win.tree.selected_hosts()
+        self.open_deploy(hosts=hosts)
 
     def which_ssh_add(self) -> Optional[str]:
         return shutil.which("ssh-add")

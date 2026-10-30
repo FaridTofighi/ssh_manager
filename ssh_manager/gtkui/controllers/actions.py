@@ -99,6 +99,12 @@ class WindowActions:
     def run_command_on_group(self) -> None:
         self.win.multirun.open_for_group()
 
+    def install_key_on_selection(self) -> None:
+        self.win.ssh_keys.deploy_to_selection()
+
+    def install_key_on_group(self) -> None:
+        self.win.ssh_keys.deploy_to_group()
+
     def forget_host_key(self) -> None:
         host = self.win.tree.selected_host()
         if host is not None:
