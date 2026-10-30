@@ -241,6 +241,7 @@ FOCUS_RETRY_MS = 50  # focus_terminal(): retry interval while the terminal is no
 FOCUS_RETRY_LIMIT = 40  # … and give up after ~2 s
 
 _RESPONSE_RECONNECT = 1
+RECONNECT_STAGGER_MS = 150  # broadcast: ended sessions reconnect one after another, not all at once
 _RESPONSE_CLOSE = 2
 _FAILURE_WORDS = ("failed", "denied", "terminated", "error")
 
@@ -294,6 +295,8 @@ class TerminalTab(SessionPage):
     __gsignals__ = {
         # ``q`` / the banner's Close on an ended session: the notebook may close its ended broadcast peers too.
         "close-ended-requested": (GObject.SignalFlags.RUN_LAST, None, ()),
+        # ``r`` / the banner's Reconnect on an ended session: the notebook may reconnect its ended peers too.
+        "reconnect-requested": (GObject.SignalFlags.RUN_LAST, None, ()),
     }
     is_terminal = True
     kind = "terminal"
@@ -1080,7 +1083,7 @@ class TerminalTab(SessionPage):
 
     def _on_banner_response(self, _bar: Gtk.InfoBar, response: int) -> None:
         if response == _RESPONSE_RECONNECT:
-            self.reconnect()
+            self._request_reconnect()
         elif response == _RESPONSE_CLOSE:
             self._request_close_ended()
 
@@ -1807,7 +1810,7 @@ class TerminalTab(SessionPage):
 
         if lower == Gdk.KEY_r and modifiers == 0:
             if not self._session_active:
-                self.reconnect()
+                self._request_reconnect()
                 return True
             return False
 
@@ -1839,6 +1842,14 @@ class TerminalTab(SessionPage):
             self.emit("close-ended-requested")
         else:  # not in a notebook (tests)
             self._request_close()
+
+    def _request_reconnect(self) -> None:
+        """The user reconnects this ended session (``r``, the banner): in broadcast, its ended peers too."""
+
+        if self._has_handler("reconnect-requested"):
+            self.emit("reconnect-requested")
+        else:  # not in a notebook (tests)
+            self.reconnect()
 
     def destroy(self) -> None:
         self._stop_stats_updates()
@@ -2447,6 +2458,7 @@ class TerminalNotebook(Gtk.Box):
         tab.connect("close-requested", self._on_tab_close_requested)
         if tab.is_terminal:
             tab.connect("close-ended-requested", lambda t: self.close_with_broadcast_peers(t))
+            tab.connect("reconnect-requested", lambda t: self.reconnect_with_broadcast_peers(t))
         tab.on_activated = self._on_tab_activated
         tab.on_focus_neighbor = lambda direction, t=tab: self._focus_neighbor_tile(t, direction)
         tab.set_input_observer(self._on_tab_input)
@@ -2710,7 +2722,7 @@ class TerminalNotebook(Gtk.Box):
     def reconnect_current(self) -> None:
         tab = self._current_tab()
         if tab:
-            tab.reconnect()
+            self.reconnect_with_broadcast_peers(tab)
 
     def duplicate_current(self) -> None:
         tab = self._current_tab()
@@ -3107,6 +3119,21 @@ class TerminalNotebook(Gtk.Box):
 
         for target in [tab, *self.ended_broadcast_peers(tab)]:
             GLib.idle_add(self._close_tab_after_idle, target)
+
+    def reconnect_with_broadcast_peers(self, tab: SessionPage) -> None:
+        """Reconnect ``tab`` at once, then its ended broadcast peers 150 ms apart (in tab order), each on its own."""
+
+        for index, peer in enumerate(self.ended_broadcast_peers(tab), start=1):
+            GLib.timeout_add(RECONNECT_STAGGER_MS * index, self._reconnect_peer, peer)
+        self._reconnect_peer(tab)
+
+    def _reconnect_peer(self, tab: SessionPage) -> bool:
+        if tab in self._tabs:  # closed meanwhile: nothing to do
+            try:
+                tab.reconnect()
+            except Exception as exc:  # one session failing never stops the others
+                LOGGER.warning("reconnecting %s failed: %s", getattr(tab, "title", "a session"), type(exc).__name__)
+        return GLib.SOURCE_REMOVE
 
     def _close_tab_after_idle(self, tab: TerminalTab) -> bool:
         self.close_tab(tab)

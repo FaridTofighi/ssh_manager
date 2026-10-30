@@ -6,6 +6,14 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Broadcast: close or reconnect every ended session at once
+
+- In broadcast mode, q (close) and r (reconnect) on an ended session now
+  apply to all ended broadcast sessions at once.
+- The banner's Close / Reconnect and the toolbar's Reconnect do the same.
+  Ended sessions reconnect 150 ms apart. The tab menu's Close and Reconnect
+  stay single-tab.
+
 ## Old Credential Vault converter removed
 
 - Removed the converter for the old Credential Vault. Update through the

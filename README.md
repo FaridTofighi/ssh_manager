@@ -238,6 +238,13 @@ receive your typing, and those sessions get a red border. Uncheck
 `Broadcast` on a tile to leave that session out. Stop with the strip's
 button, Ctrl+Shift+B, or Esc when focus is outside a terminal.
 
+When broadcast sessions have ended (for example after Ctrl+D), `q` (close)
+and `r` (reconnect) in one of them apply to every ended session in the
+broadcast. The banner's Close / Reconnect and the toolbar's Reconnect do the
+same. Sessions still connected and sessions left out of the broadcast are
+not touched. The ended sessions reconnect 150 ms apart. The tab menu's
+Close and Reconnect act on that tab only.
+
 ## Theming
 
 Settings → Appearance offers *Follow system*, *Light* and *Dark*. Changes

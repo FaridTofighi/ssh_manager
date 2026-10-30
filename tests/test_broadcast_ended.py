@@ -151,5 +151,110 @@ class CloseTests(EndedBroadcastCase):
         fed.assert_not_called()
 
 
+class ReconnectTests(EndedBroadcastCase):
+    def watch(self, tabs) -> list:
+        """Record ``reconnect()`` calls (tab index, time) without restarting the shells."""
+
+        import time
+
+        calls = []
+        for index, tab in enumerate(tabs):
+            patcher = mock.patch.object(tab, "reconnect", side_effect=lambda i=index: calls.append((i, time.monotonic())))
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        return calls
+
+    def test_7_r_reconnects_every_ended_broadcast_session_t_first_then_staggered(self) -> None:
+        tabs = self.open(4)
+        self.broadcast()
+        self.end(*tabs)
+        calls = self.watch(tabs)
+        self.assertTrue(self.press(tabs[2], "r"))
+        self.assertEqual([i for i, _t in calls], [2])  # T at once
+        self.assertTrue(pump(3, until=lambda: len(calls) == 4))
+        pump(0.3)
+        self.assertEqual([i for i, _t in calls], [2, 0, 1, 3])  # then the others in tab order
+        gaps = [later - earlier for (_a, earlier), (_b, later) in zip(calls, calls[1:])]
+        self.assertTrue(all(gap >= 0.1 for gap in gaps), gaps)  # staggered (150 ms apart)
+
+    def test_8_excluded_running_off_and_focused_excluded_are_not_reconnected(self) -> None:
+        tabs = self.open(4)
+        self.broadcast()
+        self.exclude(tabs[3])
+        self.end(tabs[0], tabs[1], tabs[3])  # tabs[2] still runs
+        calls = self.watch(tabs)
+        self.press(tabs[0], "r")
+        pump(1.0)
+        self.assertEqual(sorted(i for i, _t in calls), [0, 1])
+        calls.clear()
+        self.press(tabs[3], "r")  # the focused tab is excluded: only itself
+        pump(1.0)
+        self.assertEqual([i for i, _t in calls], [3])
+        calls.clear()
+        self.broadcast(False)
+        self.press(tabs[1], "r")
+        pump(1.0)
+        self.assertEqual([i for i, _t in calls], [1])
+
+    def test_9_banner_toolbar_and_tab_menu(self) -> None:
+        from ssh_manager.gtk_terminal import _RESPONSE_RECONNECT
+
+        tabs = self.open(3)
+        self.broadcast()
+        self.end(*tabs)
+        calls = self.watch(tabs)
+        tabs[1]._on_banner_response(tabs[1]._banner, _RESPONSE_RECONNECT)
+        self.assertTrue(pump(2, until=lambda: len(calls) == 3))
+        self.assertEqual([i for i, _t in calls], [1, 0, 2])
+        calls.clear()
+        self.tabs.focus_tab(tabs[0])
+        pump(0.2)
+        self.tabs.reconnect_current()  # the toolbar button and its shortcut
+        self.assertTrue(pump(2, until=lambda: len(calls) == 3))
+        self.assertEqual([i for i, _t in calls], [0, 1, 2])
+        calls.clear()
+        with mock.patch("ssh_manager.gtk_terminal.tab_menu_spec") as spec, \
+                mock.patch("ssh_manager.gtk_terminal.popup_menu"), \
+                mock.patch("ssh_manager.gtk_terminal.build_context_menu"):
+            self.tabs._show_tab_menu(tabs[2], None)
+        spec.call_args.kwargs["reconnect"]()  # the tab menu: that tab only
+        pump(1.0)
+        self.assertEqual([i for i, _t in calls], [2])
+
+    def test_a_peer_that_fails_does_not_stop_the_others(self) -> None:
+        tabs = self.open(3)
+        self.broadcast()
+        self.end(*tabs)
+        calls = self.watch(tabs)
+        tabs[1].reconnect.side_effect = RuntimeError("boom")
+        with self.assertLogs("ssh_manager", level="WARNING"):
+            self.press(tabs[0], "r")
+            self.assertTrue(pump(2, until=lambda: len(calls) == 2))
+            pump(0.3)
+        self.assertEqual([i for i, _t in calls], [0, 2])
+
+    def test_a_closed_peer_is_skipped(self) -> None:
+        tabs = self.open(3)
+        self.broadcast()
+        self.end(*tabs)
+        calls = self.watch(tabs)
+        self.press(tabs[0], "r")
+        self.tabs.close_tab(tabs[2])  # closed before its turn
+        pump(1.0)
+        self.assertEqual([i for i, _t in calls], [0, 1])
+
+    def test_10_r_is_not_typed_into_the_peers(self) -> None:
+        from gi.repository import Vte  # type: ignore
+
+        tabs = self.open(3)
+        self.broadcast()
+        self.end(*tabs)
+        self.watch(tabs)
+        with mock.patch.object(Vte.Terminal, "feed_child") as fed:
+            self.press(tabs[0], "r")
+            pump(0.6)
+        fed.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
