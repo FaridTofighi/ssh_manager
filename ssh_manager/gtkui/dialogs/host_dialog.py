@@ -54,7 +54,7 @@ from .confirm import confirm  # noqa: E402
 from .settings_layout import SettingsPageLayout  # noqa: E402
 
 # Options edited through dedicated fields (everything else goes to "SSH options").
-DEDICATED_OPTIONS = {"hostname", "user", "port", "identityfile", "proxyjump", "jump_host", "tags"}
+DEDICATED_OPTIONS = {"hostname", "user", "port", "identityfile", "proxyjump", "jump_host", "tags", "forwardagent"}
 
 
 def parse_option_lines(text: str) -> Tuple[Dict[str, str], List[str]]:
@@ -292,6 +292,16 @@ class HostDialog(BaseDialog):
         self.identity_entry.connect("changed", lambda *_a: self._check_identity())
         self._identity_filled = False
         self.proxy_entry = entry(placeholder=_("jump-host or user@jump:2222"))
+        # ForwardAgent: per host only, off unless the user ticks it (never set globally).
+        self.forward_agent_check = Gtk.CheckButton.new_with_mnemonic(_("_Forward the SSH agent (ForwardAgent)"))
+        self.forward_agent_warning = Gtk.Label(
+            label=_("Anyone with root on that server can use your keys while you are connected."))
+        self.forward_agent_warning.set_xalign(0.0)
+        self.forward_agent_warning.set_line_wrap(True)
+        self.forward_agent_warning.get_style_context().add_class("form-help")
+        self.forward_agent_warning.set_no_show_all(True)
+        self.forward_agent_check.connect(
+            "toggled", lambda button: self.forward_agent_warning.set_visible(button.get_active()))
         self.tags_entry = entry(placeholder=_("production, web, eu"))
         self.environment_entry = entry(str(meta.get("environment", "") or ""), _("prod / staging"))
         self.owner_entry = entry(str(meta.get("owner", "") or ""), _("team or person"))
@@ -431,6 +441,8 @@ class HostDialog(BaseDialog):
         sec.add_widget(self.identity_warning)
         sec.add(_("_Jump host"), self.proxy_entry, label_group=labels,
                 help_text=_("ProxyJump target (-J). Use the SSH options page for ProxyCommand."))
+        sec.add_widget(self.forward_agent_check)
+        sec.add_widget(self.forward_agent_warning)
         connection.append(sec)
         self._sections["connection"] = sec
 
@@ -682,6 +694,7 @@ class HostDialog(BaseDialog):
         self.identity_entry.set_text(host_option(host, "identityfile") or "")
         self.proxy_entry.set_text(host_option(host, "proxyjump") or host_option(host, "jump_host") or "")
         self.tags_entry.set_text(host_option(host, "tags") or "")
+        self.forward_agent_check.set_active((host_option(host, "forwardagent") or "").strip().lower() == "yes")
         extras = [f"{key}={value}" for key, value in host.options.items() if str(key).lower() not in DEDICATED_OPTIONS]
         self.extras_view.get_buffer().set_text("\n".join(extras))
 
@@ -800,7 +813,9 @@ class HostDialog(BaseDialog):
             options["user"] = cred.username
         if ssh_like:
             extra_options, _invalid = parse_option_lines(self._extras_text())
-            options.update(extra_options)
+            options.update({k: v for k, v in extra_options.items() if str(k).lower() != "forwardagent"})
+            if self.forward_agent_check.get_active():  # the checkbox decides; off writes nothing
+                options["forwardagent"] = "yes"
 
         metadata: Dict[str, object] = {
             "environment": self.environment_entry.get_text().strip(),

@@ -619,9 +619,103 @@ class DeployRun:
         self._set(target.key, status=result.status, message=message, verified=verified)
 
 
+# -------------------------------------------------------------------- agent
+@dataclass(frozen=True)
+class AgentStatus:
+    reachable: bool
+    keys: int = 0
+    detail: str = ""
+
+
+def agent_status() -> AgentStatus:
+    """Whether an ssh-agent answers at ``SSH_AUTH_SOCK``, and how many identities it holds."""
+
+    sock = os.environ.get("SSH_AUTH_SOCK", "")
+    if not sock or not os.path.exists(sock):
+        return AgentStatus(False, 0, _("No ssh-agent is running (SSH_AUTH_SOCK is not set)."))
+    try:
+        import paramiko
+
+        agent = paramiko.Agent()
+        try:
+            count = len(agent.get_keys())
+        finally:
+            agent.close()
+    except Exception as exc:
+        return AgentStatus(False, 0, _("The ssh-agent does not answer ({error}).").format(error=type(exc).__name__))
+    return AgentStatus(True, count, "")
+
+
+def agent_add(path: Path, passphrase: str = "", *, timeout: float = 20.0) -> Tuple[bool, str]:
+    """``ssh-add <path>`` in its own pty: the passphrase is typed at its prompt (never argv or environment).
+
+    ``SSH_ASKPASS`` is removed, so no other program is asked. Returns ``(ok, message)``; the message never
+    holds the passphrase.
+    """
+
+    import select
+    import shutil
+    import subprocess
+
+    program = shutil.which("ssh-add")
+    if program is None:
+        return False, _("ssh-add is not installed.")
+    env = {k: v for k, v in os.environ.items() if k not in ("SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", "DISPLAY",
+                                                           "WAYLAND_DISPLAY")}
+    env["SSH_ASKPASS_REQUIRE"] = "never"
+    # A pty as stdin/stdout/stderr and no controlling terminal: ssh-add prompts on the pty and reads from it.
+    master, slave = os.openpty()
+    try:
+        process = subprocess.Popen([program, str(path)], stdin=slave, stdout=slave, stderr=slave, env=env,
+                                   start_new_session=True, close_fds=True)
+    except OSError as exc:
+        os.close(master)
+        os.close(slave)
+        return False, _("ssh-add could not be started ({error}).").format(error=type(exc).__name__)
+    os.close(slave)
+    output = b""
+    typed = False
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            ready, _w, _x = select.select([master], [], [], 0.2)
+            if not ready:
+                if process.poll() is not None:
+                    break
+                continue
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:  # the child closed the pty
+                break
+            if not chunk:
+                break
+            output += chunk
+            last = output.split(b"\n")[-1]
+            if b"passphrase" in last.lower() and last.rstrip().endswith(b":"):  # "Enter…" or "Bad…, try again…"
+                if typed or not passphrase:
+                    break  # a wrong (or no) passphrase: stop instead of waiting at the prompt
+                typed = True
+                os.write(master, passphrase.encode("utf-8") + b"\n")
+                output = b""
+    finally:
+        try:
+            code = process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            code = process.wait()
+        os.close(master)
+    text = output.decode("utf-8", "replace")
+    if passphrase:
+        text = text.replace(passphrase, "•••")
+    if code == 0 and "Identity added" in text:
+        return True, _("The key was added to the agent.")
+    return False, _("ssh-add did not add the key: {reason}").format(
+        reason=(text.strip().splitlines() or [_("wrong passphrase")])[-1][:200])
+
+
 __all__ = ["KeyInfo", "KeyError_", "scan_ssh_dir", "read_key_info", "fingerprint_sha256", "generate_key",
            "make_private_key", "write_private_key", "change_passphrase", "derive_public_line", "public_key_line",
            "authorized_keys_add", "deploy_public_key", "DeployRun", "DeployResult", "deploy_status_label",
            "suggest_name", "bcrypt_available", "default_ssh_dir", "is_private_key_file", "INSTALLED",
            "ALREADY_PRESENT", "AUTH_FAILED", "HOST_KEY_CHANGED", "HOST_KEY_UNKNOWN", "UNREACHABLE", "TIMEOUT",
-           "FAILED", "DEPLOY_FAILURES"]
+           "FAILED", "DEPLOY_FAILURES", "AgentStatus", "agent_status", "agent_add"]

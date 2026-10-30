@@ -164,6 +164,7 @@ class PreferencesDialog(BaseDialog):
         inventory: Optional[Dict[str, object]] = None,
         shortcuts: object = None,
         security: object = None,
+        ssh_keys: object = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -175,6 +176,7 @@ class PreferencesDialog(BaseDialog):
         self._settings = settings
         self._on_reset = on_reset
         self._security = security
+        self._ssh_keys = ssh_keys
         self._on_export = on_export
         self._appearance = settings.terminal_appearance or TerminalAppearanceSettings()
         self._custom_font = self._appearance.custom_font
@@ -390,6 +392,12 @@ class PreferencesDialog(BaseDialog):
 
             self.security_page = SecurityPage(self._security, self)
             page.append(self.security_page)
+        self.agent_section = None
+        if self._ssh_keys is not None:
+            from .ssh_agent_section import AgentSection
+
+            self.agent_section = AgentSection(self._ssh_keys, self)
+            page.append(self.agent_section)
         export = Gtk.Button.new_with_mnemonic(_("_Export Settings & Policies…"))
         export.set_halign(Gtk.Align.START)
         export.connect("clicked", lambda *_: self._on_export and self._on_export())

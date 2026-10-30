@@ -56,6 +56,7 @@ class AppDialogs:
             inventory=self.inventory_info(),
             shortcuts=getattr(self.win, "shortcut_registry", None),
             security=getattr(self.win, "security", None),
+            ssh_keys=getattr(self.win, "ssh_keys", None),
         )
         if page:
             dialog.layout.show_page(page)
