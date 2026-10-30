@@ -92,7 +92,8 @@ class MultiRunController:
         settings = TransferSettings.for_host(resolved)[0]
         settings.timeout_connect = timeout
         backend = backend_for(resolved, resolved.option("user") or "", password, settings=settings,
-                              host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
+                              host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"),
+                              passphrase=self.win.sessions.saved_key_passphrase(resolved))
         return backend.open_transport("Run command")
 
     # -------------------------------------------------------- entry points

@@ -24,6 +24,8 @@ caller applies :meth:`HostDialog.password_choice` after Save; Cancel discards it
 
 from __future__ import annotations
 
+import os
+
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import gi
@@ -128,6 +130,8 @@ class HostDialog(BaseDialog):
         rdp_engine_preference: str = "auto",
         forwards_host_id: str = "",
         forwards_others: Sequence[Tuple[str, object]] = (),
+        identity_keys: Optional[Callable[[], Sequence[Tuple[str, str]]]] = None,
+        open_keys: Optional[Callable[[], None]] = None,
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
         self._editing = host is not None
@@ -137,6 +141,8 @@ class HostDialog(BaseDialog):
         self._rdp_engine_preference = rdp_engine_preference
         self._forwards_host_id = forwards_host_id  # Port Forwarding: this host's key, the inventory's forwards
         self._forwards_others = list(forwards_others)
+        self._identity_keys = identity_keys  # () -> (path, label) of the keys SSH Manager knows (asked lazily)
+        self._open_keys = open_keys
         self.forwards_page = None  # built when the page is first shown
         self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
         self._port_edited = False  # the user typed a port in this dialog
@@ -277,7 +283,14 @@ class HostDialog(BaseDialog):
             self.protocol_combo.append(self._protocol, self._protocol)
         self.protocol_combo.set_active_id(self._protocol)
         self.protocol_combo.connect("changed", self._on_protocol_changed)
-        self.identity_entry = entry(placeholder="~/.ssh/id_ed25519")
+        # The key picker: an editable combo whose entry stays ``identity_entry`` (any path still works).
+        self.identity_combo = Gtk.ComboBoxText.new_with_entry()
+        self.identity_entry = self.identity_combo.get_child()
+        self.identity_entry.set_placeholder_text("~/.ssh/id_ed25519")
+        self.identity_entry.set_activates_default(True)
+        self.identity_combo.connect("notify::popup-shown", lambda *_a: self._fill_identity_keys())
+        self.identity_entry.connect("changed", lambda *_a: self._check_identity())
+        self._identity_filled = False
         self.proxy_entry = entry(placeholder=_("jump-host or user@jump:2222"))
         self.tags_entry = entry(placeholder=_("production, web, eu"))
         self.environment_entry = entry(str(meta.get("environment", "") or ""), _("prod / staging"))
@@ -400,8 +413,22 @@ class HostDialog(BaseDialog):
     def _page_connection(self, labels: Gtk.SizeGroup) -> None:
         connection = self.layout.new_page("connection", _("Connection"), _("Keys and jump hosts."))
         sec = FormSection()
-        sec.add(_("Private _key"), self.identity_entry, label_group=labels,
-                help_text=_("Path of the identity file (IdentityFile)."))
+        picker = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        picker.pack_start(self.identity_combo, True, True, 0)
+        browse = Gtk.Button.new_with_mnemonic(_("_Browse…"))
+        browse.connect("clicked", lambda *_a: self._browse_identity())
+        picker.pack_start(browse, False, False, 0)
+        if self._open_keys is not None:
+            keys = Gtk.Button.new_with_mnemonic(_("SSH _Keys…"))
+            keys.connect("clicked", lambda *_a: self._open_keys())
+            picker.pack_start(keys, False, False, 0)
+        self._identity_row = sec.add(_("Private _key"), picker, label_group=labels,
+                                     help_text=_("Path of the identity file (IdentityFile)."))
+        self.identity_warning = Gtk.Label()
+        self.identity_warning.set_xalign(0.0)
+        self.identity_warning.get_style_context().add_class("form-error")
+        self.identity_warning.set_no_show_all(True)
+        sec.add_widget(self.identity_warning)
         sec.add(_("_Jump host"), self.proxy_entry, label_group=labels,
                 help_text=_("ProxyJump target (-J). Use the SSH options page for ProxyCommand."))
         connection.append(sec)
@@ -675,6 +702,31 @@ class HostDialog(BaseDialog):
 
     def set_alias(self, alias: str) -> None:
         self.alias_entry.set_text(alias)
+
+    def _fill_identity_keys(self) -> None:
+        if self._identity_filled or self._identity_keys is None:
+            return
+        self._identity_filled = True
+        current = self.identity_entry.get_text()
+        for path, _label in self._identity_keys():
+            self.identity_combo.append(path, path)  # the entry takes the row's text: the path itself
+        self.identity_entry.set_text(current)
+
+    def _browse_identity(self) -> None:
+        from .files import choose_open_file
+
+        folder = os.path.expanduser("~/.ssh")
+        name = choose_open_file(self, _("Choose a private key"), current_folder=folder if os.path.isdir(folder) else "")
+        if name:
+            self.identity_entry.set_text(name)
+
+    def _check_identity(self) -> None:
+        """A path that does not exist (a stale key) shows a warning; it is not an error (ssh decides)."""
+
+        path = self.identity_entry.get_text().strip()
+        stale = bool(path) and "%" not in path and not os.path.exists(os.path.expanduser(path))
+        self.identity_warning.set_text(_("This file does not exist.") if stale else "")
+        self.identity_warning.set_visible(stale)
 
     def _apply_identity_source(self) -> None:
         cred = self._selected_credential()

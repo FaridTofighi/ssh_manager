@@ -127,6 +127,40 @@ def classify_exit(status: int, output: str) -> AuthOutcome:
     return AuthOutcome.OTHER
 
 
+_PASSPHRASE_PROMPT_RE = re.compile(r"^Enter passphrase for key '([^'\n]+)': ?$")
+
+
+def passphrase_prompt(output: str) -> Optional[str]:
+    """The key path when ssh's ``Enter passphrase for key '…':`` is the **last** line (ssh waits there)."""
+
+    lines = strip_ansi(output).replace("\r", "").split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not lines:
+        return None
+    match = _PASSPHRASE_PROMPT_RE.match(lines[-1].lstrip())
+    return match.group(1) if match else None
+
+
+class PassphraseFill:
+    """A saved key passphrase goes in at most once per connection attempt, and only for the host's own key."""
+
+    def __init__(self, identity: str) -> None:
+        self.identity = os.path.realpath(os.path.expanduser(identity)) if identity else ""
+        self._done = False
+
+    def should_fill(self, prompt_path: str) -> bool:
+        if self._done or not self.identity:
+            return False
+        return os.path.realpath(os.path.expanduser(prompt_path)) == self.identity
+
+    def filled(self, _prompt_path: str = "") -> None:
+        self._done = True
+
+    def reset(self) -> None:
+        self._done = False
+
+
 def ends_with_password_prompt(output: str) -> bool:
     lines = [line for line in strip_ansi(output or "").splitlines() if line.strip()]
     return bool(lines) and bool(_PASSWORD_PROMPT_RE.search(lines[-1]))

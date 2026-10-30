@@ -174,6 +174,8 @@ class _Server(paramiko.ServerInterface):
         return "keyboard-interactive" if self.owner.otp_only else "password,publickey"
 
     def check_channel_request(self, kind, chanid):
+        if kind == "session":
+            self.owner.sessions_opened += 1
         if kind == "direct-tcpip":
             return paramiko.OPEN_SUCCEEDED if self.owner.allow_forward else \
                 paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
@@ -322,6 +324,7 @@ class FakeSftpServer:
         self.allow_remote_forward = True  # tcpip-forward (port forwarding tests)
         self.allow_exec = True  # exec (Run Command tests)
         self.exec_commands: list = []
+        self.sessions_opened = 0  # session channels: only after a real login
         self.pty_requests = 0
         self.remote_listeners: list = []
         self.forwards: dict = {}  # channel id -> (host, port) asked for

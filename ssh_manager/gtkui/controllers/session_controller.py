@@ -187,6 +187,9 @@ class SessionController:
             tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
                                                       password_service=self.win.creds)
             self.bind_tab_status(tab, resolved)
+        keys = getattr(self.win, "ssh_keys", None)
+        if tab is not None and keys is not None:
+            tab.passphrase_provider = keys.saved_passphrase  # ssh's "Enter passphrase for key" prompt
         self.start_session_tunnels(host_obj, tab)
         return resolved.alias
 
@@ -283,7 +286,14 @@ class SessionController:
         resolved = creds.host_with_resolved_identity(host)
         resolution = creds.resolve_password(host)
         return backend_for(resolved, resolved.option("user") or "", resolution.password or "",
-                           host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
+                           host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"),
+                           passphrase=self.saved_key_passphrase(resolved))
+
+    def saved_key_passphrase(self, host) -> str:
+        """The passphrase saved for the host's identity file ('' if none): Paramiko connections use it."""
+
+        keys = getattr(self.win, "ssh_keys", None)
+        return keys.passphrase_for_host(host) if keys is not None else ""
 
     def credential_password(self, credential_id: str) -> Optional[str]:
         return self.win._credential_store.get_password(credential_id) or None

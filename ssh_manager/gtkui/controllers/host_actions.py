@@ -98,6 +98,10 @@ class HostActions:
             rdp_engine_preference=self.win._settings.remote_desktop.preferred_engine,
             forwards_host_id=self.win.creds.credential_key(host) if host else "",
             forwards_others=self.win.tunnels.all_forwards() if getattr(self.win, "tunnels", None) else (),
+            identity_keys=(lambda: [(str(info.path), f"{info.name} — {info.type_label} — {info.path}")
+                                    for info in self.win.ssh_keys.keys()]) if getattr(self.win, "ssh_keys", None)
+            else None,
+            open_keys=(lambda: self.win.ssh_keys.open_dialog()) if getattr(self.win, "ssh_keys", None) else None,
             **kwargs,
         )
 
@@ -126,7 +130,8 @@ class HostActions:
         elif original is not None:
             password = self.win.creds.resolve_password(original).password or ""
         return make_backend(host, user, password,
-                            host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"))
+                            host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"),
+                            passphrase=self.win.sessions.saved_key_passphrase(host))
 
     @requires_editable_inventory
     def prompt_new_host(self, template: Optional[HostTemplate] = None, prefill: Optional[HostEntry] = None) -> None:

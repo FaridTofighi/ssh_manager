@@ -423,8 +423,11 @@ class FileBrowserTab(SessionPage):
         from ...transfer.factory import make_backend
 
         policy = getattr(self._app_settings, "host_key_policy", "reject")
+        window = self._window()
+        sessions = getattr(window, "sessions", None)
+        passphrase = sessions.saved_key_passphrase(self._host) if sessions is not None else ""
         return make_backend(self._host, self._user(), password, host_key_policy=policy, settings=self.settings,
-                            log=self.connection_log)
+                            log=self.connection_log, passphrase=passphrase)
 
     def _plain_ftp_ok(self, password: str) -> bool:
         """Plain FTP with a password: ask once per host (Preferences can turn the question off)."""

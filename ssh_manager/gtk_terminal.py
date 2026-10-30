@@ -34,6 +34,8 @@ from ssh_manager.auth_flow import (
     PasswordResolution,
     SaveContext,
     SaveOffer,
+    PassphraseFill,
+    passphrase_prompt,
     classify_exit,
     new_marker_path,
     probably_authenticated,
@@ -42,7 +44,7 @@ from ssh_manager.auth_flow import (
     with_sentinel,
 )
 from ssh_manager.config import HostEntry
-from ssh_manager.host_utils import host_connection_params
+from ssh_manager.host_utils import host_connection_params, host_option
 from ssh_manager.ssh_command import build_ssh_command
 from ssh_manager.secure_store import SecureStore, SecureStoreError
 from ssh_manager.text_utils import strip_ansi
@@ -339,6 +341,7 @@ class TerminalTab(SessionPage):
         self._panes.add(self._terminal)
         self._terminal.connect("contents-changed", self._on_auth_output)
         self._terminal.connect("contents-changed", self._on_host_key_output)
+        self._terminal.connect("contents-changed", self._on_passphrase_output)
         self.connect("destroy", lambda *_a: self._on_tab_destroyed())
         if autostart:
             self._begin_connect()
@@ -1222,6 +1225,33 @@ class TerminalTab(SessionPage):
                 self._hide_host_key_bar()
                 self.reconnect()  # ssh asks again in the terminal; that answer is the user's
 
+    # ------------------------------------------------- key passphrase prompt
+    passphrase_provider: Optional[Callable[[str], Optional[str]]] = None  # key path -> the saved passphrase
+    _passphrase_check_id = 0
+
+    def _on_passphrase_output(self, *_args) -> None:
+        if (self.passphrase_provider is None or self._authenticated or self._child_pid is None
+                or self._passphrase_check_id):
+            return
+        self._passphrase_check_id = GLib.timeout_add(120, self._check_passphrase_prompt)
+
+    def _check_passphrase_prompt(self) -> bool:
+        """ssh waits at "Enter passphrase for key '…':" for the host's own key: type the saved one, once."""
+
+        self._passphrase_check_id = 0
+        fill = getattr(self, "_passphrase_fill", None)
+        if fill is None or self._authenticated or self._child_pid is None or self.passphrase_provider is None:
+            return GLib.SOURCE_REMOVE
+        path = passphrase_prompt(self._terminal_tail(self._terminal))
+        if path is None or not fill.should_fill(path):
+            return GLib.SOURCE_REMOVE
+        secret = self.passphrase_provider(path)
+        if secret:
+            fill.filled(path)  # never twice: a wrong saved passphrase leaves ssh's next prompt to the user
+            self._terminal.feed_child((secret + "\n").encode("utf-8"))
+            LOGGER.info("%s: the saved key passphrase was entered", self._host.alias)
+        return GLib.SOURCE_REMOVE
+
     def remove_host_key(self, window: Optional[Gtk.Window], change: ChangedKey) -> bool:
         return remove_old_key(window, change, action=_("_Remove and Reconnect"))
 
@@ -1599,6 +1629,7 @@ class TerminalTab(SessionPage):
 
     def _reset_attempt_state(self) -> None:
         self._stop_auth_sources(keep_retry=True)
+        self._passphrase_fill = PassphraseFill(host_option(self._host, "identityfile") or "")
         if hasattr(self, "_host_key_bar"):
             self._hide_host_key_bar()
         self._ever_connected = False
