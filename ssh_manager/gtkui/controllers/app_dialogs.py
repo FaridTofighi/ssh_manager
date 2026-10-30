@@ -200,6 +200,10 @@ class AppDialogs:
 
     def open_credentials(self) -> None:
         dialog = CredentialManagerDialog(self.win, self.win._credential_store)
+        keys = Gtk.Button.new_with_mnemonic(_("SSH _Keys…"))
+        keys.connect("clicked", lambda *_a: self.win.ssh_keys.open_dialog())
+        dialog.toolbar.pack_end(keys, False, False, 0)
+        keys.show()
         dialog.run_and_destroy()
         self.win.tree.update_details()
 

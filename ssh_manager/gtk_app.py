@@ -353,6 +353,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         from ssh_manager.gtkui.controllers.multirun import MultiRunController
 
         self.multirun = MultiRunController(self)  # one command on many hosts, no tabs
+        from ssh_manager.gtkui.controllers.ssh_keys_controller import SshKeysController
+
+        self.ssh_keys = SshKeysController(self)  # ~/.ssh keys, saved passphrases (in the password store)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -580,6 +583,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "known-hosts": dialogs.open_known_hosts,
             "tunnels.open": dialogs.open_tunnels,
             "multirun.open": lambda: self.multirun.open_for_selection(),
+            "ssh-keys.open": lambda: self.ssh_keys.open_dialog(),
             "config-file": dialogs.open_config_file,
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,
