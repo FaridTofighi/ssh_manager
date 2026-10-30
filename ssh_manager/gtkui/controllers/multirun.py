@@ -27,6 +27,33 @@ class MultiRunController:
         self.win = win
         self.dialog_size: Optional[tuple] = None  # remembered for this session
         self.last_options: Optional[object] = None
+        self._store = None
+        self._store_key = None
+
+    # ------------------------------------------------- saved commands
+    def store(self):
+        """Saved commands and history: encrypted with the keybox like macros; memory only without one."""
+
+        from pathlib import Path
+
+        from ...multirun.store import FILE_NAME, CommandFileError, CommandStore
+
+        keybox = getattr(self.win, "keybox", None)
+        key_id = keybox.id if keybox is not None and not keybox.locked else None
+        if self._store is not None and self._store_key == key_id:
+            return self._store
+        store = CommandStore(None)
+        if key_id is not None:
+            candidate = CommandStore(Path(self.win._settings.config_path).parent / FILE_NAME)
+            try:
+                candidate.unlock(keybox.subkey("commands"), keybox.id)
+                store = candidate
+            except CommandFileError as exc:
+                LOGGER.warning("saved commands cannot be opened (%s)", exc.kind)
+                self.win._notify(_("The saved commands cannot be opened; the file is kept unchanged."),
+                                 Level.WARNING)
+        self._store, self._store_key = store, key_id
+        return store
 
     # -------------------------------------------------------------- hosts
     def all_hosts(self) -> list:

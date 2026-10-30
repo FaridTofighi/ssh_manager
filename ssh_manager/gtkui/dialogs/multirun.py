@@ -19,7 +19,7 @@ from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
 from ...multirun import engine as R  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
-from ..theme.tokens import Space  # noqa: E402
+from ..theme.tokens import Level, Space  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
 from .multirun_results import ResultsView  # noqa: E402
@@ -80,8 +80,18 @@ class MultiRunDialog(BaseDialog):
         self.shell.set_active(0)
         set_accessible_name(self.shell, _("Shell that runs the script"))
         tools.pack_start(self.shell, False, False, 0)
+        self.history = Gtk.ComboBoxText()
+        set_accessible_name(self.history, _("Recent commands"))
+        self.history.connect("changed", self._on_history_chosen)
+        tools.pack_end(self.history, False, False, 0)
+        self.saved_button = Gtk.MenuButton(label=_("Saved Commands"))
+        self.saved_button.connect("toggled", lambda button: button.get_active() and self._fill_saved_menu())
+        self.saved_menu = Gtk.Menu()
+        self.saved_button.set_popup(self.saved_menu)
+        tools.pack_end(self.saved_button, False, False, 0)
         self.tools = tools
         self.add_body(tools)
+        self.ask_name: Callable[[], Optional[str]] = self._ask_name  # test hook
 
         # ------------------------------------------------------- options
         self.options_box = Gtk.Expander(label=_("Options"))
@@ -154,7 +164,92 @@ class MultiRunDialog(BaseDialog):
         self.connect("destroy", lambda *_a: self._stop_drain())
         self.command.get_buffer().connect("changed", lambda *_a: self._sync())
         self._update_targets()
+        self._fill_history()
         self._sync()
+
+    # ------------------------------------------------- history and saved
+    def _fill_history(self) -> None:
+        self._filling = True
+        self.history.remove_all()
+        self.history.append("", _("History"))
+        for text in self.controller.store().history():
+            first = text.strip().splitlines()[0] if text.strip() else text
+            self.history.append(text, first[:60] + ("…" if len(first) > 60 or "\n" in text.strip() else ""))
+        self.history.set_active(0)
+        self._filling = False
+
+    def _on_history_chosen(self, combo: Gtk.ComboBoxText) -> None:
+        text = combo.get_active_id()
+        if text and not getattr(self, "_filling", False):
+            self.set_command(text)
+
+    def _fill_saved_menu(self) -> None:
+        menu = self.saved_menu
+        for child in menu.get_children():
+            menu.remove(child)
+        store = self.controller.store()
+
+        def item(label: str, callback, sensitive: bool = True) -> None:
+            entry = Gtk.MenuItem.new_with_mnemonic(label)
+            entry.set_sensitive(sensitive)
+            entry.connect("activate", lambda *_a: callback())
+            menu.append(entry)
+
+        item(_("_Save Current Command…"), self.save_current, store.persistent and bool(self.command_text.strip()))
+        if not store.persistent:
+            item(_("Saving needs a master password (Settings → Security)"), lambda: None, False)
+        commands = store.commands()
+        if commands:
+            menu.append(Gtk.SeparatorMenuItem())
+            for command in commands:
+                item(command.name.replace("_", "__"), lambda c=command: self.load_saved(c))
+            menu.append(Gtk.SeparatorMenuItem())
+            for command in commands:
+                item(_("Delete ‘{name}’").format(name=command.name.replace("_", "__")),
+                     lambda c=command: self.delete_saved(c))
+        menu.append(Gtk.SeparatorMenuItem())
+        item(_("C_lear History"), self.clear_history, bool(store.history()))
+        menu.show_all()
+
+    def _ask_name(self) -> Optional[str]:
+        return self.controller.win._prompt_text(_("Save Command"), _("Name for this command:"),
+                                                accept_label=_("_Save"))
+
+    def save_current(self):
+        from ...multirun.store import CommandFileError
+
+        name = self.ask_name()
+        if not name or not name.strip():
+            return None
+        options = self.options()
+        try:
+            return self.controller.store().save_command(
+                name, self.command_text, shell=options.shell,
+                options={"concurrency": options.concurrency, "command_timeout": options.command_timeout,
+                         "pty": options.pty})
+        except (CommandFileError, OSError) as exc:
+            self.controller.win._notify(_("The command was not saved ({reason}).").format(
+                reason=getattr(exc, "kind", type(exc).__name__)), Level.WARNING)
+            return None
+
+    def load_saved(self, command) -> None:
+        self.set_command(command.text)
+        entry = self.shell.get_child()
+        entry.set_text(command.shell)
+        options = command.options or {}
+        if "concurrency" in options:
+            self.concurrency.set_value(int(options["concurrency"]))
+        if "command_timeout" in options:
+            self.command_timeout.set_value(float(options["command_timeout"]))
+        if "pty" in options:
+            self.pty.set_active(bool(options["pty"]))
+
+    def delete_saved(self, command) -> None:
+        self.controller.store().delete_command(command.id)
+
+    def clear_history(self) -> None:
+        self.controller.store().clear_history()
+        self._fill_history()
 
     # ------------------------------------------------------------- targets
     def _update_targets(self) -> None:
@@ -242,7 +337,12 @@ class MultiRunDialog(BaseDialog):
         return self.run
 
     def on_started(self, command: str) -> None:
-        """Hook for the history (saved commands)."""
+        try:
+            self.controller.store().add_history(command)  # encrypted, or memory only without a key
+        except OSError as exc:
+            self.controller.win._notify(_("The history could not be saved ({error}).").format(
+                error=type(exc).__name__), Level.WARNING)
+        self._fill_history()
 
     def cancel(self) -> None:
         if self.run is not None and not self.run.done:

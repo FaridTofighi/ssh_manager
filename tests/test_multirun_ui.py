@@ -236,5 +236,50 @@ class ResultsTests(MultiRunUiCase):
         self.assertEqual(sum(1 for r in dialog.results.results.values() if r.status == R.SUCCESS), 1200)
 
 
+class SavedCommandTests(MultiRunUiCase):
+    SECRET = "Token-sentinel-in-a-command"
+
+    def test_saved_and_history_with_a_keybox_are_encrypted(self) -> None:
+        box = self.sandbox.use_keybox("pw")
+        self.controller._store = None
+        dialog = self.dialog(self.keys("web-01"))
+        dialog.set_command(f"curl -H 'X-Token: {self.SECRET}' http://localhost/")
+        dialog.ask_name = lambda: "token call"
+        saved = dialog.save_current()
+        self.assertEqual(saved.name, "token call")
+        dialog.set_command("echo {alias}")
+        dialog.start()
+        self.finish(dialog)
+        path = Path(self.win._settings.config_path).parent / "commands.enc"
+        raw = path.read_bytes()
+        self.assertNotIn(self.SECRET.encode(), raw)
+        self.assertNotIn(b"echo {alias}", raw)
+        self.controller._store = None  # read it again from the file
+        second = self.dialog([])
+        self.assertEqual(second.history.get_model()[1][1], "echo {alias}")
+        commands = self.controller.store().commands()
+        second.load_saved(commands[0])
+        self.assertIn(self.SECRET, second.command_text)
+        self.assertEqual(box.id, self.controller._store_key)
+        second.clear_history()
+        self.assertEqual(self.controller.store().history(), [])
+        second._fill_saved_menu()
+        labels = [item.get_label() for item in second.saved_menu.get_children() if hasattr(item, "get_label")]
+        self.assertIn("token call", labels)
+
+    def test_without_a_key_history_is_memory_only(self) -> None:
+        self.controller._store = None
+        dialog = self.dialog(self.keys("web-01"))
+        dialog.set_command("uptime")
+        dialog.start()
+        self.finish(dialog)
+        self.assertEqual(self.controller.store().history(), ["uptime"])
+        self.assertFalse(self.controller.store().persistent)
+        dialog.ask_name = lambda: "x"
+        self.assertIsNone(dialog.save_current())
+        config = Path(self.win._settings.config_path).parent
+        self.assertEqual(list(config.glob("commands*")), [])
+
+
 if __name__ == "__main__":
     unittest.main()
