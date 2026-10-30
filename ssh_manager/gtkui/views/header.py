@@ -29,7 +29,7 @@ from ..constants import Icons  # noqa: E402
 from ..controllers.notifications import MessageHistory  # noqa: E402
 from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..health import Health  # noqa: E402
-from ..i18n import _  # noqa: E402
+from ..i18n import _, ngettext  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
 from ..theme.tokens import Layout, Level, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
@@ -231,6 +231,16 @@ class HeaderView(Gtk.HeaderBar):
         self.pack_end(self.health_button)
         self.set_health(Health(Level.SUCCESS, _("All systems operational"), _("Operational")))
 
+        # Active port forwards ("⇄ 3"); hidden while there are none. A click opens Tunnels.
+        self.on_tunnels: Optional[Callable[[], None]] = None
+        self.tunnels_button = Gtk.Button(label="")
+        self.tunnels_button.get_style_context().add_class("flat")
+        self.tunnels_button.set_relief(Gtk.ReliefStyle.NONE)
+        self.tunnels_button.set_valign(Gtk.Align.CENTER)
+        self.tunnels_button.connect("clicked", lambda *_: self.on_tunnels() if self.on_tunnels else None)
+        self.tunnels_button.set_no_show_all(True)
+        self.pack_end(self.tunnels_button)
+
     # ------------------------------------------------------------- density
     def apply_density(self) -> None:
         """Lay the bar out with the active density preset (also on a runtime switch)."""
@@ -257,6 +267,13 @@ class HeaderView(Gtk.HeaderBar):
             self.set_brand_width(self._brand_width)
 
     # ---------------------------------------------------------------- api
+    def set_tunnel_count(self, count: int) -> None:
+        text = ngettext("{n} active tunnel", "{n} active tunnels", count).format(n=count)
+        self.tunnels_button.set_label(f"⇄ {count}")
+        self.tunnels_button.set_tooltip_text(text + " — " + _("open Tunnels"))
+        set_accessible_name(self.tunnels_button, text)
+        self.tunnels_button.set_visible(count > 0)
+
     def set_brand_width(self, width: Optional[int]) -> None:
         """Line the brand divider up with the sidebar edge (``None`` = sidebar hidden)."""
 

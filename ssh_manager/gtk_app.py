@@ -349,6 +349,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         from ssh_manager.gtkui.controllers.tunnels import TunnelController
 
         self.tunnels = TunnelController(self)  # port forwarding (its own SSH connections)
+        self.tunnels.listeners.append(self._update_tunnel_chip)
         self.store_actions = StoreActions(self)
         self.importer = MobaXtermImportController(self)
         from ssh_manager.gtkui.controllers.rdp_files import RdpFileActions
@@ -452,8 +453,15 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._notify(_("Saved passwords and macros are now encrypted with your master password."), Level.SUCCESS)
         return True
 
+    def _update_tunnel_chip(self) -> None:
+        header = getattr(self, "_header", None)
+        tunnels = getattr(self, "tunnels", None)
+        if header is not None and tunnels is not None:
+            header.set_tunnel_count(tunnels.active_count())
+
     def _build_header(self) -> None:
         self._header = HeaderView(self._toasts.history)
+        self._header.on_tunnels = lambda: self.app_dialogs.open_tunnels()
         self._header.set_user_initials(local_user_initials())
         self._header.on_workspace_selected = self.inventory.switch_workspace
         self._header.history_button.host_activity_provider = self.host_page.host_activity
