@@ -33,6 +33,7 @@ import logging
 import termios
 import threading
 import time
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 import gi
@@ -550,11 +551,23 @@ class MacroController:
             return False
         if not self.ask_master_password_needed(self.win):
             return False
+        if getattr(self.win._secure_store, "saving_disabled", False):  # "Don't save passwords": create the keybox
+            keybox = self.create_keybox()
+            if keybox is None:
+                return False
+            self.win.adopt_keybox(keybox)
+            self.unlock_with_keybox(keybox, then)
+            return True
         password = self.set_master_password()
         if password is None:
             return False
         self.unlock(password, then)
         return True
+
+    def create_keybox(self):
+        from ..unlock_flow import set_master_password
+
+        return set_master_password(self.win, self.win._settings, Path(self.win._settings.config_path).parent)
 
     def set_master_password(self) -> Optional[str]:
         """Turn the master password on (create one, or confirm the existing one) as Preferences would."""

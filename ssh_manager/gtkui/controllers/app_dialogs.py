@@ -230,6 +230,10 @@ class AppDialogs:
         about.destroy()
 
     def change_master_password(self) -> None:
+        keybox = getattr(self.win, "keybox", None)
+        if keybox is not None:
+            self._change_keybox_password(keybox)
+            return
         stored = self.win._settings.master_password_hash
         if not stored:
             return
@@ -251,4 +255,35 @@ class AppDialogs:
         self.win._settings.save()
         self.win._master_password = new_password
         self.win.creds.rekey_password_file(None if self.win._settings.master_password_disabled else new_password)
+        self.win._notify(_("Master password updated."), Level.SUCCESS)
+
+    def _change_keybox_password(self, keybox) -> None:
+        """Only the key file changes: the data key is re-wrapped, saved passwords and macros stay as they are."""
+
+        from ...keybox import Keybox, KeyboxError
+        from ..unlock_flow import run_off_thread
+
+        def verify(text: str) -> bool:
+            try:
+                return Keybox.load(keybox.path).unlock(text)
+            except KeyboxError:
+                return False
+
+        new_password = NewSecretDialog(
+            self.win,
+            _("Change Master Password"),
+            _("Choose a new master password"),
+            _("Confirm the current password first. Saved passwords and macros keep their key; only the key "
+              "file is updated."),
+            accept_label=_("_Change"),
+            verify_current=verify,
+        ).ask()
+        if new_password is None:
+            return
+        try:
+            run_off_thread(lambda: keybox.reset_password(new_password))
+        except KeyboxError as exc:
+            LOGGER.warning("master password change failed: %s", exc.code)
+            self.win._notify(_("The master password was not changed. The previous one stays valid."), Level.ERROR)
+            return
         self.win._notify(_("Master password updated."), Level.SUCCESS)

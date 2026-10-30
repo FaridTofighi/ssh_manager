@@ -286,8 +286,10 @@ class AppSettings:
     auth_timeout: float = 10.0
     banner_timeout: float = 10.0
     use_paramiko_vte: bool = False
+    # Obsolete once keybox.json exists (read for the migration only; never a way to turn protection off).
     master_password_hash: str = ""
     master_password_disabled: bool = False
+    passwords_off: bool = False  # "Don't save passwords" (meaningful only while there is no keybox)
     allowed_ciphers: list[str] = field(default_factory=list)
     allowed_kex: list[str] = field(default_factory=list)
     secrets_policy: Dict[str, Any] = field(default_factory=dict)
@@ -354,6 +356,7 @@ class AppSettings:
             bool,
             instance.master_password_disabled,
         )
+        instance.passwords_off = get_value(data, "passwords_off", bool, instance.passwords_off)
         ciphers = data.get("allowed_ciphers")
         if isinstance(ciphers, list):
             instance.allowed_ciphers = [v.strip() for v in ciphers if isinstance(v, str) and v.strip()]
@@ -434,8 +437,6 @@ class AppSettings:
                 "banner": self.banner_timeout,
             },
             "use_paramiko_vte": self.use_paramiko_vte,
-            "master_password_hash": self.master_password_hash,
-            "master_password_disabled": self.master_password_disabled,
             "allowed_ciphers": self.allowed_ciphers,
             "allowed_kex": self.allowed_kex,
             "secrets_policy": self.secrets_policy,
@@ -452,6 +453,11 @@ class AppSettings:
             "local_shell": self.local_shell.to_dict(),
             "macros": self.macros.to_dict(),
         }
+        if not (Path(self.config_path).parent / "keybox.json").exists():
+            # Before the keybox exists these steer the migration; afterwards they are never written again.
+            payload["master_password_hash"] = self.master_password_hash
+            payload["master_password_disabled"] = self.master_password_disabled
+            payload["passwords_off"] = self.passwords_off
         try:
             write_json_atomic(self.config_path, payload, mode=0o600)
         except OSError:

@@ -15,7 +15,7 @@ from ...config import HostEntry  # noqa: E402
 from ...credentials import KEEP, Credential, PasswordChoice  # noqa: E402
 from ...host_utils import host_config_key, host_connection_params, host_option, with_user  # noqa: E402
 from ...profiles import SessionProfile  # noqa: E402
-from ...secure_store import FileKeyring, KeyringError, SecureStoreError  # noqa: E402
+from ...secure_store import EncryptedFileKeyring, FileKeyring, KeyringError, SecureStoreError  # noqa: E402
 from ..dialogs.confirm import confirm  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
@@ -263,6 +263,11 @@ class CredentialController:
         """Why passwords cannot be saved right now (locked password file, keyring error), or ``None``."""
 
         backend = self.win._secure_store.backend
+        if getattr(self.win._secure_store, "saving_disabled", False):
+            return _("Saving passwords is turned off. Set a master password in Preferences → Security to save them.")
+        if isinstance(backend, EncryptedFileKeyring) and backend.locked:
+            return _("Saved passwords cannot be opened ({reason}). Nothing was changed.").format(
+                reason=backend.error or _("unknown error"))
         if isinstance(backend, FileKeyring) and backend.locked:
             return _("Saved passwords are locked. Unlock them with the master password, then try again.")
         try:
@@ -453,6 +458,12 @@ class CredentialController:
 
     def warn_if_password_file_locked(self) -> None:
         backend = self.win._secure_store.backend
+        if isinstance(backend, EncryptedFileKeyring) and backend.locked:
+            self.win._notify_warning(
+                _("Saved passwords could not be opened: {reason}. The file is kept unchanged.").format(
+                    reason=backend.error or _("unknown error"))
+            )
+            return
         if isinstance(backend, FileKeyring) and backend.locked:
             self.win._notify_warning(
                 _("Saved passwords are encrypted but could not be unlocked; enable the master password to use them.")

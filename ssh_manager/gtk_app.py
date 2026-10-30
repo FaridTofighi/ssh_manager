@@ -63,6 +63,7 @@ from ssh_manager.gtkui.controllers.ui_state import (  # noqa: E402,F401
 from ssh_manager.gtkui.dialogs.confirm import confirm, show_message  # noqa: E402
 from ssh_manager.gtkui.dialogs.prompt import prompt_text  # noqa: E402
 from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog, UnlockDialog  # noqa: E402
+from ssh_manager.gtkui.unlock_flow import StartupFlow  # noqa: E402
 from ssh_manager.gtkui.i18n import _, ngettext  # noqa: E402
 from ssh_manager.gtkui.theme import density as density_tokens  # noqa: E402
 from ssh_manager.gtkui.theme.density import Density  # noqa: E402
@@ -76,7 +77,7 @@ from ssh_manager.gtkui.widgets.toast import ToastOverlay  # noqa: E402
 from ssh_manager.master_auth import hash_master_password, master_hash_needs_upgrade, verify_master_password  # noqa: E402
 from ssh_manager.password_dialog import PasswordDialog  # noqa: E402
 from ssh_manager.profiles import SessionProfile, built_in_profiles  # noqa: E402
-from ssh_manager.secure_store import SecureStore  # noqa: E402
+from ssh_manager.secure_store import DisabledSecureStore, SecureStore  # noqa: E402
 from ssh_manager.settings import AppSettings  # noqa: E402
 from ssh_manager.templates import built_in_templates  # noqa: E402
 
@@ -153,8 +154,12 @@ class SSHManagerApplication(Gtk.Application):
 
     def do_activate(self) -> None:  # type: ignore[override]
         if not self._window:
-            if not self._ensure_master_password():
+            started = StartupFlow(self._settings, Path(self._settings.config_path).parent).run()
+            if started is None:
                 self.quit()
+                return
+            if started.migrate and not self._ensure_master_password():
+                self.quit()  # data of an older version: the previous unlock until it is migrated
                 return
             manager = None
             if self._base_dir is None:
@@ -165,6 +170,7 @@ class SSHManagerApplication(Gtk.Application):
                 manager = StoreConfigManager(store)
             base = manager.base_dir if manager is not None else self._base_dir
             self._window = SSHManagerWindow(self, base, self._settings, master_password=self._master_password,
+                                            keybox=started.keybox, passwords_off=started.passwords_off,
                                             manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
@@ -285,6 +291,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         settings: AppSettings,
         *,
         master_password: Optional[str] = None,
+        keybox=None,
+        passwords_off: bool = False,
         manager=None,
     ) -> None:
         Gtk.ApplicationWindow.__init__(self, application=app)
@@ -295,7 +303,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.get_style_context().add_class("sm-window")
 
         self.closing = False
-        self._init_services(base_dir, settings, master_password, manager)
+        self._init_services(base_dir, settings, master_password, manager, keybox=keybox, passwords_off=passwords_off)
         self._init_controllers()
         self._build_ui()
         self._register_actions()
@@ -311,12 +319,21 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.connect("destroy", self._on_destroy)
 
     # ---------------------------------------------------------------- setup
-    def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str], manager=None) -> None:
+    def _init_services(self, base_dir: Path, settings: AppSettings, master_password: Optional[str], manager=None,
+                       *, keybox=None, passwords_off: bool = False) -> None:
         # The app store (StoreConfigManager) by default; a folder inventory for --base-dir and tests.
         self.manager = manager if manager is not None else ConfigManager(base_dir)
         self._settings = settings
-        self._master_password = master_password
-        self._secure_store = SecureStore.with_default_backend(master_password=master_password)
+        self.keybox = keybox  # the unlocked keybox (saved passwords and macros), or None
+        if keybox is not None:
+            self._master_password = None  # never kept once the keybox is open
+            self._secure_store = SecureStore.for_keybox(keybox)
+        elif passwords_off:
+            self._master_password = None
+            self._secure_store = DisabledSecureStore()
+        else:  # data of an older version not migrated yet, and windows built by tests
+            self._master_password = master_password
+            self._secure_store = SecureStore.with_default_backend(master_password=master_password)
         self._credential_store = CredentialStore(self._secure_store)
         self._password_dialog = PasswordDialog()
         self._profiles: Dict[str, SessionProfile] = {p.id: p for p in built_in_profiles()}
@@ -334,6 +351,14 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self._ui_font_size = self._ui.ui_font_size
         self._apply_ui_font(self._ui_font_size)
         self.tree_store = new_tree_store()
+
+    def adopt_keybox(self, keybox) -> None:
+        """A master password was just set (saving passwords was off): save passwords and macros with its key."""
+
+        self.keybox = keybox
+        self._master_password = None
+        self._secure_store = SecureStore.for_keybox(keybox)
+        self._credential_store._secure_store = self._secure_store  # callers keep the same credential store
 
     def _init_controllers(self) -> None:
         self.actions = WindowActions(self)
