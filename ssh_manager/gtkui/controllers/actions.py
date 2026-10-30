@@ -93,6 +93,11 @@ class WindowActions:
     def forget_password(self) -> None:
         self.win.creds.forget_password()
 
+    def forget_host_key(self) -> None:
+        host = self.win.tree.selected_host()
+        if host is not None:
+            self.win.app_dialogs.open_known_hosts(host)
+
     # groups
     def expand_all_groups(self) -> None:
         self.win.tree.expand_all_groups()

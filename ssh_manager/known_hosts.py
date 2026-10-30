@@ -528,7 +528,47 @@ def cached_map(file: KnownHostsFile, entries: Sequence[Entry], hosts: Sequence[I
     return _CACHE[key]
 
 
+# ------------------------------------------------------------- verifying
+MATCH, DIFFERENT, NOT_STORED = "match", "different", "not_stored"
+
+
+def probe_host_key(hostname: str, port: int = 22, *, prefer: Sequence[str] = (), timeout: float = 10.0
+                   ) -> Tuple[str, str]:
+    """The key the server presents ``(key_type, key_b64)``: key exchange only, no login, nothing written.
+
+    ``prefer`` asks for these key types first (the stored ones), so a server with several keys shows
+    the one known_hosts has.
+    """
+
+    import socket
+
+    import paramiko
+
+    sock = socket.create_connection((hostname, int(port or 22)), timeout=timeout)
+    transport = paramiko.Transport(sock)
+    try:
+        if prefer:
+            options = transport.get_security_options()
+            wanted = [t for t in prefer if t in options.key_types]
+            if wanted:
+                options.key_types = wanted + [t for t in options.key_types if t not in wanted]
+        transport.start_client(timeout=timeout)
+        key = transport.get_remote_server_key()
+        return key.get_name(), key.get_base64()
+    finally:
+        transport.close()
+
+
+def compare_host_key(entries: Sequence[Entry], key_type: str, key_b64: str) -> str:
+    """``match``, ``different`` (known with other keys) or ``not_stored``; ``@`` markers are ignored."""
+
+    known = [e for e in entries if not e.marker]
+    if any(e.key_type == key_type and e.key_b64 == key_b64 for e in known):
+        return MATCH
+    return DIFFERENT if known else NOT_STORED
+
+
 __all__ = ["Entry", "Unparsed", "KnownHostsFile", "KnownHostsError", "KnownHostsChanged", "parse", "parse_line",
            "fingerprint_sha256", "fingerprint_md5", "key_bits", "key_type_label", "host_pattern", "hashed_host",
            "backups", "restore_backup", "map_inventory", "unmatched_hashed", "cached_map", "merge_preview",
-           "default_known_hosts"]
+           "default_known_hosts", "probe_host_key", "compare_host_key", "MATCH", "DIFFERENT", "NOT_STORED"]

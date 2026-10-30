@@ -170,6 +170,29 @@ class AppDialogs:
         except Exception as exc:
             self.win._notify(_("Export failed: {error}").format(error=exc), Level.WARNING)
 
+    def known_hosts_inventory(self) -> list:
+        """``(key, alias, hostname, port)`` of every SSH / SFTP host of the inventory."""
+
+        from ...host_utils import host_connection_params
+        from ...inventory.openssh import iter_hosts
+
+        hosts = []
+        for host in iter_hosts(self.win.manager.tree):
+            if getattr(host, "protocol", "ssh") not in ("ssh", "sftp"):
+                continue
+            hostname, port, _user = host_connection_params(host)
+            hosts.append((self.win.creds.credential_key(host), host.alias, hostname, port))
+        return hosts
+
+    def open_known_hosts(self, host=None) -> None:
+        from ..dialogs.known_hosts import KnownHostsDialog
+
+        toasts = self.win._toasts
+        dialog = KnownHostsDialog(self.win, None, self.known_hosts_inventory(),
+                                  host_key=self.win.creds.credential_key(host) if host is not None else "",
+                                  notify=lambda text, level, **kw: toasts.notify(text, level, **kw))
+        dialog.ask()
+
     def open_credentials(self) -> None:
         dialog = CredentialManagerDialog(self.win, self.win._credential_store)
         dialog.run_and_destroy()

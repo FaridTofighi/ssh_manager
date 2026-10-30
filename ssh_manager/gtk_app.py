@@ -560,6 +560,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "app-menu": self._header.open_app_menu,
             "shortcuts": dialogs.show_shortcuts,
             "credentials": dialogs.open_credentials,
+            "known-hosts": dialogs.open_known_hosts,
             "config-file": dialogs.open_config_file,
             "open-shared": self.inventory.open_shared_inventory,
             "git-check": self.inventory.check_git_now,
