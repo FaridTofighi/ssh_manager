@@ -177,6 +177,8 @@ class SSHManagerApplication(Gtk.Application):
                                             migration_pending=started.unfinished, manager=manager)
             if manager is not None and not manager.read_only:
                 GLib.idle_add(lambda: self._window and self._window.store_actions.offer_first_run_import() and False)
+            # Forwards set to start with the app: after the window is shown, one at a time, no dialogs.
+            GLib.timeout_add(1500, lambda: bool(self._window and self._window.tunnels.start_with_app()) and False)
             if self._startup_host is not None:
                 host, self._startup_host = self._startup_host, None
                 GLib.timeout_add(500, self._open_startup_host, host)

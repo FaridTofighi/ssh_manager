@@ -181,13 +181,35 @@ class SessionController:
             return None
         profile = self.win.creds.profile_for_host(resolved)
         if self.win._settings.use_paramiko_vte:
-            self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
+            tab = self.open_host_paramiko(resolved, profile=profile, password_provider=provider)
         else:
             self.win._notify(_("Opening {alias}").format(alias=resolved.alias), Level.INFO)
             tab = self.win.terminal_tabs.new_terminal(resolved, profile=profile, password_provider=provider,
                                                       password_service=self.win.creds)
             self.bind_tab_status(tab, resolved)
+        self.start_session_tunnels(host_obj, tab)
         return resolved.alias
+
+    def start_session_tunnels(self, host: HostEntry, tab) -> None:
+        """Forwards set to start with a session run beside the terminal (the engine, not ``ssh -L``)."""
+
+        tunnels = getattr(self.win, "tunnels", None)
+        if tunnels is None or tab is None:
+            return
+        tunnels.session_opened(host)
+        key = self.win.creds.credential_key(host)
+
+        def on_destroy(*_args) -> None:
+            others = [t for t in self.win.terminal_tabs.tabs() if t is not tab and getattr(t, "is_terminal", False)
+                      and getattr(t, "_host", None) is not None
+                      and self.win.creds.credential_key(t._host) == key]
+            if not others:
+                tunnels.last_session_closed(host)
+
+        try:
+            tab.connect("destroy", on_destroy)
+        except Exception:
+            pass
 
     def open_transfer_host(self, host_obj: HostEntry, bind_status: bool = True) -> Optional[str]:
         """The FTP / FTPS / SFTP opener: a file-browser tab; returns the alias.
@@ -267,7 +289,7 @@ class SessionController:
         return self.win._credential_store.get_password(credential_id) or None
 
     def open_host_paramiko(self, host: HostEntry, profile: Optional[SessionProfile] = None,
-                           password_provider=None) -> None:
+                           password_provider=None):
         tab = self.win.terminal_tabs.new_terminal(host, autostart=False, profile=profile,
                                                   password_provider=password_provider, password_service=self.win.creds)
         self.bind_tab_status(tab, host)
@@ -289,6 +311,7 @@ class SessionController:
         tab.connect("destroy", lambda *_: self.cleanup_paramiko_connector(tab))
         connector.connect_to_host(host_cfg, password_provider=password_provider,
                                   describe_source=self.win.creds.describe_password_source)
+        return tab
 
     def cleanup_paramiko_connector(self, tab) -> None:
         self.paramiko_connectors.pop(tab, None)

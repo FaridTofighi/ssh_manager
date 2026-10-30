@@ -126,6 +126,8 @@ class HostDialog(BaseDialog):
         transfer_backend_factory: Optional[Callable[[HostEntry, Optional[str]], object]] = None,
         rdp_ssh_hosts: Sequence[Tuple[str, str]] = (),
         rdp_engine_preference: str = "auto",
+        forwards_host_id: str = "",
+        forwards_others: Sequence[Tuple[str, object]] = (),
     ) -> None:
         title = _("Edit Host") if host else _("New Host")
         self._editing = host is not None
@@ -133,6 +135,9 @@ class HostDialog(BaseDialog):
         self._transfer_backend_factory = transfer_backend_factory  # (host, credential id) -> backend
         self._rdp_ssh_hosts = list(rdp_ssh_hosts)  # (inventory id, label) of SSH hosts an RDP host can tunnel through
         self._rdp_engine_preference = rdp_engine_preference
+        self._forwards_host_id = forwards_host_id  # Port Forwarding: this host's key, the inventory's forwards
+        self._forwards_others = list(forwards_others)
+        self.forwards_page = None  # built when the page is first shown
         self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
         self._port_edited = False  # the user typed a port in this dialog
         self._suppress_protocol_events = False
@@ -241,6 +246,7 @@ class HostDialog(BaseDialog):
         ssh_like = kind is None or kind.supports_keys or kind.supports_jump_host
         self.layout.set_page_visible("connection", ssh_like)
         self.layout.set_page_visible("ssh_options", ssh_like)
+        self.layout.set_page_visible("forwarding", self._protocol == "ssh")
         self.layout.set_page_visible("transfer", transfer)
         rdp = self._protocol == "rdp"
         for page_id in RDP_PAGES:
@@ -303,7 +309,8 @@ class HostDialog(BaseDialog):
     def _build_pages(self) -> None:
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
         for build in (self._page_general, self._page_connection, self._page_transfer, self._page_rdp,
-                      self._page_credentials, self._page_tags, self._page_ssh_options, self._page_permissions):
+                      self._page_credentials, self._page_tags, self._page_ssh_options, self._page_forwarding,
+                      self._page_permissions):
             build(labels)
 
     def _page_transfer(self, labels: Gtk.SizeGroup) -> None:
@@ -614,6 +621,25 @@ class HostDialog(BaseDialog):
         options.append(self._extras_row.error)
         self.extras_view.get_buffer().connect("changed", lambda *_: self._extras_row.validate())
 
+    def _page_forwarding(self, labels: Gtk.SizeGroup) -> None:
+        self._forwarding_page = self.layout.new_page(
+            "forwarding", _("Port Forwarding"),
+            _("Local, remote and SOCKS forwards of this host. SSH Manager runs them beside the terminal, so they "
+              "can be stopped without disconnecting (see Tunnels…)."))
+        self.layout.on_page_shown.append(self._show_forwarding)
+
+    def _show_forwarding(self, page_id: str) -> None:
+        if page_id != "forwarding" or self.forwards_page is not None:
+            return
+        from ...tunnels.model import forwards_from_metadata
+        from .forwards_page import ForwardsPage
+
+        self.forwards_page = ForwardsPage(self, forwards_from_metadata(self._metadata), host_id=self._forwards_host_id,
+                                          others=self._forwards_others, host_label=self.alias_entry.get_text().strip(),
+                                          ssh_options=lambda: parse_option_lines(self._extras_text())[0])
+        self._forwarding_page.append(self.forwards_page, expand=True)
+        self.forwards_page.show_all()
+
     def _page_permissions(self, labels: Gtk.SizeGroup) -> None:
         perms = self.layout.new_page("permissions", _("Permissions"),
                                      _("Local, advisory restrictions for this host. They are stored as comments in the config file."))
@@ -744,6 +770,10 @@ class HostDialog(BaseDialog):
             metadata["transfer"] = self.transfer_page.settings().to_json()  # protocol settings, never ssh options
         if self._protocol == "rdp":
             metadata["rdp"] = self.rdp_pages.settings().to_json()
+        if self.forwards_page is not None:  # edited on the Port Forwarding page
+            metadata["forwards"] = [forward.to_dict() for forward in self.forwards_page.forwards()]
+        elif self._metadata.get("forwards"):  # not opened: kept exactly as stored
+            metadata["forwards"] = self._metadata.get("forwards")
         return HostEntry(
             alias=alias,
             options=options,

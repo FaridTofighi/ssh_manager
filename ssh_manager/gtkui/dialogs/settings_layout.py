@@ -64,6 +64,7 @@ class SettingsPageLayout(Gtk.Box):
         self._pages: Dict[str, SettingsPage] = {}
         self._rows: Dict[str, Gtk.ListBoxRow] = {}
         self._order: List[str] = []
+        self.on_page_shown: List = []  # callables(page_id): build a page the first time it is shown
 
     def add_page(self, page: SettingsPage) -> SettingsPage:
         self._stack.add_named(page, page.page_id)
@@ -119,3 +120,5 @@ class SettingsPageLayout(Gtk.Box):
     def _on_row_selected(self, _listbox: Gtk.ListBox, row: Optional[Gtk.ListBoxRow]) -> None:
         if row is not None:
             self._stack.set_visible_child_name(row.page_id)  # type: ignore[attr-defined]
+            for callback in list(self.on_page_shown):
+                callback(row.page_id)  # type: ignore[attr-defined]

@@ -96,6 +96,8 @@ class HostActions:
             alias_validator=validators_for(self.win.manager)["alias"],
             rdp_ssh_hosts=self.tunnel_hosts(exclude=getattr(host, "id", "") if host else ""),
             rdp_engine_preference=self.win._settings.remote_desktop.preferred_engine,
+            forwards_host_id=self.win.creds.credential_key(host) if host else "",
+            forwards_others=self.win.tunnels.all_forwards() if getattr(self.win, "tunnels", None) else (),
             **kwargs,
         )
 
