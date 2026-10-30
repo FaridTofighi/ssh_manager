@@ -242,6 +242,19 @@ class EditTests(Case):
         self.assertEqual(self.path.read_bytes(), before + f"fresh.example ssh-ed25519 {ED25519}\n".encode())
         self.assertEqual(self.file.merge(incoming), (0, 2))
 
+    def test_resolve_the_offending_line(self) -> None:
+        self.assertEqual(KH.resolve_changed_entry(self.file, 3, [("web.example.org", 22)]).line_no, 3)
+        # line 5 is another host: searched again, the one entry of web.example.org is it
+        self.assertEqual(KH.resolve_changed_entry(self.file, 5, [("web.example.org", 22)]).line_no, 3)
+        with self.assertRaises(KH.KnownHostsError):  # nothing for that host
+            KH.resolve_changed_entry(self.file, 3, [("nowhere.example", 22)])
+        self.file.add_entry("web.example.org", 22, "ssh-rsa", RSA)
+        with self.assertRaises(KH.KnownHostsError) as caught:  # two candidates: refused
+            KH.resolve_changed_entry(self.file, 99, [("web.example.org", 22)])
+        self.assertIn("Several", str(caught.exception))
+        new = KH.fingerprint_sha256(RSA)  # the new key is not a candidate: back to one
+        self.assertEqual(KH.resolve_changed_entry(self.file, 99, [("web.example.org", 22)], new).line_no, 3)
+
 
 class InventoryTests(Case):
     def test_mapping_plain_patterns_and_hashed(self) -> None:

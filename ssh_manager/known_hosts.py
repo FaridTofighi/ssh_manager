@@ -528,6 +528,30 @@ def cached_map(file: KnownHostsFile, entries: Sequence[Entry], hosts: Sequence[I
     return _CACHE[key]
 
 
+def resolve_changed_entry(file: KnownHostsFile, line_no: int, names: Sequence[Tuple[str, int]],
+                          new_fingerprint: str = "") -> Entry:
+    """The entry ssh called "offending": line ``line_no`` if it really belongs to one of ``names``.
+
+    When that line is something else now (the file changed), the host's entries are searched again:
+    exactly one entry with another key than ``new_fingerprint`` is accepted; anything else is refused
+    (never a removal by pattern).
+    """
+
+    names = [(name, int(port or 22)) for name, port in names if name]
+    entry = file.entry_at(line_no) if line_no > 0 else None
+    if entry is not None and not entry.marker and any(entry.matches(name, port) for name, port in names):
+        return entry
+    candidates = {e.line_no: e for e in file.entries() if not e.marker
+                  and any(e.matches(name, port) for name, port in names)
+                  and (not new_fingerprint or e.fingerprint != new_fingerprint)}
+    if len(candidates) == 1:
+        return next(iter(candidates.values()))
+    if not candidates:
+        raise KnownHostsError("No stored key for this host was found in known_hosts. Nothing was changed.")
+    raise KnownHostsError("Several stored keys could be the old one ({lines}). Nothing was changed; use the "
+                          "Known Hosts manager.".format(lines=", ".join(str(n) for n in sorted(candidates))))
+
+
 # ------------------------------------------------------------- verifying
 MATCH, DIFFERENT, NOT_STORED = "match", "different", "not_stored"
 
@@ -571,4 +595,4 @@ def compare_host_key(entries: Sequence[Entry], key_type: str, key_b64: str) -> s
 __all__ = ["Entry", "Unparsed", "KnownHostsFile", "KnownHostsError", "KnownHostsChanged", "parse", "parse_line",
            "fingerprint_sha256", "fingerprint_md5", "key_bits", "key_type_label", "host_pattern", "hashed_host",
            "backups", "restore_backup", "map_inventory", "unmatched_hashed", "cached_map", "merge_preview",
-           "default_known_hosts", "probe_host_key", "compare_host_key", "MATCH", "DIFFERENT", "NOT_STORED"]
+           "default_known_hosts", "probe_host_key", "compare_host_key", "resolve_changed_entry", "MATCH", "DIFFERENT", "NOT_STORED"]

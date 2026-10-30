@@ -46,6 +46,8 @@ from ssh_manager.host_utils import host_connection_params
 from ssh_manager.ssh_command import build_ssh_command
 from ssh_manager.secure_store import SecureStore, SecureStoreError
 from ssh_manager.text_utils import strip_ansi
+from ssh_manager.host_key_output import HostKeyOutputDetector, UnknownHostKeyPrompt, split_host
+from ssh_manager.gtkui.dialogs.host_key import ChangedKey, changed_key_names, remove_old_key, risk_text, show_details
 from ssh_manager.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
     _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output,
 )
@@ -82,7 +84,7 @@ from ssh_manager.gtkui.session_page import SessionPage
 from ssh_manager.gtkui.tab_labels import SessionLabelInfo, TabLabelMode, is_duplicate, pane_labels, session_tab_labels
 from ssh_manager.gtkui.widgets.pane_frame import PaneFooter, PaneFrame
 from ssh_manager.gtkui.widgets.empty_state import EmptyState
-from ssh_manager.gtkui.widgets.icon_button import IconMenuButton
+from ssh_manager.gtkui.widgets.icon_button import IconMenuButton, set_accessible_name
 from ssh_manager.gtkui.widgets.menus import build_context_menu, build_menu, popup_menu
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -241,6 +243,7 @@ FOCUS_RETRY_MS = 50  # focus_terminal(): retry interval while the terminal is no
 FOCUS_RETRY_LIMIT = 40  # … and give up after ~2 s
 
 _RESPONSE_RECONNECT = 1
+_RESPONSE_HOST_KEY_DETAILS, _RESPONSE_HOST_KEY_REMOVE, _RESPONSE_HOST_KEY_COPY, _RESPONSE_HOST_KEY_DISMISS = 11, 12, 13, 14
 RECONNECT_STAGGER_MS = 150  # broadcast: ended sessions reconnect one after another, not all at once
 _RESPONSE_CLOSE = 2
 _FAILURE_WORDS = ("failed", "denied", "terminated", "error")
@@ -322,6 +325,7 @@ class TerminalTab(SessionPage):
         self.set_hexpand(True)
         self.set_vexpand(True)
         self._build_infobar()
+        self._build_host_key_bar()
         self._build_terminal_area()
         self._build_statusbar()
 
@@ -331,6 +335,7 @@ class TerminalTab(SessionPage):
         self._terminal.connect("size-allocate", self._on_terminal_size_allocate)
         self._panes.add(self._terminal)
         self._terminal.connect("contents-changed", self._on_auth_output)
+        self._terminal.connect("contents-changed", self._on_host_key_output)
         self.connect("destroy", lambda *_a: self._on_tab_destroyed())
         if autostart:
             self._begin_connect()
@@ -1086,6 +1091,137 @@ class TerminalTab(SessionPage):
         elif response == _RESPONSE_CLOSE:
             self._request_close_ended()
 
+    # --------------------------------------------------------- host key banner
+    def _build_host_key_bar(self) -> None:
+        """ssh's host-key messages, made visible: a changed key (warning) or an unknown one (information).
+
+        It acts on this tab only (never mirrored to broadcast sessions); ssh's own question stays in
+        the terminal: nothing is answered for the user.
+        """
+
+        self._host_key_change: Optional[ChangedKey] = None
+        self._host_key_prompt: Optional[UnknownHostKeyPrompt] = None
+        self._host_key_check_id = 0
+        bar = Gtk.InfoBar()
+        bar.set_show_close_button(False)
+        set_accessible_name(bar, _("SSH host key"))
+        self._host_key_icon = Gtk.Image()
+        self._host_key_label = Gtk.Label()
+        self._host_key_label.set_xalign(0.0)
+        self._host_key_label.set_line_wrap(True)
+        self._host_key_label.set_selectable(True)
+        area = bar.get_content_area()
+        area.pack_start(self._host_key_icon, False, False, 0)
+        area.pack_start(self._host_key_label, True, True, 0)
+        self._host_key_icon.show()
+        self._host_key_label.show()
+        self._host_key_buttons = {
+            "details": bar.add_button(_("_Details…"), _RESPONSE_HOST_KEY_DETAILS),
+            "remove": bar.add_button(_("_Remove Old Key and Reconnect…"), _RESPONSE_HOST_KEY_REMOVE),
+            "copy": bar.add_button(_("_Copy Fingerprint"), _RESPONSE_HOST_KEY_COPY),
+            "dismiss": bar.add_button(_("D_ismiss"), _RESPONSE_HOST_KEY_DISMISS),
+        }
+        bar.connect("response", self._on_host_key_response)
+        bar.set_no_show_all(True)
+        self._host_key_bar = bar
+        self.pack_start(bar, False, False, 0)
+
+    @property
+    def host_key_banner(self) -> str:
+        """``changed``, ``unknown`` or ``""`` (what the bar shows)."""
+
+        if not self._host_key_bar.get_visible():
+            return ""
+        return "changed" if self._host_key_change is not None else "unknown"
+
+    def _show_host_key_bar(self, kind: str, text: str) -> None:
+        bar = self._host_key_bar
+        changed = kind == "changed"
+        bar.set_message_type(Gtk.MessageType.WARNING if changed else Gtk.MessageType.INFO)
+        self._host_key_icon.set_from_icon_name("dialog-warning-symbolic" if changed else "dialog-information-symbolic",
+                                               Gtk.IconSize.BUTTON)  # never colour only
+        self._host_key_label.set_markup(text)
+        for name, button in self._host_key_buttons.items():
+            button.set_visible(name in (("details", "remove", "dismiss") if changed else ("copy", "dismiss")))
+        set_accessible_name(bar, _("SSH host key"))  # after set_message_type, which names it "Warning"
+        bar.get_accessible().set_description(self._host_key_label.get_text())
+        bar.show()
+
+    def _hide_host_key_bar(self) -> None:
+        self._host_key_change = None
+        self._host_key_prompt = None
+        if self._host_key_check_id:
+            GLib.source_remove(self._host_key_check_id)
+            self._host_key_check_id = 0
+        self._host_key_bar.hide()
+
+    def _host_key_names(self, ssh_host: str = "") -> list:
+        hostname, port, _user = host_connection_params(self._host)
+        extra = [split_host(ssh_host)] if ssh_host else []
+        return changed_key_names(hostname, port, extra)
+
+    def _check_host_key_changed(self, term: Vte.Terminal) -> bool:
+        """At exit, before authentication: ssh's "REMOTE HOST IDENTIFICATION HAS CHANGED" block."""
+
+        detector = HostKeyOutputDetector()
+        detector.feed(self._terminal_tail(term, HostKeyOutputDetector.LIMIT))
+        found = detector.changed(exited=True)
+        if found is None:
+            return False
+        self._host_key_prompt = None
+        self._host_key_change = ChangedKey(
+            host_label=self._host.alias, names=self._host_key_names(found.host), new_fingerprint=found.new_fingerprint,
+            key_type=found.key_type, known_hosts_path=found.known_hosts_path, line_no=found.line_no)
+        self._show_host_key_bar("changed", "<b>{}</b>".format(GLib.markup_escape_text(risk_text())))
+        self._log(_("{alias}: the server's host key has changed; the connection was refused.").format(
+            alias=self._host.alias), Level.ERROR)
+        return True
+
+    def _on_host_key_output(self, *_args) -> None:
+        if self._authenticated or self._child_pid is None or self._host_key_check_id:
+            return
+        self._host_key_check_id = GLib.timeout_add(150, self._check_host_key_prompt)
+
+    def _check_host_key_prompt(self) -> bool:
+        """While ssh waits at "Are you sure you want to continue connecting": show the fingerprint."""
+
+        self._host_key_check_id = 0
+        if self._authenticated or self._child_pid is None:
+            return GLib.SOURCE_REMOVE
+        detector = HostKeyOutputDetector()
+        detector.feed(self._terminal_tail(self._terminal, HostKeyOutputDetector.LIMIT))
+        prompt = detector.unknown()
+        if prompt is None:
+            if self._host_key_prompt is not None:  # answered: the question is gone
+                self._hide_host_key_bar()
+            return GLib.SOURCE_REMOVE
+        if prompt != self._host_key_prompt:
+            self._host_key_prompt = prompt
+            text = _("{host} is not known yet. Compare its {type} fingerprint with the one you expect, then answer "
+                     "ssh in the terminal:").format(host=GLib.markup_escape_text(self._host.alias),
+                                                    type=GLib.markup_escape_text(prompt.key_type))
+            self._show_host_key_bar("unknown", f"{text}\n<tt>{GLib.markup_escape_text(prompt.fingerprint)}</tt>")
+        return GLib.SOURCE_REMOVE
+
+    def _on_host_key_response(self, _bar: Gtk.InfoBar, response: int) -> None:
+        change = self._host_key_change
+        window = self.get_toplevel() if isinstance(self.get_toplevel(), Gtk.Window) else None
+        if response == _RESPONSE_HOST_KEY_DISMISS:
+            self._hide_host_key_bar()
+        elif response == _RESPONSE_HOST_KEY_COPY and self._host_key_prompt is not None:
+            Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(self._host_key_prompt.fingerprint, -1)
+        elif response == _RESPONSE_HOST_KEY_DETAILS and change is not None:
+            dialogs = getattr(window, "app_dialogs", None)
+            show_details(window, change, open_manager=(lambda: dialogs.open_known_hosts(self._host))
+                         if dialogs is not None else None)
+        elif response == _RESPONSE_HOST_KEY_REMOVE and change is not None:
+            if self.remove_host_key(window, change):
+                self._hide_host_key_bar()
+                self.reconnect()  # ssh asks again in the terminal; that answer is the user's
+
+    def remove_host_key(self, window: Optional[Gtk.Window], change: ChangedKey) -> bool:
+        return remove_old_key(window, change, action=_("_Remove and Reconnect"))
+
     def _on_banner_destroy(self, _banner) -> None:
         self._banner_alive = False
 
@@ -1460,6 +1596,8 @@ class TerminalTab(SessionPage):
 
     def _reset_attempt_state(self) -> None:
         self._stop_auth_sources(keep_retry=True)
+        if hasattr(self, "_host_key_bar"):
+            self._hide_host_key_bar()
         self._ever_connected = False
         self._authenticated = False
         self._auth_method = "none"
@@ -1650,6 +1788,10 @@ class TerminalTab(SessionPage):
             self._set_status("Authentication failed", False)
             GLib.idle_add(self.emit, "session-closed", self._host.alias, False)
             return
+        if not self._authenticated and hasattr(self, "_host_key_bar") and self._check_host_key_changed(_term):
+            self._set_status("Host key changed", False)
+            GLib.idle_add(self.emit, "session-closed", self._host.alias, exited_normally)
+            return
         if not self._authenticated:
             outcome = classify_exit(exit_code, self._auth_failure_output(_term))
             if outcome is AuthOutcome.AUTH_FAILED and self._handle_auth_failure_retry():
@@ -1718,6 +1860,8 @@ class TerminalTab(SessionPage):
 
     def _on_authenticated(self, method: str) -> None:
         self._authenticated = True
+        if self._host_key_prompt is not None:
+            self._hide_host_key_bar()
         self._ever_connected = True
         self._auth_method = method
         self._attempts = 0
