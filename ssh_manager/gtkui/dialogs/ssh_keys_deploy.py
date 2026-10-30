@@ -40,7 +40,7 @@ class DeployKeyDialog(BaseDialog):
         self.win = win
         self.keys = [info for info in win.ssh_keys.keys() if info.public_line]
         self.host_keys: List[str] = list(dict.fromkeys(host_keys))
-        self.run: Optional[K.DeployRun] = None
+        self.job: Optional[K.DeployRun] = None
         self._poll_id = 0
         self._iters: Dict[str, Gtk.TreeIter] = {}
         # Test hooks.
@@ -143,7 +143,7 @@ class DeployKeyDialog(BaseDialog):
 
     @property
     def running(self) -> bool:
-        return self.run is not None and not self.run.done
+        return self.job is not None and not self.job.done
 
     def _sync(self) -> None:
         running = self.running
@@ -151,8 +151,8 @@ class DeployKeyDialog(BaseDialog):
         self.install_button.set_sensitive(ready)
         self.change.set_sensitive(not running)
         self.key_combo.set_sensitive(not running)
-        finished = self.run is not None and not running
-        results = self.run.results() if finished else []
+        finished = self.job is not None and not running
+        results = self.job.results() if finished else []
         self.retry_button.set_sensitive(any(r.status in K.DEPLOY_FAILURES for r in results))
         self.copy_button.set_sensitive(finished)
         works = [r for r in results if r.verified]
@@ -193,16 +193,16 @@ class DeployKeyDialog(BaseDialog):
         self.store.clear()
         self._iters = {t.key: self.store.append([t.key, t.alias, K.deploy_status_label(K.QUEUED), "",
                                                  ICONS[K.QUEUED]]) for t in targets}
-        self.run = K.DeployRun(targets, key.public_line, connect=self.win.multirun.connect,
+        self.job = K.DeployRun(targets, key.public_line, connect=self.win.multirun.connect,
                                verify=self._verify(key))
-        self.run.start()
+        self.job.start()
         self._stop_poll()
         self._poll_id = GLib.timeout_add(150, self._poll)
         self._sync()
-        return self.run
+        return self.job
 
     def _poll(self) -> bool:
-        run = self.run
+        run = self.job
         if run is None:
             self._poll_id = 0
             return False
@@ -228,14 +228,14 @@ class DeployKeyDialog(BaseDialog):
             self._poll_id = 0
 
     def retry_failed(self) -> Optional[K.DeployRun]:
-        if self.run is None:
+        if self.job is None:
             return None
-        failed = [r.key for r in self.run.results() if r.status in K.DEPLOY_FAILURES]
+        failed = [r.key for r in self.job.results() if r.status in K.DEPLOY_FAILURES]
         return self.start(failed) if failed else None
 
     def report(self) -> str:
         lines = ["host\tstatus\tmessage"]
-        for result in self.run.results() if self.run else []:
+        for result in self.job.results() if self.job else []:
             lines.append("\t".join((result.alias, K.deploy_status_label(result.status),
                                     result.message.replace("\t", " ").replace("\n", " "))))
         return "\n".join(lines) + "\n"
@@ -249,10 +249,10 @@ class DeployKeyDialog(BaseDialog):
         """IdentityFile = this key for the hosts where the key login works (one transaction, with Undo)."""
 
         key = self.selected_key()
-        if key is None or self.run is None or not self.set_identity.get_active():
+        if key is None or self.job is None or not self.set_identity.get_active():
             return 0
         hosts = self._hosts()
-        works = [r.key for r in self.run.results() if r.verified]
+        works = [r.key for r in self.job.results() if r.verified]
         manager = self.win.manager
         previous = {}
         transaction = getattr(manager, "transaction", None)

@@ -52,11 +52,19 @@ class MultiRunUiCase(unittest.TestCase):
         return dialog
 
     def finish(self, dialog, seconds=30):
-        self.assertTrue(pump(seconds, until=lambda: dialog.run is not None and dialog.run.done
+        self.assertTrue(pump(seconds, until=lambda: dialog.job is not None and dialog.job.done
                              and dialog._drain_id == 0), "the run did not finish")
 
 
 class DialogTests(MultiRunUiCase):
+    def test_opens_modally_and_closes(self) -> None:
+        from gi.repository import GLib, Gtk
+
+        dialog = self.dialog(self.keys("web-01"))
+        GLib.timeout_add(200, lambda: dialog.response(Gtk.ResponseType.CLOSE) and False)
+        dialog.present_and_run()  # crashed: an attribute named "run" hid Gtk.Dialog.run
+        self.assertIsNone(dialog.job)
+
     def test_twelve_hundred_hosts_open_quickly_and_show_a_count(self) -> None:
         from ssh_manager.inventory.store import NewHost
 
@@ -247,7 +255,7 @@ class ResultsTests(MultiRunUiCase):
         dialog = self.dialog([])
         targets = [R.Target(key=f"k{i}", alias=f"h{i}", hostname="x") for i in range(1200)]
         run = R.MultiRun(targets, "true", connect=lambda *a: None)
-        dialog.run = run
+        dialog.job = run
         started = time.perf_counter()
         dialog.results.reset(targets)
         for target in targets:

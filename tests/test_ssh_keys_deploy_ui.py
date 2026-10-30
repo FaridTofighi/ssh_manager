@@ -54,7 +54,7 @@ class DeployDialogTests(unittest.TestCase):
         return dialog
 
     def finish(self, dialog):
-        self.assertTrue(pump(30, until=lambda: dialog.run is not None and dialog.run.done and dialog._poll_id == 0))
+        self.assertTrue(pump(30, until=lambda: dialog.job is not None and dialog.job.done and dialog._poll_id == 0))
 
     def test_install_verify_report_retry_and_set_identityfile(self) -> None:
         from ssh_manager import ssh_keys as K
@@ -66,10 +66,10 @@ class DeployDialogTests(unittest.TestCase):
         dialog.start()
         self.finish(dialog)
         self.assertEqual(asked, ["Install key id_ed25519 on 3 hosts using their saved credentials?"])
-        statuses = {r.alias: r.status for r in dialog.run.results()}
+        statuses = {r.alias: r.status for r in dialog.job.results()}
         self.assertEqual(statuses["db-primary"], K.AUTH_FAILED)
         self.assertEqual(sorted(statuses[a] for a in ("web-01", "web-02")), [K.ALREADY_PRESENT, K.INSTALLED])
-        self.assertTrue(all(r.verified for r in dialog.run.results() if r.alias != "db-primary"))
+        self.assertTrue(all(r.verified for r in dialog.job.results() if r.alias != "db-primary"))
         text = (self.srv / ".ssh" / "authorized_keys").read_text()
         self.assertEqual(text.count(self.key.public_line.split()[1]), 1)  # once, whatever the order
         report = dialog.copy_report()
@@ -90,6 +90,14 @@ class DeployDialogTests(unittest.TestCase):
         dialog.undo()
         hosts = {h.alias: h for h in self.win.multirun.host_by_key().values()}
         self.assertFalse(hosts["web-01"].option("identityfile"))
+
+    def test_opens_modally_and_closes(self) -> None:
+        from gi.repository import GLib, Gtk
+
+        dialog = self.dialog({"web-01"})
+        GLib.timeout_add(200, lambda: dialog.response(Gtk.ResponseType.CLOSE) and False)
+        dialog.ask()  # crashed: an attribute named "run" hid Gtk.Dialog.run
+        self.assertIsNone(dialog.job)
 
     def test_declining_the_confirmation_runs_nothing(self) -> None:
         dialog = self.dialog({"web-01"})

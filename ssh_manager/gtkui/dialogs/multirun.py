@@ -35,7 +35,7 @@ class MultiRunDialog(BaseDialog):
         BaseDialog.__init__(self, parent, _("Run Command on Hosts"), size=DialogSize.LARGE, height=640)
         self.controller = controller
         self.keys: List[str] = list(dict.fromkeys(keys))
-        self.run: Optional[R.MultiRun] = None
+        self.job: Optional[R.MultiRun] = None
         self._drain_id = 0
         self.confirm_cancel: Callable[[], bool] = self._confirm_cancel  # test hook
         self.confirm_run: Callable[[List[R.Target], str], bool] = self._confirm_run  # test hook
@@ -298,7 +298,7 @@ class MultiRunDialog(BaseDialog):
 
     @property
     def running(self) -> bool:
-        return self.run is not None and not self.run.done
+        return self.job is not None and not self.job.done
 
     def _sync(self) -> None:
         running = self.running
@@ -306,7 +306,7 @@ class MultiRunDialog(BaseDialog):
             widget.set_sensitive(not running)
         self.run_button.set_sensitive(not running and bool(self.command_text.strip()) and self.runnable_count > 0)
         self.cancel_button.set_sensitive(running)
-        finished = self.run is not None and not running
+        finished = self.job is not None and not running
         failed = bool(self.results.keys_with(R.FAILURES)) if finished else False
         for name, button in getattr(self, "result_buttons", {}).items():
             button.set_sensitive(finished and (failed or name not in ("rerun_failed", "sessions")))
@@ -335,16 +335,16 @@ class MultiRunDialog(BaseDialog):
             return None
         options = self.options()
         self.controller.last_options = options
-        self.run = R.MultiRun(targets, command, options, connect=self.controller.connect)
+        self.job = R.MultiRun(targets, command, options, connect=self.controller.connect)
         self.results.reset(targets)
-        self.run.start()
+        self.job.start()
         self._started = time.monotonic()
         self._update_progress()
         self._stop_drain()
         self._drain_id = GLib.timeout_add(DRAIN_MS, self._drain)
         self._sync()
         self.on_started(command)
-        return self.run
+        return self.job
 
     def on_started(self, command: str) -> None:
         try:
@@ -355,11 +355,11 @@ class MultiRunDialog(BaseDialog):
         self._fill_history()
 
     def cancel(self) -> None:
-        if self.run is not None and not self.run.done:
-            self.run.cancel()
+        if self.job is not None and not self.job.done:
+            self.job.cancel()
 
     def _drain(self) -> bool:
-        run = self.run
+        run = self.job
         if run is None:
             self._drain_id = 0
             return False
@@ -380,7 +380,7 @@ class MultiRunDialog(BaseDialog):
         return True
 
     def _update_progress(self) -> None:
-        if self.run is None:
+        if self.job is None:
             return
         results = self.results.results.values()
         total = len(self.results.results)
@@ -389,7 +389,7 @@ class MultiRunDialog(BaseDialog):
         self.progress.set_text(_("{done} / {total} done").format(done=done, total=total))
 
     def _finished(self) -> None:
-        self.controller.log(R.audit_line(self.run))
+        self.controller.log(R.audit_line(self.job))
         self._sync()
         self.on_finished()
 
