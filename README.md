@@ -171,6 +171,12 @@ that direct file mode follows `Include` directives.
   **Known Hosts…** lists `~/.ssh/known_hosts` with the inventory hosts
   (hashed entries included): delete with Undo, import, export, verify a key
   now. See `docs/known-hosts.md`.
+- **Run Command on Hosts**: one non-interactive command or script on many hosts
+  at once, with no tabs. Results show in a table: status, exit code, output,
+  grouping of identical outputs and a diff against the majority. You can
+  export them (CSV/JSON/text) and re-run failed hosts. It asks first on more
+  than 5 hosts or for disruptive commands. Saved commands are encrypted. See
+  `docs/multi-run.md`.
 - **Port forwarding**: Local (`-L`), Remote (`-R`) and Dynamic (SOCKS5)
   forwards per host, started by hand, with a session or with the app, beside
   the terminal (they stop without disconnecting). App menu → **Tunnels…** shows
@@ -314,6 +320,7 @@ authentication.
 - `docs/security.md` — the master password, the key file, unlock modes, the recovery key, the migration, the threat model
 - `docs/known-hosts.md` — SSH host keys: the terminal banner, the Known Hosts manager, hashed entries
 - `docs/port-forwarding.md` — tunnels: Local / Remote / SOCKS forwards, when they run, limits
+- `docs/multi-run.md` — Run Command on Hosts: sending the script, results, safety checks, saved commands, limits
 - `docs/macros.md` — terminal macros: recording, secrets, playback, shortcuts, the encrypted file
 - `docs/rdp.md` — Remote Desktop: engines, install, settings, secrets, sessions, import / export, troubleshooting, the manual test checklist
 - `CHANGELOG-UI.md` — UI changes, moved features, shortcuts

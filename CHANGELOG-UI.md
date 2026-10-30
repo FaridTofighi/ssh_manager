@@ -6,6 +6,25 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Run Command on Hosts
+
+- **One command or script on many hosts**, with no tabs.
+  - **Opening:** from the app menu, a host's or group's menu, or the filter
+    (the matching hosts).
+  - **How it runs:** the script goes to `sh -s` (heredocs and quotes work).
+    `{host}` / `{alias}` / `{user}` / `{port}` are replaced per host. Several
+    hosts run at a time, with timeouts and an output cap.
+- **Results table:** status as an icon and a word, exit code, time, and
+  the first line; All / Failed / Succeeded filters; stdout and stderr per
+  host with a search; Group by Output and Show Differences.
+- **Actions:** Copy Results, Export (CSV with a formula guard, JSON, text),
+  Re-run Failed Only, Open Sessions to Failed Hosts.
+- **Safety:** asks before more than 5 hosts or a disruptive command (rm -rf,
+  reboot, mkfs …, with an "I understand" tick). Hosts that need a typed login
+  are reported, not prompted. No sudo password.
+- **Saved commands and history:** encrypted like macros; memory only
+  without a master password.
+
 ## Port forwarding (tunnels)
 
 - **Forwards per host:** Local, Remote and Dynamic (SOCKS5). SSH Manager runs

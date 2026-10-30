@@ -74,6 +74,10 @@ Terminal defaults:
 | Quick connect | Ctrl+Alt+T (was Ctrl+Shift+T) |
 | Connect to the selected host | Ctrl+T |
 
+Window actions without a key by default (set one if you use them often):
+`known-hosts` (Known Hosts), `tunnels.open` (Tunnels), `multirun.open` (Run
+Command on Hosts, see `docs/multi-run.md`).
+
 The terminal actions act only on the focused terminal. In a text field (the
 search box, a dialog) they do the field's own copy / paste / select all —
 Shift+Insert in the search box pastes there, never into a terminal behind it —
