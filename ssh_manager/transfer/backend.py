@@ -61,11 +61,26 @@ class UnknownHostKey(HostKeyError):
 
 
 class HostKeyChanged(HostKeyError):
+    """The stored key differs: never accepted automatically (whatever the policy).
+
+    ``fingerprint`` is the new key's, ``expected`` the first stored one; ``old_fingerprints`` all stored
+    ones, ``known_hosts_path`` / ``line_no`` the entry (0 when unknown) for "Remove old key and retry".
+    """
+
     default_message = "The server's host key has CHANGED. This can mean an attack; the connection was stopped."
 
-    def __init__(self, message: str = "", technical: str = "", *, fingerprint: str = "", expected: str = "") -> None:
+    def __init__(self, message: str = "", technical: str = "", *, fingerprint: str = "", expected: str = "",
+                 hostname: str = "", port: int = 22, key_type: str = "", old_fingerprints: Any = (),
+                 known_hosts_path: str = "", line_no: int = 0) -> None:
         super().__init__(message, technical)
         self.fingerprint, self.expected = fingerprint, expected
+        self.hostname, self.port, self.key_type = hostname, port, key_type
+        self.old_fingerprints = tuple(old_fingerprints) or ((expected,) if expected else ())
+        self.known_hosts_path, self.line_no = known_hosts_path, line_no
+
+    @property
+    def new_fingerprint(self) -> str:
+        return self.fingerprint
 
 
 class TlsError(BackendError):

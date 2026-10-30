@@ -46,8 +46,8 @@ from ssh_manager.host_utils import host_connection_params
 from ssh_manager.ssh_command import build_ssh_command
 from ssh_manager.secure_store import SecureStore, SecureStoreError
 from ssh_manager.text_utils import strip_ansi
-from ssh_manager.host_key_output import HostKeyOutputDetector, UnknownHostKeyPrompt, split_host
-from ssh_manager.gtkui.dialogs.host_key import ChangedKey, changed_key_names, remove_old_key, risk_text, show_details
+from ssh_manager.host_key_output import HostKeyOutputDetector, UnknownHostKeyPrompt, split_host  # noqa: E402
+from ssh_manager.gtkui.dialogs.host_key import ChangedKey, changed_key_names, remove_old_key, risk_text, show_details  # noqa: E402
 from ssh_manager.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
     _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output,
 )
@@ -244,7 +244,10 @@ FOCUS_RETRY_LIMIT = 40  # … and give up after ~2 s
 
 _RESPONSE_RECONNECT = 1
 _RESPONSE_HOST_KEY_DETAILS, _RESPONSE_HOST_KEY_REMOVE, _RESPONSE_HOST_KEY_COPY, _RESPONSE_HOST_KEY_DISMISS = 11, 12, 13, 14
-RECONNECT_STAGGER_MS = 150  # broadcast: ended sessions reconnect one after another, not all at once
+RECONNECT_STAGGER_MS = 150
+STATS_HOST_KEY_CHANGED = "host_key_changed"
+HOST_KEY_CHANGED_TEXT = "REMOTE HOST IDENTIFICATION HAS CHANGED"
+_HOST_KEY_WARNED: set = set()  # hosts whose changed key the stats probe reported (once per session)  # broadcast: ended sessions reconnect one after another, not all at once
 _RESPONSE_CLOSE = 2
 _FAILURE_WORDS = ("failed", "denied", "terminated", "error")
 
@@ -2200,6 +2203,8 @@ class TerminalTab(SessionPage):
             )
             if proc.returncode == 0 and proc.stdout.strip():
                 return parse_remote_stats_output(proc.stdout)
+            if HOST_KEY_CHANGED_TEXT in (proc.stderr or ""):
+                return {"error": STATS_HOST_KEY_CHANGED}
             LOGGER.debug(
                 "Remote stats command failed for %s: rc=%s stderr=%s",
                 self._host.alias,
@@ -2217,10 +2222,27 @@ class TerminalTab(SessionPage):
             return
         self._start_stats_updates()
 
+    def _stats_host_key_changed(self) -> None:
+        """A background probe never opens a dialog: the stats say so, and the log once per host and session."""
+
+        self._cpu_label.set_text(_("Host key changed"))
+        _set_stat_tooltip(self._cpu_label, _("The server's host key has changed; remote stats are stopped. See "
+                                             "Known Hosts."))
+        self._mem_label.set_text("Mem: —")
+        self._disk_label.set_text("Disk: —")
+        alias = self._host.alias
+        if alias not in _HOST_KEY_WARNED:
+            _HOST_KEY_WARNED.add(alias)
+            self._log(_("{alias}: the server's host key has changed; remote stats could not be read.").format(
+                alias=alias), Level.WARNING)
+
     def _apply_stats_result(self, data: Optional[Dict[str, float]]) -> bool:
         set_spinner_busy(self._info_spinner, False)
         with self._stats_lock:
             self._stats_updating = False
+        if isinstance(data, dict) and data.get("error") == STATS_HOST_KEY_CHANGED:
+            self._stats_host_key_changed()
+            return False
         if not isinstance(data, dict):
             self._cpu_label.set_text("CPU: N/A")
             self._mem_label.set_text("Mem: N/A")

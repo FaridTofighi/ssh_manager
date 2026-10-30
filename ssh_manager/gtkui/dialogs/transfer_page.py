@@ -312,7 +312,8 @@ class TransferPage:
                          "connect.").format(type=exc.key_type, fingerprint=exc.fingerprint)
                 ok = False
             except HostKeyChanged as exc:
-                text = exc.message
+                text = exc.message + "\n" + _("Now: {new}\nStored: {old}\nSee Known Hosts to check or remove the old "
+                                              "key.").format(new=exc.fingerprint, old=exc.expected)
                 ok = False
             except BackendError as exc:
                 text = exc.message + (f"\n{exc.technical}" if exc.technical else "")

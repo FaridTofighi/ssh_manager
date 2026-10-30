@@ -225,14 +225,30 @@ class SftpBackend(RemoteFileBackend):
         if key.get_name() in entries:
             if entries[key.get_name()] == key:
                 return
-            raise HostKeyChanged(fingerprint=key_fingerprint(key), expected=key_fingerprint(entries[key.get_name()]))
+            raise self._changed(key, entries[key.get_name()], entries)
         if entries:  # known with another key type: treat like OpenSSH (a changed key is suspicious)
-            other = next(iter(entries.values()))
-            raise HostKeyChanged(fingerprint=key_fingerprint(key), expected=key_fingerprint(other))
+            raise self._changed(key, next(iter(entries.values())), entries)
         if self.host_key_policy == "auto-add":
             return
         raise UnknownHostKey(hostname=self.hostname, port=self.port, key_type=key.get_name(),
                              fingerprint=key_fingerprint(key), key=key)
+
+    def _changed(self, key: paramiko.PKey, expected: paramiko.PKey, entries) -> HostKeyChanged:
+        """The error with what "Remove old key and retry" needs: the stored entry's file and line."""
+
+        from ..known_hosts import KnownHostsFile
+
+        line_no = 0
+        try:
+            stored = [e for e in KnownHostsFile(self.known_hosts).lookup(self.hostname, self.port) if not e.marker]
+            same_type = [e for e in stored if e.key_type == expected.get_name()]
+            line_no = (same_type or stored)[0].line_no if (same_type or stored) else 0
+        except OSError:
+            pass
+        return HostKeyChanged(fingerprint=key_fingerprint(key), expected=key_fingerprint(expected),
+                              hostname=self.hostname, port=self.port, key_type=key.get_name(),
+                              old_fingerprints=[key_fingerprint(k) for k in entries.values()],
+                              known_hosts_path=str(self.known_hosts), line_no=line_no)
 
     def accept_host_key(self, error: UnknownHostKey, *, remember: bool = True) -> None:
         """The user confirmed the fingerprint: accept it now and (``remember``) append it to known_hosts."""

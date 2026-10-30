@@ -514,11 +514,23 @@ class FileBrowserTab(SessionPage):
             self._set_status(ConnectionStatus.FAILED, exc.message)
             self._log(_("{alias}: the host key changed (now {new}, expected {old}).").format(
                 alias=alias, new=exc.fingerprint, old=exc.expected), Level.ERROR)
+            self._host_key_changed(exc, password)
             return
         error = exc if isinstance(exc, BackendError) else BackendError(technical=type(exc).__name__)
         self._set_status(ConnectionStatus.FAILED, error.message)
         if error.technical:
             LOGGER.info("%s: %s", alias, error.technical)
+
+    def _host_key_changed(self, exc: HostKeyChanged, password: str) -> None:
+        """The shared dialog (Details… / Remove Old Key and Retry…); nothing is trusted automatically."""
+
+        from ..dialogs.host_key import changed_key_from_error, show_host_key_changed
+
+        window = self._window()
+        dialogs = getattr(window, "app_dialogs", None)
+        show_host_key_changed(window, changed_key_from_error(exc, self._host.alias),
+                              on_retry=lambda: self._retry_same(password),
+                              open_manager=(lambda: dialogs.open_known_hosts(self._host)) if dialogs else None)
 
     def _trust(self, backend: RemoteFileBackend, exc: UntrustedCertificate) -> None:
         trust = getattr(backend, "trust_certificate", None)

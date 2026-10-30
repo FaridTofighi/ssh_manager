@@ -62,7 +62,7 @@ from ...rdp.keyboard import Effect, KeyboardGrab, release_hint  # noqa: E402
 from ...rdp.outcome import Kind, RdpOutcome, classify_rdp_exit, connected_line  # noqa: E402
 from ...rdp.probe import ProbeResult, probe, probe_tls  # noqa: E402
 from ...rdp.tunnel import open_tunnel  # noqa: E402
-from ...transfer.backend import AuthError, BackendError, UnknownHostKey  # noqa: E402
+from ...transfer.backend import AuthError, BackendError, HostKeyChanged, UnknownHostKey  # noqa: E402
 from ...rdp.process import RdpProcess  # noqa: E402
 from ...rdp.reconnect import Plan, ReconnectScheduler, plan_for  # noqa: E402
 from ...rdp.settings import RdpSettings, resolve_identity  # noqa: E402
@@ -699,6 +699,9 @@ class RdpSessionTab(SessionPage):
             except UnknownHostKey as exc:
                 GLib.idle_add(self._tunnel_host_key, exc)
                 return
+            except HostKeyChanged as exc:
+                GLib.idle_add(self._tunnel_host_key_changed, exc)
+                return
             except Exception as exc:  # BackendError, LookupError …: explained, never a traceback
                 GLib.idle_add(self._tunnel_failed, exc)
                 return
@@ -726,6 +729,20 @@ class RdpSessionTab(SessionPage):
                        "tunnel host key", kind=Kind.NETWORK)
             return GLib.SOURCE_REMOVE
         self._open_tunnel()
+        return GLib.SOURCE_REMOVE
+
+    def _tunnel_host_key_changed(self, exc: Any) -> bool:
+        """The tunnel host's key changed: the shared dialog; *Remove Old Key and Retry* reconnects."""
+
+        from ..dialogs.host_key import changed_key_from_error, show_host_key_changed
+
+        self._runtime.limiter.release(self)
+        if self._closed:
+            return GLib.SOURCE_REMOVE
+        label = _("{host} (SSH tunnel)").format(host=exc.hostname or self.settings.via_ssh)
+        self._fail(_("The SSH host's key has changed; the tunnel was not opened."), "tunnel: host key changed",
+                   kind=Kind.NETWORK)
+        show_host_key_changed(self._window(), changed_key_from_error(exc, label), on_retry=self.reconnect)
         return GLib.SOURCE_REMOVE
 
     def _tunnel_failed(self, exc: BaseException) -> bool:
