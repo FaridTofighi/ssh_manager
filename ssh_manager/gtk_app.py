@@ -96,7 +96,7 @@ from ssh_manager.gtkui.identity import local_user_initials  # noqa: E402
 from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
 from ssh_manager.gtkui.workspaces import workspace_list  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import UI_FONT_FAMILIES  # noqa: E402
-from ssh_manager.gtkui.widgets.icons import register_icon_path  # noqa: E402
+from ssh_manager.gtkui.widgets.icons import install_app_icon, register_icon_path  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
@@ -146,6 +146,7 @@ class SSHManagerApplication(Gtk.Application):
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
         register_icon_path()
+        install_app_icon()  # before the first window (the unlock dialogs too)
         self._install_css(None)
 
     def _open_startup_host(self, host: HostEntry) -> bool:

@@ -239,7 +239,7 @@ class AppDialogs:
     def show_about(self) -> None:
         about = Gtk.AboutDialog(transient_for=self.win, modal=True)
         about.set_program_name(_("SSH Manager"))
-        about.set_logo_icon_name("utilities-terminal")
+        about.set_logo_icon_name("ophion")
         about.set_comments(_("Browse grouped OpenSSH configs, manage credentials and run embedded SSH sessions."))
         about.run()
         about.destroy()

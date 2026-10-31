@@ -24,6 +24,7 @@ symbolic recoloring too, should a name ever reach ``Gtk.IconTheme`` directly.
 from __future__ import annotations
 
 import functools
+import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -35,6 +36,7 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Rsvg", "2.0")
 from gi.repository import Gdk, Gtk, Rsvg  # type: ignore  # noqa: E402
 
+LOGGER = logging.getLogger(__name__)
 ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons"
 PREFIX = "sshm-"
 
@@ -48,6 +50,37 @@ def register_icon_path() -> None:
     theme = Gtk.IconTheme.get_default()
     if theme is not None and str(ICON_DIR) not in theme.get_search_path():
         theme.append_search_path(str(ICON_DIR))
+
+
+APP_ICON_NAME = "ophion"
+APP_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "app-icon"  # holds hicolor/<size>/apps/
+APP_ICON_SIZES = (16, 22, 24, 32, 48, 64, 96, 128, 256, 512)
+
+
+def app_icon_file(size: int = 256) -> Path:
+    return APP_ICON_DIR / "hicolor" / f"{size}x{size}" / "apps" / f"{APP_ICON_NAME}.png"
+
+
+def install_app_icon(theme: Optional[Gtk.IconTheme] = None, search_dir: Optional[Path] = None) -> str:
+    """The default icon of every window: the ``ophion`` theme icon, else the 256 px file.
+
+    Works from a source checkout too (the bundled hicolor folder joins the search path). Returns ``"name"``,
+    ``"file"`` or ``""`` (no icon); never raises.
+    """
+
+    theme = theme or Gtk.IconTheme.get_default()
+    folder = str(search_dir or APP_ICON_DIR)
+    try:
+        if theme is not None and folder not in theme.get_search_path():
+            theme.append_search_path(folder)
+        if theme is not None and theme.has_icon(APP_ICON_NAME):
+            Gtk.Window.set_default_icon_name(APP_ICON_NAME)
+            return "name"
+        Gtk.Window.set_default_icon_from_file(str(app_icon_file()))
+        return "file"
+    except Exception as exc:  # a missing or unreadable icon must never stop the app
+        LOGGER.info("app icon: not set (%s)", type(exc).__name__)
+        return ""
 
 
 def _file_for(name: str) -> Optional[Path]:
