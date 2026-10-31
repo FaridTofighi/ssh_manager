@@ -46,6 +46,28 @@ class AppIconTests(unittest.TestCase):
             self.assertIn(window.get_icon_name(), (None, "ophion"))
             self.assertIsNone(window.get_icon())
 
+    def test_the_welcome_state_shows_the_mark_at_128_px(self) -> None:
+        from gi.repository import Gtk
+
+        from tests import gtk_window_fixture
+        from tests.gtk_window_fixture import WindowSandbox
+
+        self.icons.install_app_icon()
+        with mock.patch.dict(gtk_window_fixture.SAMPLE, clear=True):  # no hosts: the welcome
+            sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        sandbox.window.host_page.refresh()
+        ready = sandbox.window.host_page.terminal_page.ready
+        Gtk.Box.show_all(ready)  # what showing the window does: must not bring the card back
+        self.assertEqual(ready.title.get_text(), "Add your first host")
+        self.assertTrue(ready.logo.get_visible())
+        self.assertFalse(ready._card.get_visible())
+        self.assertEqual((ready.logo.get_icon_name()[0], ready.logo.get_pixel_size()), ("ophion", 128))
+        info = Gtk.IconTheme.get_default().lookup_icon("ophion", 128, 0)
+        self.assertTrue(info.get_filename().endswith("128x128/apps/ophion.png"))  # its own size, never stretched
+        ready.set_content("Ready to connect", "", "Connect", lambda: None)  # any other state: the card again
+        self.assertEqual((ready.logo.get_visible(), ready._card.get_visible()), (False, True))
+
     def test_about_shows_the_logo(self) -> None:
         from gi.repository import Gtk
 

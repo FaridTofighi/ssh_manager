@@ -477,6 +477,7 @@ class HostPageController:
                 primary_icon=Icons.NEW,
                 secondary_label=_("_Import from OpenSSH config"),
                 on_secondary=self.win.inventory.open_inventory_folder,
+                logo=True,  # the welcome: the application's mark
             )
         elif kind == "multi":
             page.ready.set_content(

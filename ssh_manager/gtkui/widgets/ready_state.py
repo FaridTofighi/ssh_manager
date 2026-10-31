@@ -27,7 +27,9 @@ from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
-from .icons import make_icon  # noqa: E402
+from .icons import APP_ICON_NAME, make_icon  # noqa: E402
+
+LOGO_SIZE = 128  # the application mark on the welcome state: a file of that size exists (never stretched)
 
 
 class ReadyState(Gtk.Box):
@@ -48,7 +50,14 @@ class ReadyState(Gtk.Box):
         self._card_icon = make_icon(Icons.TERMINAL, Size.EMPTY_CARD_ICON, css_class="empty-icon")
         self._card_icon.set_valign(Gtk.Align.CENTER)
         card.set_center_widget(self._card_icon)
+        card.show_all()
+        card.set_no_show_all(True)  # set_content() decides: the card, or the logo (a parent's show_all() keeps it)
         self.pack_start(card, False, False, 0)
+        self.logo = Gtk.Image.new_from_icon_name(APP_ICON_NAME, Gtk.IconSize.DIALOG)  # instead of the card
+        self.logo.set_pixel_size(LOGO_SIZE)
+        self.logo.set_halign(Gtk.Align.CENTER)
+        self.logo.set_no_show_all(True)
+        self.pack_start(self.logo, False, False, 0)
 
         self.title = Gtk.Label()
         self.title.get_style_context().add_class("empty-title")
@@ -135,8 +144,11 @@ class ReadyState(Gtk.Box):
         on_secondary: Optional[Callable[[], None]] = None,
         caption: str = "",
         details_link: bool = False,
+        logo: bool = False,
     ) -> None:
         self.title.set_text(title)
+        self._card.set_visible(not logo)
+        self.logo.set_visible(logo)
         self.body.set_markup(body_markup)
         self._primary_label.set_text_with_mnemonic(primary_label)
         self._primary_icon.set_icon(primary_icon)
