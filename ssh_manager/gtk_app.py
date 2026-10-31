@@ -130,12 +130,19 @@ def _home_relative(path: Path) -> str:
         return str(path)
 
 
+APPLICATION_ID = "org.codex.SSHManager"  # also StartupWMClass in packaging/appimage/ssh-manager.desktop
+
+
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
     def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None,
                  startup_host: Optional[HostEntry] = None) -> None:
-        Gtk.Application.__init__(self, application_id="org.codex.SSHManager")
+        Gtk.Application.__init__(self, application_id=APPLICATION_ID)
+        # X11 WM_CLASS = the desktop file's StartupWMClass (it was "main.py"), so docks group the windows
+        # under the launcher and its icon; on Wayland the app id is already this.
+        GLib.set_prgname(APPLICATION_ID)
+        Gdk.set_program_class(APPLICATION_ID)
         self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
         self._inventory = inventory  # --inventory: another database file
         self._window: Optional[SSHManagerWindow] = None

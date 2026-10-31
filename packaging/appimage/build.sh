@@ -150,10 +150,18 @@ cp -a /opt/freerdp/lib/lib*.so* "$LIBDIR/"
 # ---- desktop integration
 cp "$PACKAGING/AppRun" "$APPDIR/AppRun"
 chmod 755 "$APPDIR/AppRun"
-cp "$PACKAGING/ssh-manager.desktop" "$PACKAGING/ssh-manager.svg" "$APPDIR/"
-ln -s ssh-manager.svg "$APPDIR/.DirIcon"
+# The application icon "ophion": the bundled hicolor PNGs (raster only; see gtkui/assets/app-icon/README.md).
+APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"
+cp "$PACKAGING/ssh-manager.desktop" "$APPDIR/"
+cp "$APP_ICONS/256x256/apps/ophion.png" "$APPDIR/ophion.png"  # appimagetool: the Icon= file at the top
+ln -s ophion.png "$APPDIR/.DirIcon"
 install -Dm644 "$PACKAGING/ssh-manager.desktop" "$APPDIR/usr/share/applications/ssh-manager.desktop"
-install -Dm644 "$PACKAGING/ssh-manager.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/ssh-manager.svg"
+for size_dir in "$APP_ICONS"/*x*; do
+    install -Dm644 "$size_dir/apps/ophion.png" "$APPDIR/usr/share/icons/hicolor/$(basename "$size_dir")/apps/ophion.png"
+done
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then  # the copied hicolor cache would not list it
+    gtk-update-icon-cache -f -t "$APPDIR/usr/share/icons/hicolor" || log "note: gtk-update-icon-cache failed"
+fi
 install -Dm644 "$PACKAGING/ssh-manager.metainfo.xml" "$APPDIR/usr/share/metainfo/ssh-manager.appdata.xml"
 
 # ---- shared libraries: everything the ELF files need, except the host's (host-libraries.txt)

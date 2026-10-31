@@ -91,7 +91,52 @@ class AppIconTests(unittest.TestCase):
             self.assertEqual(self.icons.install_app_icon(Gtk.IconTheme.new(), Path("/nonexistent/icons")), "")
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class WindowClassTests(unittest.TestCase):
+    def test_wm_class_is_the_desktop_files_startup_wm_class(self) -> None:
+        from gi.repository import Gdk, GLib
+
+        from tests.gtk_window_fixture import WindowSandbox
+
+        from ssh_manager.gtk_app import APPLICATION_ID, SSHManagerApplication
+
+        sandbox = WindowSandbox()  # a temporary HOME: the application reads its settings there
+        self.addCleanup(sandbox.close)
+        SSHManagerApplication()
+        self.assertEqual((GLib.get_prgname(), Gdk.get_program_class()), (APPLICATION_ID, APPLICATION_ID))
+        self.assertEqual(desktop_entry()["StartupWMClass"], APPLICATION_ID)
+
+
+def desktop_entry():
+    import configparser
+
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.optionxform = str  # keys are case-sensitive
+    parser.read(REPO / "packaging" / "appimage" / "ssh-manager.desktop", encoding="utf-8")
+    return parser["Desktop Entry"]
+
+
 class PackagingTests(unittest.TestCase):
+    def test_desktop_entry(self) -> None:
+        entry = desktop_entry()
+        for key in ("Type", "Name", "Exec", "Icon", "Terminal", "Categories", "StartupWMClass"):
+            self.assertTrue(entry.get(key), key)
+        self.assertEqual(entry["Icon"], "ophion")
+        self.assertEqual(entry["Exec"].split()[0], "ssh-manager")  # the AppImage's launcher name
+        self.assertEqual(entry["Terminal"], "false")
+        if shutil.which("desktop-file-validate"):
+            result = subprocess.run(["desktop-file-validate", str(REPO / "packaging/appimage/ssh-manager.desktop")],
+                                    capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout.strip()), (0, ""))
+
+    def test_the_appimage_installs_every_size(self) -> None:
+        script = (REPO / "packaging" / "appimage" / "build.sh").read_text(encoding="utf-8")
+        self.assertIn('APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"', script)
+        self.assertIn('/usr/share/icons/hicolor/$(basename "$size_dir")/apps/ophion.png', script)
+        self.assertIn('ln -s ophion.png "$APPDIR/.DirIcon"', script)
+        self.assertIn("gtk-update-icon-cache -f -t", script)
+        self.assertNotIn("ssh-manager.svg", script)  # the old icon is gone
+
     def test_every_icon_file_is_shipped(self) -> None:
         """The AppImage ships ``git archive HEAD -- ssh_manager``: the files must exist and be tracked."""
 

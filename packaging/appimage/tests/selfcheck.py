@@ -116,15 +116,17 @@ def terminal_and_icon():
     window = Gtk.OffscreenWindow()
     window.add(terminal)
     window.show_all()
-    icon = os.path.join(APPDIR, "ssh-manager.svg")
-    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(icon, 64, 64)
-    handle = Rsvg.Handle.new_from_file(icon)
-    app_icon = os.path.join(APPDIR, "usr/share/ssh-manager/ssh_manager/gtkui/assets/icons/sshm-server-symbolic.svg")
-    GdkPixbuf.Pixbuf.new_from_file_at_size(app_icon, 16, 16)
+    pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(APPDIR, "ophion.png"))
+    svg = os.path.join(APPDIR, "usr/share/ssh-manager/ssh_manager/gtkui/assets/icons/sshm-server-symbolic.svg")
+    svg_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(svg, 64, 64)
+    handle = Rsvg.Handle.new_from_file(svg)
     theme = Gtk.IconTheme.get_default().lookup_icon("window-close-symbolic", 16, 0)
     assert theme is not None, "Adwaita's window-close-symbolic not found"
+    app_icon = Gtk.IconTheme.get_default().lookup_icon("ophion", 48, 0)
+    assert app_icon is not None, "the application icon (ophion) is not in the bundled hicolor theme"
     window.destroy()
-    return f"VTE terminal created; SVG {pixbuf.get_width()}x{pixbuf.get_height()} via GdkPixbuf, Rsvg {bool(handle)}"
+    return (f"VTE terminal created; icon {pixbuf.get_width()}x{pixbuf.get_height()}; SVG "
+            f"{svg_pixbuf.get_width()}x{svg_pixbuf.get_height()} via GdkPixbuf, Rsvg {bool(handle)}")
 
 
 def certificates():

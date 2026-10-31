@@ -146,7 +146,7 @@ host's PulseAudio / PipeWire server as usual).
 | `AppRun` | The launcher: environment for the bundled Python / GTK / programs |
 | `host-libraries.txt` | Libraries allowed from the host (library audit) |
 | `requirements.lock`, `requirements-build.lock` | Hashed Python dependencies |
-| `ssh-manager.desktop`, `ssh-manager.svg`, `ssh-manager.metainfo.xml` | Desktop integration, AppStream |
+| `ssh-manager.desktop`, `ssh-manager.metainfo.xml` | Desktop integration, AppStream (the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
 | `tests/smoke.sh`, `tests/selfcheck.py`, `tests/e2e_ssh.py` | Clean-room tests |
 
 There is no CI configuration: the repository does not use GitHub Actions yet. A CI job would run
