@@ -22,6 +22,7 @@ ssh_manager/
     unlock_flow.py      start-up: set / ask for the master password, recovery key, key file missing
     migration_flow.py   the dialogs of the move to the key file (ssh_manager/migration.py does it)
     assets/icons/       bundled sshm-*-symbolic.svg outline icons
+    assets/app-icon/    the application icon "ophion" (hicolor PNGs, see "Icons" below)
     theme/              density (Compact/Comfortable presets), tokens (palette; live Space/Size/
                         Layout/FontScale views), stylesheet generator, fonts, css_dark/css_light,
                         loader, terminal_schemes
@@ -226,6 +227,37 @@ self.win._notify(_("Upload failed."), Level.ERROR,      # stays 30 s (warnings 2
 
 Use `Level.INFO` for hints. Every toast is also recorded in the message
 history popover in the header bar.
+
+## Icons
+
+- **Application icon:** the icon name is `ophion`. Its files are in
+  `gtkui/assets/app-icon/hicolor/<size>x<size>/apps/ophion.png` (16, 22, 24,
+  32, 48, 64, 96, 128, 256, 512 px), copied unchanged from the approved Ophion
+  icon package (dark-multicolor).
+- **Startup:** `install_app_icon()` (`widgets/icons.py`) adds that folder to
+  the icon theme search path and makes `ophion` the default icon of every
+  window and dialog, before the first window opens. If the theme cannot find
+  it, the 256 px file is used; a missing icon never stops the app. No window
+  sets an icon of its own.
+- **Where it shows:** the About logo, and the "Add your first host" welcome,
+  which shows the mark at 128 px instead of the card
+  (`ReadyState.set_content(logo=True)`). The header bar has no Ophion logo.
+- **Packaging:** the AppImage installs the same files under
+  `usr/share/icons/hicolor` (`packaging/appimage/build.sh`). Its desktop
+  entry says `Icon=ophion`, and `StartupWMClass` is the application id, which
+  is also the X11 `WM_CLASS` (`GLib.set_prgname` / `Gdk.set_program_class`
+  in `SSHManagerApplication`).
+- **Adding a size:** put the PNG at `hicolor/<n>x<n>/apps/ophion.png`, add `n`
+  to `APP_ICON_SIZES`, and make sure the size is in the hicolor theme's
+  `index.theme`. The build script copies every size folder.
+- **Raster only:** there is no SVG. Never resample the PNGs (no enlarging, no
+  "fixing"); sizes above 512 px or sharper small sizes need a vector redraw.
+- **Wordmark:** the package's wordmark (opaque white background) is not used
+  yet. It spells the new name and belongs with the rename. When it is added,
+  prepare a transparent light-theme copy at build time and show only the mark
+  on dark themes.
+- **Symbolic icons:** the UI's own `sshm-*-symbolic.svg` icons are separate
+  (`assets/icons`, `make_icon`).
 
 ## Lifetimes and cleanup
 

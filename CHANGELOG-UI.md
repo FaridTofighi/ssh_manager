@@ -6,6 +6,13 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Application icon
+
+- Ophion has its new application icon (window, taskbar, About dialog, desktop
+  entry). The "Add your first host" welcome shows it at 128 px.
+- The windows' X11 class is now the application id, so docks group them
+  under the launcher and its icon (it was "main.py").
+
 ## Host keys in Paramiko connections
 
 - Run Command, file transfer and tunnels no longer report a false "Host key
