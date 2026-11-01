@@ -8,6 +8,6 @@ Icon=ophion
 Terminal=false
 Categories=Network;RemoteAccess;
 Keywords=ssh;sftp;ftp;rdp;terminal;remote;
-StartupWMClass=io.github.ophion.Ophion
+StartupWMClass=io.github.faridtofighi.Ophion
 StartupNotify=true
 X-AppImage-Name=Ophion

@@ -13,8 +13,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
   Manager" in the README.
 - The window title, header, About, menus, dialogs, reports and the OpenSSH export say Ophion. The
   header's brand tile shows the new icon.
-- Command `ophion`, application id `io.github.ophion.Ophion`, desktop file
-  `io.github.ophion.Ophion.desktop`, AppImage `Ophion-<version>-x86_64.AppImage`.
+- Command `ophion`, application id `io.github.faridtofighi.Ophion`, desktop file
+  `io.github.faridtofighi.Ophion.desktop`, AppImage `Ophion-<version>-x86_64.AppImage`.
 - `.sshm` exports, macros, the key file and saved passwords keep their formats: everything SSH
   Manager wrote still opens.
 

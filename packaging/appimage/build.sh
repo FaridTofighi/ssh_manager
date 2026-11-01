@@ -152,7 +152,7 @@ cp "$PACKAGING/AppRun" "$APPDIR/AppRun"
 chmod 755 "$APPDIR/AppRun"
 # The application icon "ophion": the bundled hicolor PNGs (raster only; see gtkui/assets/app-icon/README.md).
 APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"
-DESKTOP_ID="io.github.ophion.Ophion"  # identity.APP_ID: the desktop file's and AppStream's name
+DESKTOP_ID="io.github.faridtofighi.Ophion"  # identity.APP_ID: the desktop file's and AppStream's name
 cp "$PACKAGING/$DESKTOP_ID.desktop" "$APPDIR/"
 cp "$APP_ICONS/256x256/apps/ophion.png" "$APPDIR/ophion.png"  # appimagetool: the Icon= file at the top
 ln -s ophion.png "$APPDIR/.DirIcon"

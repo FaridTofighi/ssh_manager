@@ -11,8 +11,8 @@ from __future__ import annotations
 
 APP_NAME = "Ophion"  # window title, About, notifications, reports
 APP_SLUG = "ophion"  # command, directories, icon name, file prefixes
-# Placeholder until the real GitHub organisation / user is known: change it here only.
-APP_ID = "io.github.ophion.Ophion"  # Gtk.Application id, desktop file, metainfo, WM class
+# Reverse-DNS of github.com/FaridTofighi; the packaging files repeat it in their names (packaging/appimage).
+APP_ID = "io.github.faridtofighi.Ophion"  # Gtk.Application id, desktop file, metainfo, WM class
 APP_TAGLINE = "Connection manager for SSH, SFTP, FTP and RDP"
 ENV_PREFIX = "OPHION_"  # environment variables (the legacy prefix is still read as a fallback)
 

@@ -9,7 +9,7 @@ from unittest import mock
 from tests.gtk_window_fixture import display_available
 
 REPO = Path(__file__).resolve().parent.parent
-APP_ID = "io.github.ophion.Ophion"
+APP_ID = "io.github.faridtofighi.Ophion"
 
 
 @unittest.skipUnless(display_available(), "needs a display")
@@ -184,7 +184,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("gtk-update-icon-cache -f -t", script)
         self.assertNotIn("ssh-manager.svg", script)  # the old icon is gone
         self.assertIn('NAME="Ophion-$VERSION-x86_64.AppImage"', script)
-        self.assertIn('DESKTOP_ID="io.github.ophion.Ophion"', script)
+        self.assertIn('DESKTOP_ID="io.github.faridtofighi.Ophion"', script)
         apprun = (REPO / "packaging" / "appimage" / "AppRun").read_text(encoding="utf-8")
         self.assertIn('export OPHION_APPDIR="$HERE"', apprun)
         self.assertIn("${OPHION_APPIMAGE_EXEC:-${SSH_MANAGER_APPIMAGE_EXEC:-}}", apprun)  # the old name works

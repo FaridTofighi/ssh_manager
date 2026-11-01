@@ -68,7 +68,7 @@ files are two tiny GTK module caches with the current mount path in `~/.cache/op
 ones are removed at the next start).
 
 The taskbar and dock show Ophion's icon once the AppImage is integrated into the desktop (for example
-with AppImageLauncher), which installs `io.github.ophion.Ophion.desktop` (`Icon=ophion`). GNOME on
+with AppImageLauncher), which installs `io.github.faridtofighi.Ophion.desktop` (`Icon=ophion`). GNOME on
 Wayland finds the icon through that desktop file and the application id. Without integration, the
 window still has the icon: the app sets it itself from the bundled `usr/share/icons/hicolor` (AppRun
 puts `usr/share` on `XDG_DATA_DIRS`).
@@ -153,7 +153,7 @@ host's PulseAudio / PipeWire server as usual).
 | `AppRun` | The launcher: environment for the bundled Python / GTK / programs |
 | `host-libraries.txt` | Libraries allowed from the host (library audit) |
 | `requirements.lock`, `requirements-build.lock` | Hashed Python dependencies |
-| `io.github.ophion.Ophion.desktop`, `io.github.ophion.Ophion.metainfo.xml` | Desktop integration, AppStream (named after the application id; the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
+| `io.github.faridtofighi.Ophion.desktop`, `io.github.faridtofighi.Ophion.metainfo.xml` | Desktop integration, AppStream (named after the application id; the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
 | `tests/smoke.sh`, `tests/selfcheck.py`, `tests/e2e_ssh.py` | Clean-room tests |
 
 There is no CI configuration: the repository does not use GitHub Actions yet. A CI job would run

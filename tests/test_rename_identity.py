@@ -8,7 +8,7 @@ from ssh_manager import identity as I
 
 class IdentityTests(unittest.TestCase):
     def test_constants(self) -> None:
-        self.assertEqual((I.APP_NAME, I.APP_SLUG, I.APP_ID), ("Ophion", "ophion", "io.github.ophion.Ophion"))
+        self.assertEqual((I.APP_NAME, I.APP_SLUG, I.APP_ID), ("Ophion", "ophion", "io.github.faridtofighi.Ophion"))
         self.assertEqual(I.APP_TAGLINE, "Connection manager for SSH, SFTP, FTP and RDP")
         self.assertEqual((I.LEGACY_APP_NAME, I.LEGACY_SLUG, I.LEGACY_APP_ID),
                          ("SSH Manager", "ssh-manager", "org.codex.SSHManager"))
