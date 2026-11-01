@@ -101,10 +101,6 @@ class HeaderHitAreaTests(unittest.TestCase):
                 if name.endswith("chip"):
                     button.set_active(True)  # a click toggled it: back to "included"
 
-    # Measured: after set_zoomed() the new SvgIcon (a DrawingArea with its own GdkWindow) is stacked above
-    # the button's input window; the centre of the zoom button goes to SvgIcon. Strict: an unexpected
-    # success fails the run (Python 3.11+).
-    @unittest.expectedFailure
     def test_every_button_is_clickable_on_its_icon_in_every_state(self) -> None:
         self.assert_clickable("shown")
         for frame in (self.tile, self.pane):

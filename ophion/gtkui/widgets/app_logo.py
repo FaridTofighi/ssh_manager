@@ -41,6 +41,7 @@ def logo_pixbuf(pixels: int) -> Optional[GdkPixbuf.Pixbuf]:
 class AppLogo(Gtk.DrawingArea):
     def __init__(self, size: int, radius: int = 6) -> None:
         Gtk.DrawingArea.__init__(self)
+        self.set_has_window(False)  # draws only: no input window that could cover a button's (see SvgIcon)
         self._cache: Dict[int, Optional[GdkPixbuf.Pixbuf]] = {}
         self.set_logo_size(size, radius)
         self.connect("draw", lambda _w, cr: self.paint(cr, self.get_scale_factor()) or False)

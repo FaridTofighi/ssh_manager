@@ -15,6 +15,7 @@ class Dot(Gtk.DrawingArea):
 
     def __init__(self, diameter: int = 8, *, css_class: str = "") -> None:
         Gtk.DrawingArea.__init__(self)
+        self.set_has_window(False)  # draws only: no input window that could cover a button's (see SvgIcon)
         self._diameter = diameter
         self.set_size_request(diameter, diameter)
         self.set_valign(Gtk.Align.CENTER)

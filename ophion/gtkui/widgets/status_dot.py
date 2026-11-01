@@ -32,6 +32,7 @@ class StatusDot(Gtk.DrawingArea):
 
     def __init__(self, status: object = ConnectionStatus.UNKNOWN, *, size: int = 10) -> None:
         Gtk.DrawingArea.__init__(self)
+        self.set_has_window(False)  # draws only: no input window that could cover a button's (see SvgIcon)
         self._size = size
         self._status = ConnectionStatus.UNKNOWN
         self.set_size_request(size, size)

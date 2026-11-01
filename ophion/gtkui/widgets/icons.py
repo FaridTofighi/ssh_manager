@@ -269,6 +269,9 @@ class SvgIcon(Gtk.DrawingArea):
 
     def __init__(self, name: str, size: int = 16, *, css_class: str = "") -> None:
         Gtk.DrawingArea.__init__(self)
+        # No GdkWindow of its own: an icon swapped into a realized button (IconButton.set_icon) got its
+        # window stacked above the button's input window, so the middle of the button stopped reacting.
+        self.set_has_window(False)
         self._name = name
         self._size = size
         self.set_size_request(size, size)
