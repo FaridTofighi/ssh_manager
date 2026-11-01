@@ -6,6 +6,13 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Fixes
+
+- Fixed the maximize/restore button in session tiles: it now reacts when the
+  pointer is on the icon. Before, only its edges worked after the first zoom
+  or restore. The macro Record/Stop button had the same problem and is fixed
+  too.
+
 ## Renamed to Ophion
 
 - Renamed to Ophion ("Connection manager for SSH, SFTP, FTP and RDP"), with a new icon. Your data

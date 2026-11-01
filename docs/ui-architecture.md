@@ -158,6 +158,18 @@ buttons, footer, padding and border. Its capture-phase `GestureMultiPress`
 gets the press. A press inside a split pane of a tile is left to that pane's
 own frame. The divider, the tile gutters and the scroll wheel never activate.
 
+**Header buttons: the hit area must equal the drawn area.**
+- **No window in a button:** widgets that only draw (`SvgIcon`, `Dot`,
+  `StatusDot`, `AppLogo`) have no GdkWindow (`set_has_window(False)`). A
+  `Gtk.Button` takes the pointer through its own input window, raised above
+  its children when it is mapped. An icon with a window of its own that is
+  swapped in later (`IconButton.set_icon`, as zoom ↔ restore does) would be
+  stacked above it, and only the button's edges would react.
+- **No size changes on hover:** never change size-affecting CSS (padding,
+  border, margin) on hover or focus; change colours only.
+
+`tests/test_gtkui_pane_header_hitarea.py` checks both.
+
 ### Density
 
 `theme/density.py` holds the presets and the active one. Views implement
