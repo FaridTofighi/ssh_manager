@@ -35,7 +35,7 @@ if [ "${1:-}" != "--inside" ]; then
         echo "=== $image"
         "$ENGINE" run --rm -e SMOKE_IMAGE="$image" -e FULL_SUITE="$([ "$image" = ubuntu:22.04 ] && echo 1 || echo 0)" \
             -v "$(readlink -f "$APPIMAGE"):/smoke/Ophion.AppImage:ro" -v "$TESTS:/smoke/tests:ro" \
-            -v "$REPO/tests:/smoke/repo-tests:ro" -v "$REPO/farid.py:/smoke/farid.py:ro" -v "$REPO/tools:/smoke/tools:ro" -v "$OUTDIR:/smoke/out" \
+            -v "$REPO/tests:/smoke/repo-tests:ro" -v "$REPO/tools:/smoke/tools:ro" -v "$OUTDIR:/smoke/out" \
             "$image" bash /smoke/tests/smoke.sh --inside 2>&1 | tee "$OUTDIR/$tag.log"
         [ "${PIPESTATUS[0]}" = 0 ] || status=1
         grep -E '^(PASS|FAIL|SKIP) ' "$OUTDIR/$tag.log" > "$OUTDIR/$tag-results.txt" || true
@@ -150,7 +150,7 @@ sed 's/^/    /' /tmp/e2e.txt | tail -6
 
 # 6. transfer engine tests on the bundled Python
 # The tests find repo files relative to their own folder: a real copy, the bundled app next to it.
-mkdir -p /tmp/tt && cp -r /smoke/repo-tests /tmp/tt/tests && cp /smoke/farid.py /tmp/tt/ && cp -r /smoke/tools /tmp/tt/tools \
+mkdir -p /tmp/tt && cp -r /smoke/repo-tests /tmp/tt/tests && cp -r /smoke/tools /tmp/tt/tools \
     && ln -sfn /tmp/squashfs-root/usr/share/ophion/ssh_manager /tmp/tt/ssh_manager
 if (cd /tmp/tt && run python3 -m unittest tests.test_transfer_engine tests.test_transfer_backends > /tmp/transfer.txt 2>&1); then
     pass "transfer engine tests ($(grep -E '^Ran' /tmp/transfer.txt))"

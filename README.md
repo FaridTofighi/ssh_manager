@@ -101,7 +101,6 @@ GTK desktop app:
 
 ```bash
 python3 main.py
-python3 ssh_manager.py
 python3 -m ssh_manager
 ```
 
@@ -111,16 +110,10 @@ Textual terminal app:
 python3 -m ssh_manager.main
 ```
 
-Diagnostic config listing:
-
-```bash
-python3 farid.py --base-dir ~/.ssh/conf.d
-```
-
 The GTK app uses its own inventory database by default (see below);
 `--inventory <file>` picks another database, and `--base-dir <folder>` opens a
 folder of grouped config files instead (the layout of older versions, edited in
-place). The Textual app and `farid.py` work on folders (`--base-dir`, default
+place). The Textual app works on folders (`--base-dir`, default
 `~/.ssh/conf.d`); the Textual app also accepts `--terminal`.
 
 ## Inventory
@@ -386,7 +379,7 @@ This repository currently uses the standard library unittest runner:
 
 ```bash
 python3 -m unittest discover
-python3 -m compileall ssh_manager tests farid.py main.py ssh_manager.py
+python3 -m compileall ssh_manager tests main.py
 ```
 
 The GTK and VTE bindings come from the distribution, so a virtualenv needs
