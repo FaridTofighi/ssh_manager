@@ -329,8 +329,13 @@ class SessionStrip(Gtk.Box):
         self.pack_end(self.actions, False, False, 0)
         # Keep our own reference: the scrolled window drops it while it is destroyed.
         self._hadj = self._scroller.get_hadjustment()
+        # The adjustment changes while the strip is being laid out: showing the chevrons right then made GTK
+        # finish that layout with stale sizes ("Negative content width" for the actions box at the end, from
+        # the tab that first overflows). They follow once the layout is done instead.
+        self._chevrons_idle = 0
         for signal in ("changed", "value-changed"):
-            self._hadj.connect(signal, lambda *_: self._sync_chevrons())
+            self._hadj.connect(signal, lambda *_: self._queue_chevrons())
+        self.connect("destroy", lambda *_: self._cancel_chevrons())
 
     def _on_new_button_press(self, _button, event) -> bool:
         if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 3:
@@ -378,6 +383,20 @@ class SessionStrip(Gtk.Box):
         adjustment = self._hadj
         step = max(1.0, adjustment.get_page_size() * 0.8)
         adjustment.set_value(adjustment.get_value() + direction * step)
+
+    def _queue_chevrons(self) -> None:
+        if not self._chevrons_idle:
+            self._chevrons_idle = GLib.idle_add(self._chevrons_after_layout)
+
+    def _chevrons_after_layout(self) -> bool:
+        self._chevrons_idle = 0
+        self._sync_chevrons()
+        return False
+
+    def _cancel_chevrons(self) -> None:
+        if self._chevrons_idle:
+            GLib.source_remove(self._chevrons_idle)
+            self._chevrons_idle = 0
 
     def _sync_chevrons(self) -> None:
         adjustment = self._hadj
