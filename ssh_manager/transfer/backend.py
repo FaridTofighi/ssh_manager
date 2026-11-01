@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, BinaryIO, Dict, Iterator, Optional, Set
 
+from ..secret_mask import mask_secrets
 from ..trust import CertificateInfo  # noqa: F401  (re-exported: FTPS code and dialogs import it here)
 
 MAX_PATH = 4096  # characters of a remote path
@@ -348,7 +349,4 @@ def redact(text: str, secrets: Dict[str, str] | None = None) -> str:
     stripped = text.lstrip()
     if stripped[:5].upper() == "PASS ":
         return text[: len(text) - len(stripped)] + "PASS ********"
-    for secret in (secrets or {}).values():
-        if secret:
-            text = text.replace(secret, "********")
-    return text
+    return mask_secrets(text, (secrets or {}).values(), "********")  # short secrets: see secret_mask.py

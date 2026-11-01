@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from .gtkui.i18n import _
+from .secret_mask import mask_secrets
 
 LOGGER = logging.getLogger(__name__)
 
@@ -705,8 +706,7 @@ def agent_add(path: Path, passphrase: str = "", *, timeout: float = 20.0) -> Tup
             code = process.wait()
         os.close(master)
     text = output.decode("utf-8", "replace")
-    if passphrase:
-        text = text.replace(passphrase, "•••")
+    text = mask_secrets(text, [passphrase], "•••")
     if code == 0 and "Identity added" in text:
         return True, _("The key was added to the agent.")
     return False, _("ssh-add did not add the key: {reason}").format(

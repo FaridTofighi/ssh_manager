@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional
 
 from .. import gc_guard
+from ..secret_mask import mask_secrets
 from ..text_utils import strip_ansi
 from .command import LaunchPlan
 
@@ -191,9 +192,7 @@ class RdpProcess:
 
     # ------------------------------------------------------------- output
     def mask(self, text: str) -> str:
-        for secret in self._secrets:
-            text = text.replace(secret, "***")
-        return text
+        return mask_secrets(text, self._secrets)  # a very short secret is not masked (secret_mask.py)
 
     def _read(self, stream) -> None:
         try:
