@@ -3,7 +3,7 @@
 import types
 import unittest
 
-from ssh_manager.secret_mask import MIN_MASKED_LENGTH, mask_secrets
+from ophion.secret_mask import MIN_MASKED_LENGTH, mask_secrets
 
 LINE = ("[17:45:50:344] [1792398:0001b5996] [WARN][com.freerdp.client.x11] - [load_map_from_xkbfile]: "
         "keycode: 0x08 -> no RDP scancode found")
@@ -20,8 +20,8 @@ class SecretMaskTests(unittest.TestCase):
         self.assertEqual(mask_secrets("a s3cret! b", ["", None or "", "s3cret!"], "••"), "a •• b")
 
     def test_every_output_path_uses_it(self) -> None:
-        from ssh_manager.rdp.process import RdpProcess
-        from ssh_manager.transfer.backend import redact
+        from ophion.rdp.process import RdpProcess
+        from ophion.transfer.backend import redact
 
         process = types.SimpleNamespace(_secrets=("1", "long-password"))
         self.assertEqual(RdpProcess.mask(process, LINE + " long-password"), LINE + " ***")

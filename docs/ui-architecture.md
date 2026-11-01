@@ -1,7 +1,7 @@
 # Ophion GTK UI architecture
 
 ```
-ssh_manager/
+ophion/
   gtk_main.py           CLI entry → SSHManagerApplication
   gtk_app.py            SSHManagerApplication + SSHManagerWindow (composition root) + re-exports
   gtk_terminal.py       TerminalTab (one session) and TerminalNotebook (workspace)
@@ -20,7 +20,7 @@ ssh_manager/
     latency.py          LatencyProbe: threaded, cached TCP connect timing
     host_history.py     HostHistory: last connected + activity (.host_history.json)
     unlock_flow.py      start-up: set / ask for the master password, recovery key, key file missing
-    migration_flow.py   the dialogs of the move to the key file (ssh_manager/migration.py does it)
+    migration_flow.py   the dialogs of the move to the key file (ophion/migration.py does it)
     assets/icons/       bundled sshm-*-symbolic.svg outline icons
     assets/app-icon/    the application icon "ophion" (hicolor PNGs, see "Icons" below)
     theme/              density (Compact/Comfortable presets), tokens (palette; live Space/Size/

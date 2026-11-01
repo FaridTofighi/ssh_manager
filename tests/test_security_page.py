@@ -4,9 +4,9 @@ import json
 import unittest
 from unittest import mock
 
-from ssh_manager import keybox as K
-from ssh_manager import unlock as U
-from ssh_manager.secure_store import DisabledSecureStore, EncryptedFileKeyring, InMemoryKeyring
+from ophion import keybox as K
+from ophion import unlock as U
+from ophion.secure_store import DisabledSecureStore, EncryptedFileKeyring, InMemoryKeyring
 
 from tests.gtk_window_fixture import display_available
 
@@ -33,7 +33,7 @@ class SecurityPageTests(unittest.TestCase):
         self.actions.show_recovery = lambda code: self.shown.append(code) or True
 
     def page(self):
-        from ssh_manager.gtkui.dialogs.security_page import SecurityPage
+        from ophion.gtkui.dialogs.security_page import SecurityPage
 
         page = SecurityPage(self.actions, self.win)
         self.addCleanup(page.destroy)
@@ -100,7 +100,7 @@ class SecurityPageTests(unittest.TestCase):
         self.assertTrue(json.loads((config / "settings.json").read_text())["passwords_off"])
         self.assertTrue(page.off_switch.get_active())
         self.assertIsNone(page.change_button)
-        with mock.patch("ssh_manager.gtkui.unlock_flow.NewSecretDialog") as new:
+        with mock.patch("ophion.gtkui.unlock_flow.NewSecretDialog") as new:
             new.return_value.ask.return_value = "back on"
             page.off_switch.set_active(False)
         self.assertIsInstance(self.win._secure_store.backend, EncryptedFileKeyring)
@@ -133,8 +133,8 @@ class SecurityPageTests(unittest.TestCase):
         finish.assert_called_once()
 
     def test_preferences_has_the_page_and_no_old_checkbox(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog, PreferencesValues
-        from ssh_manager.gtkui.theme.loader import ThemeMode
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog, PreferencesValues
+        from ophion.gtkui.theme.loader import ThemeMode
 
         dialog = PreferencesDialog(None, ThemeMode.LIGHT, 1.0, 11, self.win._settings, security=self.actions)
         self.addCleanup(dialog.destroy)

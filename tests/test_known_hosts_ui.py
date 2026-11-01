@@ -33,7 +33,7 @@ class KnownHostsDialogTests(unittest.TestCase):
         self.toasts = []
 
     def dialog(self, hosts=(), **kwargs):
-        from ssh_manager.gtkui.dialogs.known_hosts import KnownHostsDialog
+        from ophion.gtkui.dialogs.known_hosts import KnownHostsDialog
 
         dialog = KnownHostsDialog(None, self.path, hosts,
                                   notify=lambda text, level, **kw: self.toasts.append((text, kw)), **kwargs)
@@ -72,7 +72,7 @@ class KnownHostsDialogTests(unittest.TestCase):
         self.assertEqual(self.rows(dialog, 4), [])  # the one hashed entry belongs to "hidden"
 
     def test_delete_with_backup_and_undo(self) -> None:
-        from ssh_manager import known_hosts as KH
+        from ophion import known_hosts as KH
 
         self.path.write_text(f"# keep me\na.example ssh-ed25519 {ED25519}\nb.example ssh-ed25519 {ED25519}\r\n")
         before = self.path.read_bytes()
@@ -157,9 +157,9 @@ class KnownHostsDialogTests(unittest.TestCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class PreferencesHintTests(unittest.TestCase):
     def test_auto_add_hint_follows_the_policy(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         with tempfile.TemporaryDirectory() as tmp:
             settings = AppSettings(config_path=Path(tmp) / "settings.json")

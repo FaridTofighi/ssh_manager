@@ -8,12 +8,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.auth_flow import PasswordResolution
-from ssh_manager.config import HostEntry
-from ssh_manager.rdp import engines
-from ssh_manager.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
-from ssh_manager.rdp.probe import ProbeResult
-from ssh_manager.trust import CertificateInfo, TrustStore, pin_key
+from ophion.auth_flow import PasswordResolution
+from ophion.config import HostEntry
+from ophion.rdp import engines
+from ophion.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
+from ophion.rdp.probe import ProbeResult
+from ophion.trust import CertificateInfo, TrustStore, pin_key
 from tests import fake_freerdp
 
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"
@@ -87,8 +87,8 @@ class FakeSaveDialog:
 @unittest.skipUnless(_display(), "needs a display")
 class SessionTabTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
-        from ssh_manager.rdp.process import ChildRegistry
+        from ophion.gtkui.rdp.runtime import RdpRuntime
+        from ophion.rdp.process import ChildRegistry
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -109,7 +109,7 @@ class SessionTabTests(unittest.TestCase):
         FakePasswordDialog.answers, FakePasswordDialog.requests, FakeSaveDialog.offers = [], [], []
         for target, value in (("PasswordRequestDialog", FakePasswordDialog), ("SavePasswordDialog", FakeSaveDialog),
                               ("RETRY_DELAY_S", 0)):
-            patcher = mock.patch(f"ssh_manager.gtkui.rdp.tab.{target}", value)
+            patcher = mock.patch(f"ophion.gtkui.rdp.tab.{target}", value)
             patcher.start()
             self.addCleanup(patcher.stop)
 
@@ -121,7 +121,7 @@ class SessionTabTests(unittest.TestCase):
         self.trust.set(pin_key("h-win", "10.0.0.50", 3389, scope="rdp"), sha, "CN=win-01")
 
     def tab(self, host=None, password=None, report="default", **script):
-        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
+        from ophion.gtkui.rdp.tab import RdpSessionTab
 
         resolution = PasswordResolution(password, "credential" if password else "none")
         env = mock.patch.dict(os.environ, fake_freerdp.env_for(self.record, **script))
@@ -145,7 +145,7 @@ class SessionTabTests(unittest.TestCase):
     def test_verified_nla_login_with_a_typed_password_offers_save(self) -> None:
         self.pin()
         service = mock.Mock()
-        service.password_save_context.return_value = __import__("ssh_manager.auth_flow").auth_flow.SaveContext()
+        service.password_save_context.return_value = __import__("ophion.auth_flow").auth_flow.SaveContext()
         FakePasswordDialog.answers = ["typed secret"]
         tab = self.tab(lines=[CONNECTED], sleep=30)
         tab._password_service = service
@@ -168,7 +168,7 @@ class SessionTabTests(unittest.TestCase):
         self.pin()
         self.probe_answer = probe_result("tls")
         FakePasswordDialog.answers = ["typed"]
-        with mock.patch("ssh_manager.gtkui.rdp.tab.HEURISTIC_S", 1):
+        with mock.patch("ophion.gtkui.rdp.tab.HEURISTIC_S", 1):
             tab = self.tab(sleep=30)
             self.assertTrue(pump_until(lambda: tab.connected_method == "heuristic", 15))
         self.assertEqual(FakeSaveDialog.offers, [])
@@ -199,7 +199,7 @@ class SessionTabTests(unittest.TestCase):
             tab.destroy()
 
     def test_first_certificate_ask_and_remember(self) -> None:
-        with mock.patch("ssh_manager.gtkui.rdp.tab.rdp_trust_choice", return_value="remember") as ask:
+        with mock.patch("ophion.gtkui.rdp.tab.rdp_trust_choice", return_value="remember") as ask:
             tab = self.tab(password="stored", lines=[CONNECTED], sleep=30)
             self.assertTrue(pump_until(lambda: tab.connected_method == "log"))
         ask.assert_called_once()
@@ -207,7 +207,7 @@ class SessionTabTests(unittest.TestCase):
         tab.disconnect()
 
     def test_trust_once_does_not_store(self) -> None:
-        with mock.patch("ssh_manager.gtkui.rdp.tab.rdp_trust_choice", return_value="once"):
+        with mock.patch("ophion.gtkui.rdp.tab.rdp_trust_choice", return_value="once"):
             tab = self.tab(password="stored", lines=[CONNECTED], sleep=30)
             self.assertTrue(pump_until(lambda: tab.connected_method == "log"))
         self.assertEqual(self.trust.get(pin_key("h-win", "10.0.0.50", 3389, scope="rdp")), "")
@@ -215,7 +215,7 @@ class SessionTabTests(unittest.TestCase):
 
     def test_changed_certificate_is_not_accepted_without_consent(self) -> None:
         self.pin(B)
-        with mock.patch("ssh_manager.gtkui.rdp.tab.trust_certificate", return_value=False) as warn:
+        with mock.patch("ophion.gtkui.rdp.tab.trust_certificate", return_value=False) as warn:
             tab = self.tab(password="stored")
             self.assertTrue(pump_until(lambda: tab.status.value == "failed"))
         self.assertTrue(warn.call_args.kwargs["changed"])
@@ -233,7 +233,7 @@ class SessionTabTests(unittest.TestCase):
         self.assertIn("refuses unknown certificates", deny.status_label.get_text())
 
     def test_ignore_asks_every_time_and_is_flagged(self) -> None:
-        with mock.patch("ssh_manager.gtkui.rdp.tab.confirm_unchecked_certificate", return_value=True) as ask:
+        with mock.patch("ophion.gtkui.rdp.tab.confirm_unchecked_certificate", return_value=True) as ask:
             tab = self.tab(self.host(cert_policy="ignore"), password="stored", lines=[CONNECTED], sleep=30)
             self.assertTrue(pump_until(lambda: tab.connected_method == "log"))
         ask.assert_called_once()
@@ -275,7 +275,7 @@ class SessionTabTests(unittest.TestCase):
         self.pin()
         tab = self.tab(password="stored", lines=[CONNECTED], child=True, sleep=60)
         self.assertTrue(pump_until(lambda: tab.connected_method == "log"))
-        with mock.patch("ssh_manager.gtkui.rdp.tab.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.rdp.tab.confirm", return_value=False) as ask:
             self.assertFalse(tab.confirm_close())
         ask.assert_called_once()
         record = self.records()[0]
@@ -319,7 +319,7 @@ class WindowTests(unittest.TestCase):
         env = mock.patch.dict(os.environ, fake_freerdp.env_for(record, lines=[CONNECTED], child=True, sleep=60))
         env.start()
         self.addCleanup(env.stop)
-        with mock.patch("ssh_manager.gtkui.rdp.tab.probe", return_value=probe_result()), \
+        with mock.patch("ophion.gtkui.rdp.tab.probe", return_value=probe_result()), \
                 mock.patch.object(win.creds, "resolve_password", return_value=PasswordResolution("pw", "credential")):
             win.sessions.open_hosts([stored])
             tab = win.terminal_tabs.current_tab()

@@ -16,8 +16,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.gtkui.theme.density import COMFORTABLE, COMPACT
-from ssh_manager.gtkui.theme.tokens import DARK, LIGHT, contrast_ratio
+from ophion.gtkui.theme.density import COMFORTABLE, COMPACT
+from ophion.gtkui.theme.tokens import DARK, LIGHT, contrast_ratio
 
 ROOT = Path(__file__).resolve().parent.parent
 PANE_ROLES = ("pane_border", "pane_border_focus", "pane_border_broadcast", "pane_header_bg",
@@ -44,7 +44,7 @@ class PaneTokenTests(unittest.TestCase):
         self.assertEqual((COMFORTABLE.size.PANE_GUTTER, COMFORTABLE.size.PANE_RADIUS, COMFORTABLE.size.PANE_HEADER), (8, 8, 34))
 
     def test_contrast(self) -> None:
-        from ssh_manager.gtkui.theme.terminal_schemes import DARK_COLORS
+        from ophion.gtkui.theme.terminal_schemes import DARK_COLORS
 
         for palette in (DARK, LIGHT):
             gutter = palette.pane_gutter
@@ -56,7 +56,7 @@ class PaneTokenTests(unittest.TestCase):
                 self.assertEqual(palette.pane_gutter, palette.bg_canvas)
 
     def test_pane_css_uses_tokens(self) -> None:
-        from ssh_manager.gtkui.theme import css_dark, css_light
+        from ophion.gtkui.theme import css_dark, css_light
 
         for module in (css_dark, css_light):
             for preset in (COMPACT, COMFORTABLE):
@@ -83,7 +83,7 @@ def _child(theme: str, density_name: str) -> None:
     snap._pin_resolution()
     snap._patch_toplevel_mapping()
     snap._stub_terminal_io()
-    from ssh_manager import gtk_app
+    from ophion import gtk_app
 
     app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
@@ -123,7 +123,7 @@ def _child(theme: str, density_name: str) -> None:
             gaps.append({"width": gap, "colors": colors})
         return {"panes": panes, "gaps": gaps}
 
-    from ssh_manager.gtkui.theme.loader import get_theme_manager
+    from ophion.gtkui.theme.loader import get_theme_manager
 
     for kind in ("split", "tile", "broadcast"):
         window = snap._make_window(app, base, theme == "dark", density_name)
@@ -241,8 +241,8 @@ class PaneBehaviourTests(unittest.TestCase):
         self.sandbox = WindowSandbox()
         self.win = self.sandbox.window
         self.win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"), \
-                mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn_secondary"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"), \
+                mock.patch("ophion.gtk_terminal.TerminalTab._spawn_secondary"):
             self.win.sessions.connect_selected()
             self.tab = self.win.terminal_tabs.current_tab()
             self.tab.toggle_split()
@@ -251,7 +251,7 @@ class PaneBehaviourTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_single_pane_has_no_frame(self) -> None:
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             self.win.sessions.connect_selected()
         single = self.win.terminal_tabs.current_tab()
         self.assertEqual(single.pane_frames, [])
@@ -312,7 +312,7 @@ class PaneBehaviourTests(unittest.TestCase):
         self.assertEqual(first.get_cursor_position(), cursor)
         # Tile mode and back keeps the terminal and its contents.
         notebook = self.win.terminal_tabs
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             self.win.sessions.connect_selected()
         notebook.set_tile_mode(True)
         notebook.set_tile_mode(False)
@@ -321,7 +321,7 @@ class PaneBehaviourTests(unittest.TestCase):
 
     def test_tile_frames_focus_broadcast_chip_and_zoom(self) -> None:
         notebook = self.win.terminal_tabs
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             self.win.sessions.connect_selected()
         other = notebook.current_tab()
         notebook.set_tile_mode(True)

@@ -2,15 +2,16 @@
 
 import os
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.rdp import engines
-from ssh_manager.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
-from ssh_manager.rdp.settings import SharedFolder
+from ophion.config import HostEntry
+from ophion.rdp import engines
+from ophion.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
+from ophion.rdp.settings import SharedFolder
 
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"
 
@@ -61,11 +62,16 @@ def rdp_host(**rdp) -> HostEntry:
 @unittest.skipUnless(_display(), "needs a display")
 class HostDialogTests(unittest.TestCase):
     def setUp(self) -> None:
+        # A main window from an earlier test may still be looking for FreeRDP in a worker thread; its real
+        # report must not replace the one a test stores (it did when xfreerdp3 is installed).
+        for thread in threading.enumerate():
+            if thread.name == "sshm-rdp-discovery":
+                thread.join(30)
         self.addCleanup(engines.store_report, None)
         engines.store_report(None)
 
     def dialog(self, host=None, **kwargs):
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         dialog = HostDialog(None, host, **kwargs)
         self.addCleanup(dialog.destroy)
@@ -128,7 +134,7 @@ class HostDialogTests(unittest.TestCase):
 
     def test_risky_choices_ask_first(self) -> None:
         pages = self.dialog(rdp_host()).rdp_pages
-        with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
             pages.cert_policy.set_active_id("ignore")
             pages.security.set_active_id("rdp")
             pages.home_drive.set_active(True)
@@ -136,7 +142,7 @@ class HostDialogTests(unittest.TestCase):
         self.assertEqual(ask.call_count, 4)
         self.assertEqual((pages.cert_policy.get_active_id(), pages.security.get_active_id()), ("ask", "auto"))
         self.assertFalse(pages.home_drive.get_active() or pages.extra_unchecked.get_active())
-        with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=True):
+        with mock.patch("ophion.gtkui.dialogs.rdp_page.confirm", return_value=True):
             pages.cert_policy.set_active_id("ignore")
         self.assertEqual(pages.settings().cert_policy, "ignore")
 
@@ -164,7 +170,7 @@ class HostDialogTests(unittest.TestCase):
     def test_test_connection_uses_the_probe(self) -> None:
         if os.environ.get("SSHM_SKIP_INTEGRATION") == "1":
             self.skipTest("integration tests skipped")
-        from ssh_manager.rdp.probe import PROTOCOL_HYBRID
+        from ophion.rdp.probe import PROTOCOL_HYBRID
         from tests.fake_rdp import FakeRdpServer, neg_rsp, write_certificate
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -189,22 +195,22 @@ class HostDialogTests(unittest.TestCase):
             secret = Path(home) / ".ssh"
             secret.mkdir()
             with mock.patch.dict(os.environ, {"HOME": home}):
-                with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
+                with mock.patch("ophion.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
                     pages.add_drive(str(secret))
                 self.assertEqual(len(pages.drive_store), 0)
                 self.assertIn("~/.ssh", ask.call_args.args[1])
-                with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=True):
+                with mock.patch("ophion.gtkui.dialogs.rdp_page.confirm", return_value=True):
                     pages.add_drive(str(secret))
                 folder = pages.settings().drives[0]
                 self.assertTrue(folder.allow_sensitive)
                 self.assertEqual(pages.problems(), [])
-        with mock.patch("ssh_manager.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.dialogs.rdp_page.confirm", return_value=False) as ask:
             pages.restricted_admin.set_active(True)
         ask.assert_called_once()
         self.assertFalse(pages.restricted_admin.get_active())
 
     def test_gateway_credential_and_vm_id(self) -> None:
-        from ssh_manager.credentials import Credential
+        from ophion.credentials import Credential
 
         credentials = [Credential("c-gw", "Gateway", "bob")]
         dialog = self.dialog(rdp_host(gateway={"host": "gw.acme.test", "use_same_credentials": False}),
@@ -221,7 +227,7 @@ class HostDialogTests(unittest.TestCase):
 
     def test_switching_away_from_rdp_warns(self) -> None:
         dialog = self.dialog(rdp_host(domain="CORP"))
-        with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.dialogs.host_dialog.confirm", return_value=False) as ask:
             dialog.protocol_combo.set_active_id("ssh")
         self.assertIn("remote desktop settings", ask.call_args.args[2])
         self.assertEqual(dialog.selected_protocol(), "rdp")
@@ -230,8 +236,8 @@ class HostDialogTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class PreferencesTests(unittest.TestCase):
     def test_remote_desktop_page_and_diagnostics(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.settings import AppSettings
 
         with tempfile.TemporaryDirectory() as tmp:
             settings = AppSettings(config_path=Path(tmp) / "settings.json")
@@ -245,7 +251,7 @@ class PreferencesTests(unittest.TestCase):
             self.assertEqual((values.preferred_engine, values.binary_path, values.max_sessions),
                              ("external", "/opt/freerdp/bin/xfreerdp3", 4))
             calls = []
-            with mock.patch("ssh_manager.gtkui.dialogs.rdp_diagnostics.discover_async",
+            with mock.patch("ophion.gtkui.dialogs.rdp_diagnostics.discover_async",
                             side_effect=lambda cb, **kw: (calls.append(kw), cb(report()))):
                 diag = dialog.open_rdp_diagnostics()
             self.addCleanup(diag.destroy)
@@ -258,7 +264,7 @@ class PreferencesTests(unittest.TestCase):
             self.assertIn("FreeRDP 3.15.0", copied)
 
     def test_settings_round_trip(self) -> None:
-        from ssh_manager.settings import AppSettings, RemoteDesktopPreferences
+        from ophion.settings import AppSettings, RemoteDesktopPreferences
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "settings.json"
@@ -294,8 +300,8 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(self.win.terminal_tabs.tab_count(), 0)
 
     def test_tree_icon_and_tunnel_hosts(self) -> None:
-        from ssh_manager.gtkui.constants import RowKind
-        from ssh_manager.gtkui.tree_icons import tree_icon_for
+        from ophion.gtkui.constants import RowKind
+        from ophion.gtkui.tree_icons import tree_icon_for
 
         self.assertEqual(tree_icon_for(RowKind.HOST, protocol="rdp").name, "sshm-desktop")
         self.win.manager.add_host("staging", "hosts.conf", rdp_host())
@@ -304,7 +310,7 @@ class WindowTests(unittest.TestCase):
         self.assertNotIn("win-01", " ".join(label for _id, label in tunnel))  # only SSH hosts
 
     def test_shared_folder_name_generation(self) -> None:
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         dialog = HostDialog(None, rdp_host())
         self.addCleanup(dialog.destroy)

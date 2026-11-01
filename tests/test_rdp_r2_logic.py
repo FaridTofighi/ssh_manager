@@ -2,14 +2,14 @@
 
 import unittest
 
-from ssh_manager.rdp.clipboard import ClipboardPolicy
-from ssh_manager.rdp.engines import FRDP_CAPABILITIES, Platform, build_engines, frdp_missing
-from ssh_manager.rdp.keyboard import (
+from ophion.rdp.clipboard import ClipboardPolicy
+from ophion.rdp.engines import FRDP_CAPABILITIES, Platform, build_engines, frdp_missing
+from ophion.rdp.keyboard import (
     DEFAULT_RELEASE, Effect, GrabState, KeyboardGrab, accelerator_label, parse_accelerator, release_hint,
 )
-from ssh_manager.rdp.outcome import Kind, RdpOutcome, classify_rdp_exit
-from ssh_manager.rdp.reconnect import HARD_CAP, Plan, ReconnectScheduler, plan_for
-from ssh_manager.rdp.x11 import EmbedWatch
+from ophion.rdp.outcome import Kind, RdpOutcome, classify_rdp_exit
+from ophion.rdp.reconnect import HARD_CAP, Plan, ReconnectScheduler, plan_for
+from ophion.rdp.x11 import EmbedWatch
 
 
 class KeyboardTests(unittest.TestCase):

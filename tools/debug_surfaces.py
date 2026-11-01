@@ -72,7 +72,7 @@ def _child(theme: str, modes: Sequence[str], verbose: bool, as_json: bool) -> in
     snap._patch_toplevel_mapping()
     snap._stub_terminal_io()
 
-    from ssh_manager import gtk_app
+    from ophion import gtk_app
 
     app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
@@ -111,7 +111,7 @@ def _child(theme: str, modes: Sequence[str], verbose: bool, as_json: bool) -> in
 def scenes(app, snap, mode: str, populated: Path, empty: Path) -> Iterator[Tuple[str, object, bool]]:
     """Yield (name, toplevel, is_dark) for the main window states and each dialog."""
 
-    from ssh_manager.gtkui.theme.loader import get_theme_manager
+    from ophion.gtkui.theme.loader import get_theme_manager
 
     theme_mode = mode.split("-", 1)[0]
     snap.set_desktop_color_scheme(mode == "system-dark")
@@ -150,12 +150,12 @@ def scenes(app, snap, mode: str, populated: Path, empty: Path) -> Iterator[Tuple
 
 
 def dialog_factories(base: Path):
-    from ssh_manager.config_viewer import ConfigViewerDialog
-    from ssh_manager.gtk_app import CredentialManagerDialog, HostDialog, PreferencesDialog
-    from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window
-    from ssh_manager.gtkui.dialogs.confirm import ConfirmDialog
-    from ssh_manager.gtkui.dialogs.password import PasswordDialog
-    from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+    from ophion.config_viewer import ConfigViewerDialog
+    from ophion.gtk_app import CredentialManagerDialog, HostDialog, PreferencesDialog
+    from ophion.gtkui.controllers.shortcuts import build_shortcuts_window
+    from ophion.gtkui.dialogs.confirm import ConfirmDialog
+    from ophion.gtkui.dialogs.password import PasswordDialog
+    from ophion.gtkui.dialogs.prompt import PromptDialog
 
     def first_host(window):
         for groups in window.manager.tree.values():
@@ -200,7 +200,7 @@ def token_colors(dark: bool) -> List[Tuple[float, float, float]]:
 
     from gi.repository import Gdk  # type: ignore
 
-    from ssh_manager.gtkui.theme.tokens import palette_for
+    from ophion.gtkui.theme.tokens import palette_for
 
     colors = []
     for value in palette_for(dark).surface_colors():
@@ -334,7 +334,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         theme = args.themes.split(",")[0] if args.themes != ",".join(CANDIDATE_THEMES) else None
         if theme:
             env["GTK_THEME"] = theme
-        return subprocess.call([sys.executable, "-m", "ssh_manager.gtk_main"], cwd=ROOT, env=env)
+        return subprocess.call([sys.executable, "-m", "ophion.gtk_main"], cwd=ROOT, env=env)
 
     use_xvfb = args.xvfb or not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY")
     if use_xvfb and not shutil.which("xvfb-run"):

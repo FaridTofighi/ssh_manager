@@ -1,7 +1,7 @@
 # Terminals: mouse, clipboard, shortcuts and the local shell
 
 Every terminal in Ophion (SSH tabs, both panes of a split, tiles and the
-local shell tab) behaves like gnome-terminal. Code: `ssh_manager/terminal_input.py`
+local shell tab) behaves like gnome-terminal. Code: `ophion/terminal_input.py`
 (mouse rules), `gtk_terminal.py` (`TerminalTab`), `gtkui/controllers/shortcut_registry.py`
 (shortcuts), `local_shell.py` and `gtkui/local_terminal.py` (the local shell).
 

@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from ssh_manager import identity as I
+from ophion import identity as I
 
 
 class IdentityTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(I.env("APPDIR", {}, "x"), "x")
 
     def test_local_shell_drops_both_prefixes_and_reads_the_new_appdir(self) -> None:
-        from ssh_manager.local_shell import local_shell_env
+        from ophion.local_shell import local_shell_env
 
         env = dict(item.split("=", 1) for item in local_shell_env(
             {"PATH": "/usr/bin", "HOME": "/home/u", "OPHION_APPDIR": "/tmp/.mount_x", "SSH_MANAGER_DEBUG": "1",
@@ -28,8 +28,8 @@ class IdentityTests(unittest.TestCase):
         self.assertNotIn("APPIMAGE", env)  # OPHION_APPDIR is recognised: the AppImage's own variables go
 
     def test_names_written_and_names_still_read(self) -> None:
-        from ssh_manager import native_format as F
-        from ssh_manager.inventory import openssh
+        from ophion import native_format as F
+        from ophion.inventory import openssh
 
         self.assertEqual(F.MIME_TYPES, ("application/x-ophion+json", "application/x-ssh-manager+json"))
         self.assertEqual((F.FORMAT, F.EXTENSION), ("ssh-manager-export", ".sshm"))  # file format: unchanged

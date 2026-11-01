@@ -151,7 +151,7 @@ sed 's/^/    /' /tmp/e2e.txt | tail -6
 # 6. transfer engine tests on the bundled Python
 # The tests find repo files relative to their own folder: a real copy, the bundled app next to it.
 mkdir -p /tmp/tt && cp -r /smoke/repo-tests /tmp/tt/tests && cp -r /smoke/tools /tmp/tt/tools \
-    && ln -sfn /tmp/squashfs-root/usr/share/ophion/ssh_manager /tmp/tt/ssh_manager
+    && ln -sfn /tmp/squashfs-root/usr/share/ophion/ophion /tmp/tt/ophion
 if (cd /tmp/tt && run python3 -m unittest tests.test_transfer_engine tests.test_transfer_backends > /tmp/transfer.txt 2>&1); then
     pass "transfer engine tests ($(grep -E '^Ran' /tmp/transfer.txt))"
 else

@@ -21,8 +21,8 @@ class TerminalPassphraseTests(unittest.TestCase):
         from tests.fake_sftp import FakeSftpServer
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager import ssh_keys as K
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion import ssh_keys as K
+        from ophion.gtk_terminal import TerminalTab
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -50,7 +50,7 @@ class TerminalPassphraseTests(unittest.TestCase):
         pump(0.3)
 
     def open(self, saved):
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         host = HostEntry(alias="keyed", options={
             "hostname": "127.0.0.1", "port": str(self.server.port), "user": "alice",
@@ -73,7 +73,7 @@ class TerminalPassphraseTests(unittest.TestCase):
         self.assertEqual(fed, [(PASS + "\n").encode()])
 
     def test_a_wrong_saved_passphrase_is_never_typed_twice(self) -> None:
-        from ssh_manager.gtk_terminal import terminal_text
+        from ophion.gtk_terminal import terminal_text
 
         tab, asked, fed = self.open("wrong-passphrase")
         self.assertTrue(pump(15, until=lambda: terminal_text(tab._terminal).count("Enter passphrase") >= 2))
@@ -93,7 +93,7 @@ class HostDialogPickerTests(unittest.TestCase):
         self.win.ssh_keys.ssh_dir = self.sandbox.root / "home" / ".ssh"
 
     def test_combo_lists_known_keys_lazily_and_saves_identityfile(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         info = K.generate_key(self.win.ssh_keys.ssh_dir / "id_ed25519", comment="t")
         host = next(h for h in self.win.ssh_keys.hosts() if h.alias == "web-01")
@@ -137,7 +137,7 @@ class ParamikoPassphraseTests(unittest.TestCase):
             seen.append(kwargs.get("passphrase"))
             raise ConnectionError("stop here")
 
-        with mock.patch("ssh_manager.transfer.sftp.backend_for", side_effect=fake_backend_for):
+        with mock.patch("ophion.transfer.sftp.backend_for", side_effect=fake_backend_for):
             for connect in (lambda: win.multirun.connect(win.multirun.target(host), 5),
                             lambda: win.tunnels._connect(win.tunnels.host_key(host))):
                 with self.assertRaises(ConnectionError):

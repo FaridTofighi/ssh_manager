@@ -18,7 +18,7 @@ class FakeTab:
 
 
 def fake_notebook(tabs, order=None, included=None, connected=None, broadcast=True):
-    from ssh_manager.gtk_terminal import TerminalNotebook
+    from ophion.gtk_terminal import TerminalNotebook
 
     class Notebook:
         macro_targets = TerminalNotebook.macro_targets
@@ -42,7 +42,7 @@ class TargetResolutionTests(unittest.TestCase):
 
     def setUp(self) -> None:
         try:
-            import ssh_manager.gtk_terminal  # noqa: F401
+            import ophion.gtk_terminal  # noqa: F401
         except (ImportError, ValueError) as exc:
             self.skipTest(str(exc))
         self.a, self.b, self.c, self.d = (FakeTab(n) for n in "ABCD")
@@ -80,7 +80,7 @@ class TargetResolutionTests(unittest.TestCase):
         self.assertEqual(fake_notebook([a, b], order=[]).macro_targets(b), [b, a])  # unknown order: kept last
 
     def test_same_sessions_as_typed_input(self) -> None:
-        from ssh_manager.gtk_terminal import broadcast_target_tabs
+        from ophion.gtk_terminal import broadcast_target_tabs
 
         rng = random.Random(7)
         tabs = [FakeTab(f"t{i}") for i in range(5)]
@@ -105,10 +105,10 @@ class TargetResolutionTests(unittest.TestCase):
 
 class MacroSettingsTests(unittest.TestCase):
     def test_default_validation_and_round_trip(self) -> None:
-        from ssh_manager.settings import AppSettings, MacroSettings
+        from ophion.settings import AppSettings, MacroSettings
 
         self.assertTrue(MacroSettings().confirm_multi_session)
-        with self.assertLogs("ssh_manager.settings", "WARNING"):
+        with self.assertLogs("ophion.settings", "WARNING"):
             self.assertTrue(MacroSettings.from_dict({"confirm_multi_session": "no"}).confirm_multi_session)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "settings.json"

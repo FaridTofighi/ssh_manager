@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.gtkui.constants import Icons, TreeColumn
-from ssh_manager.gtkui.widgets.icons import tinted_icon_surface
+from ophion.config import HostEntry
+from ophion.gtkui.constants import Icons, TreeColumn
+from ophion.gtkui.widgets.icons import tinted_icon_surface
 
 
 def _color_window(*, current_item=("", {}), group_colors=None, host_colors=None, calls=None):
@@ -27,7 +27,7 @@ def _color_window(*, current_item=("", {}), group_colors=None, host_colors=None,
     return win
 
 
-from ssh_manager.gtk_app import (
+from ophion.gtk_app import (
     Gdk,
     GdkPixbuf,
     Gtk,
@@ -37,10 +37,10 @@ from ssh_manager.gtk_app import (
     audit_log_value,
     ui_state_path_for_base,
 )
-from ssh_manager.gtkui.controllers.colors import ColorController
-from ssh_manager.gtkui.controllers.session_controller import SessionController
-from ssh_manager.gtkui.controllers.tree import TreeController
-from ssh_manager.gtkui.controllers.ui_state import UiState, save_ui_state
+from ophion.gtkui.controllers.colors import ColorController
+from ophion.gtkui.controllers.session_controller import SessionController
+from ophion.gtkui.controllers.tree import TreeController
+from ophion.gtkui.controllers.ui_state import UiState, save_ui_state
 
 
 class GtkAppHelperTests(unittest.TestCase):
@@ -123,7 +123,7 @@ class GtkAppHelperTests(unittest.TestCase):
 
         win = _color_window(current_item=("host", {"parent": "prod", "child": "web", "alias": "app"}), calls=calls)
 
-        with mock.patch("ssh_manager.gtk_app.Gtk.ColorChooserDialog", FakeDialog):
+        with mock.patch("ophion.gtk_app.Gtk.ColorChooserDialog", FakeDialog):
             win.colors.change_host_color()
 
         self.assertEqual(FakeDialog.title, "Choose Host Color")
@@ -155,7 +155,7 @@ class GtkAppHelperTests(unittest.TestCase):
                 updates.append((tree_iter, column, value))
 
         win = SimpleNamespace(tree_store=FakeTreeStore(), _ui=SimpleNamespace(filter_query=""))
-        with mock.patch("ssh_manager.gtkui.controllers.tree.load_smart_groups", return_value=[]):
+        with mock.patch("ophion.gtkui.controllers.tree.load_smart_groups", return_value=[]):
             tree = TreeController(win)
         tree.host_iters = {"prod::web::app": "iter-1"}
 
@@ -172,8 +172,8 @@ class GtkAppHelperTests(unittest.TestCase):
         self.assertIsNotNone(tinted_icon_surface(Icons.HOST, "#445566"))
 
     def test_tree_row_icons_follow_the_row_kind(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import TreeRow
-        from ssh_manager.gtkui.constants import RowKind
+        from ophion.gtkui.controllers.tree_controller import TreeRow
+        from ophion.gtkui.constants import RowKind
 
         host = TreeRow(RowKind.HOST, "web-01", "prod")
         self.assertEqual(host.icon, Icons.HOST)

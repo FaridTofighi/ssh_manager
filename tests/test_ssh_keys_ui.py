@@ -23,7 +23,7 @@ class SshKeysUiCase(unittest.TestCase):
         self.controller.ssh_dir = self.sandbox.root / "home" / ".ssh"
 
     def dialog(self):
-        from ssh_manager.gtkui.dialogs.ssh_keys import SshKeysDialog
+        from ophion.gtkui.dialogs.ssh_keys import SshKeysDialog
 
         dialog = SshKeysDialog(None, self.controller)
         self.addCleanup(dialog.destroy)
@@ -35,7 +35,7 @@ class SshKeysUiCase(unittest.TestCase):
 
 class KeysDialogTests(SshKeysUiCase):
     def test_generate_lists_and_remembers_the_passphrase_encrypted(self) -> None:
-        from ssh_manager.gtkui.dialogs.ssh_keys import GenerateKeyDialog
+        from ophion.gtkui.dialogs.ssh_keys import GenerateKeyDialog
 
         generate = GenerateKeyDialog(None, self.controller)
         self.addCleanup(generate.destroy)
@@ -68,7 +68,7 @@ class KeysDialogTests(SshKeysUiCase):
         self.assertIn("No passphrase", second.warning.get_text())
 
     def test_delete_confirms_and_shows_the_hosts_that_use_it(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         info = K.generate_key(self.controller.ssh_dir / "used", comment="t")
         host = next(h for h in self.controller.hosts() if h.alias == "web-01")
@@ -90,7 +90,7 @@ class KeysDialogTests(SshKeysUiCase):
         self.assertEqual(rows, [("dialog-warning-symbolic", "used", "1 host")])  # still referenced: warned
 
     def test_import_copy_and_public_key(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         outside = self.sandbox.root / "elsewhere"
         outside.mkdir()

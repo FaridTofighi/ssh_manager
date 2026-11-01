@@ -2,7 +2,7 @@
 
 How Ophion shows and handles SSH host keys: the terminal banner, the
 Known Hosts manager, and the file browser / tunnel dialog. Code:
-`ssh_manager/known_hosts.py` (no GTK), `ssh_manager/host_key_output.py`,
+`ophion/known_hosts.py` (no GTK), `ophion/host_key_output.py`,
 `gtkui/dialogs/known_hosts.py`, `gtkui/dialogs/host_key.py`.
 
 ## What a host key is

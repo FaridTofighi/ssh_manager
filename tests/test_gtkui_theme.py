@@ -1,14 +1,14 @@
 import unittest
 
-from ssh_manager.gtkui.theme import css_dark, css_light
-from ssh_manager.gtkui.theme.stylesheet import build_css, defined_colors, unresolved_color_refs
-from ssh_manager.gtkui.theme.terminal_schemes import (
+from ophion.gtkui.theme import css_dark, css_light
+from ophion.gtkui.theme.stylesheet import build_css, defined_colors, unresolved_color_refs
+from ophion.gtkui.theme.terminal_schemes import (
     DARK_COLORS,
     LIGHT_COLORS,
     SOLARIZED_PALETTE,
     resolve_terminal_colors,
 )
-from ssh_manager.gtkui.theme.tokens import (
+from ophion.gtkui.theme.tokens import (
     PALETTES,
     STATUS_GLYPHS,
     ConnectionStatus,
@@ -18,7 +18,7 @@ from ssh_manager.gtkui.theme.tokens import (
     contrast_ratio,
     contrast_report,
 )
-from ssh_manager.settings import TerminalAppearanceSettings
+from ophion.settings import TerminalAppearanceSettings
 
 
 class TokenTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class TokenTests(unittest.TestCase):
         self.assertIs(ConnectionStatus.coerce("weird"), ConnectionStatus.UNKNOWN)
 
     def test_spacing_scale_is_fixed(self) -> None:
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         with density.using("comfortable"):
             self.assertEqual(Space.values(), (4, 8, 12, 16, 20, 24, 32, 36))
@@ -61,7 +61,7 @@ class TokenTests(unittest.TestCase):
 
 class RelayContrastTests(unittest.TestCase):
     def test_environment_badges_meet_aa(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import ENV_BADGES
+        from ophion.gtkui.theme.tokens import ENV_BADGES
 
         for theme, badges in ENV_BADGES.items():
             for kind, (background, foreground) in badges.items():
@@ -167,7 +167,7 @@ if __name__ == "__main__":  # pragma: no cover
     unittest.main()
 
 
-from ssh_manager.gtkui.theme.tokens import DARK  # noqa: E402
+from ophion.gtkui.theme.tokens import DARK  # noqa: E402
 
 
 class NeutralDarkPaletteTests(unittest.TestCase):
@@ -210,7 +210,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
 
     def ratio(self, fg, bg):
-        from ssh_manager.gtkui.theme.tokens import contrast_ratio
+        from ophion.gtkui.theme.tokens import contrast_ratio
 
         return contrast_ratio(getattr(self._DARK, fg), getattr(self._DARK, bg))
 
@@ -236,7 +236,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
                     self.assertLessEqual(g, b, "green cast on a neutral token")
 
     def test_elevation_steps_by_lightness(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import relative_luminance
+        from ophion.gtkui.theme.tokens import relative_luminance
 
         layers = ["bg_canvas", "bg_window", "bg_surface", "bg_surface_raised", "bg_hover"]
         lum = [relative_luminance(getattr(self._DARK, role)) for role in layers]
@@ -267,7 +267,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         self.assertGreaterEqual(self.ratio("text_faint", "bg_surface"), 3.0)
 
     def test_environment_badges(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import ENV_BADGES, contrast_ratio
+        from ophion.gtkui.theme.tokens import ENV_BADGES, contrast_ratio
 
         for kind, (background, foreground) in ENV_BADGES["dark"].items():
             with self.subTest(kind=kind):
@@ -276,9 +276,9 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         self.assertLessEqual(max(r, g, b) - min(r, g, b), 12)
 
     def test_terminal_default_scheme(self) -> None:
-        from ssh_manager.gtkui.theme.terminal_schemes import resolve_terminal_colors
-        from ssh_manager.gtkui.theme.tokens import contrast_ratio
-        from ssh_manager.settings import TerminalAppearanceSettings
+        from ophion.gtkui.theme.terminal_schemes import resolve_terminal_colors
+        from ophion.gtkui.theme.tokens import contrast_ratio
+        from ophion.settings import TerminalAppearanceSettings
 
         colors = resolve_terminal_colors(TerminalAppearanceSettings())
         self.assertEqual((colors.background, colors.foreground), ("#16171a", "#d6d9de"))
@@ -297,7 +297,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         self.assertEqual((light.background, light.highlight), ("#f8fafc", "#2f333a"))
 
     def test_dark_css_has_no_green_neutrals_or_unresolved_names(self) -> None:
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         for preset in (density.COMPACT, density.COMFORTABLE):
             css = css_dark.css(tokens=preset)
@@ -309,7 +309,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
     def test_text_faint_is_decorative_only(self) -> None:
         import re
 
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         for preset in (density.COMPACT, density.COMFORTABLE):
             css = re.sub(r"/\*.*?\*/", "", css_dark.css(tokens=preset), flags=re.S)
@@ -324,7 +324,7 @@ class NeutralDarkPaletteTests(unittest.TestCase):
         import re
         from pathlib import Path
 
-        root = Path(__file__).resolve().parent.parent / "ssh_manager" / "gtkui"
+        root = Path(__file__).resolve().parent.parent / "ophion" / "gtkui"
         allowed = {root / "theme" / "tokens.py", root / "theme" / "terminal_schemes.py"}
         offenders = [
             f"{path.relative_to(root)}:{number}"
@@ -339,7 +339,7 @@ class NeutralDarkStateTests(unittest.TestCase):
     """Hover, selected and focus stay distinguishable on every gray layer."""
 
     def test_states_on_gray_layers(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import DARK, contrast_ratio
+        from ophion.gtkui.theme.tokens import DARK, contrast_ratio
 
         for state in ("bg_hover", "bg_selected"):
             for layer in ("bg_surface", "bg_canvas"):
@@ -361,13 +361,13 @@ class BroadcastColourTests(unittest.TestCase):
     def hue(color: str) -> float:
         import colorsys
 
-        from ssh_manager.gtkui.theme.tokens import parse_hex
+        from ophion.gtkui.theme.tokens import parse_hex
 
         r, g, b = (c / 255.0 for c in parse_hex(color))
         return colorsys.rgb_to_hsv(r, g, b)[0] * 360.0
 
     def test_every_palette_defines_the_roles_and_they_pass_contrast(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import CONTRAST_PAIRS, PALETTES, contrast_report
+        from ophion.gtkui.theme.tokens import CONTRAST_PAIRS, PALETTES, contrast_report
 
         for pair in (("broadcast_fg", "broadcast_bg"), ("broadcast", "bg_surface"), ("broadcast", "broadcast_bg"),
                      ("pane_border_broadcast", "bg_surface")):
@@ -383,7 +383,7 @@ class BroadcastColourTests(unittest.TestCase):
                         self.assertGreaterEqual(ratio, minimum)
 
     def test_a_hue_of_its_own(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import PALETTES
+        from ophion.gtkui.theme.tokens import PALETTES
 
         for name, palette in PALETTES.items():
             for role in ("broadcast", "pane_border_broadcast", "broadcast_fg"):
@@ -393,7 +393,7 @@ class BroadcastColourTests(unittest.TestCase):
                         self.assertGreaterEqual(min(distance, 360 - distance), 30)
 
     def test_badge_and_chip_text_on_their_tint(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import PALETTES, parse_hex
+        from ophion.gtkui.theme.tokens import PALETTES, parse_hex
 
         def over(color: str, background: str, alpha: float) -> str:
             mixed = (round(alpha * f + (1 - alpha) * b) for f, b in zip(parse_hex(color), parse_hex(background)))
@@ -408,7 +408,7 @@ class BroadcastColourTests(unittest.TestCase):
     def test_no_red_in_broadcast_styling_and_red_stays_for_errors(self) -> None:
         import re
 
-        from ssh_manager.gtkui.theme.tokens import PALETTES
+        from ophion.gtkui.theme.tokens import PALETTES
 
         for name, palette in PALETTES.items():
             css = build_css(palette)

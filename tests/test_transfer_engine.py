@@ -8,17 +8,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.transfer import engine as eng
-from ssh_manager.transfer.backend import F_REST, Disconnected, EntryKind, RemoteEntry
-from ssh_manager.transfer.dnd import (
+from ophion.transfer import engine as eng
+from ophion.transfer.backend import F_REST, Disconnected, EntryKind, RemoteEntry
+from ophion.transfer.dnd import (
     DropAction, Payload, decode_payload, encode_payload, into_itself, parse_uri_list, resolve_drop, uri_list,
     validate_payload,
 )
-from ssh_manager.transfer.engine import (
+from ophion.transfer.engine import (
     Conflict, Direction, Endpoint, RateLimiter, State, TransferJob, TransferQueue, plan, summarize,
 )
-from ssh_manager.transfer.local import LocalBackend
-from ssh_manager.transfer.names import UnsafePath, contained_path, safe_local_name, unique_name
+from ophion.transfer.local import LocalBackend
+from ophion.transfer.names import UnsafePath, contained_path, safe_local_name, unique_name
 
 from tests.fake_backend import FakeBackend
 

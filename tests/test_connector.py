@@ -6,8 +6,8 @@ from typing import List, Optional
 from unittest import mock
 
 import paramiko
-from ssh_manager.connection_state import ConnectionState, ConnectionStateMachine
-from ssh_manager.connector import (
+from ophion.connection_state import ConnectionState, ConnectionStateMachine
+from ophion.connector import (
     Connector,
     TryResult,
     _connection_algorithm_overrides,
@@ -15,7 +15,7 @@ from ssh_manager.connector import (
     _policy_from_settings,
     _proxy_command_for,
 )
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore
+from ophion.secure_store import InMemoryKeyring, SecureStore
 
 
 @dataclass
@@ -270,7 +270,7 @@ class ConnectorTests(unittest.TestCase):
         self.settings = AlgorithmSettings()
         connector = self._make_connector(FakePasswordDialog([]))
 
-        with mock.patch("ssh_manager.connector.paramiko.SSHClient", FakeSSHClient):
+        with mock.patch("ophion.connector.paramiko.SSHClient", FakeSSHClient):
             result = connector._try_paramiko(HostCfg(), "secret", (1.0, 1.0, 1.0))
 
         self.assertTrue(result.ok)
@@ -309,7 +309,7 @@ class ConnectorTests(unittest.TestCase):
             }
         )
 
-        with mock.patch("ssh_manager.connector.paramiko.SSHClient", FakeSSHClient):
+        with mock.patch("ophion.connector.paramiko.SSHClient", FakeSSHClient):
             result = connector._try_paramiko(host_cfg, "secret", (1.0, 1.0, 1.0))
 
         self.assertTrue(result.ok)
@@ -361,8 +361,8 @@ class ConnectorTests(unittest.TestCase):
 
         connector = self._make_connector(FakePasswordDialog([]))
         host_cfg = HostCfg(options={"proxyjump": "bastion"})
-        with mock.patch("ssh_manager.connector.paramiko.SSHClient", FakeSSHClient), mock.patch(
-            "ssh_manager.connector.paramiko.ProxyCommand", side_effect=lambda cmd: ("proxy", cmd)
+        with mock.patch("ophion.connector.paramiko.SSHClient", FakeSSHClient), mock.patch(
+            "ophion.connector.paramiko.ProxyCommand", side_effect=lambda cmd: ("proxy", cmd)
         ):
             result = connector._try_paramiko(host_cfg, "secret", (1.0, 1.0, 1.0))
 

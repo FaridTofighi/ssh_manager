@@ -4,7 +4,7 @@ import gc
 import threading
 import unittest
 
-from ssh_manager import gc_guard
+from ophion import gc_guard
 
 
 class GcGuardTests(unittest.TestCase):

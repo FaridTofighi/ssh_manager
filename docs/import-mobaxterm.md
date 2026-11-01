@@ -6,7 +6,7 @@ sessions export and copies its folders and SSH sessions into the Ophion
 inventory as groups and hosts. Nothing is written until you press **Import**. Nothing in
 the file is executed, connected to or resolved (no DNS, no ping).
 
-Code: `ssh_manager/importers/mobaxterm.py` (pure Python: parse, plan, map
+Code: `ophion/importers/mobaxterm.py` (pure Python: parse, plan, map
 credentials, commit), `gtkui/dialogs/mobaxterm_import.py` (the wizard) and
 `gtkui/controllers/mobaxterm_import.py` (entry point). To move an inventory between Ophion
 installations, use Ophion's own export instead (`docs/export-import.md`).

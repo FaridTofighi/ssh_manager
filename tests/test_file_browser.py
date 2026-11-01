@@ -10,15 +10,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.transfer.backend import AuthError, CancelToken, Cancelled, EntryKind, RemoteEntry
-from ssh_manager.transfer.browse import (
+from ophion.config import HostEntry
+from ophion.transfer.backend import AuthError, CancelToken, Cancelled, EntryKind, RemoteEntry
+from ophion.transfer.browse import (
     History, breadcrumbs, complete, filter_entries, human_size, natural_key, normalize_remote, parent_of,
     remote_url, sort_entries,
 )
-from ssh_manager.transfer.copy import copy_file
-from ssh_manager.transfer.local import LocalBackend
-from ssh_manager.transfer.state import BrowserState
+from ophion.transfer.copy import copy_file
+from ophion.transfer.local import LocalBackend
+from ophion.transfer.state import BrowserState
 
 from tests.fake_backend import FakeBackend
 
@@ -139,7 +139,7 @@ class CopyAndLocalTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(os.stat(state.path).st_mode), 0o600)
 
     def test_file_transfer_preferences(self) -> None:
-        from ssh_manager.settings import FileTransferPreferences
+        from ophion.settings import FileTransferPreferences
 
         prefs = FileTransferPreferences.from_dict({"conflict_policy": "bogus", "concurrency": 99, "warn_plain_ftp": 0,
                                                    "future": 1})
@@ -176,8 +176,8 @@ def pump_until(predicate, timeout=5.0) -> bool:
 @unittest.skipUnless(_display(), "needs a display")
 class PaneTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.file_browser.pane import FilePane
-        from ssh_manager.gtkui.file_browser.worker import Worker
+        from ophion.gtkui.file_browser.pane import FilePane
+        from ophion.gtkui.file_browser.worker import Worker
 
         files = {f"/home/alice/file{i}.txt": b"x" * i for i in range(1, 13)}
         files["/home/alice/.hidden"] = b"h"
@@ -233,7 +233,7 @@ class PaneTests(unittest.TestCase):
         self.load("/home/alice/empty")
         self.assertEqual(self.pane.state_stack.get_visible_child_name(), "empty")
         fresh_worker = self.worker
-        from ssh_manager.gtkui.file_browser.pane import FilePane
+        from ophion.gtkui.file_browser.pane import FilePane
 
         pane = FilePane("remote", fresh_worker, lambda: self.backend)
         self.addCleanup(pane.destroy)
@@ -255,7 +255,7 @@ class PaneTests(unittest.TestCase):
         for i in range(1300):
             self.backend.files[f"/home/alice/big/item{i:04d}"] = b""
         self.backend.dirs.add("/home/alice/big")
-        with mock.patch("ssh_manager.gtkui.file_browser.pane.MAX_ROWS", 1000):
+        with mock.patch("ophion.gtkui.file_browser.pane.MAX_ROWS", 1000):
             self.load("/home/alice/big")
             self.assertEqual(len(self.pane.entries), 1300)
             self.assertEqual(len(self.pane.store), 1000)
@@ -264,7 +264,7 @@ class PaneTests(unittest.TestCase):
 
     def test_operations(self) -> None:
         self.load()
-        with mock.patch("ssh_manager.gtkui.file_browser.pane.prompt_text", return_value="New stuff"):
+        with mock.patch("ophion.gtkui.file_browser.pane.prompt_text", return_value="New stuff"):
             self.pane.new_folder()
         self.assertTrue(pump_until(lambda: "/home/alice/New stuff" in self.backend.dirs))
         self.pane.select_name("file1.txt")
@@ -274,13 +274,13 @@ class PaneTests(unittest.TestCase):
         self.assertTrue(pump_until(lambda: "/home/alice/renamed.txt" in self.backend.files))
         self.assertTrue(pump_until(lambda: "renamed.txt" in self.names()))
         self.pane.select_name("docs")
-        with mock.patch("ssh_manager.gtkui.file_browser.pane.confirm", return_value=True) as ask:
+        with mock.patch("ophion.gtkui.file_browser.pane.confirm", return_value=True) as ask:
             self.pane.delete_selected()
         self.assertIn("docs", ask.call_args[0][2])
         self.assertTrue(pump_until(lambda: "/home/alice/docs" not in self.backend.dirs))
 
     def test_invalid_names_are_refused(self) -> None:
-        from ssh_manager.gtkui.file_browser.pane import valid_name
+        from ophion.gtkui.file_browser.pane import valid_name
 
         for bad in ("", "..", "a/b", "x\ny", "é" * 200):
             self.assertIsNotNone(valid_name(bad), bad)
@@ -292,7 +292,7 @@ class PaneTests(unittest.TestCase):
         self.pane.select_name("file1.txt")
         for button in (self.pane.new_folder_button, self.pane.rename_button, self.pane.delete_button):
             self.assertFalse(button.get_sensitive())
-        with mock.patch("ssh_manager.gtkui.file_browser.pane.confirm") as ask:
+        with mock.patch("ophion.gtkui.file_browser.pane.confirm") as ask:
             self.pane.delete_selected()
         ask.assert_not_called()
 
@@ -334,7 +334,7 @@ class TabTests(unittest.TestCase):
         self.logs = []
 
     def tab(self, protocol="sftp", backends=None, service=None, read_only=False, settings=None, **kwargs):
-        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
+        from ophion.gtkui.file_browser.tab import FileBrowserTab
 
         queue = list(backends or [self.backend])
         host = HostEntry("files", {"hostname": "10.0.0.20", "user": "alice"}, protocol=protocol,
@@ -365,7 +365,7 @@ class TabTests(unittest.TestCase):
     def test_plain_ftp_asks_once_and_is_flagged(self) -> None:
         self.factory_calls = []
         provider = lambda: SimpleNamespace(password="pw", source="credential", credential_id="c1")  # noqa: E731
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.confirm", return_value=True) as ask:
+        with mock.patch("ophion.gtkui.file_browser.tab.confirm", return_value=True) as ask:
             tab = self.tab("ftp", password_provider=provider)
             self.connected(tab)
             self.assertEqual(tab.security_kind, "plain")
@@ -378,13 +378,13 @@ class TabTests(unittest.TestCase):
     def test_declining_plain_ftp_does_not_connect(self) -> None:
         self.factory_calls = []
         provider = lambda: SimpleNamespace(password="pw", source="credential", credential_id="c1")  # noqa: E731
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.confirm", return_value=False):
+        with mock.patch("ophion.gtkui.file_browser.tab.confirm", return_value=False):
             tab = self.tab("ftp", password_provider=provider)
             self.assertTrue(pump_until(lambda: tab.status.value == "failed"))
         self.assertEqual(self.factory_calls, [])
 
     def test_auth_failure_retry_and_save_offer(self) -> None:
-        from ssh_manager.auth_flow import Decision, SaveContext
+        from ophion.auth_flow import Decision, SaveContext
 
         self.factory_calls = []
         failing = FakeBackend()
@@ -395,9 +395,9 @@ class TabTests(unittest.TestCase):
         service.save_host_password.return_value = ("saved", "Password saved for ‘files’.")
         requests, offers = [], []
         provider = lambda: SimpleNamespace(password="old-pw", source="credential", credential_id="c1")  # noqa: E731
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.PasswordRequestDialog",
+        with mock.patch("ophion.gtkui.file_browser.tab.PasswordRequestDialog",
                         side_effect=lambda p, r, cb: requests.append((r, cb)) or mock.Mock()), \
-                mock.patch("ssh_manager.gtkui.file_browser.tab.SavePasswordDialog",
+                mock.patch("ophion.gtkui.file_browser.tab.SavePasswordDialog",
                            side_effect=lambda p, o, cb: offers.append((o, cb)) or mock.Mock()):
             tab = self.tab(backends=[failing, self.backend], service=service, password_provider=provider)
             self.assertTrue(pump_until(lambda: bool(requests)))
@@ -414,13 +414,13 @@ class TabTests(unittest.TestCase):
         self.assertEqual(service.save_host_password.call_args[0][1], "typed pw")
 
     def test_untrusted_certificate_flow(self) -> None:
-        from ssh_manager.transfer.backend import CertificateInfo, UntrustedCertificate
+        from ophion.transfer.backend import CertificateInfo, UntrustedCertificate
 
         self.factory_calls = []
         failing = FakeBackend()
         failing.connect_errors = [UntrustedCertificate(info=CertificateInfo(subject="CN=x", sha256="AA:BB"))]
         failing.trust_certificate = mock.Mock()
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.trust_certificate", return_value=True) as ask:
+        with mock.patch("ophion.gtkui.file_browser.tab.trust_certificate", return_value=True) as ask:
             tab = self.tab("ftps", backends=[failing, self.backend])
             self.connected(tab)
         ask.assert_called_once()
@@ -469,7 +469,7 @@ class TabTests(unittest.TestCase):
         tab = self.tab()
         self.connected(tab)
         report = tab.remote_pane.entries[0]
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.Gio.AppInfo.launch_default_for_uri") as launch:
+        with mock.patch("ophion.gtkui.file_browser.tab.Gio.AppInfo.launch_default_for_uri") as launch:
             tab._open_file(tab.remote_pane, report)
             self.assertTrue(pump_until(lambda: launch.called))
         opened = Path(launch.call_args[0][0].replace("file://", ""))
@@ -504,8 +504,8 @@ class RealFtpTabTests(unittest.TestCase):
     """The tab with the real FTP backend against tests/fake_ftp.py."""
 
     def test_browse_and_upload_over_ftp(self) -> None:
-        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
-        from ssh_manager.transfer.ftp import FtpBackend
+        from ophion.gtkui.file_browser.tab import FileBrowserTab
+        from ophion.transfer.ftp import FtpBackend
         from tests.fake_ftp import FakeFtpServer
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -524,7 +524,7 @@ class RealFtpTabTests(unittest.TestCase):
                                                               credential_id="c"),
                     backend_factory=lambda h, u, p: FtpBackend("127.0.0.1", server.port, u, p))
                 self.addCleanup(tab.destroy)
-                with mock.patch("ssh_manager.gtkui.file_browser.tab.confirm", return_value=True):
+                with mock.patch("ophion.gtkui.file_browser.tab.confirm", return_value=True):
                     self.assertTrue(pump_until(lambda: tab.remote_pane.current_path == "/pub"
                                                and tab.remote_pane.entries, timeout=10))
                 self.assertEqual([e.name for e in tab.remote_pane.entries], ["hello.txt"])
@@ -549,7 +549,7 @@ class NotebookTests(unittest.TestCase):
         win.manager.add_host("staging", "hosts.conf", HostEntry("files", {"hostname": "10.0.0.20"}, protocol="sftp"))
         win.tree.rebuild(refresh=True)
         backend = FakeBackend({"/home/alice/a.txt": b"a"})
-        with mock.patch("ssh_manager.transfer.factory.make_backend", return_value=backend):
+        with mock.patch("ophion.transfer.factory.make_backend", return_value=backend):
             win.sessions.open_hosts([win.tree.find_host_by_alias("files")])
             tab = win.terminal_tabs.current_tab()
             self.assertEqual(type(tab).__name__, "FileBrowserTab")

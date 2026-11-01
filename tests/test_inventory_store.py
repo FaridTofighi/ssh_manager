@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.inventory.store import (
+from ophion.inventory.store import (
     SCHEMA_VERSION,
     InventoryCorrupt,
     InventoryError,
@@ -108,7 +108,7 @@ class LifecycleTests(StoreTestCase):
         other = sqlite3.connect(self.path, isolation_level=None, timeout=0.1)
         other.execute("BEGIN IMMEDIATE")
         try:
-            with mock.patch("ssh_manager.inventory.store.BUSY_TIMEOUT_S", 0.1):
+            with mock.patch("ophion.inventory.store.BUSY_TIMEOUT_S", 0.1):
                 self.store.conn.execute("PRAGMA busy_timeout=100")
                 with self.assertRaises(InventoryLocked) as ctx:
                     self.store.create_group(None, "blocked")

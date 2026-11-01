@@ -48,7 +48,7 @@ class FakeKey:
 @unittest.skipUnless(display_available(), "needs a display")
 class ChooserTests(unittest.TestCase):
     def chooser(self, children, **kw):
-        from ssh_manager.gtkui.dialogs.child_group_chooser import ChildGroupChooserDialog
+        from ophion.gtkui.dialogs.child_group_chooser import ChildGroupChooserDialog
 
         kw.setdefault("normalize", lambda name: name.strip() and (name.strip() if name.strip().endswith(".conf")
                                                                      else f"{name.strip()}.conf"))
@@ -128,8 +128,8 @@ class LargeGroupRegressionTests(unittest.TestCase):
     def make_groups(self, children, *, store_names=True):
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.controllers.group_actions import GroupActions
-        from ssh_manager.gtkui.dialogs.prompt import prompt_text
+        from ophion.gtkui.controllers.group_actions import GroupActions
+        from ophion.gtkui.dialogs.prompt import prompt_text
 
         win = Gtk.Window()
         self.addCleanup(win.destroy)
@@ -164,7 +164,7 @@ class LargeGroupRegressionTests(unittest.TestCase):
 
 
     def test_the_title_and_message_never_list_the_groups(self) -> None:
-        from ssh_manager.gtkui.dialogs import child_group_chooser
+        from ophion.gtkui.dialogs import child_group_chooser
 
         names = child_names(40)
         groups = self.make_groups(names)
@@ -188,7 +188,7 @@ class CallSiteTests(unittest.TestCase):
     """New Host on a top-level group and dropping hosts on one both use the chooser."""
 
     def window(self):
-        from ssh_manager.gtkui.constants import RowKind
+        from ophion.gtkui.constants import RowKind
 
         win = mock.Mock()
         win.ensure_editable_inventory.return_value = True
@@ -200,7 +200,7 @@ class CallSiteTests(unittest.TestCase):
         return win
 
     def answer(self, choice):
-        from ssh_manager.gtkui.dialogs import child_group_chooser
+        from ophion.gtkui.dialogs import child_group_chooser
 
         self.asked = []
 
@@ -215,8 +215,8 @@ class CallSiteTests(unittest.TestCase):
             self.skipTest("needs a display")
 
     def test_new_host_in_an_existing_and_in_a_new_child_group(self) -> None:
-        from ssh_manager.gtkui.controllers.group_actions import GroupActions
-        from ssh_manager.gtkui.controllers.host_actions import HostActions
+        from ophion.gtkui.controllers.group_actions import GroupActions
+        from ophion.gtkui.controllers.host_actions import HostActions
 
         win = self.window()
         win.groups = GroupActions(win)
@@ -235,8 +235,8 @@ class CallSiteTests(unittest.TestCase):
         create.assert_not_called()
 
     def test_dropping_hosts_on_a_top_level_group(self) -> None:
-        from ssh_manager.gtkui.controllers.drag_drop import DragDropController
-        from ssh_manager.gtkui.controllers.group_actions import GroupActions
+        from ophion.gtkui.controllers.drag_drop import DragDropController
+        from ophion.gtkui.controllers.group_actions import GroupActions
 
         win = self.window()
         win.groups = GroupActions(win)
@@ -252,7 +252,7 @@ class CallSiteTests(unittest.TestCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class GroupPickerTests(unittest.TestCase):
     def picker(self, tree, **kw):
-        from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
+        from ophion.gtkui.dialogs.group_picker import GroupPickerDialog
 
         manager = mock.Mock(tree=tree, allows_display_names=False)
         dialog = GroupPickerDialog(None, manager, "Move", **kw)
@@ -312,7 +312,7 @@ class ScreenFitTests(unittest.TestCase):
     def test_a_dialog_with_a_huge_body_keeps_its_buttons_on_screen(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.base import BaseDialog
+        from ophion.gtkui.dialogs.base import BaseDialog
 
         dialog = BaseDialog(None, "Huge")
         self.addCleanup(dialog.destroy)
@@ -326,7 +326,7 @@ class ScreenFitTests(unittest.TestCase):
         self.assertTrue(dialog._fitted)
 
     def test_prompt_messages_scroll_and_are_bounded(self) -> None:
-        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+        from ophion.gtkui.dialogs.prompt import PromptDialog
 
         dialog = PromptDialog(None, "Long", "x" * 10000)
         self.addCleanup(dialog.destroy)
@@ -336,7 +336,7 @@ class ScreenFitTests(unittest.TestCase):
         self.assertLessEqual(dialog.message_scroller.get_allocated_height(), 160 + 4)
 
     def test_short_prompt_messages_look_as_before(self) -> None:
-        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
+        from ophion.gtkui.dialogs.prompt import PromptDialog
 
         dialog = PromptDialog(None, "Short", "Name of the new group:")
         self.addCleanup(dialog.destroy)

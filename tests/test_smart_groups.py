@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.smart_groups import SmartGroup, load_smart_groups, save_smart_groups
+from ophion.smart_groups import SmartGroup, load_smart_groups, save_smart_groups
 
 
 class SmartGroupTests(unittest.TestCase):
@@ -70,7 +70,7 @@ class SmartGroupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "smart_groups.json"
 
-            with mock.patch("ssh_manager.smart_groups.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.smart_groups.write_json_atomic", side_effect=OSError("disk full")):
                 saved = save_smart_groups([SmartGroup(name="Prod", query="env:prod")], path)
 
             self.assertFalse(saved)

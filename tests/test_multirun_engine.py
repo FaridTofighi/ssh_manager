@@ -9,9 +9,9 @@ from pathlib import Path
 
 import paramiko
 
-from ssh_manager.multirun import engine as R
-from ssh_manager.multirun.engine import RunOptions, Target
-from ssh_manager.transfer.settings import TransferSettings
+from ophion.multirun import engine as R
+from ophion.multirun.engine import RunOptions, Target
+from ophion.transfer.settings import TransferSettings
 
 from tests.fake_sftp import FakeSftpServer
 
@@ -31,7 +31,7 @@ class EngineCase(unittest.TestCase):
         self.password = PASSWORD
 
     def connect(self, target: Target, timeout: float):
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         port = target.port
         backend = SftpBackend("127.0.0.1", port, "alice", self.password, known_hosts=self.known, allow_agent=False,
@@ -115,7 +115,7 @@ class FailureTests(EngineCase):
     def test_wrong_password_and_no_secret_anywhere(self) -> None:
         self.password = "wrong-" + PASSWORD
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             run = self.run_all("true", self.targets(2))
         for result in run.results():
             self.assertEqual(result.status, R.AUTH_FAILED)
@@ -144,8 +144,8 @@ class FailureTests(EngineCase):
         self.assertEqual((result.status, result.message), (R.SUCCESS, ""))  # was "Host key changed"
 
     def test_changed_key_message_names_host_type_and_fingerprints(self) -> None:
-        from ssh_manager.transfer.backend import HostKeyChanged
-        from ssh_manager.transfer.sftp import key_fingerprint
+        from ophion.transfer.backend import HostKeyChanged
+        from ophion.transfer.sftp import key_fingerprint
 
         stale = paramiko.ECDSAKey.generate()
         self.known.write_text(f"[127.0.0.1]:{self.server.port} ecdsa-sha2-nistp256 {stale.get_base64()}\n")

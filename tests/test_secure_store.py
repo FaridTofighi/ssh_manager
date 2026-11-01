@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.secure_store import (
+from ophion.secure_store import (
     CRYPTO_AVAILABLE,
     FileKeyring,
     InMemoryKeyring,
@@ -76,14 +76,14 @@ class SecureStoreTests(unittest.TestCase):
             backend = FileKeyring(path)
             backend.set_password("svc", "user", "old")
 
-            with mock.patch("ssh_manager.secure_store.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.secure_store.write_json_atomic", side_effect=OSError("disk full")):
                 with self.assertRaises(KeyringError):
                     backend.set_password("svc", "user", "new")
             self.assertEqual(backend.get_password("svc", "user"), "old")
 
             store = SecureStore(backend)
             store.set("example.com", 22, "alice", "secret")
-            with mock.patch("ssh_manager.secure_store.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.secure_store.write_json_atomic", side_effect=OSError("disk full")):
                 with self.assertRaises(SecureStoreError):
                     store.delete("example.com", 22, "alice")
             self.assertEqual(store.get("example.com", 22, "alice"), "secret")
@@ -92,7 +92,7 @@ class SecureStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = SecureStore(FileKeyring(Path(tmpdir) / "passwords.json"))
 
-            with mock.patch("ssh_manager.secure_store.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.secure_store.write_json_atomic", side_effect=OSError("disk full")):
                 with self.assertRaises(SecureStoreError):
                     store.set("example.com", 22, "alice", "secret")
 
@@ -171,7 +171,7 @@ class SecureStoreTests(unittest.TestCase):
     def test_default_backend_falls_back_to_encrypted_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmpdir}), mock.patch(
-                "ssh_manager.secure_store._system_keyring", return_value=None
+                "ophion.secure_store._system_keyring", return_value=None
             ):
                 store = SecureStore.with_default_backend(master_password="master")
             self.assertTrue(store.uses_file_backend)

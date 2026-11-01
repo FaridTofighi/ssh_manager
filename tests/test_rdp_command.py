@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.rdp.command import LOG_ARGS, LaunchError, build_launch, target_address
-from ssh_manager.rdp.engines import ClientBinary, parse_help_options
-from ssh_manager.rdp.settings import Gateway, RdpIdentity, RdpSettings, RemoteApp, SharedFolder
+from ophion.rdp.command import LOG_ARGS, LaunchError, build_launch, target_address
+from ophion.rdp.engines import ClientBinary, parse_help_options
+from ophion.rdp.settings import Gateway, RdpIdentity, RdpSettings, RemoteApp, SharedFolder
 
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"
 V3 = ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0",
@@ -136,7 +136,7 @@ class SecretTests(unittest.TestCase):
             self.assertTrue(build(password=password).password_sent, password)
 
     def test_leak_check_catches_password_positions(self) -> None:
-        from ssh_manager.rdp.command import _leaks
+        from ophion.rdp.command import _leaks
 
         self.assertTrue(_leaks(["/p:hunter2"], ["hunter2"]))
         self.assertTrue(_leaks(["/gateway:g:gw,u:bob,p:hunter2"], ["hunter2"]))

@@ -5,8 +5,8 @@ depth), hosts of every protocol with their settings, colours, notes, tags and
 credential *references*, in one file that Ophion on another computer (or
 after a reinstall) imports again without loss. It never contains a password.
 
-Code: `ssh_manager/native_format.py` (format, integrity, encryption),
-`ssh_manager/exporters/native.py` (export), `ssh_manager/importers/native.py`
+Code: `ophion/native_format.py` (format, integrity, encryption),
+`ophion/exporters/native.py` (export), `ophion/importers/native.py`
 (import), `gtkui/dialogs/native_export.py`, `gtkui/dialogs/native_import.py`,
 `gtkui/controllers/native_transfer.py`.
 

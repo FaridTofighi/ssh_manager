@@ -6,14 +6,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.gtkui.constants import Icons, RowKind
-from ssh_manager.gtkui.controllers.tree_controller import TreeCallbacks, build_tree_rows
-from ssh_manager.inventory.manager import StoreConfigManager
-from ssh_manager.inventory.store import InventoryStore
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore
-from ssh_manager.ssh_command import build_ssh_command
+from ophion.config import HostEntry
+from ophion.credentials import CredentialStore
+from ophion.gtkui.constants import Icons, RowKind
+from ophion.gtkui.controllers.tree_controller import TreeCallbacks, build_tree_rows
+from ophion.inventory.manager import StoreConfigManager
+from ophion.inventory.store import InventoryStore
+from ophion.secure_store import InMemoryKeyring, SecureStore
+from ophion.ssh_command import build_ssh_command
 
 UNICODE = "Prod DB (10.0.0.5) — مرکز"
 
@@ -179,7 +179,7 @@ class GroupOperationTests(ManagerTestCase):
         self.assertFalse(self.manager.changed_externally())
 
     def test_locked_database_is_a_message(self) -> None:
-        from ssh_manager.inventory.store import InventoryLocked
+        from ophion.inventory.store import InventoryLocked
 
         with mock.patch.object(self.store, "create_group", side_effect=InventoryLocked("busy, try again")):
             ok, message = self.manager.create_parent_group("x")
@@ -247,7 +247,7 @@ class PerformanceTests(ManagerTestCase):
         for i in range(25):
             top = store.create_group(None, f"group {i}")
             groups += [store.create_group_path(f"sub {j}/leaf", top.id) for j in range(4)]
-        from ssh_manager.inventory.store import NewHost
+        from ophion.inventory.store import NewHost
 
         store.add_hosts_bulk(NewHost(groups[i % len(groups)].id, f"host {i}", f"10.{i // 65536}.{i // 256 % 256}.{i % 256}",
                                      22, "ops") for i in range(5000))

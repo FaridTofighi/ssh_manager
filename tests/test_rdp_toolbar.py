@@ -22,7 +22,7 @@ def _display() -> bool:
 @unittest.skipUnless(_display(), "needs a display")
 class ToolbarTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.rdp.toolbar import RdpToolbar
+        from ophion.gtkui.rdp.toolbar import RdpToolbar
 
         self.bar = RdpToolbar()
         self.bar.show_all()
@@ -66,8 +66,8 @@ class ToolbarTests(unittest.TestCase):
         self.bar.on_resolution = chosen.append
         self.bar.on_clipboard = chosen.append
         self.bar.on_scale = chosen.append
-        with mock.patch("ssh_manager.gtkui.rdp.toolbar.popup_menu"), \
-                mock.patch("ssh_manager.gtkui.rdp.toolbar.build_menu") as build:
+        with mock.patch("ophion.gtkui.rdp.toolbar.popup_menu"), \
+                mock.patch("ophion.gtkui.rdp.toolbar.build_menu") as build:
             for which in ("resolution", "clipboard", "scale"):
                 self.bar._menu(which)
         for spec in (call.args[0] for call in build.call_args_list):

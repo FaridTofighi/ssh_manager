@@ -15,7 +15,7 @@ APP_ID = "io.github.faridtofighi.Ophion"
 @unittest.skipUnless(display_available(), "needs a display")
 class AppIconTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.widgets import icons
+        from ophion.gtkui.widgets import icons
 
         self.icons = icons
         self.addCleanup(icons.install_app_icon)  # the real default again for the next tests
@@ -93,7 +93,7 @@ class AppIconTests(unittest.TestCase):
 
             self.assertEqual(alpha(0, 0), 0)  # rounded corner: clipped
             self.assertEqual(alpha(pixels // 2, pixels // 2), 255)  # the opaque artwork
-        from ssh_manager.gtkui.widgets.app_logo import logo_pixbuf
+        from ophion.gtkui.widgets.app_logo import logo_pixbuf
 
         self.assertEqual(logo_pixbuf(600).get_width(), 512)  # never enlarged past the largest file
 
@@ -116,11 +116,14 @@ class AppIconTests(unittest.TestCase):
         from gi.repository import Gtk
 
         theme = Gtk.IconTheme.new()
+        theme.set_search_path([])  # nothing installed counts (the app's own launcher puts ophion in ~/.local)
         self.assertEqual(self.icons.install_app_icon(theme, Path("/nonexistent/icons")), "file")
         self.assertEqual([p.get_width() for p in Gtk.Window.get_default_icon_list()],
                          [16, 22, 24, 32, 48, 64, 96, 128, 256])
         with mock.patch.object(self.icons, "app_icon_file", lambda size=256: Path("/nonexistent/ophion.png")):
-            self.assertEqual(self.icons.install_app_icon(Gtk.IconTheme.new(), Path("/nonexistent/icons")), "")
+            empty = Gtk.IconTheme.new()
+            empty.set_search_path([])
+            self.assertEqual(self.icons.install_app_icon(empty, Path("/nonexistent/icons")), "")
 
 
 @unittest.skipUnless(display_available(), "needs a display")
@@ -130,8 +133,8 @@ class WindowClassTests(unittest.TestCase):
 
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.gtk_app import APPLICATION_ID, SSHManagerApplication
-        from ssh_manager.identity import APP_ID, APP_SLUG
+        from ophion.gtk_app import APPLICATION_ID, SSHManagerApplication
+        from ophion.identity import APP_ID, APP_SLUG
 
         sandbox = WindowSandbox()  # a temporary HOME: the application reads its settings there
         self.addCleanup(sandbox.close)
@@ -178,7 +181,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_the_appimage_installs_every_size(self) -> None:
         script = (REPO / "packaging" / "appimage" / "build.sh").read_text(encoding="utf-8")
-        self.assertIn('APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"', script)
+        self.assertIn('APP_ICONS="$DATA/ophion/gtkui/assets/app-icon/hicolor"', script)
         self.assertIn('/usr/share/icons/hicolor/$(basename "$size_dir")/apps/ophion.png', script)
         self.assertIn('ln -s ophion.png "$APPDIR/.DirIcon"', script)
         self.assertIn("gtk-update-icon-cache -f -t", script)
@@ -190,16 +193,16 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("${OPHION_APPIMAGE_EXEC:-${SSH_MANAGER_APPIMAGE_EXEC:-}}", apprun)  # the old name works
 
     def test_every_icon_file_is_shipped(self) -> None:
-        """The AppImage ships ``git archive HEAD -- ssh_manager``: the files must exist and be tracked."""
+        """The AppImage ships ``git archive HEAD -- ophion``: the files must exist and be tracked."""
 
-        from ssh_manager.gtkui.widgets import icons
+        from ophion.gtkui.widgets import icons
 
         required = [icons.app_icon_file(size) for size in icons.APP_ICON_SIZES]
         for path in required:
             self.assertTrue(path.is_file(), path)
         if shutil.which("git") is None or not (REPO / ".git").exists():
             self.skipTest("not a git checkout")
-        tracked = set(subprocess.run(["git", "ls-files", "--", "ssh_manager/gtkui/assets/app-icon"], cwd=REPO,
+        tracked = set(subprocess.run(["git", "ls-files", "--", "ophion/gtkui/assets/app-icon"], cwd=REPO,
                                      capture_output=True, text=True, check=True).stdout.split())
         for path in required:
             self.assertIn(str(path.relative_to(REPO)), tracked)

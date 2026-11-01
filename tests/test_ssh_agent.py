@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import ssh_keys as K
+from ophion import ssh_keys as K
 
 PASS = "Agent-passphrase-sentinel"
 

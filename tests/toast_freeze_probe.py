@@ -303,7 +303,7 @@ def main(argv=None) -> int:
     sandbox = WindowSandbox(store=True)
     win = sandbox.window
     if args.motion0:
-        from ssh_manager.gtkui.theme.loader import get_theme_manager
+        from ophion.gtkui.theme.loader import get_theme_manager
 
         manager = get_theme_manager()
         manager.motion_ms = lambda *_a, **_k: 0  # type: ignore[assignment]
@@ -361,7 +361,7 @@ def main(argv=None) -> int:
 
     started = time.monotonic()
     win.sessions.open_hosts([stored])
-    from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog
+    from ophion.gtkui.dialogs.password import PasswordRequestDialog
 
     def prompt():
         return next((t for t in Gtk.Window.list_toplevels() if isinstance(t, PasswordRequestDialog)), None)
@@ -414,7 +414,7 @@ def main(argv=None) -> int:
     print(f"toast_shown: {ok} after {time.monotonic() - started:.2f}s")
     print(f"toasts_visible: {[m.text for m in win._toasts.visible]}")
     print(f"history: {[m.text for m in win._toasts.history.items()][:6]}")
-    from ssh_manager.gtk_terminal import TerminalTab as _TT
+    from ophion.gtk_terminal import TerminalTab as _TT
     _tabs = []
 
     def _find(widget):

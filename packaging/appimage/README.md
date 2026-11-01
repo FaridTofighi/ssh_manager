@@ -13,7 +13,7 @@ packaging/appimage/tests/smoke.sh        # clean-room tests (ubuntu:22.04, debia
 
 `build.sh` builds the image from `Dockerfile.build` (Ubuntu 22.04), then runs itself inside it. The
 application is taken from the **committed** `HEAD` (`git archive`), so uncommitted changes in
-`main.py` / `ssh_manager/` are not packaged (the script says so). Outputs in `dist/`:
+`main.py` / `ophion/` are not packaged (the script says so). Outputs in `dist/`:
 
 | File | What |
 |---|---|
@@ -153,7 +153,7 @@ host's PulseAudio / PipeWire server as usual).
 | `AppRun` | The launcher: environment for the bundled Python / GTK / programs |
 | `host-libraries.txt` | Libraries allowed from the host (library audit) |
 | `requirements.lock`, `requirements-build.lock` | Hashed Python dependencies |
-| `io.github.faridtofighi.Ophion.desktop`, `io.github.faridtofighi.Ophion.metainfo.xml` | Desktop integration, AppStream (named after the application id; the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
+| `io.github.faridtofighi.Ophion.desktop`, `io.github.faridtofighi.Ophion.metainfo.xml` | Desktop integration, AppStream (named after the application id; the icon, `ophion`, comes from `ophion/gtkui/assets/app-icon/hicolor`) |
 | `tests/smoke.sh`, `tests/selfcheck.py`, `tests/e2e_ssh.py` | Clean-room tests |
 
 There is no CI configuration: the repository does not use GitHub Actions yet. A CI job would run

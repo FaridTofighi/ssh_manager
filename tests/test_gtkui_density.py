@@ -17,10 +17,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.gtkui.controllers.ui_state import UiState
-from ssh_manager.gtkui.theme import css_dark, css_light, density
-from ssh_manager.gtkui.theme.density import COMFORTABLE, COMPACT, MIN_FONT_PX, Density
-from ssh_manager.gtkui.theme.stylesheet import unresolved_color_refs
+from ophion.gtkui.controllers.ui_state import UiState
+from ophion.gtkui.theme import css_dark, css_light, density
+from ophion.gtkui.theme.density import COMFORTABLE, COMPACT, MIN_FONT_PX, Density
+from ophion.gtkui.theme.stylesheet import unresolved_color_refs
 
 ROOT = Path(__file__).resolve().parent.parent
 SIZE = (1920, 1041)
@@ -69,7 +69,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(COMPACT.space.values()[:5], (2, 4, 8, 12, 16))
 
     def test_coerce_and_live_views(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import FontScale, Size
+        from ophion.gtkui.theme.tokens import FontScale, Size
 
         self.assertIs(Density.coerce("Comfortable"), Density.COMFORTABLE)
         self.assertIs(Density.coerce("huge"), Density.COMPACT)
@@ -108,8 +108,8 @@ class DensitySettingTests(unittest.TestCase):
         self.assertEqual(UiState.from_dict(state.to_dict()).density, "comfortable")
 
     def test_sidebar_width_follows_the_density_default(self) -> None:
-        from ssh_manager.gtkui.controllers.layout import resolve_sidebar_width
-        from ssh_manager.gtkui.controllers.ui_state import DEFAULT_SIDEBAR_WIDTH
+        from ophion.gtkui.controllers.layout import resolve_sidebar_width
+        from ophion.gtkui.controllers.ui_state import DEFAULT_SIDEBAR_WIDTH
 
         with density.using("compact"):
             self.assertEqual(resolve_sidebar_width(DEFAULT_SIDEBAR_WIDTH), 283)
@@ -176,13 +176,13 @@ class RuntimeSwitchTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_switch_keeps_sessions_and_relayouts(self) -> None:
-        from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager
-        from ssh_manager.gtkui.theme.tokens import Size
+        from ophion.gtkui.theme.loader import ThemeMode, get_theme_manager
+        from ophion.gtkui.theme.tokens import Size
 
         win = self.win
         self.assertIs(win.density, Density.COMPACT)
         win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.sessions.connect_selected()
         tab = win.terminal_tabs.current_tab()
         terminal = tab._terminal
@@ -209,7 +209,7 @@ class RuntimeSwitchTests(unittest.TestCase):
         self.assertEqual(win._load_ui_state()["density"], "compact")
 
     def test_font_size_change_keeps_floor(self) -> None:
-        from ssh_manager.gtkui.theme.loader import get_theme_manager
+        from ophion.gtkui.theme.loader import get_theme_manager
 
         self.win._apply_ui_font(10)
         css = get_theme_manager().stylesheet()
@@ -246,7 +246,7 @@ def _child(density_name: str) -> None:
     snap._pin_resolution()
     snap._patch_toplevel_mapping()
     snap._stub_terminal_io()
-    from ssh_manager import gtk_app
+    from ophion import gtk_app
 
     app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
@@ -296,8 +296,8 @@ def _child_workspace() -> None:
     snap._pin_resolution()
     snap._patch_toplevel_mapping()
     snap._stub_terminal_io()
-    from ssh_manager import gtk_app
-    from ssh_manager.gtkui.views.host_page import PanelPage
+    from ophion import gtk_app
+    from ophion.gtkui.views.host_page import PanelPage
 
     app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.config import ConfigManager
+from ophion.config import ConfigManager
 
 
 class CliDetectionTests(unittest.TestCase):

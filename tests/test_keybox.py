@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import keybox as K
+from ophion import keybox as K
 
 FAST = 2 ** 15  # the minimum the reader accepts; the default is slower on purpose
 
@@ -108,7 +108,7 @@ class KeyboxTests(KeyboxCase):
         document["unlockers"][0]["kdf"] = {"name": "argon2id", "time_cost": 3, "memory_kib": 65536,
                                            "parallelism": 4, "salt": document["unlockers"][0]["kdf"]["salt"]}
         self.path.write_text(json.dumps(document))
-        with mock.patch("ssh_manager.aead.argon2_available", return_value=False):
+        with mock.patch("ophion.aead.argon2_available", return_value=False):
             with self.assertRaises(K.KeyboxError) as caught:
                 K.Keybox.load(self.path)
         self.assertEqual(caught.exception.code, "unsupported")
@@ -127,7 +127,7 @@ class KeyboxTests(KeyboxCase):
     def test_a_failed_change_keeps_the_old_password(self) -> None:
         box = self.create("old password")
         before = self.path.read_bytes()
-        with mock.patch("ssh_manager.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
+        with mock.patch("ophion.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
             with self.assertRaises(K.KeyboxError) as caught:
                 box.change_password("old password", "new password")
         self.assertEqual(caught.exception.code, "write")

@@ -63,8 +63,8 @@ def _parse(value: str) -> Tuple[int, int, int]:
 
 
 def expected_color(token: str) -> str:
-    from ssh_manager.gtkui.theme.terminal_schemes import DARK_COLORS
-    from ssh_manager.gtkui.theme.tokens import DARK
+    from ophion.gtkui.theme.terminal_schemes import DARK_COLORS
+    from ophion.gtkui.theme.tokens import DARK
 
     return DARK_COLORS[0] if token == "terminal" else getattr(DARK, token)
 

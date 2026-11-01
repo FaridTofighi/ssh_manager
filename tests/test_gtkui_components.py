@@ -1,10 +1,10 @@
 import unittest
 from typing import Callable, Dict, List
 
-from ssh_manager.gtkui.controllers.notifications import Message, MessageHistory, ToastController
-from ssh_manager.gtkui.menu_spec import MenuItemSpec, MenuSection, describe, menu_layout
-from ssh_manager.gtkui.theme.tokens import Level
-from ssh_manager.gtkui.validation import (
+from ophion.gtkui.controllers.notifications import Message, MessageHistory, ToastController
+from ophion.gtkui.menu_spec import MenuItemSpec, MenuSection, describe, menu_layout
+from ophion.gtkui.theme.tokens import Level
+from ophion.gtkui.validation import (
     validate_alias,
     validate_child_path,
     validate_group_name,
@@ -188,7 +188,7 @@ class ToastWidgetTests(unittest.TestCase):
     def setUp(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.widgets.toast import Toast, ToastOverlay
+        from ophion.gtkui.widgets.toast import Toast, ToastOverlay
 
         self.Gtk, self.Toast = Gtk, Toast
         self.scheduler = FakeScheduler()
@@ -236,7 +236,7 @@ class DialogWidgetTests(unittest.TestCase):
         return [child.get_label() for child in area.get_children()]
 
     def test_confirm_dialog_labels_and_destructive_default(self) -> None:
-        from ssh_manager.gtkui.dialogs.confirm import ConfirmDialog
+        from ophion.gtkui.dialogs.confirm import ConfirmDialog
 
         dialog = ConfirmDialog(None, "Delete host?", "Gone", confirm_label="_Delete Host", destructive=True)
         try:
@@ -247,7 +247,7 @@ class DialogWidgetTests(unittest.TestCase):
             dialog.destroy()
 
     def test_confirm_dialog_for_non_delete_question(self) -> None:
-        from ssh_manager.gtkui.dialogs.confirm import ConfirmDialog
+        from ophion.gtkui.dialogs.confirm import ConfirmDialog
 
         dialog = ConfirmDialog(None, "Reconnect all?", confirm_label="_Reconnect")
         try:
@@ -260,7 +260,7 @@ class DialogWidgetTests(unittest.TestCase):
             dialog.destroy()
 
     def test_confirm_response_mapping(self) -> None:
-        from ssh_manager.gtkui.dialogs.base import is_accept
+        from ophion.gtkui.dialogs.base import is_accept
 
         Gtk = self.Gtk
         self.assertTrue(is_accept(Gtk.ResponseType.OK))
@@ -268,8 +268,8 @@ class DialogWidgetTests(unittest.TestCase):
         self.assertFalse(is_accept(Gtk.ResponseType.DELETE_EVENT))
 
     def test_prompt_validator_keeps_dialog_open_on_invalid_value(self) -> None:
-        from ssh_manager.gtkui.dialogs.prompt import PromptDialog
-        from ssh_manager.gtkui.validation import validate_group_name
+        from ophion.gtkui.dialogs.prompt import PromptDialog
+        from ophion.gtkui.validation import validate_group_name
 
         dialog = PromptDialog(None, "New Group", "Name", default="bad/name", validator=validate_group_name)
         try:
@@ -285,7 +285,7 @@ class DialogWidgetTests(unittest.TestCase):
             dialog.destroy()
 
     def test_status_dot_states(self) -> None:
-        from ssh_manager.gtkui.widgets.status_dot import StatusDot
+        from ophion.gtkui.widgets.status_dot import StatusDot
 
         dot = StatusDot("connected")
         self.assertTrue(dot.get_style_context().has_class("connected"))
@@ -296,7 +296,7 @@ class DialogWidgetTests(unittest.TestCase):
         self.assertEqual(dot.get_tooltip_text(), "Connection failed")
 
     def test_build_menu_renders_separators_and_destructive_items(self) -> None:
-        from ssh_manager.gtkui.widgets.menus import build_menu
+        from ophion.gtkui.widgets.menus import build_menu
 
         menu = build_menu(
             [
@@ -310,7 +310,7 @@ class DialogWidgetTests(unittest.TestCase):
         self.assertTrue(children[2].get_style_context().has_class("destructive"))
 
     def test_chip_flow_replaces_chips(self) -> None:
-        from ssh_manager.gtkui.widgets.chips import ChipFlow
+        from ophion.gtkui.widgets.chips import ChipFlow
 
         flow = ChipFlow()
         flow.set_chips(["prod", "web"])

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.config_viewer import export_path_for_directory, save_config_text, validate_config
+from ophion.config_viewer import export_path_for_directory, save_config_text, validate_config
 
 
 class ConfigViewerTests(unittest.TestCase):

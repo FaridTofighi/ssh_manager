@@ -4,7 +4,7 @@ import random
 import unittest
 from pathlib import Path
 
-from ssh_manager.host_key_output import HostKeyOutputDetector, detect_changed, detect_unknown
+from ophion.host_key_output import HostKeyOutputDetector, detect_changed, detect_unknown
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ssh_output"
 

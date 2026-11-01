@@ -9,8 +9,8 @@ from tests.gtk_window_fixture import display_available
 @unittest.skipUnless(display_available(), "needs a display")
 class ShortcutEditorTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcut_registry import ShortcutRegistry, canonical
-        from ssh_manager.gtkui.dialogs.shortcuts_page import ShortcutEditor
+        from ophion.gtkui.controllers.shortcut_registry import ShortcutRegistry, canonical
+        from ophion.gtkui.dialogs.shortcuts_page import ShortcutEditor
 
         self.canonical = canonical
         self.registry = ShortcutRegistry()
@@ -37,7 +37,7 @@ class ShortcutEditorTests(unittest.TestCase):
         self.assertTrue(self.editor.assign("copy", "not a key").invalid)
 
     def test_keys_programs_need_ask_first(self) -> None:
-        from ssh_manager.gtkui.dialogs.shortcuts_page import steals_terminal_input
+        from ophion.gtkui.dialogs.shortcuts_page import steals_terminal_input
 
         for accel, steals in (("a", True), ("<Shift>a", True), ("F5", True), ("<Primary>c", True),
                               ("<Primary><Shift>c", False), ("<Primary><Alt>t", False), ("<Alt>x", False)):
@@ -47,10 +47,10 @@ class ShortcutEditorTests(unittest.TestCase):
         self.assertTrue(self.editor.assign("reset-terminal", "<Primary>r", force=True).ok)
 
     def test_page_builds_and_asks_before_replacing(self) -> None:
-        from ssh_manager.gtkui.dialogs import shortcuts_page
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.dialogs import shortcuts_page
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         dialog = PreferencesDialog(None, ThemeMode.LIGHT, 1.0, 11, AppSettings(), shortcuts=self.registry)
         self.addCleanup(dialog.destroy)
@@ -122,7 +122,7 @@ class WindowShortcutTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_terminal_shortcuts_and_live_rebinding(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcuts import accel_label
+        from ophion.gtkui.controllers.shortcuts import accel_label
 
         term = self.terminal()
         del self.calls[:]
@@ -151,7 +151,7 @@ class WindowShortcutTests(unittest.TestCase):
         self.assertEqual(self.calls, [("paste_primary", term)])
 
     def test_hints_follow_the_bindings(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcuts import refresh_shortcuts_window
+        from ophion.gtkui.controllers.shortcuts import refresh_shortcuts_window
 
         sidebar_button = next(w for w in _walk(self.win) if w.get_tooltip_text() and
                               w.get_tooltip_text().startswith("Hide sidebar"))

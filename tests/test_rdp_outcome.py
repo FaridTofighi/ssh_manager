@@ -2,9 +2,9 @@
 
 import unittest
 
-from ssh_manager.rdp.outcome import ERRCONNECT, ERRINFO, EXIT_CODES, Kind, classify_rdp_exit, connected_line
-from ssh_manager.rdp.trust_flow import Action, decide
-from ssh_manager.trust import CertificateInfo
+from ophion.rdp.outcome import ERRCONNECT, ERRINFO, EXIT_CODES, Kind, classify_rdp_exit, connected_line
+from ophion.rdp.trust_flow import Action, decide
+from ophion.trust import CertificateInfo
 
 A = ":".join(["AA"] * 32)
 B = ":".join(["BB"] * 32)

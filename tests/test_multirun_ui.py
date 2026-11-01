@@ -16,7 +16,7 @@ class MultiRunUiCase(unittest.TestCase):
         from tests.fake_sftp import FakeSftpServer
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.transfer.settings import TransferSettings
+        from ophion.transfer.settings import TransferSettings
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -32,7 +32,7 @@ class MultiRunUiCase(unittest.TestCase):
         self.controller = self.win.multirun
 
         def connect(target, timeout):
-            from ssh_manager.transfer.sftp import SftpBackend
+            from ophion.transfer.sftp import SftpBackend
 
             return SftpBackend("127.0.0.1", self.server.port, "alice", PASSWORD, known_hosts=known,
                                allow_agent=False, settings=TransferSettings(timeout_connect=timeout)
@@ -45,7 +45,7 @@ class MultiRunUiCase(unittest.TestCase):
         return [key for key, host in hosts.items() if not aliases or host.alias in aliases]
 
     def dialog(self, keys):
-        from ssh_manager.gtkui.dialogs.multirun import MultiRunDialog
+        from ophion.gtkui.dialogs.multirun import MultiRunDialog
 
         dialog = MultiRunDialog(None, self.controller, keys)
         self.addCleanup(dialog.destroy)
@@ -58,7 +58,7 @@ class MultiRunUiCase(unittest.TestCase):
 
 class DialogTests(MultiRunUiCase):
     def test_the_trust_question_names_the_type_trusted_before(self) -> None:
-        from ssh_manager.gtkui.dialogs.trust import host_key_message
+        from ophion.gtkui.dialogs.trust import host_key_message
 
         self.assertIn("You trusted ecdsa-sha2-nistp256 for this host before; the server now presents ssh-ed25519.",
                       host_key_message("ssh-ed25519", ["ecdsa-sha2-nistp256"]))
@@ -67,8 +67,8 @@ class DialogTests(MultiRunUiCase):
     def test_host_key_details_only_for_host_key_statuses(self) -> None:
         from unittest import mock
 
-        from ssh_manager.multirun import engine as R
-        from ssh_manager.transfer.backend import HostKeyChanged, UnknownHostKey
+        from ophion.multirun import engine as R
+        from ophion.transfer.backend import HostKeyChanged, UnknownHostKey
 
         keys = self.keys("web-01", "web-02", "db-primary")
         dialog = self.dialog(keys)
@@ -99,7 +99,7 @@ class DialogTests(MultiRunUiCase):
 
         trusted = []
         dialog.trust_new_key = lambda alias, error: trusted.append(error.other_key_types) or True
-        with mock.patch("ssh_manager.transfer.sftp.SftpBackend.accept_host_key") as accept:
+        with mock.patch("ophion.transfer.sftp.SftpBackend.accept_host_key") as accept:
             dialog.results.select(rows[1].key)
             dialog.results.details_button.clicked()
         accept.assert_called_once_with(unknown)
@@ -115,7 +115,7 @@ class DialogTests(MultiRunUiCase):
         self.assertIsNone(dialog.job)
 
     def test_twelve_hundred_hosts_open_quickly_and_show_a_count(self) -> None:
-        from ssh_manager.inventory.store import NewHost
+        from ophion.inventory.store import NewHost
 
         store = self.sandbox.store
         group = store.create_group(None, "Many")
@@ -131,7 +131,7 @@ class DialogTests(MultiRunUiCase):
         self.assertRegex(dialog.targets_label.get_text(), r"^\d+ hosts selected")
         self.assertNotIn("many-1", dialog.targets_label.get_text())  # never a list of names
         started = time.perf_counter()
-        from ssh_manager.gtkui.dialogs.multirun_targets import TargetChooserDialog
+        from ophion.gtkui.dialogs.multirun_targets import TargetChooserDialog
 
         chooser = TargetChooserDialog(None, self.win.manager.tree, keys[:10], key=self.win.creds.credential_key)
         self.addCleanup(chooser.destroy)
@@ -139,7 +139,7 @@ class DialogTests(MultiRunUiCase):
               f"for {len(keys)} hosts")
 
     def test_target_chooser_search_and_select_matches(self) -> None:
-        from ssh_manager.gtkui.dialogs.multirun_targets import TargetChooserDialog
+        from ophion.gtkui.dialogs.multirun_targets import TargetChooserDialog
 
         chooser = TargetChooserDialog(None, self.win.manager.tree, [], key=self.win.creds.credential_key)
         self.addCleanup(chooser.destroy)
@@ -157,7 +157,7 @@ class DialogTests(MultiRunUiCase):
         self.assertEqual(len(chooser.selected), 3)
 
     def test_a_run_fills_the_table_and_skips_non_ssh_hosts(self) -> None:
-        from ssh_manager.inventory.store import NewHost
+        from ophion.inventory.store import NewHost
 
         store = self.sandbox.store
         group = store.create_group(None, "Desktops")
@@ -204,7 +204,7 @@ class DialogTests(MultiRunUiCase):
 
 class SafetyTests(MultiRunUiCase):
     def test_runs_are_confirmed_above_five_hosts_or_when_dangerous(self) -> None:
-        from ssh_manager.inventory.store import NewHost
+        from ophion.inventory.store import NewHost
 
         asked = []
         dialog = self.dialog(self.keys("web-01"))
@@ -298,8 +298,8 @@ class ResultsTests(MultiRunUiCase):
         sessions.assert_called_once_with(self.keys("web-02"))
 
     def test_results_arrive_in_batches(self) -> None:
-        from ssh_manager.multirun import engine as R
-        from ssh_manager.gtkui.dialogs import multirun as D
+        from ophion.multirun import engine as R
+        from ophion.gtkui.dialogs import multirun as D
 
         dialog = self.dialog([])
         targets = [R.Target(key=f"k{i}", alias=f"h{i}", hostname="x") for i in range(1200)]

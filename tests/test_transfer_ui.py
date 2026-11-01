@@ -9,12 +9,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.transfer.backend import RemoteEntry
-from ssh_manager.transfer.dnd import encode_payload
-from ssh_manager.transfer.engine import Conflict, ConflictInfo, Direction, Endpoint, State, TransferItem, TransferJob
-from ssh_manager.transfer.local import LocalBackend
-from ssh_manager.transfer.state import BrowserState
+from ophion.config import HostEntry
+from ophion.transfer.backend import RemoteEntry
+from ophion.transfer.dnd import encode_payload
+from ophion.transfer.engine import Conflict, ConflictInfo, Direction, Endpoint, State, TransferItem, TransferJob
+from ophion.transfer.local import LocalBackend
+from ophion.transfer.state import BrowserState
 
 from tests.fake_backend import FakeBackend
 
@@ -47,7 +47,7 @@ def pump_until(predicate, timeout=8.0) -> bool:
 class PanelTextTests(unittest.TestCase):
     def setUp(self) -> None:
         try:
-            from ssh_manager.gtkui.file_browser import transfers  # noqa: F401
+            from ophion.gtkui.file_browser import transfers  # noqa: F401
         except Exception as exc:  # pragma: no cover
             raise unittest.SkipTest(str(exc))
 
@@ -61,7 +61,7 @@ class PanelTextTests(unittest.TestCase):
         return job
 
     def test_detail_texts(self) -> None:
-        from ssh_manager.gtkui.file_browser.transfers import format_eta, job_detail
+        from ophion.gtkui.file_browser.transfers import format_eta, job_detail
 
         running = self.job(State.RUNNING, rate=3_100_000.0)
         self.assertEqual(job_detail(running), "12.4 MB of 48.0 MB · 3.1 MB/s · 11 s left · Transferring")
@@ -75,7 +75,7 @@ class PanelTextTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class PanelTests(unittest.TestCase):
     def test_rows_and_actions(self) -> None:
-        from ssh_manager.gtkui.file_browser.transfers import TransferPanel
+        from ophion.gtkui.file_browser.transfers import TransferPanel
 
         panel = TransferPanel()
         self.addCleanup(panel.destroy)
@@ -108,7 +108,7 @@ class PanelTests(unittest.TestCase):
     def test_conflict_dialog(self) -> None:
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.file_browser.transfers import ConflictDialog
+        from ophion.gtkui.file_browser.transfers import ConflictDialog
 
         item = TransferItem("/a/report.pdf", "/b/report.pdf", size=2000, mtime=1_700_000_000)
         dialog = ConflictDialog(None, ConflictInfo(item, 1000, 1_600_000_000, can_resume=True))
@@ -139,7 +139,7 @@ class DragDropTests(unittest.TestCase):
         self.logs = []
 
     def tab(self, backend=None, read_only=False, home=None):
-        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
+        from ophion.gtkui.file_browser.tab import FileBrowserTab
 
         backend = backend or self.backend
         host = HostEntry("files", {"hostname": "10.0.0.20", "user": "alice"}, protocol="sftp", id=f"h{id(backend)}")
@@ -242,7 +242,7 @@ class DragDropTests(unittest.TestCase):
         self.backend.files["/home/alice/notes.txt"] = b"old"
         tab = self.tab()
         notes = self.entry(tab.local_pane, "notes.txt")
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.ConflictDialog") as dialog:
+        with mock.patch("ophion.gtkui.file_browser.tab.ConflictDialog") as dialog:
             dialog.return_value.ask.return_value = (Conflict.OVERWRITE, False)
             tab.transfer(tab.local_pane, tab.remote_pane, [notes])
             self.wait_jobs(tab)
@@ -253,7 +253,7 @@ class DragDropTests(unittest.TestCase):
         self.backend.files["/home/alice/notes.txt"] = b"old"
         tab = self.tab()
         notes = self.entry(tab.local_pane, "notes.txt")
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.ConflictDialog") as dialog:
+        with mock.patch("ophion.gtkui.file_browser.tab.ConflictDialog") as dialog:
             dialog.return_value.ask.return_value = (None, False)
             job = tab.transfer(tab.local_pane, tab.remote_pane, [notes])
             self.wait_jobs(tab)
@@ -268,7 +268,7 @@ class DragDropTests(unittest.TestCase):
         notes = self.entry(tab.local_pane, "notes.txt")
         tab.transfer(tab.local_pane, tab.remote_pane, [notes])
         self.assertTrue(pump_until(lambda: tab.running_transfers() == 1))
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.file_browser.tab.confirm", return_value=False) as ask:
             self.assertFalse(tab.confirm_close())
         self.assertIn("1 transfers are in progress", ask.call_args[0][2])
         gate.set()
@@ -295,7 +295,7 @@ class DragDropTests(unittest.TestCase):
         data = SimpleNamespace(get_data=lambda: encode_payload(tab.local_pane.token, "local", [notes.path]),
                                get_uris=lambda: None)
         context = SimpleNamespace(get_selected_action=lambda: Gdk.DragAction.COPY)
-        with mock.patch("ssh_manager.gtkui.file_browser.pane.Gtk.drag_finish") as finish:
+        with mock.patch("ophion.gtkui.file_browser.pane.Gtk.drag_finish") as finish:
             tab.remote_pane._on_drag_data_received(tab.remote_pane.view, context, 1, 1, data, 1, 0)
         finish.assert_called_once_with(context, True, False, 0)
         self.wait_jobs(tab)

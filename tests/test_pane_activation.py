@@ -1,6 +1,6 @@
 import unittest
 
-from ssh_manager.gtkui.pane_activation import ActivePane
+from ophion.gtkui.pane_activation import ActivePane
 
 
 class ActivePaneTests(unittest.TestCase):

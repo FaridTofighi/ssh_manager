@@ -8,11 +8,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import native_format as F
-from ssh_manager.exporters.native import build_export
-from ssh_manager.importers import native as N
-from ssh_manager.importers.mobaxterm import ConflictPolicy, Destination, ExistingInventory
-from ssh_manager.inventory.manager import StoreConfigManager
+from ophion import native_format as F
+from ophion.exporters.native import build_export
+from ophion.importers import native as N
+from ophion.importers.mobaxterm import ConflictPolicy, Destination, ExistingInventory
+from ophion.inventory.manager import StoreConfigManager
 from tests.native_fixture import FakeCredential, build_rich, make_store
 
 
@@ -113,7 +113,7 @@ class CommitTests(CommitCase):
         self.assertEqual(self.manager.tree["Prod"]["Databases"].hosts[0].alias, "db-01")  # refreshed
 
     def test_any_failure_leaves_the_inventory_as_it_was(self) -> None:
-        from ssh_manager.inventory.store import InventoryError
+        from ophion.inventory.store import InventoryError
 
         self.commit(self.job(self.exported()))  # something to protect
         before = snapshot(self.target)
@@ -207,7 +207,7 @@ class RoundTripTests(CommitCase):
 
 class SmartGroupTests(unittest.TestCase):
     def test_merge(self) -> None:
-        from ssh_manager.smart_groups import SmartGroup
+        from ophion.smart_groups import SmartGroup
 
         merged, added = N.merge_smart_groups([SmartGroup("Prod", "env:prod")],
                                              [{"name": "prod", "query": "x"}, {"name": "Web", "query": "tag:web"}])

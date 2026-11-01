@@ -1,7 +1,7 @@
 import unittest
 
-from ssh_manager.config import HostEntry
-from ssh_manager.ssh_command import build_ssh_command
+from ophion.config import HostEntry
+from ophion.ssh_command import build_ssh_command
 
 
 class SshCommandTests(unittest.TestCase):

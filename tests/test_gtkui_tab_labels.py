@@ -1,6 +1,6 @@
 import unittest
 
-from ssh_manager.gtkui.tab_labels import (
+from ophion.gtkui.tab_labels import (
     SessionLabelInfo,
     TabLabelMode,
     address_text,
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
 class TabLabelSettingTests(unittest.TestCase):
     def test_ui_state_round_trip_and_old_keys(self) -> None:
-        from ssh_manager.gtkui.controllers.ui_state import UiState
+        from ophion.gtkui.controllers.ui_state import UiState
 
         self.assertEqual(UiState().tab_label_mode, "name")
         self.assertEqual(UiState.from_dict({"tab_label_mode": "name_ip"}).tab_label_mode, "name_ip")
@@ -114,7 +114,7 @@ class TabLabelSettingTests(unittest.TestCase):
 
 class PaneLabelTests(unittest.TestCase):
     def test_pane_suffixes_only_when_split(self) -> None:
-        from ssh_manager.gtkui.tab_labels import pane_labels
+        from ophion.gtkui.tab_labels import pane_labels
 
         self.assertEqual(pane_labels("web-01", 1), ["web-01"])
         self.assertEqual(pane_labels("web-01 (2)", 2), ["web-01 (2) · pane 1", "web-01 (2) · pane 2"])

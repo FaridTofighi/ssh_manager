@@ -9,11 +9,11 @@ import threading
 import unittest
 from pathlib import Path
 
-from ssh_manager.rdp.command import LaunchError, build_launch, preset_for_latency
-from ssh_manager.rdp.drives import check_folder, home_drive_check
-from ssh_manager.rdp.engines import ClientBinary, parse_help_options
-from ssh_manager.rdp.probe import probe_tls
-from ssh_manager.rdp.settings import Gateway, RdpIdentity, RdpSettings, SharedFolder
+from ophion.rdp.command import LaunchError, build_launch, preset_for_latency
+from ophion.rdp.drives import check_folder, home_drive_check
+from ophion.rdp.engines import ClientBinary, parse_help_options
+from ophion.rdp.probe import probe_tls
+from ophion.rdp.settings import Gateway, RdpIdentity, RdpSettings, SharedFolder
 
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"
 V3 = ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0",
@@ -191,13 +191,13 @@ class TunnelTests(unittest.TestCase):
         self.addCleanup(self.echo.shutdown)
 
     def backend(self, password="s3cret pass"):
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         return SftpBackend("127.0.0.1", self.ssh.port, "alice", password, host_key_policy="auto-add",
                            known_hosts=Path(self.tmp.name) / "known_hosts", allow_agent=False)
 
     def test_forwards_over_loopback_only(self) -> None:
-        from ssh_manager.rdp.tunnel import open_tunnel
+        from ophion.rdp.tunnel import open_tunnel
 
         log = []
         tunnel = open_tunnel(self.backend(), "127.0.0.1", self.echo.server_address[1], log=log.append)
@@ -218,8 +218,8 @@ class TunnelTests(unittest.TestCase):
             socket.create_connection(("127.0.0.1", tunnel.port), timeout=1).close()
 
     def test_failures_are_reported(self) -> None:
-        from ssh_manager.rdp.tunnel import open_tunnel
-        from ssh_manager.transfer.backend import AuthError
+        from ophion.rdp.tunnel import open_tunnel
+        from ophion.transfer.backend import AuthError
 
         with self.assertRaises(AuthError):
             open_tunnel(self.backend("wrong"), "127.0.0.1", 1)
@@ -258,11 +258,11 @@ class RouteTabTests(unittest.TestCase):
     def setUp(self) -> None:
         from unittest import mock
 
-        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
-        from ssh_manager.rdp import engines
-        from ssh_manager.rdp.engines import EngineReport, Platform, build_engines
-        from ssh_manager.rdp.process import ChildRegistry
-        from ssh_manager.trust import TrustStore
+        from ophion.gtkui.rdp.runtime import RdpRuntime
+        from ophion.rdp import engines
+        from ophion.rdp.engines import EngineReport, Platform, build_engines
+        from ophion.rdp.process import ChildRegistry
+        from ophion.trust import TrustStore
         from tests import fake_freerdp
         from tests.fake_rdp import write_certificate
 
@@ -287,8 +287,8 @@ class RouteTabTests(unittest.TestCase):
         self.records = lambda: fake_freerdp.records(self.record)
 
     def tab(self, host, **kwargs):
-        from ssh_manager.auth_flow import PasswordResolution
-        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
+        from ophion.auth_flow import PasswordResolution
+        from ophion.gtkui.rdp.tab import RdpSessionTab
 
         tab = RdpSessionTab(host, lambda *a: None, runtime=self.runtime,
                             password_provider=lambda: PasswordResolution("pw-x", "credential"),
@@ -303,9 +303,9 @@ class RouteTabTests(unittest.TestCase):
         return pump_until(predicate, timeout)
 
     def test_through_an_ssh_tunnel(self) -> None:
-        from ssh_manager.config import HostEntry
-        from ssh_manager.rdp.probe import PROTOCOL_HYBRID
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.config import HostEntry
+        from ophion.rdp.probe import PROTOCOL_HYBRID
+        from ophion.transfer.sftp import SftpBackend
         from tests.fake_rdp import FakeRdpServer, neg_rsp
         from tests.fake_sftp import FakeSftpServer
 
@@ -342,7 +342,7 @@ class RouteTabTests(unittest.TestCase):
         self.assertFalse(tunnel.alive)
 
     def test_tunnel_failure_is_explained(self) -> None:
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "alice"}, protocol="rdp", id="h-win",
                          metadata={"rdp": {"v": 1, "via_ssh": "gone"}})
@@ -356,9 +356,9 @@ class RouteTabTests(unittest.TestCase):
         self.assertEqual(self.records(), [])
 
     def test_through_an_rd_gateway(self) -> None:
-        from ssh_manager.config import HostEntry
-        from ssh_manager.rdp.probe import ProbeResult
-        from ssh_manager.trust import CertificateInfo, pin_key
+        from ophion.config import HostEntry
+        from ophion.rdp.probe import ProbeResult
+        from ophion.trust import CertificateInfo, pin_key
 
         gw_fp = ":".join(["CD"] * 32)
         host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "alice"}, protocol="rdp", id="h-win",

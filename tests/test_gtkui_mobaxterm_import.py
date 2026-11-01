@@ -46,7 +46,7 @@ class ImportWizardTests(unittest.TestCase):
 
     # ------------------------------------------------------------ helpers
     def dialog(self):
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import MobaXtermImportDialog
+        from ophion.gtkui.dialogs.mobaxterm_import import MobaXtermImportDialog
 
         dialog = MobaXtermImportDialog(self.win, self.win.manager, self.win._credential_store,
                                        report_dir=self.report_dir, choose_file=lambda _parent: str(self.export))
@@ -61,7 +61,7 @@ class ImportWizardTests(unittest.TestCase):
         return [tuple(r) for r in rows], dict(creds._bindings), [c.id for c in creds.list()]
 
     def next(self, dialog) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT
+        from ophion.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT
 
         self.assertTrue(dialog.next_button.get_sensitive(), f"Next is disabled on {dialog.step.name}")
         dialog.response(RESPONSE_NEXT)
@@ -78,7 +78,7 @@ class ImportWizardTests(unittest.TestCase):
 
     # -------------------------------------------------------------- tests
     def test_step_gating(self) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import Step
+        from ophion.gtkui.dialogs.mobaxterm_import import Step
 
         ops = self.add_credential()
         dialog = self.dialog()
@@ -102,7 +102,7 @@ class ImportWizardTests(unittest.TestCase):
         self.assertIn("alice (4 host(s)) → Ops", dialog.report_text)  # dev\\alice of the RDP session
 
     def test_transfer_sessions_checkbox(self) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import COL_COUNT
+        from ophion.gtkui.dialogs.mobaxterm_import import COL_COUNT
 
         ops = self.add_credential()
         dialog = self.dialog()
@@ -156,8 +156,8 @@ class ImportWizardTests(unittest.TestCase):
         self.assertIn("0 SSH sessions", dialog.selection_label.get_text())
 
     def test_full_import_writes_binds_and_reports(self) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import Step
-        from ssh_manager.importers.mobaxterm import ImportStatus
+        from ophion.gtkui.dialogs.mobaxterm_import import Step
+        from ophion.importers.mobaxterm import ImportStatus
 
         ops = self.add_credential()
         dialog = self.dialog()
@@ -190,7 +190,7 @@ class ImportWizardTests(unittest.TestCase):
     def test_create_credential_from_a_row(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs import mobaxterm_import
+        from ophion.gtkui.dialogs import mobaxterm_import
 
         dialog = self.dialog()
         self.to_credentials(dialog)
@@ -240,7 +240,7 @@ class ImportWizardTests(unittest.TestCase):
     def test_closing_during_the_import_rolls_back(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.importers.mobaxterm import ImportStatus
+        from ophion.importers.mobaxterm import ImportStatus
 
         ops = self.add_credential()
         before = self.snapshot()
@@ -271,7 +271,7 @@ class ImportWizardTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_parse_errors_stay_on_the_file_step(self) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import Step
+        from ophion.gtkui.dialogs.mobaxterm_import import Step
 
         bad = Path(self.tmp.name) / "notes.mxtsessions"
         bad.write_text("hello world\n")
@@ -297,7 +297,7 @@ class ImportWizardTests(unittest.TestCase):
 
     def test_entry_points(self) -> None:
         self.assertIsNotNone(self.win.lookup_action("import-mobaxterm"))
-        from ssh_manager.gtkui.views.header import _avatar_menu_model
+        from ophion.gtkui.views.header import _avatar_menu_model
 
         menu = _avatar_menu_model()
         labels = []

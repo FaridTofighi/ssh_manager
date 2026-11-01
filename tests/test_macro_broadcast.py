@@ -41,7 +41,7 @@ class MacroBroadcastTests(unittest.TestCase):
         self.tabs = self.win.terminal_tabs
         self.macros = self.win.macros
         self.logs = self.enterContext(self.assertLogs(level=logging.DEBUG))
-        logging.getLogger("ssh_manager").debug("broadcast macro test")
+        logging.getLogger("ophion").debug("broadcast macro test")
         # Every session runs cat without echo: what reaches its pty appears once on its screen.
         folder = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: [p.unlink() for p in folder.iterdir()] and folder.rmdir())
@@ -62,7 +62,7 @@ class MacroBroadcastTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tabs.set_broadcast_mode(False)
         for tab in list(self.tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
         pump(0.2)
 
@@ -75,12 +75,12 @@ class MacroBroadcastTests(unittest.TestCase):
         return tab
 
     def text(self, tab) -> str:
-        from ssh_manager.gtk_terminal import terminal_text
+        from ophion.gtk_terminal import terminal_text
 
         return terminal_text(tab._terminal)
 
     def macro(self, name="M", steps=None, **kw):
-        from ssh_manager.macros import Macro
+        from ophion.macros import Macro
 
         macro = Macro(name=name, steps=steps or [{"type": "text", "text": "MARK-ONE\r"},
                                                  {"type": "key", "key": "Enter"},
@@ -166,7 +166,7 @@ class MacroBroadcastTests(unittest.TestCase):
         self.assertEqual(set(players), {self.a, d, e, f})
         pump(0.3)
         source = players[f]._source
-        with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+        with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
             self.tabs.close_tab(f)
         pump(0.2)
         self.assertFalse(players[f].running)
@@ -191,7 +191,7 @@ class MacroBroadcastTests(unittest.TestCase):
         plain = self.macro("Plain")
         self.run_and_wait(plain, self.a)
         self.assertFalse(self.win._settings.macros.confirm_multi_session)
-        from ssh_manager.settings import AppSettings
+        from ophion.settings import AppSettings
 
         self.assertFalse(AppSettings.load(self.win._settings.config_path).macros.confirm_multi_session)
         asked = len(self.asked)

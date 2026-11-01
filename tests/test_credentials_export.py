@@ -9,15 +9,15 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import aead
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.credentials_export import (
+from ophion import aead
+from ophion.credentials import CredentialStore
+from ophion.credentials_export import (
     CredentialExportError,
     export_credentials,
     import_credentials,
     read_credentials_export,
 )
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore
+from ophion.secure_store import InMemoryKeyring, SecureStore
 from tests.gtk_window_fixture import display_available
 
 SECRET = "Cr3d-sentinel-پسورد"
@@ -114,7 +114,7 @@ class ExportTests(ExportCase):
 
     def test_no_secret_in_logs(self) -> None:
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             export_credentials(self.source, "pp-pp-pp-pp", self.file)
             items = read_credentials_export(self.file, "pp-pp-pp-pp")
             import_credentials(self.target, items)
@@ -127,7 +127,7 @@ class ExportTests(ExportCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class DialogTests(ExportCase):
     def test_export_and_import_flows(self) -> None:
-        from ssh_manager.gtkui.dialogs import credentials_transfer as T
+        from ophion.gtkui.dialogs import credentials_transfer as T
 
         messages = []
         with mock.patch.object(T, "_message", lambda _p, text, error=False: messages.append((text, error))):
@@ -150,8 +150,8 @@ class DialogTests(ExportCase):
     def test_passphrase_and_selection_dialogs(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.credentials_export import ExportedCredential
-        from ssh_manager.gtkui.dialogs.credentials_transfer import CredentialImportDialog, PassphraseDialog
+        from ophion.credentials_export import ExportedCredential
+        from ophion.gtkui.dialogs.credentials_transfer import CredentialImportDialog, PassphraseDialog
 
         dialog = PassphraseDialog(None, "x", confirm=True)
         self.addCleanup(dialog.destroy)
@@ -167,11 +167,11 @@ class DialogTests(ExportCase):
         self.assertEqual([i.name for i in chooser.selected()], ["B"])
 
     def test_the_manager_has_the_buttons(self) -> None:
-        from ssh_manager.gtkui.dialogs.credentials import CredentialManagerDialog
+        from ophion.gtkui.dialogs.credentials import CredentialManagerDialog
 
         dialog = CredentialManagerDialog(None, self.source)
         self.addCleanup(dialog.destroy)
-        with mock.patch("ssh_manager.gtkui.dialogs.credentials_transfer.run_export") as export:
+        with mock.patch("ophion.gtkui.dialogs.credentials_transfer.run_export") as export:
             dialog.export_button.clicked()
         export.assert_called_once()
 

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import GroupConfig, HostEntry
+from ophion.config import GroupConfig, HostEntry
 
 
 def _display() -> bool:
@@ -70,8 +70,8 @@ def synthetic(parents=20, groups=800, hosts=1500):
 @unittest.skipUnless(_display(), "needs a display")
 class TreeViewTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import build_tree_rows
-        from ssh_manager.gtkui.views.session_tree import SessionTreeView
+        from ophion.gtkui.controllers.tree_controller import build_tree_rows
+        from ophion.gtkui.views.session_tree import SessionTreeView
 
         self.build = lambda tree=None: build_tree_rows([(tree or nested_tree(), False)])
         self.view = SessionTreeView()
@@ -185,8 +185,8 @@ class TreeViewTests(unittest.TestCase):
         self.assertEqual(self.view.get_accessible().get_name(), "Hosts and groups")
 
     def test_large_inventory_first_populate_expands_nothing(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import build_tree_rows
-        from ssh_manager.gtkui.views.session_tree import SessionTreeView
+        from ophion.gtkui.controllers.tree_controller import build_tree_rows
+        from ophion.gtkui.views.session_tree import SessionTreeView
 
         rows = build_tree_rows([(synthetic(), False)])
         self.assertEqual(sum(1 for top in rows for row in top.walk() if row.kind.value == "host"), 1500)
@@ -236,7 +236,7 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(self.selected_text(), [])
 
     def new_window(self):
-        from ssh_manager.gtk_app import SSHManagerWindow
+        from ophion.gtk_app import SSHManagerWindow
 
         window = SSHManagerWindow(self.sandbox.app, self.win.manager.base_dir, self.win._settings,
                                   manager=self.win.manager)
@@ -244,7 +244,7 @@ class WindowTests(unittest.TestCase):
         return window
 
     def test_every_launch_starts_collapsed_and_nothing_is_saved(self) -> None:
-        from ssh_manager.gtkui.controllers.ui_state import ui_state_path_for_base
+        from ophion.gtkui.controllers.ui_state import ui_state_path_for_base
 
         self.view.expand_all_rows()
         self.win.tree.select_host("prod", "web.conf", "web-01")
@@ -360,8 +360,8 @@ class WindowTests(unittest.TestCase):
         self.assertNotIn("db", [k[2] for k in self.view.expanded_keys])  # nothing else was opened
 
     def test_expand_and_collapse_all_actions(self) -> None:
-        from ssh_manager.gtkui.controllers.context_menus import blank_menu
-        from ssh_manager.gtkui.menu_spec import MenuSection
+        from ophion.gtkui.controllers.context_menus import blank_menu
+        from ophion.gtkui.menu_spec import MenuSection
 
         self.win.lookup_action("expand-all-groups").activate(None)
         self.assertIn("db-primary", self.visible())
@@ -377,7 +377,7 @@ class WindowTests(unittest.TestCase):
 class ShortcutTests(unittest.TestCase):
     def test_no_accelerator_is_bound_twice(self) -> None:
         try:
-            from ssh_manager.gtkui.controllers.shortcuts import ACTIONS
+            from ophion.gtkui.controllers.shortcuts import ACTIONS
         except Exception as exc:  # pragma: no cover - no GTK
             raise unittest.SkipTest(str(exc))
         seen = {}

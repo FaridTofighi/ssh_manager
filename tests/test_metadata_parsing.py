@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.config import parse_ssh_config_file
+from ophion.config import parse_ssh_config_file
 
 
 class MetadataParsingTests(unittest.TestCase):

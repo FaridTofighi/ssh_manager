@@ -33,7 +33,7 @@ class EndedBroadcastCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         for tab in list(self.tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
         pump(0.3)
 
@@ -113,7 +113,7 @@ class CloseTests(EndedBroadcastCase):
         self.assertEqual(self.remaining(), tabs[1:])
 
     def test_banner_close_and_the_tab_menu(self) -> None:
-        from ssh_manager.gtk_terminal import _RESPONSE_CLOSE
+        from ophion.gtk_terminal import _RESPONSE_CLOSE
 
         tabs = self.open(4)
         self.broadcast()
@@ -197,7 +197,7 @@ class ReconnectTests(EndedBroadcastCase):
         self.assertEqual([i for i, _t in calls], [1])
 
     def test_9_banner_toolbar_and_tab_menu(self) -> None:
-        from ssh_manager.gtk_terminal import _RESPONSE_RECONNECT
+        from ophion.gtk_terminal import _RESPONSE_RECONNECT
 
         tabs = self.open(3)
         self.broadcast()
@@ -213,9 +213,9 @@ class ReconnectTests(EndedBroadcastCase):
         self.assertTrue(pump(2, until=lambda: len(calls) == 3))
         self.assertEqual([i for i, _t in calls], [0, 1, 2])
         calls.clear()
-        with mock.patch("ssh_manager.gtk_terminal.tab_menu_spec") as spec, \
-                mock.patch("ssh_manager.gtk_terminal.popup_menu"), \
-                mock.patch("ssh_manager.gtk_terminal.build_context_menu"):
+        with mock.patch("ophion.gtk_terminal.tab_menu_spec") as spec, \
+                mock.patch("ophion.gtk_terminal.popup_menu"), \
+                mock.patch("ophion.gtk_terminal.build_context_menu"):
             self.tabs._show_tab_menu(tabs[2], None)
         spec.call_args.kwargs["reconnect"]()  # the tab menu: that tab only
         pump(1.0)
@@ -227,7 +227,7 @@ class ReconnectTests(EndedBroadcastCase):
         self.end(*tabs)
         calls = self.watch(tabs)
         tabs[1].reconnect.side_effect = RuntimeError("boom")
-        with self.assertLogs("ssh_manager", level="WARNING"):
+        with self.assertLogs("ophion", level="WARNING"):
             self.press(tabs[0], "r")
             self.assertTrue(pump(2, until=lambda: len(calls) == 2))
             pump(0.3)

@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.inventory.manager import StoreConfigManager
-from ssh_manager.inventory.openssh import (
+from ophion.credentials import CredentialStore
+from ophion.inventory.manager import StoreConfigManager
+from ophion.inventory.openssh import (
     OPENSSH_CONFIG_GROUP,
     Policy,
     apply_include_line,
@@ -21,8 +21,8 @@ from ssh_manager.inventory.openssh import (
     render_export,
     write_export,
 )
-from ssh_manager.inventory.store import InventoryStore
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
+from ophion.inventory.store import InventoryStore
+from ophion.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
 
 
 def digest(root: Path) -> dict:
@@ -137,7 +137,7 @@ class ImportTests(OpenSSHTestCase):
         missing = plan_openssh_import([self.home / "nope"])
         self.assertEqual(missing.host_count, 0)
         self.assertTrue(missing.notes)
-        with mock.patch("ssh_manager.inventory.openssh.MAX_SOURCE_BYTES", 10):
+        with mock.patch("ophion.inventory.openssh.MAX_SOURCE_BYTES", 10):
             huge = plan_openssh_import([self.config])
         self.assertEqual(huge.host_count, 0)
         self.assertIn("20 MB", huge.notes[0].message)
@@ -154,7 +154,7 @@ class ExportTests(OpenSSHTestCase):
         m = self.manager
         m.create_parent_group("Prod — EU")
         m.create_child_group("Prod — EU", "Team A")
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         m.add_host("Prod — EU", "Team A", HostEntry("Web 01 (primary)", {"hostname": "10.0.0.1", "user": "ops",
                                                                              "identityfile": "~/.ssh/my key"},

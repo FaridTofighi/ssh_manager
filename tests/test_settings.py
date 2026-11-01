@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.settings import AppSettings
+from ophion.settings import AppSettings
 
 
 class AppSettingsTests(unittest.TestCase):

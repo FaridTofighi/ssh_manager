@@ -4,13 +4,13 @@ import os
 import tempfile
 import unittest
 
-from ssh_manager import protocols
-from ssh_manager.config import HostEntry
-from ssh_manager.rdp.settings import (
+from ophion import protocols
+from ophion.config import HostEntry
+from ophion.rdp.settings import (
     KEYBOARD_LAYOUTS, PRESET_TOGGLES, Gateway, RdpIdentity, RdpSettings, SharedFolder, extra_args_problems,
     keyboard_layout_id, resolve_identity, shared_folder_problems, split_rdp_user,
 )
-from ssh_manager.trust import TrustStore, pin_key
+from ophion.trust import TrustStore, pin_key
 
 
 class RegistryTests(unittest.TestCase):
@@ -26,9 +26,9 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(kind.validate(HostEntry("win", {}, protocol="rdp")))  # a host name is required
 
     def test_filter_tooltip_and_export(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import filter_host, host_tooltip, parse_filter
-        from ssh_manager.config import GroupConfig
-        from ssh_manager.inventory.openssh import non_ssh_hosts
+        from ophion.gtkui.controllers.tree_controller import filter_host, host_tooltip, parse_filter
+        from ophion.config import GroupConfig
+        from ophion.inventory.openssh import non_ssh_hosts
 
         host = HostEntry("win", {"hostname": "10.0.0.50", "port": "3390"}, protocol="rdp")
         self.assertTrue(filter_host(host, parse_filter("proto:rdp")[0]))
@@ -178,7 +178,7 @@ class TrustStoreTests(unittest.TestCase):
             store = TrustStore(os.path.join(tmp, "pins.json"))
             store.set(pin_key("h1", "srv", 443), "AA" * 32)
             self.assertEqual(store.get(pin_key("h1", "srv", 443, scope="rdp")), "")
-            from ssh_manager.transfer.pins import PinStore
+            from ophion.transfer.pins import PinStore
 
             self.assertIs(PinStore, TrustStore)
 

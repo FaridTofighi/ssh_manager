@@ -1,9 +1,9 @@
 import unittest
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.gtkui.theme.tokens import ConnectionStatus
-from ssh_manager.gtkui.views.statusbar import stat_level
+from ophion.config import HostEntry
+from ophion.gtkui.theme.tokens import ConnectionStatus
+from ophion.gtkui.views.statusbar import stat_level
 
 
 def _display_available() -> bool:
@@ -32,7 +32,7 @@ class StatLevelTests(unittest.TestCase):
 
 class StatusMessageTests(unittest.TestCase):
     def test_messages_map_to_states(self) -> None:
-        from ssh_manager.gtk_terminal import _status_for_message
+        from ophion.gtk_terminal import _status_for_message
 
         self.assertIs(_status_for_message("Connected", True), ConnectionStatus.CONNECTED)
         self.assertIs(_status_for_message("Connecting…", False), ConnectionStatus.CONNECTING)
@@ -44,7 +44,7 @@ class StatusMessageTests(unittest.TestCase):
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
 class NotebookTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtk_terminal import TerminalNotebook
+        from ophion.gtk_terminal import TerminalNotebook
 
         self.logs = []
         self.notebook = TerminalNotebook(lambda message, ok: self.logs.append((message, ok)))
@@ -119,7 +119,7 @@ class SpawnPathTests(unittest.TestCase):
     """Exercise the real spawn path with VTE's spawn mocked (no ssh process)."""
 
     def _tab(self):
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         tab = TerminalTab(HostEntry(alias="web", options={"hostname": "web.internal"}), lambda *_: None, autostart=False)
         tab._terminal.spawn_async = mock.Mock()
@@ -127,7 +127,7 @@ class SpawnPathTests(unittest.TestCase):
 
     def test_spawn_without_sshpass_runs_plain_ssh(self) -> None:
         tab = self._tab()
-        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value=None):
+        with mock.patch("ophion.gtk_terminal.shutil.which", return_value=None):
             tab._spawn()
         args = tab._terminal.spawn_async.call_args[0]
         argv, envv = args[2], args[3]
@@ -139,7 +139,7 @@ class SpawnPathTests(unittest.TestCase):
 
     def test_spawn_with_override_password_uses_sshpass(self) -> None:
         tab = self._tab()
-        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass"):
+        with mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass"):
             tab._spawn("s3cret", password_origin="retry")
         argv, envv = tab._terminal.spawn_async.call_args[0][2:4]
         self.assertEqual(argv[:2], ["sshpass", "-e"])
@@ -153,7 +153,7 @@ class SpawnPathTests(unittest.TestCase):
 
     def test_override_without_sshpass_does_not_spawn(self) -> None:
         tab = self._tab()
-        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value=None):
+        with mock.patch("ophion.gtk_terminal.shutil.which", return_value=None):
             tab._spawn("s3cret")
         tab._terminal.spawn_async.assert_not_called()
         self.assertEqual(tab._password_source, "manual")

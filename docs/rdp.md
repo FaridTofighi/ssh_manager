@@ -2,8 +2,8 @@
 
 RDP hosts use the protocol `rdp` (port 3389). The remote desktop itself is
 drawn by **FreeRDP**, an optional system package: Ophion starts and
-every other protocol works without it. Code: `ssh_manager/rdp/` (pure
-Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
+every other protocol works without it. Code: `ophion/rdp/` (pure
+Python) and `ophion/gtkui/dialogs/rdp_page.py`,
 `rdp_diagnostics.py`.
 
 | Module | Role |
@@ -632,8 +632,8 @@ password every time".
 - **Command line:**
 
   ```bash
-  python3 -m ssh_manager --rdp win-01.acme.test:3390 --user alice --domain CORP
-  python3 -m ssh_manager rdp://CORP%5Calice@10.0.0.50
+  python3 -m ophion --rdp win-01.acme.test:3390 --user alice --domain CORP
+  python3 -m ophion rdp://CORP%5Calice@10.0.0.50
   ```
 
   - There is no password option. The password is asked for, or comes from

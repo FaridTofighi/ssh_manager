@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import ConfigManager, HostEntry, load_config_tree, parse_ssh_config_file
+from ophion.config import ConfigManager, HostEntry, load_config_tree, parse_ssh_config_file
 
 
 class ParseIncludeTests(unittest.TestCase):
@@ -217,7 +217,7 @@ class ConfigMutationTests(unittest.TestCase):
             manager = self._manager_for_temp_dir(tmpdir)
             self.assertTrue(manager.create_parent_group("prod")[0])
 
-            with mock.patch("ssh_manager.config.write_text_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.config.write_text_atomic", side_effect=OSError("disk full")):
                 ok, message = manager.create_child_group("prod", "hosts.conf")
 
             self.assertFalse(ok)
@@ -252,7 +252,7 @@ class ConfigMutationTests(unittest.TestCase):
             copied_mode = stat.S_IMODE(os.stat(Path(tmpdir) / "prod" / "copy.conf").st_mode)
             self.assertEqual(copied_mode, 0o640)
 
-            with mock.patch("ssh_manager.config.shutil.copy2", side_effect=OSError("readonly")):
+            with mock.patch("ophion.config.shutil.copy2", side_effect=OSError("readonly")):
                 ok, message = manager.duplicate_child_group("prod", "hosts.conf", "other.conf")
             self.assertFalse(ok)
             self.assertIn("Failed to duplicate", message)
@@ -349,7 +349,7 @@ class ConfigMutationTests(unittest.TestCase):
             self.assertTrue(manager.create_parent_group("prod")[0])
             self.assertTrue(manager.create_child_group("prod", "hosts.conf")[0])
 
-            with mock.patch("ssh_manager.config._write_group_file", side_effect=OSError("disk full")):
+            with mock.patch("ophion.config._write_group_file", side_effect=OSError("disk full")):
                 ok, message = manager.add_host(
                     "prod",
                     "hosts.conf",
@@ -374,7 +374,7 @@ class ConfigMutationTests(unittest.TestCase):
                 )[0]
             )
 
-            with mock.patch("ssh_manager.config._write_group_file", side_effect=OSError("readonly")):
+            with mock.patch("ophion.config._write_group_file", side_effect=OSError("readonly")):
                 ok, message = manager.move_hosts(
                     [("source", "hosts.conf", "app")],
                     "dest",
@@ -398,7 +398,7 @@ class ConfigMutationTests(unittest.TestCase):
                 )[0]
             )
 
-            with mock.patch("ssh_manager.config.write_text_atomic", side_effect=OSError("readonly")):
+            with mock.patch("ophion.config.write_text_atomic", side_effect=OSError("readonly")):
                 ok, message = manager.move_hosts(
                     [("source", "hosts.conf", "app")],
                     "dest",

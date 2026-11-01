@@ -1,6 +1,6 @@
 import unittest
 
-from ssh_manager.password_change import PasswordChangeTracker
+from ophion.password_change import PasswordChangeTracker
 
 
 class PasswordChangeTrackerTests(unittest.TestCase):

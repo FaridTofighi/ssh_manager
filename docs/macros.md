@@ -1,7 +1,7 @@
 # Terminal macros
 
 Record what you type in a terminal, give it a name and a shortcut, and replay
-it later. Code: `ssh_manager/macros.py` (model, recorder, player, encrypted
+it later. Code: `ophion/macros.py` (model, recorder, player, encrypted
 store; no GTK), `gtkui/controllers/macro_controller.py` (recording, playback,
 menus, shortcuts), `gtkui/dialogs/macros.py` (dialogs).
 

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from ssh_manager.inventory.store import InventoryStore, NewHost
+from ophion.inventory.store import InventoryStore, NewHost
 
 SENTINEL = "S3NT1NEL-secret-value"
 

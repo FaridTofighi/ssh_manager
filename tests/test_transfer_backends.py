@@ -15,13 +15,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.transfer.backend import (
+from ophion.transfer.backend import (
     AuthError, CertificateChanged, Disconnected, DiskFull, EntryKind, HostKeyChanged, NotFound, PermissionDenied,
     ProtocolError, Timeout, UnknownHostKey, UntrustedCertificate, Unsupported, check_remote_path, redact,
 )
-from ssh_manager.transfer.listing import parse_list_line, parse_mlsd_line
-from ssh_manager.transfer.pins import PinStore, normalize_fingerprint
-from ssh_manager.transfer.settings import TransferSettings, default_port_for
+from ophion.transfer.listing import parse_list_line, parse_mlsd_line
+from ophion.transfer.pins import PinStore, normalize_fingerprint
+from ophion.transfer.settings import TransferSettings, default_port_for
 
 PASSWORD = "s3cret pass"
 INTEGRATION = unittest.skipIf(os.environ.get("SSHM_SKIP_INTEGRATION") == "1",
@@ -175,7 +175,7 @@ class _FtpCase(unittest.TestCase):
         self.tmp.cleanup()
 
     def backend(self, user="alice", password=PASSWORD, **settings):
-        from ssh_manager.transfer.ftp import FtpBackend
+        from ophion.transfer.ftp import FtpBackend
 
         settings.setdefault("timeout_read", 5)
         return FtpBackend("127.0.0.1", self.server.port, user, password, settings=TransferSettings(**settings),
@@ -291,7 +291,7 @@ class FtpTests(_FtpCase):
     def test_server_drop_reconnects_and_retries(self) -> None:
         backend = self.connected()
         self.server.drop_after = 1  # the next command after one more gets 421 and a hang-up
-        with mock.patch("ssh_manager.transfer.ftp.RECONNECT_BACKOFF_S", (0.01, 0.01, 0.01)):
+        with mock.patch("ophion.transfer.ftp.RECONNECT_BACKOFF_S", (0.01, 0.01, 0.01)):
             backend.keepalive()
             names = [e.name for e in backend.list("/pub")]
             backend.keepalive()
@@ -355,7 +355,7 @@ class FtpTests(_FtpCase):
                 self.assertNotIn("hunter2", mapped.technical)
 
     def test_active_mode_refuses_a_foreign_data_connection(self) -> None:
-        from ssh_manager.transfer.ftp import _Client
+        from ophion.transfer.ftp import _Client
 
         client = _Client(tls_mode="none", context=None, encoding="utf-8", timeout=1, trust_pasv=False,
                          port_range=None, log=None, secrets={})
@@ -468,7 +468,7 @@ class SftpTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def backend(self, password=PASSWORD, **kwargs):
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         return SftpBackend("127.0.0.1", self.server.port, "alice", password, known_hosts=self.known_hosts,
                            allow_agent=False, settings=TransferSettings(timeout_read=5), **kwargs)
@@ -596,7 +596,7 @@ class HostKeyMatchingTests(unittest.TestCase):
     def open(self, policy: str = "reject"):
         """The presented key's type after a full login (the transport is closed again)."""
 
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         backend = SftpBackend("127.0.0.1", self.server.port, "alice", PASSWORD, known_hosts=self.known_hosts,
                               allow_agent=False, host_key_policy=policy, settings=TransferSettings(timeout_read=5))
@@ -636,8 +636,8 @@ class HostKeyMatchingTests(unittest.TestCase):
         self.assertEqual(self.open(), "ssh-ed25519")
 
     def test_a_really_changed_key_is_refused_with_its_details(self) -> None:
-        from ssh_manager.known_hosts import fingerprint_sha256
-        from ssh_manager.transfer.sftp import key_fingerprint
+        from ophion.known_hosts import fingerprint_sha256
+        from ophion.transfer.sftp import key_fingerprint
 
         self.serve(self.ed)
         stale = _ed25519(self.dir, "stale")
@@ -651,7 +651,7 @@ class HostKeyMatchingTests(unittest.TestCase):
         self.assertEqual(self.server.password_attempts, 0)
 
     def test_only_another_type_known_is_a_new_key_not_a_changed_one(self) -> None:
-        from ssh_manager.known_hosts import fingerprint_sha256
+        from ophion.known_hosts import fingerprint_sha256
 
         self.serve(self.ed)
         self.write(self.line(self.ecdsa))
@@ -693,8 +693,8 @@ class HostKeyMatchingTests(unittest.TestCase):
 
         import paramiko
 
-        from ssh_manager.known_hosts import KnownHostsFile
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.known_hosts import KnownHostsFile
+        from ophion.transfer.sftp import SftpBackend
 
         self.serve(self.ed)
         backend = SftpBackend("127.0.0.1", self.server.port, known_hosts=self.known_hosts)

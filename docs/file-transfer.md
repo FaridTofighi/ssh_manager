@@ -1,7 +1,7 @@
 # File transfer: FTP, FTPS and SFTP
 
 Hosts can use the protocols `ftp`, `ftps` and `sftp` (see
-`docs/protocols.md`). Code: `ssh_manager/transfer/` (pure Python, no GTK).
+`docs/protocols.md`). Code: `ophion/transfer/` (pure Python, no GTK).
 
 | Module | Role |
 |---|---|

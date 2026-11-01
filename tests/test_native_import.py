@@ -7,11 +7,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import native_format as F
-from ssh_manager.exporters.native import build_export
-from ssh_manager.importers import native as N
-from ssh_manager.importers.mobaxterm import ConflictPolicy, Destination, ExistingInventory
-from ssh_manager.inventory.store import NewHost
+from ophion import native_format as F
+from ophion.exporters.native import build_export
+from ophion.importers import native as N
+from ophion.importers.mobaxterm import ConflictPolicy, Destination, ExistingInventory
+from ophion.inventory.store import NewHost
 from tests.native_fixture import FakeCredential, build_rich, make_store
 
 

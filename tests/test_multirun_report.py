@@ -5,8 +5,8 @@ import io
 import json
 import unittest
 
-from ssh_manager.multirun import report as P
-from ssh_manager.multirun.engine import HostResult
+from ophion.multirun import report as P
+from ophion.multirun.engine import HostResult
 
 SECRET = "Report-sentinel-pw"
 

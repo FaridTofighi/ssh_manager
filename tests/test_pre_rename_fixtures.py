@@ -18,15 +18,15 @@ class PreRenameFixtureTests(unittest.TestCase):
             shutil.copy2(path, self.dir / path.name)
 
     def keybox(self):
-        from ssh_manager.keybox import Keybox
+        from ophion.keybox import Keybox
 
         box = Keybox.load(self.dir / "keybox.json")
         self.assertTrue(box.unlock(PASSWORD))
         return box
 
     def test_keybox_secrets_and_macros_decrypt(self) -> None:
-        from ssh_manager.macros import MacroStore
-        from ssh_manager.secure_store import EncryptedFileKeyring
+        from ophion.macros import MacroStore
+        from ophion.secure_store import EncryptedFileKeyring
 
         box = self.keybox()
         secrets = EncryptedFileKeyring(box, self.dir / "passwords.json")
@@ -36,7 +36,7 @@ class PreRenameFixtureTests(unittest.TestCase):
         self.assertEqual([m.name for m in macros.list_sorted()], ["greet"])
 
     def test_native_exports_plain_and_encrypted(self) -> None:
-        from ssh_manager.importers.native import read_native
+        from ophion.importers.native import read_native
 
         plain = read_native(self.dir / "export-plain.sshm")
         encrypted = read_native(self.dir / "export-encrypted.sshm", EXPORT_PASS)
@@ -45,7 +45,7 @@ class PreRenameFixtureTests(unittest.TestCase):
         self.assertEqual(plain.app_version, "pre-rename")
 
     def test_old_openssh_export_and_include_line_are_recognised(self) -> None:
-        from ssh_manager.inventory.openssh import plan_openssh_import
+        from ophion.inventory.openssh import plan_openssh_import
 
         plan = plan_openssh_import([self.dir / "openssh-export.conf"])
         self.assertEqual([h.entry.alias for h in plan.hosts], ["web-01"])

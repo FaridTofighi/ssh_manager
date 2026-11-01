@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from ssh_manager.auth_flow import (
+from ophion.auth_flow import (
     MAX_ATTEMPTS,
     AuthOutcome,
     Decision,
@@ -21,9 +21,9 @@ from ssh_manager.auth_flow import (
     SaveOffer,
     source_phrase,
 )
-from ssh_manager.config import GroupConfig, HostEntry
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore
+from ophion.config import GroupConfig, HostEntry
+from ophion.credentials import CredentialStore
+from ophion.secure_store import InMemoryKeyring, SecureStore
 
 SECRET = "typed pa$$ 'w`rd' %s ü "  # spaces (also trailing), quotes, $, %, backtick, Unicode
 EDGE_PASSWORDS = [SECRET, " leading", "trailing ", 'dq"uote', "$(rm -rf ~)", "%h%p%%", "`id`", "пароль-密码",
@@ -153,7 +153,7 @@ class FlowTests(unittest.TestCase):
 # ---------------------------------------------------------------- controller
 class ControllerTests(unittest.TestCase):
     def setUp(self) -> None:
-        from ssh_manager.gtkui.controllers.credentials_controller import CredentialController
+        from ophion.gtkui.controllers.credentials_controller import CredentialController
 
         self.tmp = tempfile.TemporaryDirectory()
         self.keyring = RecordingKeyring()
@@ -315,13 +315,13 @@ class TabFlowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": self.tmp.name}).start()
-        mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
-        mock.patch("ssh_manager.gtk_terminal.os.kill").start()
+        mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
+        mock.patch("ophion.gtk_terminal.os.kill").start()
         self.requests = []
         self.offers = []
-        mock.patch("ssh_manager.gtk_terminal.PasswordRequestDialog",
+        mock.patch("ophion.gtk_terminal.PasswordRequestDialog",
                    side_effect=lambda parent, request, on_done: self._new(self.requests, request, on_done)).start()
-        mock.patch("ssh_manager.gtk_terminal.SavePasswordDialog",
+        mock.patch("ophion.gtk_terminal.SavePasswordDialog",
                    side_effect=lambda parent, offer, on_decision: self._new(self.offers, offer, on_decision)).start()
         self.logs = []
 
@@ -335,10 +335,10 @@ class TabFlowTests(unittest.TestCase):
         return bucket[-1]
 
     def tab(self, resolution=PasswordResolution("credential-pw", "credential", "c1"), service=None, autostart=True):
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         self.service = service if service is not None else FakeService()
-        with mock.patch("ssh_manager.gtk_terminal.Vte.Terminal.spawn_async"):
+        with mock.patch("ophion.gtk_terminal.Vte.Terminal.spawn_async"):
             tab = TerminalTab(HostEntry("web", {"hostname": "web.internal", "user": "ops"}),
                               lambda message, level: self.logs.append(message), autostart=False,
                               password_provider=lambda: resolution, password_service=self.service)
@@ -499,7 +499,7 @@ class TabFlowTests(unittest.TestCase):
         self.assertEqual(self.offers, [])
 
     def test_missing_sshpass_never_prompts_or_offers(self) -> None:
-        with mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value=None):
+        with mock.patch("ophion.gtk_terminal.shutil.which", return_value=None):
             tab = self.tab()
             self.started(tab)
             self.login(tab)
@@ -586,8 +586,8 @@ class TabFlowTests(unittest.TestCase):
         self.assertEqual(self.service.saved, [SECRET])
 
     def test_password_never_reaches_logs_or_notifications(self) -> None:
-        with self.assertLogs("ssh_manager", level=logging.DEBUG) as captured:
-            logging.getLogger("ssh_manager").debug("start")
+        with self.assertLogs("ophion", level=logging.DEBUG) as captured:
+            logging.getLogger("ophion").debug("start")
             service = FakeService(results=[("error", "Could not save the password."), ("saved", "Password saved.")])
             tab = self.tab(service=service)
             self.started(tab)
@@ -609,7 +609,7 @@ class DialogTests(unittest.TestCase):
     def test_password_request_dialog(self) -> None:
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog
+        from ophion.gtkui.dialogs.password import PasswordRequestDialog
 
         answers = []
         request = PasswordRequest("web", TARGET, 2, rejected=source_phrase("credential", "Ops"))
@@ -636,7 +636,7 @@ class DialogTests(unittest.TestCase):
     def test_save_password_dialog(self) -> None:
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.dialogs.password import SavePasswordDialog
+        from ophion.gtkui.dialogs.password import SavePasswordDialog
 
         decisions = []
         replies = ["Saved passwords are locked.", None]
@@ -673,13 +673,13 @@ class EndToEndTests(unittest.TestCase):
 
         self.tmp = tempfile.TemporaryDirectory()
         mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": self.tmp.name}).start()
-        mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
-        mock.patch("ssh_manager.gtk_terminal.os.kill").start()
-        self.spawn = mock.patch("ssh_manager.gtk_terminal.Vte.Terminal.spawn_async").start()
+        mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
+        mock.patch("ophion.gtk_terminal.os.kill").start()
+        self.spawn = mock.patch("ophion.gtk_terminal.Vte.Terminal.spawn_async").start()
         self.requests, self.offers = [], []
-        mock.patch("ssh_manager.gtk_terminal.PasswordRequestDialog",
+        mock.patch("ophion.gtk_terminal.PasswordRequestDialog",
                    side_effect=lambda p, r, cb: self.requests.append(FakeDialog(r, cb)) or self.requests[-1]).start()
-        mock.patch("ssh_manager.gtk_terminal.SavePasswordDialog",
+        mock.patch("ophion.gtk_terminal.SavePasswordDialog",
                    side_effect=lambda p, o, cb: self.offers.append(FakeDialog(o, cb)) or self.offers[-1]).start()
         self.sandbox = WindowSandbox(store=True)
         self.addCleanup(self.sandbox.close)
@@ -752,8 +752,8 @@ class ConnectorTests(unittest.TestCase):
     """Paramiko backend: the same retry dialog (max 3), nothing saved, the UI is told after a login."""
 
     def connector(self, responses, accept):
-        from ssh_manager.connection_state import ConnectionStateMachine
-        from ssh_manager.connector import Connector, TryResult
+        from ophion.connection_state import ConnectionStateMachine
+        from ophion.connector import Connector, TryResult
         from tests.test_connector import FakePasswordDialog, Settings
 
         self.dialog = FakePasswordDialog(responses)
@@ -824,7 +824,7 @@ class ParamikoWiringTests(unittest.TestCase):
         win = sandbox.window
         host = win.tree.find_host_by_alias("web-01")
         captured = {}
-        with mock.patch("ssh_manager.gtkui.controllers.session_controller.Connector.connect_to_host",
+        with mock.patch("ophion.gtkui.controllers.session_controller.Connector.connect_to_host",
                         side_effect=lambda cfg, password_provider=None, describe_source=None:
                         captured.update(cfg=cfg, describe=describe_source)):
             win.sessions.open_host_paramiko(host, password_provider=lambda: PasswordResolution(None, "none"))
@@ -834,7 +834,7 @@ class ParamikoWiringTests(unittest.TestCase):
         self.assertFalse(hasattr(captured["cfg"], "remember_password_default"))
         self.assertEqual(connector._verified_callbacks, [tab.offer_save_password])
         offers = []
-        with mock.patch("ssh_manager.gtk_terminal.SavePasswordDialog",
+        with mock.patch("ophion.gtk_terminal.SavePasswordDialog",
                         side_effect=lambda p, o, cb: offers.append(FakeDialog(o, cb)) or offers[-1]):
             connector._verified_callbacks[0](SECRET)
         self.assertEqual(offers[-1].request.title, "Save this password for ‘web-01’?")

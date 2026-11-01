@@ -33,7 +33,7 @@ class ForwardAgentTests(unittest.TestCase):
         return dialog
 
     def test_off_by_default_and_written_only_when_ticked(self) -> None:
-        from ssh_manager.ssh_command import build_ssh_command
+        from ophion.ssh_command import build_ssh_command
 
         host = self.host()
         dialog = self.dialog(host)
@@ -86,14 +86,14 @@ class AgentSectionTests(unittest.TestCase):
         self.win.ssh_keys.ssh_dir = self.sandbox.root / "home" / ".ssh"
 
     def section(self):
-        from ssh_manager.gtkui.dialogs.ssh_agent_section import AgentSection
+        from ophion.gtkui.dialogs.ssh_agent_section import AgentSection
 
         section = AgentSection(self.win.ssh_keys)
         self.addCleanup(section.destroy)
         return section
 
     def test_status_and_adding_with_the_saved_passphrase(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         info = K.generate_key(self.win.ssh_keys.ssh_dir / "id_ed25519", comment="t", passphrase=PASS)
         self.win.ssh_keys.remember_passphrase(info.path, PASS)
@@ -107,7 +107,7 @@ class AgentSectionTests(unittest.TestCase):
         self.assertEqual(section.status_label.get_text(), "An ssh-agent is running with 1 key.")
 
     def test_cancelled_passphrase_runs_nothing_and_no_agent_disables_adding(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         K.generate_key(self.win.ssh_keys.ssh_dir / "id_ed25519", comment="t", passphrase=PASS)
         section = self.section()
@@ -120,7 +120,7 @@ class AgentSectionTests(unittest.TestCase):
         self.assertIn("No ssh-agent", section.status_label.get_text())
 
     def test_preferences_show_the_section(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
 
         dialog = PreferencesDialog(None, self.win._theme_mode, 1.0, 11, self.win._settings,
                                    security=getattr(self.win, "security", None), ssh_keys=self.win.ssh_keys)

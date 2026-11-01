@@ -1,7 +1,7 @@
 # Ophion UI design system ("Relay")
 
 Everything visual in the GTK 3 front-end comes from one place:
-`ssh_manager/gtkui/theme/`. The light theme reproduces the reference design
+`ophion/gtkui/theme/`. The light theme reproduces the reference design
 `docs/ui-target/relay-reference.png`; the dark theme is derived from it. Two
 interface densities share that look: **Compact** (the default, built for
 terminal space) and **Comfortable** (the reference geometry). This document
@@ -155,7 +155,7 @@ The dark theme is neutral cool gray (hue ≈ 220°); green is only the accent.
    never `transparent` over a stock container (see Phase 3).
 7. **No literal colors:** colors live only in `tokens.py` and
    `terminal_schemes.py`, and a test fails on any `#rrggbb` elsewhere in
-   `ssh_manager/gtkui`.
+   `ophion/gtkui`.
 
 `text_faint` (3.5:1) is decorative: counts, separators, keyboard hints,
 timestamps and captions. A test fails if any other style uses it.

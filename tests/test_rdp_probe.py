@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.rdp import probe as rdp_probe
-from ssh_manager.rdp.probe import (
+from ophion.rdp import probe as rdp_probe
+from ophion.rdp.probe import (
     PROTOCOL_HYBRID, PROTOCOL_HYBRID_EX, PROTOCOL_RDP, PROTOCOL_SSL, connection_request, parse_connection_confirm,
     probe, security_name,
 )

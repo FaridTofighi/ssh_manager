@@ -17,9 +17,9 @@ class TunnelsUiCase(unittest.TestCase):
         from tests.fake_sftp import FakeSftpServer
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.gtkui.controllers.tunnels import TunnelController, _idle
-        from ssh_manager.transfer.settings import TransferSettings
-        from ssh_manager.tunnels.engine import TunnelManager
+        from ophion.gtkui.controllers.tunnels import TunnelController, _idle
+        from ophion.transfer.settings import TransferSettings
+        from ophion.tunnels.engine import TunnelManager
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -33,7 +33,7 @@ class TunnelsUiCase(unittest.TestCase):
         known.write_text(f"[127.0.0.1]:{self.server.port} {key.get_name()} {key.get_base64()}\n")
 
         def connect(_host_key):
-            from ssh_manager.transfer.sftp import SftpBackend
+            from ophion.transfer.sftp import SftpBackend
 
             return SftpBackend("127.0.0.1", self.server.port, "alice", PASSWORD, known_hosts=known, allow_agent=False,
                                settings=TransferSettings(timeout_connect=5)).open_transport("Port forwarding")
@@ -47,14 +47,14 @@ class TunnelsUiCase(unittest.TestCase):
         self.host = next(h for h in self.controller.hosts() if h.alias == "web-01")
 
     def forward(self, **kw):
-        from ssh_manager.tunnels.model import LOCAL, Forward
+        from ophion.tunnels.model import LOCAL, Forward
 
         base = dict(name="echo", kind=LOCAL, bind_port=free_port(), dest_host="127.0.0.1", dest_port=self.echo.port)
         base.update(kw)
         return Forward(**base)
 
     def dialog(self):
-        from ssh_manager.gtkui.dialogs.tunnels import TunnelsDialog
+        from ophion.gtkui.dialogs.tunnels import TunnelsDialog
 
         dialog = TunnelsDialog(None, self.controller)
         self.addCleanup(dialog.destroy)
@@ -87,7 +87,7 @@ class ManagerTests(TunnelsUiCase):
             roundtrip(forward.bind_port)
 
     def test_add_edit_delete(self) -> None:
-        from ssh_manager.tunnels.model import DYNAMIC, forwards_from_metadata
+        from ophion.tunnels.model import DYNAMIC, forwards_from_metadata
 
         dialog = self.dialog()
         key = self.controller.host_key(self.host)
@@ -123,7 +123,7 @@ class ManagerTests(TunnelsUiCase):
         self.assertEqual(row[4], "dialog-error-symbolic")  # an icon and a word
 
     def test_twelve_hundred_hosts_stay_quick(self) -> None:
-        from ssh_manager.inventory.store import NewHost
+        from ophion.inventory.store import NewHost
 
         store = self.sandbox.store
         group = store.create_group(None, "Many")
@@ -140,7 +140,7 @@ class ManagerTests(TunnelsUiCase):
 
 class EditorTests(TunnelsUiCase):
     def test_validation_and_the_bind_flag(self) -> None:
-        from ssh_manager.gtkui.dialogs.tunnels import ForwardDialog
+        from ophion.gtkui.dialogs.tunnels import ForwardDialog
 
         other = self.forward(name="taken")
         dialog = ForwardDialog(None, None, host_id="h1", others=[("h2", other)])
@@ -169,7 +169,7 @@ class EditorTests(TunnelsUiCase):
     def test_host_picker_and_editor_answer_after_closing(self) -> None:
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.dialogs.tunnels import ForwardDialog, HostPickerDialog
+        from ophion.gtkui.dialogs.tunnels import ForwardDialog, HostPickerDialog
 
         def picker(choose, response=Gtk.ResponseType.OK):
             dialog = HostPickerDialog(None, [("web-01", "key-1"), ("web-02", "key-2")])  # (alias, key)

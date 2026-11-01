@@ -10,10 +10,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.rdp.command import build_launch
-from ssh_manager.rdp.engines import ClientBinary, parse_help_options
-from ssh_manager.rdp.process import ChildRegistry, RdpProcess, SessionLimiter, _start_time, reap_stale
-from ssh_manager.rdp.settings import RdpIdentity, RdpSettings
+from ophion.rdp.command import build_launch
+from ophion.rdp.engines import ClientBinary, parse_help_options
+from ophion.rdp.process import ChildRegistry, RdpProcess, SessionLimiter, _start_time, reap_stale
+from ophion.rdp.settings import RdpIdentity, RdpSettings
 from tests import fake_freerdp
 
 FIXTURES = Path(__file__).parent / "fixtures" / "freerdp"

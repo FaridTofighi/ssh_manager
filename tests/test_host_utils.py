@@ -1,7 +1,7 @@
 import unittest
 
-from ssh_manager.config import HostEntry
-from ssh_manager.host_utils import build_scp_command, host_config_key, host_connection_params, host_option, with_user
+from ophion.config import HostEntry
+from ophion.host_utils import build_scp_command, host_config_key, host_connection_params, host_option, with_user
 
 
 class HostUtilsTests(unittest.TestCase):

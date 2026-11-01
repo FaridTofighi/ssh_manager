@@ -40,7 +40,7 @@ class StatusBarCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.providers = []
-        from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager
+        from ophion.gtkui.theme.loader import ThemeMode, get_theme_manager
 
         get_theme_manager().apply(ThemeMode.DARK)  # the app's stylesheet, as at start-up
 
@@ -60,8 +60,8 @@ class StatusBarCase(unittest.TestCase):
         self.providers.append(provider)
 
     def local_tab(self):
-        from ssh_manager.gtkui.local_terminal import LocalTerminalTab
-        from ssh_manager.settings import LocalShellSettings
+        from ophion.gtkui.local_terminal import LocalTerminalTab
+        from ophion.settings import LocalShellSettings
 
         settings = LocalShellSettings()
         settings.command = "/bin/sh"
@@ -103,7 +103,7 @@ class StatusBarCase(unittest.TestCase):
 
 class StatusBarHeightTests(StatusBarCase):
     def test_1_the_bar_keeps_one_height_in_every_state(self) -> None:
-        from ssh_manager.gtkui.views.statusbar import SessionStatusBar
+        from ophion.gtkui.views.statusbar import SessionStatusBar
 
         for small in (False, True):
             if small:
@@ -234,7 +234,7 @@ class TileModeTests(StatusBarCase):
         finally:
             for tab in opened:
                 tab._session_active = False
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 for tab in list(tabs.tabs()):
                     tabs.close_tab(tab)
             window.remove(tabs)

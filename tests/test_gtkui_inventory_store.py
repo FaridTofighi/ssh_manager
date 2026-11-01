@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.inventory.startup import Choice, open_inventory_store
-from ssh_manager.inventory.store import SCHEMA_VERSION, InventoryStore
+from ophion.inventory.startup import Choice, open_inventory_store
+from ophion.inventory.store import SCHEMA_VERSION, InventoryStore
 
 UNICODE = "Prod DB (10.0.0.5) — مرکز"
 
@@ -33,8 +33,8 @@ class StartupTests(unittest.TestCase):
         InventoryStore(self.path).close()
         answers = iter([Choice.RETRY, Choice.QUIT])
         asked = []
-        with mock.patch("ssh_manager.inventory.startup.InventoryStore",
-                        side_effect=[__import__("ssh_manager.inventory.store", fromlist=["x"]).InventoryLocked("busy")] * 2):
+        with mock.patch("ophion.inventory.startup.InventoryStore",
+                        side_effect=[__import__("ophion.inventory.store", fromlist=["x"]).InventoryLocked("busy")] * 2):
             result = open_inventory_store(self.path, lambda kind, message: asked.append(kind) or next(answers))
         self.assertIsNone(result)
         self.assertEqual(asked, ["locked", "locked"])
@@ -104,7 +104,7 @@ class StoreWindowTests(unittest.TestCase):
         return found
 
     def test_sample_is_in_the_store_with_folder_icons(self) -> None:
-        from ssh_manager.gtkui.constants import TreeColumn
+        from ophion.gtkui.constants import TreeColumn
 
         self.assertIn("web.conf", self.win.manager.tree["prod"])
         self.assertIn(("host", "web-01"), self.rows())
@@ -115,7 +115,7 @@ class StoreWindowTests(unittest.TestCase):
         self.assertFalse(any(file_backed))  # app-store groups are folders
 
     def test_unicode_groups_and_hosts_through_the_ui(self) -> None:
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         with mock.patch.object(self.win, "_prompt_text", return_value=UNICODE):
             self.win.groups.create_parent_group()
@@ -170,8 +170,8 @@ class StoreWindowTests(unittest.TestCase):
         self.assertIsNone(validate("frontend"))
 
     def test_mobaxterm_wizard_imports_into_the_store(self) -> None:
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
-        from ssh_manager.importers.mobaxterm import ImportStatus
+        from ophion.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
+        from ophion.importers.mobaxterm import ImportStatus
         from tests.mxt_synthetic import ACME
 
         export = self.home / "acme.mxtsessions"
@@ -222,7 +222,7 @@ class StoreWindowTests(unittest.TestCase):
     def test_read_only_store_explains_instead_of_failing(self) -> None:
         self.win.manager.store.read_only = True
         self.win.manager.store.read_only_reason = "The disk is full."
-        with mock.patch("ssh_manager.gtk_app.show_message") as shown, \
+        with mock.patch("ophion.gtk_app.show_message") as shown, \
                 mock.patch.object(self.win.manager, "create_parent_group") as create:
             self.win.groups.create_parent_group()
         create.assert_not_called()
@@ -281,7 +281,7 @@ class StoreWindowTests(unittest.TestCase):
         self.assertTrue(any(p.name.startswith("config.sshm-backup-") for p in config.parent.iterdir()))
 
     def test_preferences_inventory_page(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
 
         info = self.win.app_dialogs.inventory_info()
         self.assertEqual(info["location"], str(self.win.manager.base_dir))

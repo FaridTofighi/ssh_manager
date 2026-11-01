@@ -1,6 +1,6 @@
 import unittest
 
-from ssh_manager.connection_state import ConnectionState, ConnectionStateMachine
+from ophion.connection_state import ConnectionState, ConnectionStateMachine
 
 
 class ConnectionStateMachineTests(unittest.TestCase):

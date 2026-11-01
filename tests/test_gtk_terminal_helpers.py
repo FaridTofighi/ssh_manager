@@ -2,10 +2,10 @@ import threading
 import time
 import unittest
 
-from ssh_manager.config import HostEntry
-from ssh_manager.password_change import PasswordChangeTracker
-from ssh_manager.gtk_terminal import TerminalTab
-from ssh_manager.gtk_terminal import (
+from ophion.config import HostEntry
+from ophion.password_change import PasswordChangeTracker
+from ophion.gtk_terminal import TerminalTab
+from ophion.gtk_terminal import (
     auth_failure_output_detected,
     broadcast_target_tabs,
     build_remote_stats_command,
@@ -15,7 +15,7 @@ from ssh_manager.gtk_terminal import (
     terminal_text,
 )
 from gi.repository import Gdk, Vte  # type: ignore
-from ssh_manager.text_utils import strip_ansi
+from ophion.text_utils import strip_ansi
 
 
 class GtkTerminalHelperTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class GtkTerminalHelperTests(unittest.TestCase):
     def test_focus_retry_gives_up_on_a_terminal_that_is_never_shown(self) -> None:
         from unittest import mock
 
-        from ssh_manager import gtk_terminal
+        from ophion import gtk_terminal
 
         class HiddenTerminal:
             grabbed = False
@@ -149,7 +149,7 @@ class GtkTerminalHelperTests(unittest.TestCase):
         self.assertEqual(TerminalTab._terminal_tail(object(), term, limit=10), "Password: ")
 
     def test_write_contents_reads_a_real_terminal(self) -> None:
-        from ssh_manager.gtk_terminal import _terminal_contents
+        from ophion.gtk_terminal import _terminal_contents
 
         import time
 

@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Dict, List, Optional
 
-from ssh_manager.transfer.backend import (
+from ophion.transfer.backend import (
     F_CHMOD, NEVER_CANCELLED, AlreadyExists, CancelToken, EntryKind, NotFound, RemoteEntry, RemoteFileBackend,
     ServerInfo,
 )

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager import keybox as K
-from ssh_manager.multirun import store as S
+from ophion import keybox as K
+from ophion.multirun import store as S
 
 SECRET = "Saved-command-sentinel-token"
 

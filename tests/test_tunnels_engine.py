@@ -11,9 +11,9 @@ from pathlib import Path
 
 import paramiko
 
-from ssh_manager.transfer.settings import TransferSettings
-from ssh_manager.tunnels import engine as E
-from ssh_manager.tunnels.model import DYNAMIC, LOCAL, REMOTE, Forward
+from ophion.transfer.settings import TransferSettings
+from ophion.tunnels import engine as E
+from ophion.tunnels.model import DYNAMIC, LOCAL, REMOTE, Forward
 
 from tests.fake_sftp import FakeSftpServer
 
@@ -99,7 +99,7 @@ class EngineCase(unittest.TestCase):
         self.addCleanup(self.manager.stop_all)
 
     def connect(self, host_id: str):
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         self.connects += 1
         backend = SftpBackend("127.0.0.1", self.server.port, "alice", self.password, known_hosts=self.known,
@@ -261,7 +261,7 @@ class CredentialsTests(EngineCase):
         self.password = "wrong-" + PASSWORD
         forward = self.local()
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             status = self.started(forward)
             time.sleep(0.5)
         self.assertEqual((status.state, status.error_kind), (E.FAILED, "auth"))

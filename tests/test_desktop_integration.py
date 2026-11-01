@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager import desktop_integration as D
-from ssh_manager.identity import APP_ID
+from ophion import desktop_integration as D
+from ophion.identity import APP_ID
 
 
 class LauncherTests(unittest.TestCase):

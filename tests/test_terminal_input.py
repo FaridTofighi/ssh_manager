@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.settings import AppSettings, TerminalInputSettings
-from ssh_manager.terminal_input import MouseAction as A, decide_mouse_action
+from ophion.settings import AppSettings, TerminalInputSettings
+from ophion.terminal_input import MouseAction as A, decide_mouse_action
 
 LEFT, MIDDLE, RIGHT = 1, 2, 3
 
@@ -62,7 +62,7 @@ class TerminalInputSettingsTests(unittest.TestCase):
     def test_defaults_and_validation(self) -> None:
         self.assertEqual(TerminalInputSettings().to_dict(), {"copy_on_select": True, "copy_on_select_clipboard": False,
                                                              "middle_click": "paste_primary", "right_click": "menu"})
-        with self.assertLogs("ssh_manager.settings", "WARNING") as logs:
+        with self.assertLogs("ophion.settings", "WARNING") as logs:
             loaded = TerminalInputSettings.from_dict({"middle_click": "explode", "right_click": 3,
                                                       "copy_on_select_clipboard": "yes", "unknown": 1})
         self.assertEqual(loaded, TerminalInputSettings())

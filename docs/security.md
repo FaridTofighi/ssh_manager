@@ -2,9 +2,9 @@
 
 How Ophion protects saved passwords and macros, what it does not protect
 against, and how data of older versions is moved. Code:
-`ssh_manager/keybox.py`, `ssh_manager/aead.py`, `ssh_manager/secure_store.py`
-(`EncryptedFileKeyring`), `ssh_manager/macros.py`, `ssh_manager/unlock.py`,
-`ssh_manager/migration.py`; the dialogs are in `gtkui/unlock_flow.py`,
+`ophion/keybox.py`, `ophion/aead.py`, `ophion/secure_store.py`
+(`EncryptedFileKeyring`), `ophion/macros.py`, `ophion/unlock.py`,
+`ophion/migration.py`; the dialogs are in `gtkui/unlock_flow.py`,
 `gtkui/migration_flow.py` and `gtkui/dialogs/security_page.py`.
 
 ## One key, protected by the master password
@@ -97,7 +97,7 @@ Idle auto-lock is not implemented (a possible later addition).
 
 ## At start-up
 
-`ssh_manager/unlock.py` looks at the folder (never at secrets) and decides:
+`ophion/unlock.py` looks at the folder (never at secrets) and decides:
 
 | Situation | What happens |
 |---|---|

@@ -1,10 +1,10 @@
 import unittest
 
-from ssh_manager.config import HostEntry
-from ssh_manager.credentials import Credential
-from ssh_manager.gtkui.controllers.details_presenter import parse_quick_connect
-from ssh_manager.gtkui.dialogs.host_dialog import parse_option_lines, validate_option_lines
-from ssh_manager.gtkui.widgets.secret_entry import generate_password, password_strength
+from ophion.config import HostEntry
+from ophion.credentials import Credential
+from ophion.gtkui.controllers.details_presenter import parse_quick_connect
+from ophion.gtkui.dialogs.host_dialog import parse_option_lines, validate_option_lines
+from ophion.gtkui.widgets.secret_entry import generate_password, password_strength
 
 
 def _display_available() -> bool:
@@ -56,7 +56,7 @@ class SecretHelperTests(unittest.TestCase):
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
 class HostDialogTests(unittest.TestCase):
     def _dialog(self, host=None, **kwargs):
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         return HostDialog(None, host, **kwargs)
 
@@ -111,9 +111,9 @@ class HostDialogTests(unittest.TestCase):
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
 class PreferencesDialogTests(unittest.TestCase):
     def test_values_round_trip_settings(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         settings = AppSettings()
         settings.host_key_policy = "auto-add"
@@ -133,9 +133,9 @@ class PreferencesDialogTests(unittest.TestCase):
         self.assertEqual(values.git_watch_interval, 900)
 
     def test_legacy_bool_theme_argument(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         dialog = PreferencesDialog(None, True, 1.0, 14, AppSettings())
         try:
@@ -149,7 +149,7 @@ class SecretDialogTests(unittest.TestCase):
     def test_new_secret_requires_match_and_current_password(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.secrets import NewSecretDialog
+        from ophion.gtkui.dialogs.secrets import NewSecretDialog
 
         dialog = NewSecretDialog(None, "t", "h", verify_current=lambda value: value == "old")
         try:
@@ -167,7 +167,7 @@ class SecretDialogTests(unittest.TestCase):
     def test_unlock_dialog_uses_verifier(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.secrets import UnlockDialog
+        from ophion.gtkui.dialogs.secrets import UnlockDialog
 
         dialog = UnlockDialog(None, "t", "h", "d", lambda value: value == "secret")
         try:

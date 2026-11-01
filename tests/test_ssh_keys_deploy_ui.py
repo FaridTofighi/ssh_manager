@@ -14,9 +14,9 @@ class DeployDialogTests(unittest.TestCase):
         from tests.fake_sftp import FakeSftpServer
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager import ssh_keys as K
-        from ssh_manager.transfer.settings import TransferSettings
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion import ssh_keys as K
+        from ophion.transfer.settings import TransferSettings
+        from ophion.transfer.sftp import SftpBackend
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -44,7 +44,7 @@ class DeployDialogTests(unittest.TestCase):
         self.backend = backend
 
     def dialog(self, aliases):
-        from ssh_manager.gtkui.dialogs.ssh_keys_deploy import DeployKeyDialog
+        from ophion.gtkui.dialogs.ssh_keys_deploy import DeployKeyDialog
 
         hosts = self.win.multirun.host_by_key()
         keys = [k for k, h in hosts.items() if h.alias in aliases]
@@ -57,7 +57,7 @@ class DeployDialogTests(unittest.TestCase):
         self.assertTrue(pump(30, until=lambda: dialog.job is not None and dialog.job.done and dialog._poll_id == 0))
 
     def test_install_verify_report_retry_and_set_identityfile(self) -> None:
-        from ssh_manager import ssh_keys as K
+        from ophion import ssh_keys as K
 
         dialog = self.dialog({"web-01", "web-02", "db-primary"})
         self.assertEqual(dialog.hosts_label.get_text(), "3 hosts")

@@ -1,4 +1,4 @@
-"""``ssh_manager.known_hosts``: parsing, matching (plain, patterns, hashed), fingerprints, byte-preserving edits."""
+"""``ophion.known_hosts``: parsing, matching (plain, patterns, hashed), fingerprints, byte-preserving edits."""
 
 import base64
 import fcntl
@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import known_hosts as KH
+from ophion import known_hosts as KH
 
 
 

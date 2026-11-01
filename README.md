@@ -51,7 +51,7 @@ cd ssh-manager
 ### 3. Run it
 
 ```bash
-python3 -m ssh_manager
+python3 -m ophion
 ```
 
 On the first run:
@@ -80,8 +80,8 @@ On the first run:
 Some other ways to start it:
 
 ```bash
-python3 -m ssh_manager --inventory ~/other.db                          # another inventory database
-python3 -m ssh_manager --rdp 10.0.0.50 --user alice --domain CORP     # open one Remote Desktop session
+python3 -m ophion --inventory ~/other.db                          # another inventory database
+python3 -m ophion --rdp 10.0.0.50 --user alice --domain CORP     # open one Remote Desktop session
 ```
 
 ### 4. Check the installation
@@ -101,13 +101,16 @@ GTK desktop app:
 
 ```bash
 python3 main.py
-python3 -m ssh_manager
+python3 -m ophion
 ```
+
+The package was called `ssh_manager` before; `python3 -m ssh_manager` still
+starts the app (and says the new command).
 
 Textual terminal app:
 
 ```bash
-python3 -m ssh_manager.main
+python3 -m ophion.main
 ```
 
 The GTK app uses its own inventory database by default (see below);
@@ -277,7 +280,7 @@ Close and Reconnect act on that tab only.
 Settings → Appearance offers *Follow system*, *Light* and *Dark*. Changes
 apply immediately. The application font size scales the whole interface.
 All colors, spacing and type sizes come from design tokens in
-`ssh_manager/gtkui/theme/`; see `docs/ui-design-system.md`. Terminal colors
+`ophion/gtkui/theme/`; see `docs/ui-design-system.md`. Terminal colors
 are configured separately under Settings → Terminal.
 
 ## Expired Passwords
@@ -379,7 +382,7 @@ This repository currently uses the standard library unittest runner:
 
 ```bash
 python3 -m unittest discover
-python3 -m compileall ssh_manager tests main.py
+python3 -m compileall ophion tests main.py
 ```
 
 The GTK and VTE bindings come from the distribution, so a virtualenv needs

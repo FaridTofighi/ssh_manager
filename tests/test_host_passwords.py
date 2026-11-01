@@ -8,9 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.credentials import CredentialStore, PasswordChoice
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
+from ophion.config import HostEntry
+from ophion.credentials import CredentialStore, PasswordChoice
+from ophion.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
 
 SECRET = "h0st-only pa$$"
 
@@ -107,7 +107,7 @@ class StoreTests(unittest.TestCase):
 
     def test_create_private_rolls_back_when_saving_fails(self) -> None:
         before = (self.path.read_bytes(), self.keyring.keys())
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.create_private("h1", "ops", SECRET)
         self.assertEqual((self.path.read_bytes(), self.keyring.keys()), before)
@@ -125,7 +125,7 @@ class StoreTests(unittest.TestCase):
     def test_update_private_restores_the_secret_when_saving_fails(self) -> None:
         self.store.create_private("h1", "ops", SECRET)
         private = self.store.private_for_host("h1")
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.update_private("h1", password="other", username="root")
         self.assertEqual(self.store.get_password(private.id), SECRET)
@@ -159,7 +159,7 @@ class StoreTests(unittest.TestCase):
 
     def test_failed_save_keeps_the_private_credential(self) -> None:
         private = self.store.create_private("h1", "ops", SECRET)
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.bind_host("h1", None)
         self.assertEqual(self.store.binding_for_host("h1"), private.id)
@@ -192,7 +192,7 @@ class ControllerTests(unittest.TestCase):
     """CredentialController: resolution and the dialog's Save step (no window)."""
 
     def setUp(self) -> None:
-        from ssh_manager.gtkui.controllers.credentials_controller import CredentialController
+        from ophion.gtkui.controllers.credentials_controller import CredentialController
 
         self.tmp = tempfile.TemporaryDirectory()
         self.keyring = RecordingKeyring()
@@ -283,8 +283,8 @@ def _display() -> bool:
 @unittest.skipUnless(_display(), "needs a display")
 class HostDialogTests(unittest.TestCase):
     def dialog(self, **kwargs):
-        from ssh_manager.credentials import Credential
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.credentials import Credential
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         self.shared = Credential("c1", "Ops", "ops")
         self.other = Credential("c2", "Dev", "dev")
@@ -295,12 +295,12 @@ class HostDialogTests(unittest.TestCase):
         return dialog
 
     def private(self):
-        from ssh_manager.credentials import Credential
+        from ophion.credentials import Credential
 
         return Credential("p1", "host:web", "ops", private=True, based_on="c1")
 
     def confirm(self, answer):
-        patcher = mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=answer)
+        patcher = mock.patch("ophion.gtkui.dialogs.host_dialog.confirm", return_value=answer)
         self.addCleanup(patcher.stop)
         return patcher.start()
 
@@ -317,7 +317,7 @@ class HostDialogTests(unittest.TestCase):
         self.assertEqual([row[0] for row in model], ["None"])
 
     def private_cred_for_list(self):
-        from ssh_manager.credentials import Credential
+        from ophion.credentials import Credential
 
         return Credential("p9", "host:x", "ops", private=True)
 
@@ -419,7 +419,7 @@ class WindowTests(unittest.TestCase):
     def run_dialog(self, action, answer, edit=lambda d: None):
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         def fake_run(dialog):
             edit(dialog)
@@ -450,7 +450,7 @@ class WindowTests(unittest.TestCase):
         host = self.win.tree.find_host_by_alias("web-01")
         self.assertNotIn(SECRET, json.dumps(host.options) + json.dumps(host.metadata, default=str))
         self.assertEqual(self.win.creds.password_summary(host), "host-specific")
-        from ssh_manager.gtkui.constants import TreeColumn
+        from ophion.gtkui.constants import TreeColumn
 
         key = self.win.tree.make_host_key(host.parent_group, host.child_group, host.alias)
         tooltip = self.win.tree_store.get_value(self.win.tree.host_iters[key], TreeColumn.TOOLTIP)
@@ -484,7 +484,7 @@ class WindowTests(unittest.TestCase):
         for path in ("tab", "duplicate", "paramiko"):
             self.assertEqual((captured[path].password, captured[path].source), (SECRET, "host"), path)
 
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         tab = TerminalTab(self.host, lambda *a: None, autostart=False,
                           password_provider=lambda: self.win.creds.resolve_password(self.host))
@@ -533,13 +533,13 @@ class WindowTests(unittest.TestCase):
         self.assertFalse(any(SECRET in n for n in notes))
 
     def test_credential_manager_and_mobaxterm_never_list_private_credentials(self) -> None:
-        from ssh_manager.gtkui.dialogs.credentials import CredentialManagerDialog
+        from ophion.gtkui.dialogs.credentials import CredentialManagerDialog
 
         self.win.creds.apply_host_credentials(self.host, self.shared.id, PasswordChoice(True, SECRET))
         manager = CredentialManagerDialog(self.win, self.win._credential_store)
         self.addCleanup(manager.destroy)
         self.assertEqual([row[0] for row in manager.load_rows()], [self.shared.id])
-        from ssh_manager.gtkui.dialogs.mobaxterm_import import MobaXtermImportDialog
+        from ophion.gtkui.dialogs.mobaxterm_import import MobaXtermImportDialog
 
         names = [c.id for c in MobaXtermImportDialog._credentials(SimpleNamespace(_store=self.win._credential_store))]
         self.assertEqual(names, [self.shared.id])
@@ -552,7 +552,7 @@ class FolderInventoryTests(unittest.TestCase):
     def test_rename_moves_the_private_binding(self) -> None:
         from gi.repository import Gtk
 
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
         from tests.gtk_window_fixture import WindowSandbox
 
         sandbox = WindowSandbox()

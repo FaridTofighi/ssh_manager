@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.local_shell import local_shell_env, resolve_shell, shell_argv, start_directory
-from ssh_manager.settings import AppSettings, LocalShellSettings
+from ophion.local_shell import local_shell_env, resolve_shell, shell_argv, start_directory
+from ophion.settings import AppSettings, LocalShellSettings
 
 
 def env_dict(entries):
@@ -112,7 +112,7 @@ class EnvironmentTests(unittest.TestCase):
         from unittest import mock
 
         try:
-            from ssh_manager.gtk_terminal import TerminalTab
+            from ophion.gtk_terminal import TerminalTab
         except (ImportError, ValueError) as exc:  # no GTK / VTE
             self.skipTest(str(exc))
         tab = mock.Mock(_profile=None, _host=mock.Mock(options={}))
@@ -128,7 +128,7 @@ class EnvironmentTests(unittest.TestCase):
         # envv is the whole environment: VTE must not start from the app's own (its TERM, TMUX).
         from gi.repository import Vte  # type: ignore
 
-        from ssh_manager import gtk_terminal
+        from ophion import gtk_terminal
         self.assertTrue(int(gtk_terminal._SSH_SPAWN_FLAGS) & int(Vte.SPAWN_NO_PARENT_ENVV))
 
 
@@ -136,7 +136,7 @@ class LocalShellSettingsTests(unittest.TestCase):
     def test_validation_and_round_trip(self) -> None:
         self.assertEqual(LocalShellSettings().to_dict(), {"command": "", "login_shell": False, "start_in": "current",
                                                           "on_exit": "close"})
-        with self.assertLogs("ssh_manager.settings", "WARNING"):
+        with self.assertLogs("ophion.settings", "WARNING"):
             bad = LocalShellSettings.from_dict({"command": "zsh\n", "login_shell": "yes", "start_in": "/tmp",
                                                 "on_exit": "explode"})
         self.assertEqual(bad, LocalShellSettings())

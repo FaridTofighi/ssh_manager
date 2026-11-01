@@ -1,6 +1,6 @@
 import unittest
 
-from ssh_manager.ui import format_extra_options, parse_extra_options
+from ophion.ui import format_extra_options, parse_extra_options
 
 
 class UiHelperTests(unittest.TestCase):

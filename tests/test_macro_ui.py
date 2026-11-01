@@ -56,7 +56,7 @@ class MacroWindowTests(unittest.TestCase):
         self.tabs = self.win.terminal_tabs
         self.macros = self.win.macros
         self.logs = self.enterContext(self.assertLogs(level=logging.DEBUG))
-        logging.getLogger("ssh_manager").debug("macro test")  # assertLogs needs at least one record
+        logging.getLogger("ophion").debug("macro test")  # assertLogs needs at least one record
         self.win._settings.local_shell.command = "/bin/sh"
         self.win._settings.local_shell.on_exit = "hold"
         self.box = self.sandbox.use_keybox(PASSWORD)
@@ -66,7 +66,7 @@ class MacroWindowTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         for tab in list(self.tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
         pump(0.2)
 
@@ -79,7 +79,7 @@ class MacroWindowTests(unittest.TestCase):
         return tab
 
     def text(self, tab) -> str:
-        from ssh_manager.gtk_terminal import terminal_text
+        from ophion.gtk_terminal import terminal_text
 
         return terminal_text(tab._terminal)
 
@@ -134,7 +134,7 @@ class MacroWindowTests(unittest.TestCase):
         return next((m for m in self.macros.store.list_sorted() if m.name == name), None)
 
     def add_macro(self, name, shortcut=None, steps=None):
-        from ssh_manager.macros import Macro
+        from ophion.macros import Macro
 
         macro = Macro(name=name, shortcut=shortcut or [], steps=steps or [{"type": "text", "text": "echo m\r"}])
         self.macros.store.add(macro)
@@ -147,7 +147,7 @@ class MacroWindowTests(unittest.TestCase):
 
     # ------------------------------------------------------------------ tests
     def test_record_save_and_replay_with_the_shortcut(self) -> None:
-        from ssh_manager.gtkui.controllers.macro_controller import macro_action
+        from ophion.gtkui.controllers.macro_controller import macro_action
 
         tab = self.shell()
         before = self.text(tab).count("\nhi")
@@ -177,7 +177,7 @@ class MacroWindowTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_secret_steps_are_flagged_masked_and_never_leak(self) -> None:
-        from ssh_manager.gtkui.dialogs.macros import MASK
+        from ophion.gtkui.dialogs.macros import MASK
 
         tab = self.shell()
         tab._terminal.feed_child(b"stty -echo; read p; stty echo; echo got:$p\n")
@@ -250,7 +250,7 @@ class MacroWindowTests(unittest.TestCase):
         self.assertNotIn("<Primary><Shift>c", registry.effective_accels("copy"))
         self.assertIn("<Primary><Shift>c", [a for m in self.macros.store.list_sorted() for a in m.shortcut])
         # The Keyboard Shortcuts page sees the macro and does not take its key.
-        from ssh_manager.gtkui.dialogs.shortcuts_page import ShortcutEditor
+        from ophion.gtkui.dialogs.shortcuts_page import ShortcutEditor
 
         editor = ShortcutEditor(registry)
         result = editor.assign("paste", "<Primary><Alt>j", replace=True)
@@ -258,8 +258,8 @@ class MacroWindowTests(unittest.TestCase):
         self.assertEqual(editor.title(result.conflicts[0]), "Second")
 
     def test_conflict_messages_name_the_owner(self) -> None:
-        from ssh_manager.gtkui.dialogs.macros import MacroDialog
-        from ssh_manager.macros import Macro
+        from ophion.gtkui.dialogs.macros import MacroDialog
+        from ophion.macros import Macro
 
         owner = self.add_macro("Owner", ["<Primary><Alt>k"])
         macro = Macro(name="New", steps=[{"type": "text", "text": "x"}])
@@ -284,7 +284,7 @@ class MacroWindowTests(unittest.TestCase):
     def test_edit_cancel_and_delete(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.controllers.macro_controller import macro_action
+        from ophion.gtkui.controllers.macro_controller import macro_action
 
         macro = self.add_macro("Edit me", ["<Primary><Alt>e"], steps=[
             {"type": "text", "text": "one"}, {"type": "delay", "ms": 100}, {"type": "text", "text": "two"},
@@ -293,7 +293,7 @@ class MacroWindowTests(unittest.TestCase):
 
         def change(dialog):
             dialog.select_step(0)
-            with mock.patch("ssh_manager.gtkui.dialogs.macros.prompt_text", return_value="ONE"):
+            with mock.patch("ophion.gtkui.dialogs.macros.prompt_text", return_value="ONE"):
                 dialog.edit_step()
             dialog.select_step(1)
             dialog.delete_step()
@@ -317,14 +317,14 @@ class MacroWindowTests(unittest.TestCase):
         self.assertIsNone(self.macros.store.get(macro.id))
         self.assertEqual(app.get_accels_for_action(macro_action(macro.id)), [])
         self.assertEqual(self.win.shortcut_registry.conflicts("<Primary><Alt>r"), [])
-        from ssh_manager.macros import MacroStore
+        from ophion.macros import MacroStore
 
         reread = MacroStore(self.macros.store.path)
         reread.unlock_with_key(self.box.subkey("macros"), self.box.id)
         self.assertEqual(len(reread), 0)
 
     def test_manage_window_lists_filters_and_runs(self) -> None:
-        from ssh_manager.gtkui.dialogs.macros import MacrosWindow
+        from ophion.gtkui.dialogs.macros import MacrosWindow
 
         self.add_macro("Alpha", ["<Primary><Alt>a"])
         self.add_macro("Beta")
@@ -373,7 +373,7 @@ class MacroWindowTests(unittest.TestCase):
         pump(0.3)
         source = player._source
         self.assertTrue(source)
-        with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+        with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
             self.tabs.close_tab(running)
         pump(0.3)
         self.assertFalse(self.macros.playbacks)
@@ -405,7 +405,7 @@ class MacroWindowTests(unittest.TestCase):
         self.type(tab._terminal, "ls")
         pump(0.2)
         with mock.patch.object(self.macros, "_offer_save") as offer:
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
             pump(0.5)
         self.assertIsNone(self.macros.recording)
@@ -431,12 +431,12 @@ class MacroWindowTests(unittest.TestCase):
         self.assertFalse(self.box.path.exists())
 
     def test_master_password_change_keeps_the_macros(self) -> None:
-        from ssh_manager import keybox as K
-        from ssh_manager.macros import MacroStore
+        from ophion import keybox as K
+        from ophion.macros import MacroStore
 
         self.add_macro("Survivor")
         before = self.macros.store.path.read_bytes()
-        with mock.patch("ssh_manager.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
+        with mock.patch("ophion.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
             dialog.return_value.ask.return_value = "a new master password"
             self.win.app_dialogs.change_master_password()
         self.assertEqual(self.macros.store.path.read_bytes(), before)  # only the key file changes
@@ -447,8 +447,8 @@ class MacroWindowTests(unittest.TestCase):
         reread.unlock_with_key(loaded.subkey("macros"), loaded.id)
         self.assertEqual([m.name for m in reread.list_sorted()], ["Survivor"])
         # A failed write keeps the previous password.
-        with mock.patch("ssh_manager.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
-            with mock.patch("ssh_manager.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
+        with mock.patch("ophion.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
+            with mock.patch("ophion.gtkui.controllers.app_dialogs.NewSecretDialog") as dialog:
                 dialog.return_value.ask.return_value = "third password"
                 self.win.app_dialogs.change_master_password()
         self.assertTrue(K.Keybox.load(self.box.path).unlock("a new master password"))
@@ -461,7 +461,7 @@ class SecretDetectionTests(unittest.TestCase):
     def detect(self, lflag, tail):
         import termios
 
-        from ssh_manager.gtkui.controllers.macro_controller import MacroController
+        from ophion.gtkui.controllers.macro_controller import MacroController
 
         term = mock.Mock()
         if lflag is None:
@@ -499,7 +499,7 @@ class MacroWithoutMasterPasswordTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         for tab in list(self.win.terminal_tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.win.terminal_tabs.close_tab(tab)
         pump(0.2)
 
@@ -522,12 +522,12 @@ class MacroWithoutMasterPasswordTests(unittest.TestCase):
         self.assertTrue(self.macros.start_recording())
         self.macros._on_key_press(None, None)
         self.macros._on_commit(tab._terminal, "ls", 2)
-        from ssh_manager import keybox as K
-        from ssh_manager.secure_store import EncryptedFileKeyring
+        from ophion import keybox as K
+        from ophion.secure_store import EncryptedFileKeyring
 
         with mock.patch.object(self.macros, "ask_master_password_needed", return_value=True), \
-                mock.patch("ssh_manager.gtkui.unlock_flow.NewSecretDialog") as new, \
-                mock.patch("ssh_manager.gtkui.unlock_flow.RecoveryKeyDialog") as recovery, \
+                mock.patch("ophion.gtkui.unlock_flow.NewSecretDialog") as new, \
+                mock.patch("ophion.gtkui.unlock_flow.RecoveryKeyDialog") as recovery, \
                 mock.patch.object(self.macros, "run_dialog", return_value=(0, None)) as run:
             new.return_value.ask.return_value = "fresh master"
             recovery.return_value.ask.return_value = False  # skipped

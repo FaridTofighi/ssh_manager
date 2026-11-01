@@ -62,10 +62,10 @@ class TreeIconRenderTests(unittest.TestCase):
     def setUp(self) -> None:
         from gi.repository import Gdk  # type: ignore
 
-        from ssh_manager.config import HostEntry
-        from ssh_manager.gtkui.constants import RowKind
-        from ssh_manager.gtkui.controllers.tree_controller import TreeRow
-        from ssh_manager.gtkui.views.session_tree import SessionTreeView
+        from ophion.config import HostEntry
+        from ophion.gtkui.constants import RowKind
+        from ophion.gtkui.controllers.tree_controller import TreeRow
+        from ophion.gtkui.views.session_tree import SessionTreeView
 
         def host(alias, status="unknown", read_only=False):
             entry = HostEntry(alias=alias, options={"hostname": alias}, parent_group="prod", child_group="web.conf")
@@ -115,8 +115,8 @@ class TreeIconRenderTests(unittest.TestCase):
         import cairo
         from gi.repository import Gdk, Gtk  # type: ignore
 
-        from ssh_manager.gtkui.theme.loader import current_palette
-        from ssh_manager.gtkui.views import session_tree
+        from ophion.gtkui.theme.loader import current_palette
+        from ophion.gtkui.views import session_tree
 
         tree = self.tree
         path = self.path_of(text)
@@ -146,7 +146,7 @@ class TreeIconRenderTests(unittest.TestCase):
         return Raster(surface), geometry, height, drawn
 
     def icon_box(self, geometry, height, scale=1):
-        from ssh_manager.gtkui.theme.tokens import Layout
+        from ophion.gtkui.theme.tokens import Layout
 
         size = Layout.Tree.ICON
         top = round(height / 2.0 - size / 2.0)
@@ -155,7 +155,7 @@ class TreeIconRenderTests(unittest.TestCase):
     def background(self, flags):
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.loader import current_palette
 
         palette = current_palette()
         if flags & Gtk.CellRendererState.SELECTED:
@@ -166,7 +166,7 @@ class TreeIconRenderTests(unittest.TestCase):
 
     @contextmanager
     def densities(self):
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         for name in ("compact", "comfortable"):
             with density.using(name), self.subTest(density=name):
@@ -176,7 +176,7 @@ class TreeIconRenderTests(unittest.TestCase):
                 break
 
     def each_density(self):
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         for name in ("compact", "comfortable"):
             with density.using(name):
@@ -192,7 +192,7 @@ class TreeIconRenderTests(unittest.TestCase):
 
     # -------------------------------------------------------------- tests
     def test_icon_names_per_row(self) -> None:
-        from ssh_manager.gtkui.constants import Icons
+        from ophion.gtkui.constants import Icons
 
         expected = {"prod": Icons.FOLDER_OPEN, "db": Icons.FOLDER_OPEN, "primary.conf": Icons.FILE_CONF,
                     "web.conf": Icons.FILE_CONF, "legacy": Icons.FOLDER, "up": Icons.HOST}
@@ -203,8 +203,8 @@ class TreeIconRenderTests(unittest.TestCase):
                 self.assertEqual(drawn[0][0][0], name)
 
     def test_icon_size_centering_and_shape(self) -> None:
-        from ssh_manager.gtkui.theme.loader import current_palette
-        from ssh_manager.gtkui.theme.tokens import Layout
+        from ophion.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.tokens import Layout
 
         palette = current_palette()
         for density_name in self.each_density():
@@ -231,8 +231,8 @@ class TreeIconRenderTests(unittest.TestCase):
 
     @contextmanager
     def palette(self, palette):
-        with mock.patch("ssh_manager.gtkui.views.session_tree.current_palette", return_value=palette), \
-                mock.patch("ssh_manager.gtkui.theme.loader.current_palette", return_value=palette):
+        with mock.patch("ophion.gtkui.views.session_tree.current_palette", return_value=palette), \
+                mock.patch("ophion.gtkui.theme.loader.current_palette", return_value=palette):
             self.tree.clear_icon_cache()
             yield palette
 
@@ -241,7 +241,7 @@ class TreeIconRenderTests(unittest.TestCase):
 
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.theme.tokens import DARK, LIGHT
+        from ophion.gtkui.theme.tokens import DARK, LIGHT
 
         S = Gtk.CellRendererState
         states = {
@@ -276,8 +276,8 @@ class TreeIconRenderTests(unittest.TestCase):
     def test_user_color_overrides_and_clearing_restores_white(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.constants import TreeColumn
-        from ssh_manager.gtkui.theme.tokens import DARK
+        from ophion.gtkui.constants import TreeColumn
+        from ophion.gtkui.theme.tokens import DARK
 
         with self.palette(DARK):
             for flags in (Gtk.CellRendererState(0), Gtk.CellRendererState.SELECTED):
@@ -291,7 +291,7 @@ class TreeIconRenderTests(unittest.TestCase):
     def test_colors_selected_and_user_tint(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.loader import current_palette
 
         palette = current_palette()
         selected = Gtk.CellRendererState.SELECTED
@@ -308,9 +308,9 @@ class TreeIconRenderTests(unittest.TestCase):
     def test_badge_color_and_cutout_ring_on_every_background(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.theme.loader import current_palette
-        from ssh_manager.gtkui.theme.tokens import Layout
-        from ssh_manager.gtkui.tree_icons import badge_box, cutout_ring
+        from ophion.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.tokens import Layout
+        from ophion.gtkui.tree_icons import badge_box, cutout_ring
 
         palette = current_palette()
         states = {"up": palette.badge_connected, "down": palette.danger, "idle": palette.badge_unknown,
@@ -325,7 +325,7 @@ class TreeIconRenderTests(unittest.TestCase):
                     with self.subTest(density=density_name, row=text, flags=int(flags)):
                         # Scale 2: the 2 px ring is 4 device px wide, so a whole pixel sits inside it.
                         k = 2
-                        with mock.patch("ssh_manager.gtkui.views.session_tree.animations_enabled", return_value=False):
+                        with mock.patch("ophion.gtkui.views.session_tree.animations_enabled", return_value=False):
                             raster, geometry, height, _drawn = self.render(text, flags, scale=k)
                         x0, y0, _size = self.icon_box(geometry, height, k)
                         cx, cy = x0 + badge.center[0] * k, y0 + badge.center[1] * k
@@ -339,9 +339,9 @@ class TreeIconRenderTests(unittest.TestCase):
                         self.assertLessEqual(_dist(raster.rgb(cx, ring_y), self.background(flags)), 6)
 
     def test_cutout_removes_icon_ink(self) -> None:
-        from ssh_manager.gtkui.constants import Icons
-        from ssh_manager.gtkui.tree_icons import badge_box, cutout_ring
-        from ssh_manager.gtkui.widgets.icons import render_tree_icon
+        from ophion.gtkui.constants import Icons
+        from ophion.gtkui.tree_icons import badge_box, cutout_ring
+        from ophion.gtkui.widgets.icons import render_tree_icon
 
         k = 2  # device pixels per logical pixel
         for size in (20, 24):
@@ -357,7 +357,7 @@ class TreeIconRenderTests(unittest.TestCase):
                 self.assertEqual(alpha(badged), 0)
 
     def test_read_only_lock(self) -> None:
-        from ssh_manager.gtkui.constants import Icons
+        from ophion.gtkui.constants import Icons
 
         _raster, _geometry, _height, drawn = self.render("locked")
         self.assertTrue(drawn[0][1]["lock"])
@@ -369,7 +369,7 @@ class TreeIconRenderTests(unittest.TestCase):
         self.assertFalse(drawn[0][1]["lock"])
 
     def test_right_edge_shows_counts_only(self) -> None:
-        from ssh_manager.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.loader import current_palette
 
         palette = current_palette()
         bg = _hex(palette.bg_surface)
@@ -383,7 +383,7 @@ class TreeIconRenderTests(unittest.TestCase):
         self.assertTrue(any(_dist(rgb, bg) > 20 for rgb in right), "group count missing")
 
     def test_hidpi_icons_double_and_stay_crisp(self) -> None:
-        from ssh_manager.gtkui.theme.loader import current_palette
+        from ophion.gtkui.theme.loader import current_palette
 
         palette = current_palette()
         bg = _hex(palette.bg_surface)
@@ -406,7 +406,7 @@ class TreeIconRenderTests(unittest.TestCase):
         self.assertGreaterEqual(results[2][1], full * 0.8, "blurry at scale 2")
 
     def test_connecting_badge_pulses_only_with_animations(self) -> None:
-        from ssh_manager.gtkui.views import session_tree
+        from ophion.gtkui.views import session_tree
 
         renderer = self.tree.row_renderer
         alphas = {}
@@ -423,7 +423,7 @@ class TreeIconRenderTests(unittest.TestCase):
         self.assertTrue(renderer.saw_connecting)
 
     def test_pulse_timer_runs_only_while_a_host_is_connecting(self) -> None:
-        from ssh_manager.gtkui.views import session_tree
+        from ophion.gtkui.views import session_tree
 
         tree = self.tree
         with mock.patch.object(session_tree, "animations_enabled", return_value=True):
@@ -441,7 +441,7 @@ class TreeIconRenderTests(unittest.TestCase):
     def test_drag_icon_uses_the_new_row_painter(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.views import session_tree
+        from ophion.gtkui.views import session_tree
 
         tree = self.tree
         window = Gtk.OffscreenWindow()  # a drag icon needs a realized tree
@@ -462,12 +462,12 @@ class TreeIconRenderTests(unittest.TestCase):
         window.destroy()
 
     def test_theme_switch_recolors_without_restart(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import DARK, LIGHT
+        from ophion.gtkui.theme.tokens import DARK, LIGHT
 
         colors = {}
         for palette in (DARK, LIGHT):
-            with mock.patch("ssh_manager.gtkui.views.session_tree.current_palette", return_value=palette), \
-                    mock.patch("ssh_manager.gtkui.theme.loader.current_palette", return_value=palette):
+            with mock.patch("ophion.gtkui.views.session_tree.current_palette", return_value=palette), \
+                    mock.patch("ophion.gtkui.theme.loader.current_palette", return_value=palette):
                 _raster, _geometry, _height, drawn = self.render("prod")
                 colors[palette.name] = drawn[0][0][1]
         self.assertEqual(colors, {"dark": "#FFFFFF", "light": "#18231F"})
@@ -480,8 +480,8 @@ class GtkSymbolicPathTests(unittest.TestCase):
     def test_not_a_blob_and_not_empty_through_gtk(self) -> None:
         from gi.repository import Gdk, Gtk  # type: ignore
 
-        from ssh_manager.gtkui.constants import Icons
-        from ssh_manager.gtkui.widgets.icons import register_icon_path
+        from ophion.gtkui.constants import Icons
+        from ophion.gtkui.widgets.icons import register_icon_path
 
         register_icon_path()
         theme = Gtk.IconTheme.get_default()
@@ -509,9 +509,9 @@ class TreePerformanceTests(unittest.TestCase):
         import cairo
         from gi.repository import Gdk, Gtk, Rsvg  # type: ignore
 
-        from ssh_manager.gtkui.constants import RowKind
-        from ssh_manager.gtkui.controllers.tree_controller import TreeRow
-        from ssh_manager.gtkui.views.session_tree import SessionTreeView
+        from ophion.gtkui.constants import RowKind
+        from ophion.gtkui.controllers.tree_controller import TreeRow
+        from ophion.gtkui.views.session_tree import SessionTreeView
 
         states = ("connected", "failed", "connecting", "unknown")
         groups = []
@@ -562,7 +562,7 @@ class TreeIconWindowTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_status_change_updates_the_tooltip(self) -> None:
-        from ssh_manager.gtkui.constants import TreeColumn
+        from ophion.gtkui.constants import TreeColumn
 
         host = self.win.tree.find_host_by_alias("web-01")
         key = self.win.creds.host_key(host)
@@ -575,7 +575,7 @@ class TreeIconWindowTests(unittest.TestCase):
     def test_group_picker_rows_carry_the_tree_icons(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.group_picker import GroupPickerDialog
+        from ophion.gtkui.dialogs.group_picker import GroupPickerDialog
 
         dialog = GroupPickerDialog(self.win, self.win.manager, "Move")
         try:
@@ -602,8 +602,8 @@ def _theme_switch_child() -> None:
     if not Gtk.init_check(None)[0]:
         print(json.dumps({"skip": "no display"}))
         return
-    from ssh_manager.gtkui.theme.loader import ThemeMode
-    from ssh_manager.gtkui.views import session_tree
+    from ophion.gtkui.theme.loader import ThemeMode
+    from ophion.gtkui.views import session_tree
     from tests.gtk_window_fixture import WindowSandbox
 
     sandbox = WindowSandbox()

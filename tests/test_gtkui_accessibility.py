@@ -95,7 +95,7 @@ class MainWindowAccessibilityTests(unittest.TestCase):
         self.assertTrue(self.window.tree_view.get_accessible().get_name())
 
     def test_every_accelerator_is_registered(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcuts import ACTIONS
+        from ophion.gtkui.controllers.shortcuts import ACTIONS
 
         for spec in ACTIONS:
             if spec.accels:
@@ -107,7 +107,7 @@ class MainWindowAccessibilityTests(unittest.TestCase):
     def test_shortcuts_window_lists_actions(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.controllers.shortcuts import build_shortcuts_window
+        from ophion.gtkui.controllers.shortcuts import build_shortcuts_window
 
         shortcuts = build_shortcuts_window(self.window)
         # Never destroyed (GTK 3.24 bug, see build_shortcuts_window): kept for the process.

@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.config import HostEntry
-from ssh_manager.gtkui.constants import RowKind
-from ssh_manager.gtkui.host_facts import (
+from ophion.config import HostEntry
+from ophion.gtkui.constants import RowKind
+from ophion.gtkui.host_facts import (
     AuthKind,
     LatencyLevel,
     address_text,
@@ -20,8 +20,8 @@ from ssh_manager.gtkui.host_facts import (
     ssh_command_text,
     uses_proxy,
 )
-from ssh_manager.gtkui.host_history import EVENT_LIMIT, HostHistory
-from ssh_manager.gtkui.latency import LatencyProbe
+from ophion.gtkui.host_history import EVENT_LIMIT, HostHistory
+from ophion.gtkui.latency import LatencyProbe
 
 
 def host(**options):

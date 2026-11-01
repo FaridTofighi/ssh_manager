@@ -30,7 +30,7 @@ class ExportDialogTests(unittest.TestCase):
     def test_scope_options_and_passphrase(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.native_export import NativeExportDialog, passphrase_strength
+        from ophion.gtkui.dialogs.native_export import NativeExportDialog, passphrase_strength
 
         dialog = NativeExportDialog(None, group_label="prod", host_count=0, scope="groups")
         self.addCleanup(dialog.destroy)
@@ -81,9 +81,9 @@ class ExportFlowTests(unittest.TestCase):
         return self.asked
 
     def test_whole_inventory_plain_and_encrypted(self) -> None:
-        from ssh_manager import native_format as F
-        from ssh_manager.exporters.native import ExportOptions
-        from ssh_manager.importers.native import read_native
+        from ophion import native_format as F
+        from ophion.exporters.native import ExportOptions
+        from ophion.importers.native import read_native
 
         self.win.colors.group_colors["prod/web.conf"] = "#112233"
         self.run_export(("all", ExportOptions(), None))
@@ -95,7 +95,7 @@ class ExportFlowTests(unittest.TestCase):
         self.assertEqual(next(c for c in prod["children"] if c["name"] == "web.conf")["color"], "#112233")
         toast = self.win._toasts.history.items()[0]
         self.assertEqual(toast.text, "Exported 4 hosts to inventory.sshm.")
-        with mock.patch("ssh_manager.gtkui.controllers.native_transfer.show_text") as show:
+        with mock.patch("ophion.gtkui.controllers.native_transfer.show_text") as show:
             toast.action()
         self.assertIn("Hosts: 4", show.call_args.args[2])
         self.run_export(("all", ExportOptions(), "a long passphrase"))
@@ -104,8 +104,8 @@ class ExportFlowTests(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.target.parent)), ["inventory.sshm"])
 
     def test_group_context_menu_and_selected_hosts(self) -> None:
-        from ssh_manager.exporters.native import ExportOptions
-        from ssh_manager.gtkui.constants import RowKind
+        from ophion.exporters.native import ExportOptions
+        from ophion.gtkui.constants import RowKind
 
         with mock.patch.object(self.win.tree, "current_item", return_value=(RowKind.PARENT.value, {"parent": "prod"})), \
                 mock.patch.object(self.win.tree, "selected_hosts", return_value=[]):
@@ -127,18 +127,18 @@ class ExportFlowTests(unittest.TestCase):
         self.assertEqual(json.loads(self.target.read_bytes())["counts"]["hosts"], 1)
 
     def test_unwritable_folder_shows_the_os_error(self) -> None:
-        from ssh_manager.exporters.native import ExportOptions
+        from ophion.exporters.native import ExportOptions
 
         self.native.choose_path = lambda _name: "/proc/forbidden/inventory.sshm"
         self.run_export(("all", ExportOptions(), None))
         self.assertTrue(self.win._toasts.history.items()[0].text.startswith("The export could not be written:"))
 
     def test_actions_and_menu_entries(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcuts import ACTION_BY_NAME
+        from ophion.gtkui.controllers.shortcuts import ACTION_BY_NAME
 
         self.assertIn("export-native", ACTION_BY_NAME)
         self.assertIsNotNone(self.win.lookup_action("export-native"))
-        from ssh_manager.gtkui.views.header import _avatar_menu_model
+        from ophion.gtkui.views.header import _avatar_menu_model
 
         menu = _avatar_menu_model()
         labels = []
@@ -165,8 +165,8 @@ class ImportWizardTests(unittest.TestCase):
     def setUp(self) -> None:
         import tempfile
 
-        from ssh_manager import native_format as F
-        from ssh_manager.exporters.native import build_export
+        from ophion import native_format as F
+        from ophion.exporters.native import build_export
         from tests.gtk_window_fixture import WindowSandbox
         from tests.native_fixture import build_rich, make_store
 
@@ -188,7 +188,7 @@ class ImportWizardTests(unittest.TestCase):
         self.encrypted.write_bytes(F.encrypt_document(F.dump_document(doc), "open sesame"))
 
     def wizard(self):
-        from ssh_manager.gtkui.dialogs.native_import import NativeImportDialog
+        from ophion.gtkui.dialogs.native_import import NativeImportDialog
 
         dialog = NativeImportDialog(self.win, self.manager, self.creds, report_dir=self.sandbox.root / "reports",
                                     group_colors=self.win.colors.group_colors,
@@ -198,7 +198,7 @@ class ImportWizardTests(unittest.TestCase):
         return dialog
 
     def next(self, dialog) -> None:
-        from ssh_manager.gtkui.dialogs.native_import import RESPONSE_NEXT
+        from ophion.gtkui.dialogs.native_import import RESPONSE_NEXT
 
         self.assertTrue(dialog.next_button.get_sensitive(), f"Next is disabled on {dialog.step.name}")
         dialog.response(RESPONSE_NEXT)
@@ -209,7 +209,7 @@ class ImportWizardTests(unittest.TestCase):
         return len(store.list_groups()), len(store.list_hosts())
 
     def test_end_to_end_under_an_existing_group(self) -> None:
-        from ssh_manager.gtkui.dialogs.native_import import NONE_ID, Step
+        from ophion.gtkui.dialogs.native_import import NONE_ID, Step
 
         before = self.counts()
         dialog = self.wizard()
@@ -339,7 +339,7 @@ class ImportControllerTests(unittest.TestCase):
         self.win = self.sandbox.window
 
     def test_colours_are_saved_after_the_commit_and_failures_are_warnings(self) -> None:
-        from ssh_manager.importers.native import ImportStatus, NativeImportReport
+        from ophion.importers.native import ImportStatus, NativeImportReport
 
         report = NativeImportReport(ImportStatus.SUCCESS, "ok", 1, 1, ["prod"],
                                     group_colors={"prod": "#123456"}, host_colors={"prod::web.conf::web-01": "#654321"})
@@ -354,7 +354,7 @@ class ImportControllerTests(unittest.TestCase):
             def destroy(self):
                 pass
 
-        with mock.patch("ssh_manager.gtkui.dialogs.native_import.NativeImportDialog", FakeWizard), \
+        with mock.patch("ophion.gtkui.dialogs.native_import.NativeImportDialog", FakeWizard), \
                 mock.patch.object(self.win, "_save_ui_state") as save, \
                 mock.patch.object(self.win.tree, "reveal_imported") as reveal:
             self.win.lookup_action("import-native").activate(None)

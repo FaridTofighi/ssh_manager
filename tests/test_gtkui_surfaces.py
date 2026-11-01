@@ -49,8 +49,8 @@ def _child(theme: str) -> None:
     snap._patch_toplevel_mapping()
     snap._stub_terminal_io()
 
-    from ssh_manager import gtk_app
-    from ssh_manager.gtkui.theme.loader import ThemeMode, get_theme_manager
+    from ophion import gtk_app
+    from ophion.gtkui.theme.loader import ThemeMode, get_theme_manager
 
     app = gtk_app.SSHManagerApplication(snap._SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
@@ -184,7 +184,7 @@ class SidebarCssLintTests(unittest.TestCase):
                 yield sidebar, value.strip()
 
     def test_sidebar_backgrounds_use_tokens(self) -> None:
-        from ssh_manager.gtkui.theme import css_dark, css_light
+        from ophion.gtkui.theme import css_dark, css_light
 
         for module in (css_dark, css_light):
             css = module.css(animations=True)
@@ -197,7 +197,7 @@ class SidebarCssLintTests(unittest.TestCase):
     def test_sidebar_chain_is_explicit(self) -> None:
         """The nodes between the pane and the rows each get the surface token."""
 
-        from ssh_manager.gtkui.theme import css_light
+        from ophion.gtkui.theme import css_light
 
         css = re.sub(r"/\*.*?\*/", "", css_light.css(animations=True), flags=re.S)
         covered = set()

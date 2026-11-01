@@ -10,8 +10,8 @@ from tests.test_tunnels_ui import TunnelsUiCase
 
 class ExportImportTests(unittest.TestCase):
     def test_native_export_and_import_keep_forwards(self) -> None:
-        from ssh_manager.exporters.native import ExportReport, audit_metadata
-        from ssh_manager.importers.native import read_native
+        from ophion.exporters.native import ExportReport, audit_metadata
+        from ophion.importers.native import read_native
 
         from tests.test_native_import import document, group, host, raw
 
@@ -32,7 +32,7 @@ class HostDialogPageTests(TunnelsUiCase):
         return dialog
 
     def test_page_is_built_lazily_and_saves_forwards(self) -> None:
-        from ssh_manager.tunnels.model import forwards_from_metadata
+        from ophion.tunnels.model import forwards_from_metadata
 
         existing = self.forward(name="kept")
         self.controller.save(self.host, [existing])
@@ -56,7 +56,7 @@ class HostDialogPageTests(TunnelsUiCase):
         self.assertFalse(dialog.layout.page_visible("forwarding"))
 
     def test_raw_ssh_options_are_shown_and_importable(self) -> None:
-        from ssh_manager.gtkui.dialogs.forwards_page import ForwardsPage
+        from ophion.gtkui.dialogs.forwards_page import ForwardsPage
 
         options = {"LocalForward": "8080 db:5432", "DynamicForward": "garbage here"}
         page = ForwardsPage(None, [], host_id="h", ssh_options=lambda: options)
@@ -72,7 +72,7 @@ class HostDialogPageTests(TunnelsUiCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class SessionAndAppTests(TunnelsUiCase):
     def test_with_session_starts_beside_the_terminal_and_stops_with_the_last_tab(self) -> None:
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         forward = self.forward(auto_start_with_session=True)
         manual = self.forward(name="manual")

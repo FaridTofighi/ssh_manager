@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.password_store import PasswordStore
+from ophion.config import HostEntry
+from ophion.password_store import PasswordStore
 
 
 class PasswordStoreTests(unittest.TestCase):
@@ -35,12 +35,12 @@ class PasswordStoreTests(unittest.TestCase):
             store = PasswordStore(path)
             store.set(host, "old")
 
-            with mock.patch("ssh_manager.password_store.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.password_store.write_json_atomic", side_effect=OSError("disk full")):
                 with self.assertRaises(OSError):
                     store.set(host, "new")
             self.assertEqual(store.get(host), "old")
 
-            with mock.patch("ssh_manager.password_store.write_json_atomic", side_effect=OSError("disk full")):
+            with mock.patch("ophion.password_store.write_json_atomic", side_effect=OSError("disk full")):
                 with self.assertRaises(OSError):
                     store.delete(host)
             self.assertEqual(store.get(host), "old")

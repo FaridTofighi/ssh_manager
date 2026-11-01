@@ -1,9 +1,9 @@
 import unittest
 from pathlib import Path
 
-from ssh_manager.config import GroupConfig, HostEntry
-from ssh_manager.gtkui.constants import RowKind
-from ssh_manager.gtkui.controllers.tree_controller import (
+from ophion.config import GroupConfig, HostEntry
+from ophion.gtkui.constants import RowKind
+from ophion.gtkui.controllers.tree_controller import (
     TreeCallbacks,
     build_tree_rows,
     filter_host,
@@ -90,7 +90,7 @@ class TreeRowTests(unittest.TestCase):
         )
 
     def test_stage_named_groups_come_first_in_pipeline_order(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import group_sort_key
+        from ophion.gtkui.controllers.tree_controller import group_sort_key
 
         names = ["Zeta", "Development", "alpha", "Staging", "Production", "qa"]
         self.assertEqual(

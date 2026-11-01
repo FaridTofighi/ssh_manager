@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest import mock
 
-from ssh_manager.launcher import ConnectionLauncher, build_terminal_command
+from ophion.launcher import ConnectionLauncher, build_terminal_command
 
 
 class LauncherTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class LauncherTests(unittest.TestCase):
         launcher = ConnectionLauncher()
 
         with mock.patch.dict(os.environ, {"TERMINAL": "custom-term --profile ssh"}):
-            with mock.patch("ssh_manager.launcher.shutil.which") as which:
+            with mock.patch("ophion.launcher.shutil.which") as which:
                 which.side_effect = lambda program: "/usr/bin/custom-term" if program == "custom-term" else None
 
                 command = launcher._resolve_terminal_command(["ssh", "app"], "app")
@@ -48,7 +48,7 @@ class LauncherTests(unittest.TestCase):
     def test_terminal_override_does_not_require_path_lookup(self) -> None:
         launcher = ConnectionLauncher(terminal_override="missing-term --flag")
 
-        with mock.patch("ssh_manager.launcher.shutil.which", return_value=None):
+        with mock.patch("ophion.launcher.shutil.which", return_value=None):
             command = launcher._resolve_terminal_command(["ssh", "app"], "app")
 
         self.assertEqual(command, ["missing-term", "--flag", "-e", "ssh", "app"])

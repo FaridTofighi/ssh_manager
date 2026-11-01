@@ -5,8 +5,8 @@ import stat
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.secure_store import InMemoryKeyring, KeyringError, SecureStore, SecureStoreError
+from ophion.credentials import CredentialStore
+from ophion.secure_store import InMemoryKeyring, KeyringError, SecureStore, SecureStoreError
 
 
 def make_store(tmp_path: Path) -> CredentialStore:
@@ -146,7 +146,7 @@ class CredentialStoreTests(unittest.TestCase):
             path=self.base / "metadata_failing_credentials.json",
         )
 
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 store.add("prod", "alice", "secret")
 
@@ -156,7 +156,7 @@ class CredentialStoreTests(unittest.TestCase):
     def test_update_rolls_back_metadata_and_password_when_metadata_save_fails(self) -> None:
         cred = self.store.add("prod", "alice", "secret")
 
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.update(cred.id, "renamed", "bob", password="new")
 
@@ -171,7 +171,7 @@ class CredentialStoreTests(unittest.TestCase):
         cred = self.store.add("prod", "alice", "secret")
         self.store.bind_host("prod::hosts.conf::app", cred.id)
 
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.delete(cred.id)
 
@@ -179,7 +179,7 @@ class CredentialStoreTests(unittest.TestCase):
         self.assertEqual(self.store.binding_for_host("prod::hosts.conf::app"), cred.id)
         self.assertEqual(self.store.get_password(cred.id), "secret")
 
-        with mock.patch("ssh_manager.credentials.write_json_atomic", side_effect=OSError("disk full")):
+        with mock.patch("ophion.credentials.write_json_atomic", side_effect=OSError("disk full")):
             with self.assertRaises(SecureStoreError):
                 self.store.bind_host("prod::hosts.conf::app", None)
 

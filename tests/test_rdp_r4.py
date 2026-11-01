@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.gtk_main import parse_args, startup_target
-from ssh_manager.protocols.urls import cli_rdp_target, parse_connection_url
-from ssh_manager.rdp.rdpfile import encode_rdp, import_rdp
+from ophion.config import HostEntry
+from ophion.gtk_main import parse_args, startup_target
+from ophion.protocols.urls import cli_rdp_target, parse_connection_url
+from ophion.rdp.rdpfile import encode_rdp, import_rdp
 
 
 def _display() -> bool:
@@ -50,7 +50,7 @@ class UrlAndCliTests(unittest.TestCase):
         self.assertTrue(startup_target(*parse_args(["--rdp=-oProxy"]))[1])
 
     def test_main_refuses_bad_targets_before_starting_gtk(self) -> None:
-        from ssh_manager import gtk_main
+        from ophion import gtk_main
 
         with mock.patch.object(gtk_main, "SSHManagerApplication") as app:
             self.assertEqual(gtk_main.main(["--rdp", "bad host"]), 2)
@@ -59,7 +59,7 @@ class UrlAndCliTests(unittest.TestCase):
 
 class WakeOnLanSettingsTests(unittest.TestCase):
     def test_problems(self) -> None:
-        from ssh_manager.rdp.settings import RdpSettings
+        from ophion.rdp.settings import RdpSettings
 
         self.assertEqual(RdpSettings().problems(), [])  # off by default
         self.assertEqual(RdpSettings(wol_mac="AA:BB:CC:DD:EE:01", wol_broadcast="10.0.0.255").problems(), [])
@@ -74,7 +74,7 @@ class WakeOnLanSettingsTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class WakeOnLanDialogTests(unittest.TestCase):
     def test_fields_round_trip_and_validate(self) -> None:
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         host = HostEntry("win", {"hostname": "10.0.0.80"}, protocol="rdp", metadata={"rdp": {"v": 1}})
         dialog = HostDialog(None, host)
@@ -95,7 +95,7 @@ class WakeOnLanDialogTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class QuickConnectTests(unittest.TestCase):
     def test_quick_connect_rdp(self) -> None:
-        from ssh_manager.gtkui.controllers.session_controller import quick_connect_host
+        from ophion.gtkui.controllers.session_controller import quick_connect_host
 
         host = quick_connect_host("rdp://CORP%5Calice@10.0.0.50")
         self.assertEqual((host.protocol, host.option("user"), host.metadata), ("rdp", "CORP\\alice", {"rdp": {"v": 1}}))
@@ -171,8 +171,8 @@ class WindowTests(unittest.TestCase):
         labels = [item.label for section in self.win.tree.context_menu_spec() for item in section.items
                   if getattr(item, "visible", True)]
         self.assertIn("_Wake and Connect", labels)
-        with mock.patch("ssh_manager.gtkui.controllers.rdp_files.wake") as wake, \
-                mock.patch("ssh_manager.gtkui.controllers.rdp_files.GLib.timeout_add_seconds") as later:
+        with mock.patch("ophion.gtkui.controllers.rdp_files.wake") as wake, \
+                mock.patch("ophion.gtkui.controllers.rdp_files.GLib.timeout_add_seconds") as later:
             self.assertTrue(self.win.rdp_files.wake_and_connect())
         wake.assert_called_once_with("AA:BB:CC:DD:EE:03", "10.0.0.255")
         self.assertEqual(later.call_args.args[0], 0)

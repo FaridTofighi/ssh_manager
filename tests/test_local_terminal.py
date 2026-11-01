@@ -59,7 +59,7 @@ class LocalTerminalTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         for tab in list(self.tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
         pump(0.3)
 
@@ -72,7 +72,7 @@ class LocalTerminalTests(unittest.TestCase):
         return tab
 
     def shell(self, tab, command: str) -> str:
-        from ssh_manager.gtk_terminal import terminal_text
+        from ophion.gtk_terminal import terminal_text
 
         marker = f"DONE{time.monotonic_ns()}"
         tab._terminal.feed_child(f"{command}; echo {marker}\n".encode())
@@ -84,7 +84,7 @@ class LocalTerminalTests(unittest.TestCase):
         from gi.repository import Gtk  # type: ignore
 
         toplevels = len([w for w in Gtk.Window.list_toplevels() if w.get_visible()])
-        with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog") as prompt:
+        with mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog") as prompt:
             self.tabs._strip.new_button.clicked()
             self.win.lookup_action("new-local-tab").activate(None)
             self.tabs._placeholder  # the empty state offers it too (checked below)
@@ -136,14 +136,14 @@ class LocalTerminalTests(unittest.TestCase):
 
     def test_closing_asks_only_while_a_job_runs(self) -> None:
         tab = self.open()
-        with mock.patch("ssh_manager.gtkui.local_terminal.confirm") as ask:
+        with mock.patch("ophion.gtkui.local_terminal.confirm") as ask:
             self.tabs.close_tab(tab)
         ask.assert_not_called()
         self.assertNotIn(tab, self.tabs.tabs())
         busy = self.open()
         busy._terminal.feed_child(b"sleep 60\n")
         self.assertTrue(pump(5, until=busy.foreground_job_running))
-        with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=False) as ask:
             self.tabs.close_tab(busy)
         ask.assert_called_once()
         self.assertIn(busy, self.tabs.tabs())  # kept
@@ -160,7 +160,7 @@ class LocalTerminalTests(unittest.TestCase):
                         [p for p in shells if Path(f"/proc/{p}").exists()])
 
     def test_quick_connect_still_works(self) -> None:
-        with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog") as prompt:
+        with mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog") as prompt:
             prompt.return_value.ask.return_value = None
             prompt.return_value.run.return_value = 0
             items = self.tabs._strip.new_menu.get_children()
@@ -169,9 +169,9 @@ class LocalTerminalTests(unittest.TestCase):
         self.assertEqual(prompt.call_count, 2)
 
     def test_the_local_tab_has_everything_the_workspace_calls(self) -> None:
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
-        source = (ROOT / "ssh_manager" / "gtk_terminal.py").read_text()
+        source = (ROOT / "ophion" / "gtk_terminal.py").read_text()
         notebook = source[source.index("class TerminalNotebook"):]
         used = set(re.findall(r"\btab\.([a-zA-Z_][a-zA-Z0-9_]*)", notebook))
         host = self.win.tree.find_host_by_alias("web-01")
@@ -191,10 +191,10 @@ if __name__ == "__main__":
 @unittest.skipUnless(display_available(), "needs a display")
 class LocalShellPreferencesTests(unittest.TestCase):
     def test_preferences_edit_the_shared_settings(self) -> None:
-        from ssh_manager.gtkui.controllers.app_dialogs import AppDialogs
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.controllers.app_dialogs import AppDialogs
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         settings = AppSettings()
         shared = settings.local_shell

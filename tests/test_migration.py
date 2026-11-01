@@ -7,15 +7,15 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import keybox as K
-from ssh_manager import migration as MG
-from ssh_manager import unlock as U
-from ssh_manager.config import ConfigManager
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.macros import Macro, MacroStore
-from ssh_manager.master_auth import hash_master_password
-from ssh_manager.secure_store import EncryptedFileKeyring, FileKeyring, InMemoryKeyring, SecureStore
-from ssh_manager.settings import AppSettings
+from ophion import keybox as K
+from ophion import migration as MG
+from ophion import unlock as U
+from ophion.config import ConfigManager
+from ophion.credentials import CredentialStore
+from ophion.macros import Macro, MacroStore
+from ophion.master_auth import hash_master_password
+from ophion.secure_store import EncryptedFileKeyring, FileKeyring, InMemoryKeyring, SecureStore
+from ophion.settings import AppSettings
 
 from tests.gtk_window_fixture import display_available
 
@@ -101,7 +101,7 @@ class MigrationCase(unittest.TestCase):
         self.asked = []
 
     def flow(self, *, keyring="same", intro=True, current=OLD, new=("set", NEW), remove=True, fail_at=None):
-        from ssh_manager.gtkui.migration_flow import MigrationFlow
+        from ophion.gtkui.migration_flow import MigrationFlow
 
         ring = self.fx.keyring if keyring == "same" else keyring
         flow = MigrationFlow(self.fx.settings, self.fx.dir, self.fx.manager, keyring_factory=lambda: ring,
@@ -223,7 +223,7 @@ class MatrixTests(MigrationCase):
         self.assert_finished(result, {})
 
     def test_h_fresh_install_and_dont_save_passwords(self) -> None:
-        from ssh_manager.gtkui.unlock_flow import StartupFlow
+        from ophion.gtkui.unlock_flow import StartupFlow
 
         self.assertEqual(self.decision(), U.Startup.FIRST_RUN)
         flow = StartupFlow(self.fx.settings, self.fx.dir, keyring_factory=lambda: None)
@@ -245,7 +245,7 @@ class MatrixTests(MigrationCase):
                                       "web.internal:22:deploy": FILE_SECRET})
 
     def test_j_a_failure_after_each_step_loses_nothing_and_a_rerun_converges(self) -> None:
-        from ssh_manager.gtkui.unlock_flow import StartupFlow
+        from ophion.gtkui.unlock_flow import StartupFlow
 
         for step in MG.STEPS:
             with self.subTest(step=step):
@@ -274,7 +274,7 @@ class MatrixTests(MigrationCase):
     def test_j_disk_full_and_a_locked_keyring(self) -> None:
         self.fx.with_hash().with_keyring_secrets().with_encrypted_file()
         before = self.fx.snapshot()
-        with mock.patch("ssh_manager.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
+        with mock.patch("ophion.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
             result = self.flow().run()
         self.assertTrue(result.unfinished)
         self.assertEqual({k: v for k, v in self.fx.snapshot()["files"].items() if k in before["files"]},
@@ -347,7 +347,7 @@ class TamperingTests(MigrationCase):
     def test_no_secret_in_logs(self) -> None:
         self.fx.with_hash().with_keyring_secrets().with_encrypted_file().with_macros()
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             self.flow(fail_at="keep_old").run()
             self.flow(current="wrong").resume(K.Keybox.load(self.fx.dir / "keybox.json"), None)
             box = self.fx.unlocked()

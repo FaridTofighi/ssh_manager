@@ -1,4 +1,4 @@
-"""Start-up: what to do (``ssh_manager.unlock``) and the unlock flow (``gtkui/unlock_flow.py``) with fakes."""
+"""Start-up: what to do (``ophion.unlock``) and the unlock flow (``gtkui/unlock_flow.py``) with fakes."""
 
 import json
 import os
@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import keybox as K
-from ssh_manager import unlock as U
-from ssh_manager.secure_store import InMemoryKeyring
-from ssh_manager.settings import AppSettings
+from ophion import keybox as K
+from ophion import unlock as U
+from ophion.secure_store import InMemoryKeyring
+from ophion.settings import AppSettings
 
 from tests.gtk_window_fixture import display_available
 
@@ -110,7 +110,7 @@ class DecideTests(Case):
 @unittest.skipUnless(display_available(), "needs a display")
 class StartupFlowTests(Case):
     def flow(self, **answers):
-        from ssh_manager.gtkui import unlock_flow as F
+        from ophion.gtkui import unlock_flow as F
 
         ring = answers.pop("keyring", None)
         flow = F.StartupFlow(self.settings, self.dir, keyring_factory=lambda: ring)
@@ -212,8 +212,8 @@ class StartupFlowTests(Case):
 @unittest.skipUnless(display_available(), "needs a display")
 class DialogTests(Case):
     def test_recovery_dialog_wants_the_last_two_groups(self) -> None:
-        from ssh_manager.gtkui.dialogs.base import is_accept
-        from ssh_manager.gtkui.unlock_flow import RecoveryKeyDialog
+        from ophion.gtkui.dialogs.base import is_accept
+        from ophion.gtkui.unlock_flow import RecoveryKeyDialog
 
         dialog = RecoveryKeyDialog(None, "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH")
         self.addCleanup(dialog.destroy)
@@ -227,7 +227,7 @@ class DialogTests(Case):
     def test_unlock_dialog_in_a_thread(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.secrets import UnlockDialog
+        from ophion.gtkui.dialogs.secrets import UnlockDialog
 
         box = self.keybox()
         loaded = K.Keybox.load(box.path)
@@ -246,7 +246,7 @@ class DialogTests(Case):
         self.assertFalse(loaded.locked)
 
     def test_run_off_thread(self) -> None:
-        from ssh_manager.gtkui.unlock_flow import run_off_thread
+        from ophion.gtkui.unlock_flow import run_off_thread
 
         self.assertEqual(run_off_thread(lambda: os.getpid()), os.getpid())
         with self.assertRaises(ValueError):
@@ -258,7 +258,7 @@ class WindowStoreTests(unittest.TestCase):
     def test_keybox_and_passwords_off_choose_the_store(self) -> None:
         from tests.gtk_window_fixture import WindowSandbox
 
-        from ssh_manager.secure_store import DisabledSecureStore, EncryptedFileKeyring
+        from ophion.secure_store import DisabledSecureStore, EncryptedFileKeyring
 
         sandbox = WindowSandbox()
         self.addCleanup(sandbox.close)

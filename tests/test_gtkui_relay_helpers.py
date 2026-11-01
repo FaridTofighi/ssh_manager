@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.gtkui.health import compute_health
-from ssh_manager.gtkui.identity import user_initials
-from ssh_manager.gtkui.theme.tokens import ConnectionStatus, Level
-from ssh_manager.gtkui.workspaces import (
+from ophion.gtkui.health import compute_health
+from ophion.gtkui.identity import user_initials
+from ophion.gtkui.theme.tokens import ConnectionStatus, Level
+from ophion.gtkui.workspaces import (
     RECENT_LIMIT,
     WorkspaceKind,
     remember_workspace,

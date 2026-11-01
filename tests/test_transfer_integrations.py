@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.protocols.urls import ConnectionUrl, looks_like_url, parse_connection_url
-from ssh_manager.settings import AppSettings, FileTransferPreferences
-from ssh_manager.transfer.protolog import ConnectionLog, RotatingLogFile
+from ophion.config import HostEntry
+from ophion.protocols.urls import ConnectionUrl, looks_like_url, parse_connection_url
+from ophion.settings import AppSettings, FileTransferPreferences
+from ophion.transfer.protolog import ConnectionLog, RotatingLogFile
 from tests.fake_backend import FakeBackend
 
 
@@ -100,7 +100,7 @@ class ConnectionLogTests(unittest.TestCase):
         self.assertEqual(log.text(), "")
 
     def test_ring_buffer_is_bounded(self) -> None:
-        from ssh_manager.transfer import protolog
+        from ophion.transfer import protolog
 
         log = ConnectionLog()
         for i in range(protolog.MAX_LINES + 10):
@@ -138,7 +138,7 @@ class PreferencesModelTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class QuickConnectHostTests(unittest.TestCase):
     def test_quick_connect_host(self) -> None:
-        from ssh_manager.gtkui.controllers.session_controller import quick_connect_host
+        from ophion.gtkui.controllers.session_controller import quick_connect_host
 
         host = quick_connect_host("sftp://alice@10.0.0.5:2222/var/www")
         self.assertEqual((host.protocol, host.alias), ("sftp", "sftp://alice@10.0.0.5:2222/var/www"))
@@ -170,9 +170,9 @@ class WindowTests(unittest.TestCase):
         backend = FakeBackend({"/var/www/index.html": b"x", "/home/alice/a.txt": b"a"})
         notes = []
         before = len(self.win.manager.store.list_hosts())
-        with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog.ask",
+        with mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog.ask",
                         return_value="sftp://alice@10.0.0.5/var/www"), \
-                mock.patch("ssh_manager.transfer.factory.make_backend", return_value=backend), \
+                mock.patch("ophion.transfer.factory.make_backend", return_value=backend), \
                 mock.patch.object(self.win, "_notify", side_effect=lambda *a, **k: notes.append((a, k))):
             self.win.sessions.quick_connect()
             tab = self.win.terminal_tabs.current_tab()
@@ -195,8 +195,8 @@ class WindowTests(unittest.TestCase):
         def fake_init(dialog, *args, **kwargs):
             captured["validator"] = kwargs["validator"]
 
-        with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog.__init__", fake_init), \
-                mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog.ask", return_value=None):
+        with mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog.__init__", fake_init), \
+                mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog.ask", return_value=None):
             self.win.sessions.quick_connect()
         validate = captured["validator"]
         self.assertIn("password", validate("ftp://alice:pw@10.0.0.5"))
@@ -205,7 +205,7 @@ class WindowTests(unittest.TestCase):
         self.assertTrue(validate("gopher://x"))
 
     def test_files_for_an_ssh_host_is_an_sftp_view(self) -> None:
-        from ssh_manager.gtkui.controllers import context_menus
+        from ophion.gtkui.controllers import context_menus
 
         win = self.win
         win.manager.add_host("staging", "hosts.conf", HostEntry("web", {"hostname": "10.0.0.20", "user": "alice",
@@ -218,7 +218,7 @@ class WindowTests(unittest.TestCase):
         self.assertIn("Browse _Files (SFTP)", labels)
         before = [(h.id, h.protocol) for h in win.manager.store.list_hosts()]
         backend = FakeBackend({"/home/alice/a.txt": b"a"})
-        with mock.patch("ssh_manager.transfer.factory.make_backend", return_value=backend) as make:
+        with mock.patch("ophion.transfer.factory.make_backend", return_value=backend) as make:
             win.actions.open_files_selected()
             tab = win.terminal_tabs.current_tab()
             self.addCleanup(self.close_tabs)
@@ -237,7 +237,7 @@ class WindowTests(unittest.TestCase):
 @unittest.skipUnless(_display(), "needs a display")
 class PreferencesPageTests(unittest.TestCase):
     def test_file_transfer_page(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
 
         with tempfile.TemporaryDirectory() as tmp:
             settings = AppSettings(config_path=Path(tmp) / "settings.json")
@@ -261,9 +261,9 @@ class TabDiagnosticsTests(unittest.TestCase):
     """A real FTP login through the tab: the log pane and the protocol file never show the password."""
 
     def test_log_pane_copy_and_diagnostics(self) -> None:
-        from ssh_manager.auth_flow import PasswordResolution
-        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
-        from ssh_manager.transfer.state import BrowserState
+        from ophion.auth_flow import PasswordResolution
+        from ophion.gtkui.file_browser.tab import FileBrowserTab
+        from ophion.transfer.state import BrowserState
         from tests.fake_ftp import FakeFtpServer
 
         if os.environ.get("SSHM_SKIP_INTEGRATION") == "1":
@@ -281,7 +281,7 @@ class TabDiagnosticsTests(unittest.TestCase):
         log_path = Path(tmp.name) / "state" / "protocol.log"
         host = HostEntry("files", {"hostname": "127.0.0.1", "port": str(server.port), "user": "alice"},
                          protocol="ftp", id="h-files")
-        with mock.patch("ssh_manager.gtkui.file_browser.tab.default_log_path", return_value=log_path):
+        with mock.patch("ophion.gtkui.file_browser.tab.default_log_path", return_value=log_path):
             tab = FileBrowserTab(host, lambda *_a: None, app_settings=settings,
                                  password_provider=lambda: PasswordResolution("s3cret pass", "credential"),
                                  state=BrowserState(Path(tmp.name) / "fb.json"),

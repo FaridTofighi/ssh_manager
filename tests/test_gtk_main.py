@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from ssh_manager.gtk_main import parse_args
+from ophion.gtk_main import parse_args
 
 
 class GtkMainTests(unittest.TestCase):

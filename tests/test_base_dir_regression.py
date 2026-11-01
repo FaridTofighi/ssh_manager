@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import ConfigManager, HostEntry
+from ophion.config import ConfigManager, HostEntry
 
 
 class EmptyConfDTests(unittest.TestCase):
@@ -106,8 +106,8 @@ class FileWorkspaceWindowTests(unittest.TestCase):
 
     def test_use_folder_switches_and_the_action_runs(self) -> None:
         self.assertTrue(self.win.manager.read_only)
-        with mock.patch("ssh_manager.gtk_app.confirm", return_value=True) as asked, \
-                mock.patch("ssh_manager.gtkui.controllers.group_actions.prompt_text", return_value="prod", create=True), \
+        with mock.patch("ophion.gtk_app.confirm", return_value=True) as asked, \
+                mock.patch("ophion.gtkui.controllers.group_actions.prompt_text", return_value="prod", create=True), \
                 mock.patch.object(self.win.groups, "create_parent_group", wraps=self.win.groups.create_parent_group):
             self.assertTrue(self.win.ensure_editable_inventory())
         asked.assert_called_once()
@@ -117,7 +117,7 @@ class FileWorkspaceWindowTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(), self.before)
 
     def test_cancel_makes_the_action_a_no_op(self) -> None:
-        with mock.patch("ssh_manager.gtk_app.confirm", return_value=False), \
+        with mock.patch("ophion.gtk_app.confirm", return_value=False), \
                 mock.patch.object(self.win.manager, "create_parent_group") as create, \
                 mock.patch.object(self.win, "_notify_error") as error:
             self.win.groups.create_parent_group()

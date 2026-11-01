@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.tunnels import model as M
+from ophion.tunnels import model as M
 
 
 def fwd(**kw) -> M.Forward:
@@ -118,8 +118,8 @@ class SshOptionTests(unittest.TestCase):
 
 class StoreTests(unittest.TestCase):
     def test_forwards_survive_the_inventory_store(self) -> None:
-        from ssh_manager.inventory.manager import StoreConfigManager
-        from ssh_manager.inventory.store import InventoryStore, NewHost
+        from ophion.inventory.manager import StoreConfigManager
+        from ophion.inventory.store import InventoryStore, NewHost
 
         with tempfile.TemporaryDirectory() as tmp:
             store = InventoryStore(Path(tmp) / "inventory.db")

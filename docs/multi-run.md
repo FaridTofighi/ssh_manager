@@ -2,7 +2,7 @@
 
 Run one non-interactive command (or a small script) on many hosts at once,
 without opening a tab per host, and review the results in a table. Code:
-`ssh_manager/multirun/` (engine, report, safety, store; no GTK),
+`ophion/multirun/` (engine, report, safety, store; no GTK),
 `gtkui/controllers/multirun.py`, `gtkui/dialogs/multirun*.py`.
 
 **Broadcast is different:** broadcast mirrors what you *type* into sessions that
@@ -94,7 +94,7 @@ accept environment variables over SSH.
 
 - **Asks before running** on more than 5 hosts, and when the command contains a
   known dangerous pattern. The patterns are in one tuple,
-  `ssh_manager/multirun/safety.py` `DANGEROUS_PATTERNS`:
+  `ophion/multirun/safety.py` `DANGEROUS_PATTERNS`:
   - `rm -rf`, `mkfs`, `dd if=`, `shutdown`, `reboot`, `poweroff`, `halt`,
     `init 0`;
   - a fork bomb, `> /dev/sd…`;

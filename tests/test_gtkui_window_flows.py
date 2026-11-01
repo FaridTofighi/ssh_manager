@@ -59,7 +59,7 @@ class WindowFlowTests(unittest.TestCase):
     def test_open_session_status_reconnect_menu_and_copy_ssh(self) -> None:
         win = self.win
         win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.sessions.connect_selected()
         self.assertEqual(win.terminal_tabs.tab_count(), 1)
         tab = win.terminal_tabs.current_tab()
@@ -72,7 +72,7 @@ class WindowFlowTests(unittest.TestCase):
 
     def test_create_rename_delete_group_and_host_flows(self) -> None:
         win = self.win
-        with mock.patch("ssh_manager.gtkui.controllers.group_actions.GroupActions.prompt_child_destination"), \
+        with mock.patch("ophion.gtkui.controllers.group_actions.GroupActions.prompt_child_destination"), \
                 mock.patch.object(type(win), "_prompt_text", side_effect=["ops"]):
             win.groups.create_parent_group()
         self.assertIn("ops", win.manager.tree)
@@ -89,7 +89,7 @@ class WindowFlowTests(unittest.TestCase):
         self.assertNotIn("ops2", win.manager.tree)
 
     def test_edit_and_delete_host_through_dialog_fakes(self) -> None:
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         win = self.win
         win.tree.select_host("prod", "web.conf", "web-02")
@@ -129,9 +129,9 @@ class WindowFlowTests(unittest.TestCase):
         self.assertIn("details_expanded", saved)
 
     def test_settings_apply_and_inventory_refresh(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesValues
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import TerminalAppearanceSettings
+        from ophion.gtkui.dialogs.preferences import PreferencesValues
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import TerminalAppearanceSettings
 
         win = self.win
         values = PreferencesValues(
@@ -152,7 +152,7 @@ class WindowFlowTests(unittest.TestCase):
 
     def test_window_fits_minimum_width(self) -> None:
         win = self.win
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.tree.select_host("prod", "web.conf", "web-01")
             win.sessions.connect_selected()
             win.tree.select_host("prod", "web.conf", "web-02")
@@ -162,8 +162,8 @@ class WindowFlowTests(unittest.TestCase):
 
     def test_quick_connect_opens_adhoc_session(self) -> None:
         win = self.win
-        with mock.patch("ssh_manager.gtkui.dialogs.prompt.PromptDialog.ask", return_value="root@10.1.2.3:2200"), \
-                mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtkui.dialogs.prompt.PromptDialog.ask", return_value="root@10.1.2.3:2200"), \
+                mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.sessions.quick_connect()
         tab = win.terminal_tabs.current_tab()
         self.assertEqual(tab.host.option("hostname"), "10.1.2.3")
@@ -185,7 +185,7 @@ class TopBarTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_health_follows_unread_problems(self) -> None:
-        from ssh_manager.gtkui.theme.tokens import Level
+        from ophion.gtkui.theme.tokens import Level
 
         win = self.win
         self.assertEqual(win._header.health_text, "All systems operational")
@@ -223,8 +223,8 @@ class RelayTreeTests(unittest.TestCase):
         self.sandbox.close()
 
     def test_row_geometry_matches_reference(self) -> None:
-        from ssh_manager.gtkui.theme import density
-        from ssh_manager.gtkui.views.session_tree import row_geometry
+        from ophion.gtkui.theme import density
+        from ophion.gtkui.views.session_tree import row_geometry
 
         # One icon column per level: chevron, CHEVRON_GAP, icon, ICON_GAP, label (Phase 9).
         with density.using("comfortable"):
@@ -317,7 +317,7 @@ class HostPageTests(unittest.TestCase):
     def test_details_panel_shortcuts_and_focus_mode(self) -> None:
         from gi.repository import Gdk
 
-        from ssh_manager.gtkui.views.host_page import PanelPage
+        from ophion.gtkui.views.host_page import PanelPage
 
         win = self.win
         view = self.page.view
@@ -371,7 +371,7 @@ class HostPageTests(unittest.TestCase):
 
         win = self.win
         win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.sessions.connect_selected()
         view = self.page.view
         workspace = labels(win.terminal_tabs._strip) + labels(view.page_bar) + labels(view.header)
@@ -382,7 +382,7 @@ class HostPageTests(unittest.TestCase):
         win = self.win
         notebook = win.terminal_tabs
         win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.sessions.connect_selected()
             first = notebook.current_tab()
             win.sessions.duplicate_current_session()
@@ -426,7 +426,7 @@ class HostPageTests(unittest.TestCase):
         win = self.win
         notebook = win.terminal_tabs
         win.tree.select_host("prod", "web.conf", "web-01")
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             for _ in range(16):
                 win.sessions.connect_selected()
         self.assertEqual(len(notebook._strip.tabs()), 16)
@@ -445,7 +445,7 @@ class HostPageTests(unittest.TestCase):
     def test_host_bar_follows_the_active_session(self) -> None:
         win = self.win
         notebook = win.terminal_tabs
-        with mock.patch("ssh_manager.gtk_terminal.TerminalTab._spawn"):
+        with mock.patch("ophion.gtk_terminal.TerminalTab._spawn"):
             win.tree.select_host("prod", "web.conf", "web-01")
             win.sessions.connect_selected()
             web01 = notebook.current_tab()
@@ -489,7 +489,7 @@ class HostPageTests(unittest.TestCase):
 
     def test_latency_uses_cache_and_skips_proxied_hosts(self) -> None:
         win = self.win
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         proxied = HostEntry(alias="p", options={"hostname": "10.0.0.1", "proxyjump": "bastion"})
         self.assertIsNone(self.page.latency_key(proxied))
@@ -539,7 +539,7 @@ class WorkspaceStripTests(unittest.TestCase):
         self.assertTrue(notebook.toolbar_in_strip)
 
     def test_latency_preference_round_trip(self) -> None:
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
 
         win = self.win
         dialog = PreferencesDialog(win, win._theme_mode, 1.0, 11, win._settings, latency_probe=False)

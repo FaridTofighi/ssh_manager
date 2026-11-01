@@ -10,9 +10,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.importers.mobaxterm import (
+from ophion.config import HostEntry
+from ophion.credentials import CredentialStore
+from ophion.importers.mobaxterm import (
     NO_USERNAME,
     ConflictPolicy,
     CredentialMissingError,
@@ -34,10 +34,10 @@ from ssh_manager.importers.mobaxterm import (
     unique_name,
     verbatim_name,
 )
-from ssh_manager.inventory.manager import StoreConfigManager
-from ssh_manager.inventory.store import InventoryStore
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
-from ssh_manager.ssh_command import build_ssh_command
+from ophion.inventory.manager import StoreConfigManager
+from ophion.inventory.store import InventoryStore
+from ophion.secure_store import InMemoryKeyring, SecureStore, SecureStoreError
+from ophion.ssh_command import build_ssh_command
 from tests.mxt_synthetic import ACME, make_export, session_value
 
 
@@ -221,7 +221,7 @@ class FileErrorTests(unittest.TestCase):
             path.chmod(0o600)
 
     def test_size_cap(self) -> None:
-        with mock.patch("ssh_manager.importers.mobaxterm.MAX_FILE_BYTES", 100):
+        with mock.patch("ophion.importers.mobaxterm.MAX_FILE_BYTES", 100):
             self.assertFileError(ACME.encode(), "too_large")
             path = self.root / "big.mxtsessions"
             path.write_bytes(ACME.encode())
@@ -602,7 +602,7 @@ class CommitTests(StoreTestCase):
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
     def test_legacy_inventory_is_refused(self) -> None:
-        from ssh_manager.config import ConfigManager
+        from ophion.config import ConfigManager
 
         with self.assertRaises(TypeError):
             ExistingInventory.from_manager(ConfigManager(self.root / "folder"))

@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import legacy_paths as L
+from ophion import legacy_paths as L
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "pre_rename"
 PASSWORD = "pre-rename-master"
@@ -54,10 +54,10 @@ class LegacyCase(unittest.TestCase):
     def populate(self, hosts: int = HOSTS) -> str:
         """The old folders as SSH Manager left them; returns a digest of the inventory's hosts."""
 
-        from ssh_manager.credentials import CredentialStore
-        from ssh_manager.inventory.store import InventoryStore, NewHost
-        from ssh_manager.keybox import Keybox
-        from ssh_manager.secure_store import SecureStore
+        from ophion.credentials import CredentialStore
+        from ophion.inventory.store import InventoryStore, NewHost
+        from ophion.keybox import Keybox
+        from ophion.secure_store import SecureStore
 
         config, data, state = self.old("config"), self.old("data"), self.old("state")
         for folder in (config, data, state):
@@ -93,12 +93,12 @@ class LegacyCase(unittest.TestCase):
     def assert_app_reads_everything(self, inventory_digest: str) -> None:
         """Settings, keybox, saved passwords, credentials, macros and the inventory, where the code looks."""
 
-        from ssh_manager.credentials import CredentialStore
-        from ssh_manager.inventory.store import InventoryStore, default_inventory_path
-        from ssh_manager.keybox import Keybox, default_keybox_path
-        from ssh_manager.macros import MacroStore, default_macros_path
-        from ssh_manager.secure_store import SecureStore
-        from ssh_manager.settings import AppSettings
+        from ophion.credentials import CredentialStore
+        from ophion.inventory.store import InventoryStore, default_inventory_path
+        from ophion.keybox import Keybox, default_keybox_path
+        from ophion.macros import MacroStore, default_macros_path
+        from ophion.secure_store import SecureStore
+        from ophion.settings import AppSettings
 
         settings = AppSettings.load()
         self.assertEqual(settings.host_key_policy, "auto-add")
@@ -230,7 +230,7 @@ class MigrationTests(LegacyCase):
         self.assertEqual(result.status, L.FAILED)
         self.assertTrue(L.using_legacy_dirs())
         self.assertEqual(L.app_dir("config"), self.old("config"))
-        from ssh_manager.settings import AppSettings
+        from ophion.settings import AppSettings
 
         self.assertEqual(Path(AppSettings.load().config_path).parent, self.old("config"))  # never empty
         for kind in L.KINDS:
@@ -246,8 +246,8 @@ class NoticeTests(LegacyCase):
 
         if not display_available():
             self.skipTest("needs a display")
-        from ssh_manager.gtk_app import migration_notice
-        from ssh_manager.gtkui.theme.tokens import Level
+        from ophion.gtk_app import migration_notice
+        from ophion.gtkui.theme.tokens import Level
 
         copied = L.MigrationResult(L.COPIED, [L.Moved("config", self.old("config"), self.new("config"), "copy"),
                                               L.Moved("data", self.old("data"), self.new("data"), "copy")])
@@ -267,7 +267,7 @@ class NoticeTests(LegacyCase):
 
         if not display_available():
             self.skipTest("needs a display")
-        from ssh_manager import gtk_main
+        from ophion import gtk_main
 
         shown = []
         with mock.patch.object(L, "migrate", lambda: L.MigrationResult(L.BLOCKED)), \

@@ -1,7 +1,7 @@
 import hashlib
 import unittest
 
-from ssh_manager.master_auth import (
+from ophion.master_auth import (
     hash_master_password,
     master_hash_needs_upgrade,
     verify_master_password,

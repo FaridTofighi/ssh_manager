@@ -219,7 +219,7 @@ def _patch_toplevel_mapping() -> None:
 def _stub_terminal_io() -> None:
     """Replace network-bound terminal behaviour with deterministic fakes."""
 
-    from ssh_manager import gtk_terminal
+    from ophion import gtk_terminal
 
     def fake_fetch(tab) -> None:
         GLib.idle_add(tab._apply_stats_result, dict(FAKE_STATS))
@@ -360,7 +360,7 @@ def capture_popovers(window, path: Path) -> None:
 
     import cairo
 
-    from ssh_manager.gtkui.theme.loader import current_palette
+    from ophion.gtkui.theme.loader import current_palette
 
     header = window._header
     offscreen = Gtk.OffscreenWindow()
@@ -683,7 +683,7 @@ def prepare_relay_match(window) -> None:
 
     import time
 
-    from ssh_manager.gtkui.constants import TreeColumn
+    from ophion.gtkui.constants import TreeColumn
 
     window._header.set_show_close_button(False)
     window._header.set_user_initials("AF")
@@ -714,10 +714,10 @@ def render_tree_icon_sheet(path: Path, tree_crops: dict) -> None:
     import cairo
     from gi.repository import Gdk, Pango, PangoCairo
 
-    from ssh_manager.gtkui.constants import Icons
-    from ssh_manager.gtkui.theme.tokens import DARK, LIGHT
-    from ssh_manager.gtkui.tree_icons import status_badge
-    from ssh_manager.gtkui.widgets.icons import render_tree_icon
+    from ophion.gtkui.constants import Icons
+    from ophion.gtkui.theme.tokens import DARK, LIGHT
+    from ophion.gtkui.tree_icons import status_badge
+    from ophion.gtkui.widgets.icons import render_tree_icon
 
     width, height = 1960, 1240
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
@@ -833,8 +833,8 @@ def _make_window(app, base: Path, prefer_dark: bool, density: str = "", *, expan
 
     import json
 
-    from ssh_manager.gtk_app import SSHManagerWindow
-    from ssh_manager.settings import AppSettings
+    from ophion.gtk_app import SSHManagerWindow
+    from ophion.settings import AppSettings
 
     settings = AppSettings.load()
     ui_state = base / ".ui_state.json"
@@ -854,8 +854,8 @@ def make_window_with_mode(app, base: Path, theme_mode: str, density: str = "", *
 
     import json
 
-    from ssh_manager.gtk_app import SSHManagerWindow
-    from ssh_manager.settings import AppSettings
+    from ophion.gtk_app import SSHManagerWindow
+    from ophion.settings import AppSettings
 
     (base / ".ui_state.json").write_text(
         json.dumps({"theme_mode": theme_mode, "density": density or snapshot_density()}), encoding="utf-8"
@@ -872,7 +872,7 @@ def make_window_with_mode(app, base: Path, theme_mode: str, density: str = "", *
 def set_desktop_color_scheme(dark: bool) -> None:
     """Change ``org.gnome.desktop.interface color-scheme`` (use with GSETTINGS_BACKEND=memory)."""
 
-    from ssh_manager.gtkui.theme.loader import _interface_settings
+    from ophion.gtkui.theme.loader import _interface_settings
 
     settings = _interface_settings()
     if settings is not None:
@@ -960,8 +960,8 @@ def sidebar_surface_child(out_dir: Path, theme: str) -> None:
     _pin_resolution()
     _patch_toplevel_mapping()
     _stub_terminal_io()
-    from ssh_manager import gtk_app
-    from ssh_manager.gtkui.theme.loader import get_theme_manager
+    from ophion import gtk_app
+    from ophion.gtkui.theme.loader import get_theme_manager
 
     app = gtk_app.SSHManagerApplication(_SANDBOX / "inventory")
     app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
@@ -995,7 +995,7 @@ def run(out_dir: Path) -> None:
     _patch_toplevel_mapping()
     _stub_terminal_io()
 
-    from ssh_manager import gtk_app
+    from ophion import gtk_app
 
     app = gtk_app.SSHManagerApplication(_SANDBOX / "inventory")
     # Never talk to (or become) a running SSH Manager instance.
@@ -1133,11 +1133,11 @@ def run(out_dir: Path) -> None:
 
             import json
 
-            from ssh_manager.config import HostEntry
-            from ssh_manager.gtk_app import SSHManagerWindow
-            from ssh_manager.inventory.manager import StoreConfigManager
-            from ssh_manager.inventory.store import InventoryStore
-            from ssh_manager.settings import AppSettings
+            from ophion.config import HostEntry
+            from ophion.gtk_app import SSHManagerWindow
+            from ophion.inventory.manager import StoreConfigManager
+            from ophion.inventory.store import InventoryStore
+            from ophion.settings import AppSettings
 
             folder = _SANDBOX / f"store-{theme}"
             folder.mkdir(parents=True, exist_ok=True)
@@ -1190,19 +1190,19 @@ def run(out_dir: Path) -> None:
         def _import_wizard(dark=dark, theme=theme) -> None:
             """The MobaXterm import wizard, one image per step (synthetic export, no real data)."""
 
-            from ssh_manager.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.dialogs.mobaxterm_import import RESPONSE_NEXT, MobaXtermImportDialog
+            from ophion.gtkui.theme import density
             from tests.mxt_synthetic import ACME
 
             export = _SANDBOX / "acme.mxtsessions"
             export.write_bytes(ACME.encode("utf-8"))
             import json
 
-            from ssh_manager.gtk_app import SSHManagerWindow
-            from ssh_manager.inventory.manager import StoreConfigManager
-            from ssh_manager.inventory.openssh import commit_openssh_import, plan_openssh_import
-            from ssh_manager.inventory.store import InventoryStore
-            from ssh_manager.settings import AppSettings
+            from ophion.gtk_app import SSHManagerWindow
+            from ophion.inventory.manager import StoreConfigManager
+            from ophion.inventory.openssh import commit_openssh_import, plan_openssh_import
+            from ophion.inventory.store import InventoryStore
+            from ophion.settings import AppSettings
 
             # A fresh app inventory per theme (the scene imports into it), seeded with the sample hosts.
             folder = _SANDBOX / f"import-store-{theme}"
@@ -1298,7 +1298,7 @@ def run(out_dir: Path) -> None:
         def _host_panel(page=page) -> None:
             """The host panel (slide-over) over a live session."""
 
-            from ssh_manager.gtkui.views.host_page import PanelPage
+            from ophion.gtkui.views.host_page import PanelPage
 
             window = _make_window(app, density_base, True, snapshot_density("compact"))
             _density_scene(window, True)
@@ -1483,7 +1483,7 @@ def run(out_dir: Path) -> None:
     def _dialog_scenario(name: str, factory: Callable[[object], Gtk.Dialog], size: tuple[int, int] = (0, 0)) -> None:
         @scenario(name)
         def _run() -> None:
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.theme import density
 
             window = _make_window(app, base, True)
             dialog = factory(window)
@@ -1492,13 +1492,13 @@ def run(out_dir: Path) -> None:
             capture_dialog(dialog, out_dir / f"{name}.png", *(int(round(v * scale)) for v in size))
             window.destroy()
 
-    from ssh_manager.gtkui.theme.tokens import Level  # noqa: E402
-    from ssh_manager.gtk_app import (  # noqa: E402
+    from ophion.gtkui.theme.tokens import Level  # noqa: E402
+    from ophion.gtk_app import (  # noqa: E402
         CredentialManagerDialog,
         HostDialog,
         PreferencesDialog,
     )
-    from ssh_manager.config_viewer import ConfigViewerDialog
+    from ophion.config_viewer import ConfigViewerDialog
 
     def host_dialog(window) -> Gtk.Dialog:
         host = _first_host(window)
@@ -1522,7 +1522,7 @@ def run(out_dir: Path) -> None:
     def host_password_dialog(window, saved: bool = True) -> Gtk.Dialog:
         """Credentials page with "a password specific to this host" (synthetic credentials, no secret)."""
 
-        from ssh_manager.credentials import Credential
+        from ophion.credentials import Credential
 
         host = _first_host(window)
         shared = Credential("snap-shared", "Ops team", "ops")
@@ -1545,7 +1545,7 @@ def run(out_dir: Path) -> None:
     def host_transfer_dialog(window) -> Gtk.Dialog:
         """The File transfer page of an FTPS host (synthetic address)."""
 
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         host = HostEntry("files-01", {"hostname": "10.0.0.20", "user": "alice"}, protocol="ftps",
                          metadata={"transfer": {"v": 1, "initial_remote_dir": "/srv/data"}})
@@ -1557,7 +1557,7 @@ def run(out_dir: Path) -> None:
     for dark in (False, True):
         @scenario(f"dialog-host-transfer-{'dark' if dark else 'light'}")
         def _host_transfer(dark=dark) -> None:
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.theme import density
 
             window = _make_window(app, base, dark)
             dialog = host_transfer_dialog(window)
@@ -1570,7 +1570,7 @@ def run(out_dir: Path) -> None:
     def _rdp_report():
         """A synthetic engine report: FreeRDP 3.15 found, no gtk-frdp, X11 (never the real computer's)."""
 
-        from ssh_manager.rdp.engines import (ClientBinary, EngineReport, Platform, build_engines, choose_engine,
+        from ophion.rdp.engines import (ClientBinary, EngineReport, Platform, build_engines, choose_engine,
                                              parse_help_options)
 
         options = parse_help_options((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
@@ -1583,8 +1583,8 @@ def run(out_dir: Path) -> None:
     def host_rdp_dialog(window, page: str) -> Gtk.Dialog:
         """An RDP host's pages (synthetic address, domain and shared folder)."""
 
-        from ssh_manager.config import HostEntry
-        from ssh_manager.rdp import engines
+        from ophion.config import HostEntry
+        from ophion.rdp import engines
 
         engines.store_report(_rdp_report())
         host = HostEntry("win-01", {"hostname": "10.0.0.50", "user": "CORP\\alice"}, protocol="rdp",
@@ -1602,7 +1602,7 @@ def run(out_dir: Path) -> None:
 
             @scenario(name)
             def _host_rdp(dark=dark, page=page, name=name) -> None:
-                from ssh_manager.gtkui.theme import density
+                from ophion.gtkui.theme import density
 
                 window = _make_window(app, base, dark)
                 dialog = host_rdp_dialog(window, page)
@@ -1613,7 +1613,7 @@ def run(out_dir: Path) -> None:
 
     @scenario("dialog-host-rdp-compact")
     def _host_rdp_compact() -> None:
-        from ssh_manager.gtkui.theme import density
+        from ophion.gtkui.theme import density
 
         window = _make_window(app, base, False, "compact")
         dialog = host_rdp_dialog(window, "rdp")
@@ -1627,8 +1627,8 @@ def run(out_dir: Path) -> None:
 
         @scenario(name)
         def _rdp_diagnostics(dark=dark, name=name) -> None:
-            from ssh_manager.gtkui.dialogs.rdp_diagnostics import RdpDiagnosticsDialog
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.dialogs.rdp_diagnostics import RdpDiagnosticsDialog
+            from ophion.gtkui.theme import density
 
             window = _make_window(app, base, dark)
             dialog = RdpDiagnosticsDialog(window, report=_rdp_report())
@@ -1645,7 +1645,7 @@ def run(out_dir: Path) -> None:
     for dark in (False, True):
         @scenario(f"dialog-settings-remote-desktop-{'dark' if dark else 'light'}")
         def _settings_rdp(dark=dark) -> None:
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.theme import density
 
             window = _make_window(app, base, dark)
             dialog = PreferencesDialog(window, True, 1.0, 11, window._settings)
@@ -1659,7 +1659,7 @@ def run(out_dir: Path) -> None:
     for dark in (False, True):
         @scenario(f"dialog-settings-file-transfer-{'dark' if dark else 'light'}")
         def _settings_transfer(dark=dark) -> None:
-            from ssh_manager.gtkui.theme import density
+            from ophion.gtkui.theme import density
 
             window = _make_window(app, base, dark)
             dialog = settings_transfer_dialog(window)
@@ -1675,7 +1675,7 @@ def run(out_dir: Path) -> None:
 
             @scenario(name)
             def _host_password(dark=dark, saved=saved, name=name) -> None:
-                from ssh_manager.gtkui.theme import density
+                from ophion.gtkui.theme import density
 
                 window = _make_window(app, base, dark)
                 dialog = host_password_dialog(window, saved)
@@ -1686,15 +1686,15 @@ def run(out_dir: Path) -> None:
     def password_retry_dialog(window) -> Gtk.Dialog:
         """After "Permission denied" (synthetic host; no password)."""
 
-        from ssh_manager.auth_flow import PasswordRequest, source_phrase
-        from ssh_manager.gtkui.dialogs.password import PasswordRequestDialog
+        from ophion.auth_flow import PasswordRequest, source_phrase
+        from ophion.gtkui.dialogs.password import PasswordRequestDialog
 
         request = PasswordRequest("web-01", "alice@10.0.0.10:22", 2, rejected=source_phrase("credential", "Ops team"))
         return PasswordRequestDialog(window, request, lambda _password: None)
 
     def password_save_dialog(window) -> Gtk.Dialog:
-        from ssh_manager.auth_flow import SaveContext, SaveOffer
-        from ssh_manager.gtkui.dialogs.password import SavePasswordDialog
+        from ophion.auth_flow import SaveContext, SaveOffer
+        from ophion.gtkui.dialogs.password import SavePasswordDialog
 
         return SavePasswordDialog(window, SaveOffer("web-01", True, SaveContext(credential_name="Ops team")),
                                   lambda _decision: None)
@@ -1706,7 +1706,7 @@ def run(out_dir: Path) -> None:
 
             @scenario(name)
             def _password_dialog(dark=dark, factory=factory, name=name, size=size) -> None:
-                from ssh_manager.gtkui.theme import density
+                from ophion.gtkui.theme import density
 
                 window = _make_window(app, base, dark)
                 dialog = factory(window)
@@ -1720,9 +1720,9 @@ def run(out_dir: Path) -> None:
 
         import tempfile
 
-        from ssh_manager.config import HostEntry
-        from ssh_manager.gtkui.file_browser.tab import FileBrowserTab
-        from ssh_manager.transfer.state import BrowserState
+        from ophion.config import HostEntry
+        from ophion.gtkui.file_browser.tab import FileBrowserTab
+        from ophion.transfer.state import BrowserState
         from tests.fake_backend import FakeBackend
 
         files = {f"/srv/data/{name}": b"x" * size for name, size in (
@@ -1747,9 +1747,9 @@ def run(out_dir: Path) -> None:
     def _show_transfers(window) -> None:
         """Three synthetic jobs in the panel: running, paused, failed."""
 
-        from ssh_manager.transfer.backend import RemoteEntry
-        from ssh_manager.transfer.engine import Direction, Endpoint, State, TransferItem, TransferJob
-        from ssh_manager.transfer.local import LocalBackend
+        from ophion.transfer.backend import RemoteEntry
+        from ophion.transfer.engine import Direction, Endpoint, State, TransferItem, TransferJob
+        from ophion.transfer.local import LocalBackend
 
         tab = window.terminal_tabs.current_tab()
         local = Endpoint("local", LocalBackend, local=True)
@@ -1805,11 +1805,11 @@ def run(out_dir: Path) -> None:
     def _rdp_session_scene(window, state: str) -> None:
         """An RDP session card (external FreeRDP window) in one state; nothing is started."""
 
-        from ssh_manager.config import HostEntry
-        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
-        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
-        from ssh_manager.gtkui.theme.tokens import ConnectionStatus
-        from ssh_manager.trust import TrustStore
+        from ophion.config import HostEntry
+        from ophion.gtkui.rdp.runtime import RdpRuntime
+        from ophion.gtkui.rdp.tab import RdpSessionTab
+        from ophion.gtkui.theme.tokens import ConnectionStatus
+        from ophion.trust import TrustStore
         import tempfile
 
         tmp = Path(tempfile.mkdtemp(prefix="sshm-snap-rdp-"))
@@ -1832,14 +1832,14 @@ def run(out_dir: Path) -> None:
             tab._set_status(ConnectionStatus.CONNECTING, "Connection lost: The connection to the server failed. "
                             "Reconnecting… (attempt 2 of 5)")
         elif state == "embedded":
-            from ssh_manager.rdp.engines import ENGINE_LABELS, Engine, binary_capabilities, ClientBinary
-            from ssh_manager.rdp.engines import parse_help_options as parse
+            from ophion.rdp.engines import ENGINE_LABELS, Engine, binary_capabilities, ClientBinary
+            from ophion.rdp.engines import parse_help_options as parse
 
             options = parse((ROOT / "tests" / "fixtures" / "freerdp" / "help-3.15.txt").read_text())
             client = ClientBinary("xfreerdp3", "/usr/bin/xfreerdp3", (3, 15, 0), "3.15.0", options)
             tab.engine = Engine("xfreerdp-embed", ENGINE_LABELS["xfreerdp-embed"], True, binary=client,
                                 capabilities=binary_capabilities(client, embedded=True))
-            from ssh_manager.gtkui.rdp.display import Surface
+            from ophion.gtkui.rdp.display import Surface
 
             tab._surface_factory = lambda _engine: Surface()  # offscreen rendering has no X window for a Gtk.Socket
             tab._install_surface(tab.engine)

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.config import HostEntry
+from ophion.config import HostEntry
 
 
 def _display() -> bool:
@@ -38,7 +38,7 @@ def _pump_until(predicate, timeout=10.0) -> bool:
 @unittest.skipUnless(_display(), "needs a display")
 class TransferPageTests(unittest.TestCase):
     def dialog(self, host=None, **kwargs):
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         dialog = HostDialog(None, host, metadata=host.metadata if host else {}, **kwargs)
         self.addCleanup(dialog.destroy)
@@ -77,16 +77,16 @@ class TransferPageTests(unittest.TestCase):
         dialog = self.dialog()
         dialog.protocol_combo.set_active_id("ftps")
         page = dialog.transfer_page
-        with mock.patch("ssh_manager.gtkui.dialogs.transfer_page.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.dialogs.transfer_page.confirm", return_value=False) as ask:
             page.tls_verify.set_active_id("insecure")
         self.assertEqual(page.tls_verify.get_active_id(), "system")
-        with mock.patch("ssh_manager.gtkui.dialogs.transfer_page.confirm", return_value=True):
+        with mock.patch("ophion.gtkui.dialogs.transfer_page.confirm", return_value=True):
             page.tls_verify.set_active_id("insecure")
         self.assertEqual(page.tls_verify.get_active_id(), "insecure")
         ask.assert_called_once()
 
     def test_anonymous_needs_no_credential(self) -> None:
-        from ssh_manager.credentials import Credential
+        from ophion.credentials import Credential
 
         dialog = self.dialog(credentials=[Credential("c1", "Ops", "ops")], selected_credential_id="c1")
         dialog.protocol_combo.set_active_id("ftp")
@@ -141,8 +141,8 @@ class TestConnectionTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
 
     def dialog(self, password="s3cret pass"):
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
-        from ssh_manager.transfer.factory import make_backend
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.transfer.factory import make_backend
 
         dialog = HostDialog(None, None, transfer_backend_factory=lambda host, _cred: make_backend(
             host, "alice", password))
@@ -161,7 +161,7 @@ class TestConnectionTests(unittest.TestCase):
         return page.last_test
 
     def test_untrusted_certificate_is_reported_and_never_pinned(self) -> None:
-        from ssh_manager.transfer.pins import PinStore
+        from ophion.transfer.pins import PinStore
 
         ok, text = self.run_test(self.dialog())
         self.assertFalse(ok)

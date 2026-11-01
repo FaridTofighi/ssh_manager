@@ -1,8 +1,8 @@
 # Port forwarding (tunnels)
 
 Ophion runs SSH port forwards for you: per host, started and stopped on
-their own, with a status for each. Code: `ssh_manager/tunnels/model.py`
-(forwards, validation), `ssh_manager/tunnels/engine.py` (the Paramiko engine,
+their own, with a status for each. Code: `ophion/tunnels/model.py`
+(forwards, validation), `ophion/tunnels/engine.py` (the Paramiko engine,
 no GTK), `gtkui/controllers/tunnels.py`, `gtkui/dialogs/tunnels.py`,
 `gtkui/dialogs/forwards_page.py`.
 

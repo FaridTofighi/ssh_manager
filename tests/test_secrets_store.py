@@ -10,9 +10,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import keybox as K
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.secure_store import (
+from ophion import keybox as K
+from ophion.credentials import CredentialStore
+from ophion.secure_store import (
     DisabledSecureStore,
     EncryptedFileKeyring,
     KeyringError,
@@ -89,7 +89,7 @@ class SecretsStoreTests(StoreCase):
         store = self.store()
         store.set("h", 22, "u", "first")
         before = self.path.read_bytes()
-        with mock.patch("ssh_manager.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
+        with mock.patch("ophion.persistence.write_bytes_private", side_effect=OSError(28, "No space")):
             with self.assertRaises(SecureStoreError):
                 store.set("h", 22, "u", "second")
         self.assertEqual(self.path.read_bytes(), before)
@@ -135,7 +135,7 @@ class SecretsStoreTests(StoreCase):
 
     def test_no_secret_in_logs(self) -> None:
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             store = self.store()
             store.set("h", 22, "u", SECRET)
             store.get("h", 22, "u")

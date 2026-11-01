@@ -22,8 +22,8 @@ if [ "${SSHM_APPIMAGE_IN_CONTAINER:-}" != "1" ] && [ ! -x /opt/appimage/appimage
     ENGINE="${CONTAINER_ENGINE:-$(command -v docker || command -v podman || true)}"
     [ -n "$ENGINE" ] || die "docker or podman is needed (or run this script inside the build container)"
     git -C "$REPO" rev-parse HEAD >/dev/null 2>&1 || die "not a git checkout: $REPO"
-    if [ -n "$(git -C "$REPO" status --porcelain -- main.py ssh_manager)" ]; then
-        log "note: uncommitted changes in main.py / ssh_manager are NOT packaged (the build uses HEAD)"
+    if [ -n "$(git -C "$REPO" status --porcelain -- main.py ophion)" ]; then
+        log "note: uncommitted changes in main.py / ophion are NOT packaged (the build uses HEAD)"
     fi
     VERSION="${VERSION:-git$(git -C "$REPO" rev-list --count HEAD).$(git -C "$REPO" rev-parse --short=7 HEAD)}"
     OUT="${OUT:-$REPO/dist}"
@@ -31,7 +31,7 @@ if [ "${SSHM_APPIMAGE_IN_CONTAINER:-}" != "1" ] && [ ! -x /opt/appimage/appimage
     mkdir -p "$OUT" "$CACHE"
     STAGE="$(mktemp -d)"
     trap 'rm -rf "$STAGE"' EXIT
-    git -C "$REPO" archive --format=tar HEAD -- main.py ssh_manager > "$STAGE/src.tar"
+    git -C "$REPO" archive --format=tar HEAD -- main.py ophion > "$STAGE/src.tar"
     log "build image $IMAGE"
     "$ENGINE" build -f "$HERE/Dockerfile.build" -t "$IMAGE" "$HERE"
     log "build the AppImage (version $VERSION)"
@@ -50,7 +50,7 @@ fi
 PACKAGING="$HERE"
 VERSION="${VERSION:-dev}"
 OUT="${OUT:-/out}"
-SRC_TAR="${SRC_TAR:?SRC_TAR: a tar of main.py and ssh_manager/ (git archive HEAD -- main.py ssh_manager)}"
+SRC_TAR="${SRC_TAR:?SRC_TAR: a tar of main.py and ophion/ (git archive HEAD -- main.py ophion)}"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}"
 export SOURCE_DATE_EPOCH PIP_DEFAULT_TIMEOUT=180 PIP_RETRIES=10 PIP_DISABLE_PIP_VERSION_CHECK=1
 CACHE="${CACHE:-/cache}"
@@ -111,7 +111,7 @@ $PY -m pip install --no-compile --no-deps --target "$SITE" "$WORK"/wheels/*.whl 
 # ---- the application (committed sources)
 log "Ophion sources"
 tar -C "$DATA" -xf "$SRC_TAR"
-[ -f "$DATA/main.py" ] && [ -d "$DATA/ssh_manager" ] || die "SRC_TAR does not contain main.py and ssh_manager/"
+[ -f "$DATA/main.py" ] && [ -d "$DATA/ophion" ] || die "SRC_TAR does not contain main.py and ophion/"
 
 # ---- GObject data: typelibs, GdkPixbuf loaders, GTK input methods, GIO modules, schemas, icons, MIME
 log "GTK / VTE data"
@@ -151,7 +151,7 @@ cp -a /opt/freerdp/lib/lib*.so* "$LIBDIR/"
 cp "$PACKAGING/AppRun" "$APPDIR/AppRun"
 chmod 755 "$APPDIR/AppRun"
 # The application icon "ophion": the bundled hicolor PNGs (raster only; see gtkui/assets/app-icon/README.md).
-APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"
+APP_ICONS="$DATA/ophion/gtkui/assets/app-icon/hicolor"
 DESKTOP_ID="io.github.faridtofighi.Ophion"  # identity.APP_ID: the desktop file's and AppStream's name
 cp "$PACKAGING/$DESKTOP_ID.desktop" "$APPDIR/"
 cp "$APP_ICONS/256x256/apps/ophion.png" "$APPDIR/ophion.png"  # appimagetool: the Icon= file at the top

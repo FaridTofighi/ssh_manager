@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from ssh_manager.auth_flow import (
+from ophion.auth_flow import (
     MAX_ATTEMPTS,
     AuthOutcome,
     PasswordResolution,
@@ -18,9 +18,9 @@ from ssh_manager.auth_flow import (
     sentinel_options,
     with_sentinel,
 )
-from ssh_manager.config import HostEntry
-from ssh_manager.credentials import CredentialStore
-from ssh_manager.secure_store import InMemoryKeyring, SecureStore
+from ophion.config import HostEntry
+from ophion.credentials import CredentialStore
+from ophion.secure_store import InMemoryKeyring, SecureStore
 
 SECRET = "pa ss'w$o`rd%é"
 
@@ -129,7 +129,7 @@ class ResolutionTests(unittest.TestCase):
     """CredentialController.resolve_password: read-only, ordered."""
 
     def setUp(self) -> None:
-        from ssh_manager.gtkui.controllers.credentials_controller import CredentialController
+        from ophion.gtkui.controllers.credentials_controller import CredentialController
 
         self.tmp = tempfile.TemporaryDirectory()
         self.keyring = RecordingKeyring()
@@ -155,13 +155,13 @@ class ResolutionTests(unittest.TestCase):
                          ("credential-pw", "credential", self.cred.id))
 
     def test_unavailable_credential_notifies_without_the_password(self) -> None:
-        from ssh_manager.secure_store import SecureStoreError
+        from ophion.secure_store import SecureStoreError
 
         notes = []
         self.win._notify = lambda message, *a, **k: notes.append(message)
         self.creds.bind_host("p::c::web", self.cred.id)
         with mock.patch.object(self.creds, "get_password", side_effect=SecureStoreError("locked")), \
-                self.assertLogs("ssh_manager", level=logging.WARNING) as captured:
+                self.assertLogs("ophion", level=logging.WARNING) as captured:
             self.assertEqual(self.controller.resolve_password(self.host).source, "none")
         self.assertEqual(notes, ["Credential 'Ops' is unavailable."])
         self.assertNotIn("credential-pw", "\n".join(notes + captured.output))
@@ -205,9 +205,9 @@ class TerminalAuthTests(unittest.TestCase):
         self.cred = self.creds.add("Ops", "ops", SECRET)
         self.keyring.writes.clear()
         self.logs = []
-        self.which = mock.patch("ssh_manager.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass")
+        self.which = mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass")
         self.which.start()
-        self.kill = mock.patch("ssh_manager.gtk_terminal.os.kill")
+        self.kill = mock.patch("ophion.gtk_terminal.os.kill")
         self.kill.start()
 
     def tearDown(self) -> None:
@@ -215,7 +215,7 @@ class TerminalAuthTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def tab(self, resolution=None):
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         resolution = resolution or PasswordResolution(SECRET, "credential", self.cred.id)
         tab = TerminalTab(HostEntry("web", {"hostname": "web.internal", "user": "ops"}),
@@ -310,7 +310,7 @@ class TerminalAuthTests(unittest.TestCase):
     def test_max_three_attempts_then_stop(self) -> None:
         tab = self.tab()
         dialogs = []
-        with mock.patch("ssh_manager.gtk_terminal.PasswordRequestDialog",
+        with mock.patch("ophion.gtk_terminal.PasswordRequestDialog",
                         side_effect=lambda parent, request, on_done: dialogs.append(FakeDialog(request, on_done))
                         or dialogs[-1]):
             tab._begin_connect()  # attempt with the credential's password (no prompt)
@@ -345,8 +345,8 @@ class TerminalAuthTests(unittest.TestCase):
         self.assertTrue(any("does not accept password login" in message for message in self.logs))
 
     def test_no_password_in_logs(self) -> None:
-        with self.assertLogs("ssh_manager", level=logging.DEBUG) as captured:
-            logging.getLogger("ssh_manager").debug("start")
+        with self.assertLogs("ophion", level=logging.DEBUG) as captured:
+            logging.getLogger("ophion").debug("start")
             tab = self.tab()
             self.spawn(tab, "typed", password_origin="retry")
             self.exit(tab, "Permission denied, please try again.")
@@ -359,7 +359,7 @@ class TerminalAuthTests(unittest.TestCase):
         self.assertNotIn("typed", text)
 
     def test_destroy_removes_every_source_and_the_marker(self) -> None:
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         tab = TerminalTab(HostEntry("web", {"hostname": "web.internal"}), lambda *a: None, autostart=False,
                           password_provider=lambda: PasswordResolution(SECRET, "credential"))
@@ -385,8 +385,8 @@ class ConnectorTests(unittest.TestCase):
     def test_paramiko_never_deletes_or_rewrites_resolved_passwords(self) -> None:
         import time
 
-        from ssh_manager.connection_state import ConnectionStateMachine
-        from ssh_manager.connector import Connector, TryResult
+        from ophion.connection_state import ConnectionStateMachine
+        from ophion.connector import Connector, TryResult
         from tests.test_connector import FakePasswordDialog, HostCfg, Settings
 
         keyring = RecordingKeyring()

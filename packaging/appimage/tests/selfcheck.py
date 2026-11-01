@@ -117,7 +117,7 @@ def terminal_and_icon():
     window.add(terminal)
     window.show_all()
     pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(APPDIR, "ophion.png"))
-    svg = os.path.join(APPDIR, "usr/share/ophion/ssh_manager/gtkui/assets/icons/sshm-server-symbolic.svg")
+    svg = os.path.join(APPDIR, "usr/share/ophion/ophion/gtkui/assets/icons/sshm-server-symbolic.svg")
     svg_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(svg, 64, 64)
     handle = Rsvg.Handle.new_from_file(svg)
     theme = Gtk.IconTheme.get_default().lookup_icon("window-close-symbolic", 16, 0)
@@ -140,8 +140,8 @@ def certificates():
 
 def the_app_imports():
     sys.path.insert(0, os.path.join(APPDIR, "usr/share/ophion"))
-    import ssh_manager.gtk_app  # noqa: F401
-    from ssh_manager.rdp import engines
+    import ophion.gtk_app  # noqa: F401
+    from ophion.rdp import engines
 
     assert engines.frdp_typelib_version() == "", "an Frdp typelib was found (gtk-frdp is not bundled)"
     report = engines.discover(platform=engines.detect_platform())
@@ -189,7 +189,7 @@ def terminal_text_without_warnings():
     probe = ("import sys, time; sys.path.insert(0, %r); "
              "import gi; gi.require_version('Gtk', '3.0'); gi.require_version('Vte', '2.91'); "
              "from gi.repository import Gtk, Vte; Gtk.init_check([]); "
-             "from ssh_manager.gtk_terminal import TerminalTab, terminal_text\n"
+             "from ophion.gtk_terminal import TerminalTab, terminal_text\n"
              "term = Vte.Terminal(); term.feed(b'selfcheck line\\r\\nPassword: ')\n"
              "end = time.monotonic() + 5\n"
              "while 'selfcheck line' not in terminal_text(term) and time.monotonic() < end:\n"

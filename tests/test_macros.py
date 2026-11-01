@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import macros as M
-from ssh_manager.macros import Macro, MacroError, MacroFileError, MacroPlayer, MacroRecorder, MacroStore, MacroWriteError
+from ophion import macros as M
+from ophion.macros import Macro, MacroError, MacroFileError, MacroPlayer, MacroRecorder, MacroStore, MacroWriteError
 
 PASSWORD = "correct horse"
 SECRET = "S3cr3t-sentinel-pw"
@@ -265,8 +265,8 @@ class CryptoTests(StoreCase):
         self.assertTrue(renamed)
 
     def test_no_secret_in_logs_or_exception_text(self) -> None:
-        with self.assertLogs("ssh_manager", logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("start")
+        with self.assertLogs("ophion", logging.DEBUG) as logs:
+            logging.getLogger("ophion").debug("start")
             store = self.saved()
             for password in ("wrong", SECRET):
                 try:
@@ -439,7 +439,7 @@ class KeyboxMacroTests(StoreCase):
 
     def setUp(self) -> None:
         super().setUp()
-        from ssh_manager import keybox as K
+        from ophion import keybox as K
 
         self.box = K.Keybox.create("pw", self.folder / "keybox.json", scrypt_n=2 ** 15)
         self.key = self.box.subkey("macros")

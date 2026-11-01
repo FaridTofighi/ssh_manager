@@ -19,9 +19,9 @@ import gi  # noqa: E402
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk  # type: ignore  # noqa: E402
 
-from ssh_manager.auth_flow import PasswordResolution  # noqa: E402
-from ssh_manager.config import HostEntry  # noqa: E402
-from ssh_manager.gtk_terminal import TerminalTab  # noqa: E402
+from ophion.auth_flow import PasswordResolution  # noqa: E402
+from ophion.config import HostEntry  # noqa: E402
+from ophion.gtk_terminal import TerminalTab  # noqa: E402
 
 
 def pump(seconds, until):

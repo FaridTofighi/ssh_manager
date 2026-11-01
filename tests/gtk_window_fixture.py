@@ -85,17 +85,17 @@ class WindowSandbox:
         self.show_patch = mock.patch.object(Gtk.Widget, "show_all", show_children_only)
         self.show_patch.start()
 
-        from ssh_manager.gtk_app import SSHManagerWindow
-        from ssh_manager.settings import AppSettings
+        from ophion.gtk_app import SSHManagerWindow
+        from ophion.settings import AppSettings
 
         self.app = shared_application()
         settings = AppSettings.load()
         self.store = None
         manager = None
         if store:
-            from ssh_manager.inventory.manager import StoreConfigManager
-            from ssh_manager.inventory.openssh import commit_openssh_import, plan_openssh_import
-            from ssh_manager.inventory.store import InventoryStore
+            from ophion.inventory.manager import StoreConfigManager
+            from ophion.inventory.openssh import commit_openssh_import, plan_openssh_import
+            from ophion.inventory.store import InventoryStore
 
             self.store = InventoryStore(self.root / "data" / "ophion" / "inventory.db")
             manager = StoreConfigManager(self.store)
@@ -107,7 +107,7 @@ class WindowSandbox:
     def use_keybox(self, password: str):
         """A keybox in the sandbox (the fast minimum key derivation), adopted by the window."""
 
-        from ssh_manager import keybox as K
+        from ophion import keybox as K
 
         box = K.Keybox.create(password, self.root / "config" / "ophion" / "keybox.json", scrypt_n=2 ** 15)
         self.window.adopt_keybox(box)

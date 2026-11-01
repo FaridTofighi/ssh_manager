@@ -2,8 +2,8 @@
 
 import unittest
 
-from ssh_manager import remote_stats
-from ssh_manager.remote_stats import _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output
+from ophion import remote_stats
+from ophion.remote_stats import _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output
 
 
 class ParseTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class CommandTests(unittest.TestCase):
 class ReexportTests(unittest.TestCase):
     def test_gtk_terminal_keeps_the_same_objects(self) -> None:
         try:
-            from ssh_manager import gtk_terminal
+            from ophion import gtk_terminal
         except (ImportError, ValueError) as exc:  # no GTK / VTE on this machine
             self.skipTest(f"gtk_terminal unavailable: {exc}")
         self.assertIs(gtk_terminal.build_remote_stats_command, remote_stats.build_remote_stats_command)

@@ -27,7 +27,7 @@ class NoVaultLeftTests(unittest.TestCase):
         return found
 
     def test_code_and_ui_strings(self) -> None:
-        found = self.scan(sorted((ROOT / "ssh_manager").rglob("*.py")) + sorted((ROOT / "tools").rglob("*.py")))
+        found = self.scan(sorted((ROOT / "ophion").rglob("*.py")) + sorted((ROOT / "tools").rglob("*.py")))
         self.assertEqual(found, [], "\n".join(found))
 
     def test_docs(self) -> None:
@@ -79,8 +79,8 @@ class LeftoverFileTests(unittest.TestCase):
             GLib.MainContext.default().iteration(False)
 
     def test_the_start_up_decision_ignores_it(self) -> None:
-        from ssh_manager import unlock as U
-        from ssh_manager.settings import AppSettings
+        from ophion import unlock as U
+        from ophion.settings import AppSettings
 
         settings = AppSettings(config_path=self.config / "settings.json")
         self.assertIs(U.decide(U.inspect(self.config, settings)), U.Startup.FIRST_RUN)
@@ -91,12 +91,12 @@ class LeftoverFileTests(unittest.TestCase):
     def test_the_app_starts_without_a_dialog(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtk_app import SSHManagerApplication
-        from ssh_manager.gtkui.unlock_flow import StartupResult
+        from ophion.gtk_app import SSHManagerApplication
+        from ophion.gtkui.unlock_flow import StartupResult
 
         app = SSHManagerApplication(base_dir=self.sandbox.base)
         dialogs = []
-        with mock.patch("ssh_manager.gtk_app.StartupFlow") as flow, \
+        with mock.patch("ophion.gtk_app.StartupFlow") as flow, \
                 mock.patch.object(Gtk.Dialog, "run", lambda d: dialogs.append(d) or Gtk.ResponseType.CANCEL), \
                 mock.patch.object(Gtk.Window, "present", lambda w: None):
             flow.return_value.run.return_value = StartupResult(passwords_off=True)
@@ -112,7 +112,7 @@ class LeftoverFileTests(unittest.TestCase):
         self.assert_untouched()
 
     def test_the_security_page_has_no_row_for_it(self) -> None:
-        from ssh_manager.gtkui.dialogs.security_page import SecurityPage
+        from ophion.gtkui.dialogs.security_page import SecurityPage
 
         self.sandbox.use_keybox("pw")
         page = SecurityPage(self.sandbox.window.security, self.sandbox.window)

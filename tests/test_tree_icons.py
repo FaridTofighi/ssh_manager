@@ -2,10 +2,10 @@ import re
 import unittest
 from pathlib import Path
 
-from ssh_manager.gtkui.constants import Icons, RowKind
-from ssh_manager.gtkui.theme.density import COMFORTABLE, COMPACT
-from ssh_manager.gtkui.theme.tokens import DARK, LIGHT, contrast_ratio
-from ssh_manager.gtkui.tree_icons import (
+from ophion.gtkui.constants import Icons, RowKind
+from ophion.gtkui.theme.density import COMFORTABLE, COMPACT
+from ophion.gtkui.theme.tokens import DARK, LIGHT, contrast_ratio
+from ophion.gtkui.tree_icons import (
     TreeIcon,
     badge_box,
     badge_diameter,
@@ -20,7 +20,7 @@ from ssh_manager.gtkui.tree_icons import (
     tree_icon_for,
 )
 
-ICON_DIR = Path(__file__).resolve().parent.parent / "ssh_manager" / "gtkui" / "assets" / "icons"
+ICON_DIR = Path(__file__).resolve().parent.parent / "ophion" / "gtkui" / "assets" / "icons"
 TREE_FAMILY = (Icons.FOLDER, Icons.FOLDER_OPEN, Icons.FILE_CONF, Icons.HOST, Icons.BADGE_DOT, Icons.BADGE_RING,
                Icons.BADGE_FAILED, Icons.BADGE_CUTOUT, Icons.BADGE_LOCK)
 
@@ -94,7 +94,7 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(LIGHT.icon_default, LIGHT.text_primary)
 
     def test_no_literal_icon_colors_outside_the_tokens(self) -> None:
-        root = Path(__file__).resolve().parent.parent / "ssh_manager"
+        root = Path(__file__).resolve().parent.parent / "ophion"
         banned = re.compile(r"#(FFFFFF|18231F|E2B04F|B07A1E|D9A84E|A57828|A3A8B0|5B6B64|5CCB9C|176B4D)\b", re.I)
         found = []
         for path in root.rglob("*.py"):
@@ -194,8 +194,8 @@ class SvgSourceTests(unittest.TestCase):
 
 class TreeRowReadOnlyTests(unittest.TestCase):
     def test_shared_and_permission_restricted_hosts_are_read_only(self) -> None:
-        from ssh_manager.config import GroupConfig, HostEntry
-        from ssh_manager.gtkui.controllers.tree_controller import TreeCallbacks, build_tree_rows
+        from ophion.config import GroupConfig, HostEntry
+        from ophion.gtkui.controllers.tree_controller import TreeCallbacks, build_tree_rows
 
         hosts = [HostEntry(alias=a, options={}, parent_group="prod", child_group="web.conf") for a in ("a", "b")]
         group = GroupConfig(parent="prod", name="web.conf", path=Path("web.conf"), hosts=hosts)

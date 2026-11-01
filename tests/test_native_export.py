@@ -10,9 +10,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import native_format as F
-from ssh_manager.exporters.native import ExportOptions, build_export, normalize_color, render_export_report
-from ssh_manager.persistence import write_bytes_private
+from ophion import native_format as F
+from ophion.exporters.native import ExportOptions, build_export, normalize_color, render_export_report
+from ophion.persistence import write_bytes_private
 from tests.native_fixture import SENTINEL, build_rich, make_store
 
 
@@ -223,7 +223,7 @@ class WriteTests(unittest.TestCase):
 class SecretAuditTests(ExportCase):
     def test_no_secret_reaches_the_file_the_report_or_the_log(self) -> None:
         with self.assertLogs(level=logging.DEBUG) as logs:
-            logging.getLogger("ssh_manager").debug("export")
+            logging.getLogger("ophion").debug("export")
             doc, report = self.export()
             raw = F.dump_document(doc)
             text = render_export_report(report)

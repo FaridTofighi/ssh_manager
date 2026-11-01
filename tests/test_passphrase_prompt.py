@@ -2,7 +2,7 @@
 
 import unittest
 
-from ssh_manager.auth_flow import PassphraseFill, passphrase_prompt
+from ophion.auth_flow import PassphraseFill, passphrase_prompt
 
 KEY = "/home/u/.ssh/id_ed25519"
 

@@ -37,7 +37,7 @@ class HostKeyBannerTests(unittest.TestCase):
         self.win.realize()
         self.tabs = self.win.terminal_tabs
         os.makedirs(os.environ["HOME"], exist_ok=True)
-        from ssh_manager.gtk_terminal import TerminalTab
+        from ophion.gtk_terminal import TerminalTab
 
         # No stored password: the tab would ask for one first; these tests go straight to ssh.
         patcher = mock.patch.object(TerminalTab, "_password_for_attempt", return_value=(True, None))
@@ -46,12 +46,12 @@ class HostKeyBannerTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         for tab in list(self.tabs.tabs()):
-            with mock.patch("ssh_manager.gtkui.local_terminal.confirm", return_value=True):
+            with mock.patch("ophion.gtkui.local_terminal.confirm", return_value=True):
                 self.tabs.close_tab(tab)
         pump(0.3)
 
     def host(self, alias="web"):
-        from ssh_manager.config import HostEntry
+        from ophion.config import HostEntry
 
         return HostEntry(alias=alias, options={
             "hostname": "127.0.0.1", "port": str(self.server.port), "user": "alice",
@@ -70,7 +70,7 @@ class HostKeyBannerTests(unittest.TestCase):
         return tab
 
     def test_changed_key_banner_remove_and_reconnect(self) -> None:
-        from ssh_manager.gtk_terminal import _RESPONSE_HOST_KEY_REMOVE
+        from ophion.gtk_terminal import _RESPONSE_HOST_KEY_REMOVE
 
         before = self.changed_file()
         tab = self.open(self.host())
@@ -81,13 +81,13 @@ class HostKeyBannerTests(unittest.TestCase):
         self.assertTrue(tab.session_ended)  # r / q keep working on the ended tab
         self.assertEqual(tab._host_key_bar.get_accessible().get_name(), "SSH host key")
         self.assertTrue(tab._host_key_icon.get_icon_name()[0].startswith("dialog-warning"))
-        with mock.patch("ssh_manager.gtkui.dialogs.host_key.confirm_remove", return_value=False) as ask, \
+        with mock.patch("ophion.gtkui.dialogs.host_key.confirm_remove", return_value=False) as ask, \
                 mock.patch.object(tab, "reconnect") as reconnect:
             tab._host_key_bar.response(_RESPONSE_HOST_KEY_REMOVE)  # Cancel
         ask.assert_called_once()
         reconnect.assert_not_called()
         self.assertEqual(self.known.read_bytes(), before)
-        with mock.patch("ssh_manager.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
+        with mock.patch("ophion.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
                 mock.patch.object(tab, "reconnect") as reconnect:
             tab._host_key_bar.response(_RESPONSE_HOST_KEY_REMOVE)
         reconnect.assert_called_once()
@@ -103,9 +103,9 @@ class HostKeyBannerTests(unittest.TestCase):
                               "AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7\n")  # moved, and two candidates now
         before = self.known.read_bytes()
         messages = []
-        with mock.patch("ssh_manager.gtkui.dialogs.host_key.show_message",
+        with mock.patch("ophion.gtkui.dialogs.host_key.show_message",
                         side_effect=lambda _p, title, text: messages.append(text)), \
-                mock.patch("ssh_manager.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
+                mock.patch("ophion.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
                 mock.patch.object(tab, "reconnect") as reconnect:
             self.assertFalse(tab.remove_host_key(None, tab._host_key_change))
         reconnect.assert_not_called()
@@ -130,10 +130,10 @@ class HostKeyBannerTests(unittest.TestCase):
         self.tabs.set_broadcast_mode(True)
         self.assertTrue(pump(15, until=lambda: tab.host_key_banner == "changed"))
         self.assertEqual(local.host_key_banner, "")
-        with mock.patch("ssh_manager.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
+        with mock.patch("ophion.gtkui.dialogs.host_key.confirm_remove", return_value=True), \
                 mock.patch.object(tab, "reconnect") as reconnect, mock.patch.object(local, "reconnect") as other:
             tab._host_key_bar.response(13)  # Copy (nothing to copy here) and Remove act on this tab only
-            from ssh_manager.gtk_terminal import _RESPONSE_HOST_KEY_REMOVE
+            from ophion.gtk_terminal import _RESPONSE_HOST_KEY_REMOVE
             tab._host_key_bar.response(_RESPONSE_HOST_KEY_REMOVE)
         reconnect.assert_called_once()
         other.assert_not_called()

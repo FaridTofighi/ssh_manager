@@ -1,9 +1,9 @@
 # Passwords
 
 How the terminal finds the password for a connection, when it asks for one,
-and how it knows a login worked. Code: `ssh_manager/auth_flow.py` (no GTK),
+and how it knows a login worked. Code: `ophion/auth_flow.py` (no GTK),
 `CredentialController.resolve_password` and `TerminalTab` in
-`ssh_manager/gtk_terminal.py`.
+`ophion/gtk_terminal.py`.
 
 ## Where passwords are stored
 
@@ -115,7 +115,7 @@ on this computer. **Import…** asks for the passphrase, lists the credentials
 with a check box each and, when a name is already used, skips it, numbers it
 "(2)" or keeps the existing one if its username and password are the same.
 A wrong passphrase, a changed file or a newer format writes nothing. Code:
-`ssh_manager/credentials_export.py`, `ssh_manager/aead.py`.
+`ophion/credentials_export.py`, `ophion/aead.py`.
 
 ## What triggers the password dialog
 
@@ -147,7 +147,7 @@ Nothing else asks for a password. `classify_exit` keeps these apart:
 ## Recovery after "Permission denied"
 
 The flow is a per-tab state machine (`PasswordFlow` in
-`ssh_manager/auth_flow.py`). The GTK side only shows its texts.
+`ophion/auth_flow.py`). The GTK side only shows its texts.
 
 1. **First attempt:** the resolved password (credential, host-specific or
    legacy). With none stored, the password dialog opens first.

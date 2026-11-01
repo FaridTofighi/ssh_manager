@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.gtkui.controllers.shortcut_registry import ShortcutRegistry, canonical
-from ssh_manager.gtkui.controllers.shortcuts import ACTIONS
-from ssh_manager.settings import AppSettings
+from ophion.gtkui.controllers.shortcut_registry import ShortcutRegistry, canonical
+from ophion.gtkui.controllers.shortcuts import ACTIONS
+from ophion.settings import AppSettings
 
 
 class RegistryTests(unittest.TestCase):
@@ -56,7 +56,7 @@ class RegistryTests(unittest.TestCase):
 
     def test_invalid_entries_are_ignored_one_by_one(self) -> None:
         registry = ShortcutRegistry()
-        with self.assertLogs("ssh_manager.gtkui.controllers.shortcut_registry", "WARNING") as logs:
+        with self.assertLogs("ophion.gtkui.controllers.shortcut_registry", "WARNING") as logs:
             registry.from_dict({"no-such-action": ["<Primary>x"], "paste": ["<Primary>@@@", "<Primary><Alt>p"],
                                 "copy": ["garbage"], "reconnect": "<Primary><Alt>r", "quit": 42})
             registry.set_accels("paste-primary", ["nonsense", "<Shift>F2"])
@@ -90,7 +90,7 @@ class ExtraEntryTests(unittest.TestCase):
     """Macros' shortcuts: extra entries (never in the settings) that take part in conflicts and apply()."""
 
     def test_conflicts_titles_and_settings(self) -> None:
-        from ssh_manager.gtkui.controllers.shortcut_registry import ExtraEntry
+        from ophion.gtkui.controllers.shortcut_registry import ExtraEntry
 
         registry = ShortcutRegistry()
         changes = []
@@ -112,7 +112,7 @@ class ExtraEntryTests(unittest.TestCase):
     def test_apply_sets_and_frees_the_accelerators(self) -> None:
         from unittest import mock
 
-        from ssh_manager.gtkui.controllers.shortcut_registry import ExtraEntry
+        from ophion.gtkui.controllers.shortcut_registry import ExtraEntry
 
         registry = ShortcutRegistry()
         app = mock.Mock()

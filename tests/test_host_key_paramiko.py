@@ -8,9 +8,9 @@ from unittest import mock
 
 import paramiko
 
-from ssh_manager import known_hosts as KH
-from ssh_manager.transfer.backend import HostKeyChanged, UnknownHostKey
-from ssh_manager.transfer.settings import TransferSettings
+from ophion import known_hosts as KH
+from ophion.transfer.backend import HostKeyChanged, UnknownHostKey
+from ophion.transfer.settings import TransferSettings
 
 from tests.fake_sftp import FakeSftpServer
 from tests.gtk_window_fixture import display_available
@@ -30,7 +30,7 @@ class ServerCase(unittest.TestCase):
                               f"abgH5C9okWi0dh2l9GKJl\n{self.name} {self.old.get_name()} {self.old.get_base64()}\n")
 
     def backend(self, **kwargs):
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.sftp import SftpBackend
 
         backend = SftpBackend("127.0.0.1", self.server.port, "alice", "s3cret pass", known_hosts=self.known,
                               allow_agent=False, settings=TransferSettings(timeout_read=5), **kwargs)
@@ -40,7 +40,7 @@ class ServerCase(unittest.TestCase):
 
 class HostKeyChangedTests(ServerCase):
     def test_the_error_carries_what_the_dialog_needs(self) -> None:
-        from ssh_manager.transfer.sftp import key_fingerprint
+        from ophion.transfer.sftp import key_fingerprint
 
         with self.assertRaises(HostKeyChanged) as caught:
             self.backend().connect()
@@ -70,7 +70,7 @@ class HostKeyChangedTests(ServerCase):
         client.close()
 
     def test_remove_old_key_then_retry_asks_again(self) -> None:
-        from ssh_manager.gtkui.dialogs.host_key import changed_key_from_error, remove_old_key
+        from ophion.gtkui.dialogs.host_key import changed_key_from_error, remove_old_key
 
         with self.assertRaises(HostKeyChanged) as caught:
             self.backend().connect()
@@ -91,7 +91,7 @@ class DialogTests(ServerCase):
     def test_shared_dialog_details_remove_and_retry(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs import host_key as HK
+        from ophion.gtkui.dialogs import host_key as HK
 
         with self.assertRaises(HostKeyChanged) as caught:
             self.backend().connect()
@@ -112,7 +112,7 @@ class DialogTests(ServerCase):
         self.assertNotIn(self.old.get_base64().encode(), self.known.read_bytes())
 
     def test_the_file_browser_uses_the_shared_dialog(self) -> None:
-        from ssh_manager.gtkui.file_browser import tab as FB
+        from ophion.gtkui.file_browser import tab as FB
 
         with self.assertRaises(HostKeyChanged) as caught:
             self.backend().connect()
@@ -120,7 +120,7 @@ class DialogTests(ServerCase):
         fake._closed = False
         fake._host.alias = "local"
         fake._window.return_value = None
-        with mock.patch("ssh_manager.gtkui.dialogs.host_key.show_host_key_changed") as shared:
+        with mock.patch("ophion.gtkui.dialogs.host_key.show_host_key_changed") as shared:
             FB.FileBrowserTab._connect_failed(fake, mock.Mock(), caught.exception, "pw")
             FB.FileBrowserTab._host_key_changed(fake, caught.exception, "pw")
         fake._set_status.assert_called()
@@ -130,8 +130,8 @@ class DialogTests(ServerCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class StatsProbeTests(unittest.TestCase):
     def test_no_dialog_one_log_per_host(self) -> None:
-        from ssh_manager import gtk_terminal as GT
-        from ssh_manager.config import HostEntry
+        from ophion import gtk_terminal as GT
+        from ophion.config import HostEntry
 
         logs = []
         tab = GT.TerminalTab(HostEntry(alias="probe-host", options={"hostname": "127.0.0.1"}),

@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.rdp import engines
-from ssh_manager.rdp.engines import (
+from ophion.rdp import engines
+from ophion.rdp.engines import (
     CAPABILITIES, ClientBinary, Platform, build_engines, choose_engine, detect_platform, discover, find_binaries,
     inspect_binary, install_hint, parse_help_options, parse_version,
 )

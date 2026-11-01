@@ -17,7 +17,7 @@ import paramiko
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
-from ssh_manager import ssh_keys as K
+from ophion import ssh_keys as K
 
 PASS = "Key-passphrase-sentinel-7"
 
@@ -187,7 +187,7 @@ class SecretTests(Case):
             return real_popen(*args, **kwargs)
 
         with self.assertLogs(level=logging.DEBUG) as logs, mock.patch.object(subprocess, "Popen", side_effect=spy):
-            logging.getLogger("ssh_manager").debug("start")
+            logging.getLogger("ophion").debug("start")
             K.generate_key(self.dir / "s", comment="t", passphrase=PASS)
             K.change_passphrase(self.dir / "s", PASS, PASS + "2")
             try:
@@ -215,14 +215,14 @@ class DeployTests(Case):
         self.info = K.generate_key(self.dir / "deploy", comment="me@box")
 
     def backend(self, password="pw", key_file=""):
-        from ssh_manager.transfer.settings import TransferSettings
-        from ssh_manager.transfer.sftp import SftpBackend
+        from ophion.transfer.settings import TransferSettings
+        from ophion.transfer.sftp import SftpBackend
 
         return SftpBackend("127.0.0.1", self.server.port, "alice", password, known_hosts=self.known,
                            allow_agent=False, key_file=key_file, settings=TransferSettings(timeout_connect=5))
 
     def target(self, key="h1"):
-        from ssh_manager.multirun.engine import Target
+        from ophion.multirun.engine import Target
 
         return Target(key=key, alias=key, hostname="127.0.0.1", port=self.server.port, user="alice")
 
@@ -246,7 +246,7 @@ class DeployTests(Case):
 
         def connect(target, timeout):
             if target.key == "dead":
-                from ssh_manager.transfer.sftp import SftpBackend
+                from ophion.transfer.sftp import SftpBackend
 
                 return SftpBackend("127.0.0.1", dead, "alice", "pw", known_hosts=self.known).open_transport("t")
             return self.backend(password="wrong" if target.key == "wrong" else "pw").open_transport("t")

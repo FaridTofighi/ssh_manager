@@ -7,7 +7,7 @@ Counts cover the whole repository (code, tests, docs, packaging);
 `tests/fixtures/pre_rename/` is excluded. That folder holds files the old
 version wrote, and they must stay as they are.
 
-The names now live in `ssh_manager/identity.py` (`APP_NAME`, `APP_SLUG`,
+The names now live in `ophion/identity.py` (`APP_NAME`, `APP_SLUG`,
 `APP_ID`, `APP_TAGLINE` and the `LEGACY_*` names).
 
 ## Classes
@@ -25,7 +25,7 @@ The names now live in `ssh_manager/identity.py` (`APP_NAME`, `APP_SLUG`,
 
 | # | Identifier | Where | Hits | Class | Action |
 |---|---|---|---:|---|---|
-| 1 | `ssh_manager` (package, modules, imports, `python -m ssh_manager`) | everywhere | 1247 | I | kept (a later task may rename the package) |
+| 1 | `ssh_manager` (package, modules, imports, `python -m ssh_manager`) | everywhere | 1247 | I → E | kept at first; later renamed to `ophion` (a separate commit). A tiny `ssh_manager` package remains so that `python3 -m ssh_manager` still starts the app |
 | 2 | `SSHManagerApplication`, `SSHManagerWindow`, `SSHManagerApp` | `gtk_app.py`, `ui.py`, controllers, tools, tests | 92 | I | kept |
 | 3 | `sshm-*-symbolic` icon names, the `sshm-` prefix, `_sshm_rows` / `_sshm_groups` | `gtkui/assets/icons`, `widgets/icons.py`, `tree_icons.py`, tests | 169 | I | kept |
 | 4 | `.sshm` extension, `*.sshm` file filters | `native_format.py`, import / export dialogs, docs, tests | 50 | L | kept: the readers accept it, and no new extension is added |
@@ -51,8 +51,8 @@ The names now live in `ssh_manager/identity.py` (`APP_NAME`, `APP_SLUG`,
 | 24 | `SSH_MANAGER_APPDIR`, `SSH_MANAGER_APPIMAGE_EXEC` | `local_shell.py`, `AppRun`, packaging tests, docs | 17 | E | `OPHION_*` first, the old name as a fallback |
 | 25 | `SSH_MANAGER_DEBUG`, `SSH_MANAGER_TEST_X` | `tests/test_local_shell.py`, `tests/test_local_terminal.py` | 4 | I | test values for the prefix stripping; kept, plus `OPHION_` cases |
 | 26 | Export default file name `ssh-manager-YYYYMMDD-HHMM.sshm` | `native_format.py` | 1 | U | `ophion-…` |
-| 27 | "SSH Manager" in window title, header, About, menus, dialogs, toasts, errors, reports (export / import / MobaXterm / RDP / file-transfer diagnostics), shortcuts window, settings snapshot, terminal preview | about 45 files in `ssh_manager/` | ~150 | U | Ophion (`APP_NAME`) |
-| 28 | "SSH Manager" / "SSH manager" in docstrings and comments | `ssh_manager/` | ~45 | I | kept (not user-visible) |
+| 27 | "SSH Manager" in window title, header, About, menus, dialogs, toasts, errors, reports (export / import / MobaXterm / RDP / file-transfer diagnostics), shortcuts window, settings snapshot, terminal preview | about 45 files in `ophion/` | ~150 | U | Ophion (`APP_NAME`) |
+| 28 | "SSH Manager" / "SSH manager" in docstrings and comments | `ophion/` | ~45 | I | kept (not user-visible) |
 | 29 | Tests that assert the old product name or old paths | `tests/` | ~25 | U | updated with the code they check (listed in the final report) |
 | 30 | Packaging: `ssh-manager.desktop`, `ssh-manager.metainfo.xml`, `AppRun`, `build.sh`, `Dockerfile.build`, `README.md`, AppImage name `SSH_Manager-…`, packaging tests | `packaging/appimage/` | ~60 | E | `<APP_ID>.desktop` / `.metainfo.xml`, command `ophion` (with the old `ssh-manager` name kept as an alias), `Ophion-<version>-x86_64.AppImage` |
 | 31 | Documentation | `README.md`, `docs/*.md`, `CHANGELOG-UI.md` | ~90 | U | Ophion; historical changelog lines unchanged |
@@ -67,7 +67,7 @@ The names now live in `ssh_manager/identity.py` (`APP_NAME`, `APP_SLUG`,
 | E | 11 (15–20, 22–24, 30; 21's read side is L) | renamed, with migration or fallback |
 | C | 4 (5–8) | kept |
 | L | 3 (4, 9, the read side of 21 / 22) | kept |
-| I | 10 (1–3, 10–14, 25, 28, 32) | kept |
+| I | 10 (1–3, 10–14, 25, 28, 32) | kept (row 1, the package, was renamed later) |
 
 ## Verification
 
@@ -75,6 +75,6 @@ The names now live in `ssh_manager/identity.py` (`APP_NAME`, `APP_SLUG`,
   keybox, secrets, macros, plain and encrypted `.sshm` exports, and the old
   OpenSSH export and `Include` marker.
 - `tests/test_rename_guard.py` fails when `org.codex.SSHManager` or an
-  `ssh-manager` path literal appears in `ssh_manager/**/*.py` outside
+  `ssh-manager` path literal appears in `ophion/**/*.py` outside
   `identity.py`, `legacy_paths.py` and `tests/rename_allowlist.txt`. Each
   allowlist entry gives its reason and its row in this table.

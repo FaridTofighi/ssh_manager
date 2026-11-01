@@ -7,12 +7,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager import protocols
-from ssh_manager.config import GroupConfig, HostEntry
-from ssh_manager.host_utils import host_connection_params
-from ssh_manager.inventory.manager import StoreConfigManager
-from ssh_manager.inventory.openssh import non_ssh_hosts, render_export
-from ssh_manager.inventory.store import (
+from ophion import protocols
+from ophion.config import GroupConfig, HostEntry
+from ophion.host_utils import host_connection_params
+from ophion.inventory.manager import StoreConfigManager
+from ophion.inventory.openssh import non_ssh_hosts, render_export
+from ophion.inventory.store import (
     _SCHEMA_V1,
     SCHEMA_VERSION,
     InventoryStore,
@@ -21,7 +21,7 @@ from ssh_manager.inventory.store import (
     ValidationError,
     clean_protocol,
 )
-from ssh_manager.ssh_command import build_ssh_command
+from ophion.ssh_command import build_ssh_command
 
 
 def ftp_host(alias="files", protocol="ftp", **options):
@@ -174,12 +174,12 @@ class SshAssumptionTests(unittest.TestCase):
 class FilterAndTextTests(unittest.TestCase):
     def setUp(self) -> None:
         try:
-            from ssh_manager.gtkui.controllers import tree_controller  # noqa: F401
+            from ophion.gtkui.controllers import tree_controller  # noqa: F401
         except Exception as exc:  # pragma: no cover - no GTK
             raise unittest.SkipTest(str(exc))
 
     def test_proto_filter_terms(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import filter_host, parse_filter
+        from ophion.gtkui.controllers.tree_controller import filter_host, parse_filter
 
         terms, error = parse_filter("proto:ftp")
         self.assertEqual((terms, error), ([("proto", "ftp")], ""))
@@ -188,7 +188,7 @@ class FilterAndTextTests(unittest.TestCase):
         self.assertTrue(filter_host(HostEntry("web"), parse_filter("protocol:ssh")[0]))
 
     def test_tooltip_and_search_text(self) -> None:
-        from ssh_manager.gtkui.controllers.tree_controller import host_tooltip, search_text_for_host
+        from ophion.gtkui.controllers.tree_controller import host_tooltip, search_text_for_host
 
         tooltip = host_tooltip(ftp_host(protocol="sftp", port="22"), "bob", "unknown")
         self.assertIn("bob@10.0.0.20\n", tooltip)  # default port not repeated
@@ -197,7 +197,7 @@ class FilterAndTextTests(unittest.TestCase):
         self.assertIn("ftps", search_text_for_host(ftp_host(protocol="ftps")))
 
     def test_copy_text_is_a_url_without_secrets(self) -> None:
-        from ssh_manager.gtkui.host_facts import protocol_text, ssh_command_text
+        from ophion.gtkui.host_facts import protocol_text, ssh_command_text
 
         self.assertEqual(ssh_command_text(ftp_host(), "bob"), "ftp://bob@10.0.0.20")
         self.assertEqual(ssh_command_text(ftp_host(protocol="sftp", port="2222"), "a b@c"),
@@ -206,15 +206,15 @@ class FilterAndTextTests(unittest.TestCase):
         self.assertEqual(protocol_text(ftp_host(protocol="ftps")), "FTPS (FTP over TLS)")
 
     def test_transfer_hosts_get_the_transfer_icon(self) -> None:
-        from ssh_manager.gtkui.constants import RowKind
-        from ssh_manager.gtkui.tree_icons import tree_icon_for
+        from ophion.gtkui.constants import RowKind
+        from ophion.gtkui.tree_icons import tree_icon_for
 
         self.assertEqual(tree_icon_for(RowKind.HOST, protocol="sftp").name, "sshm-transfer")
         self.assertEqual(tree_icon_for(RowKind.HOST, protocol="ssh").name, "sshm-server")
         self.assertEqual(tree_icon_for(RowKind.HOST).name, "sshm-server")
 
     def test_transfer_icon_follows_the_icon_rules(self) -> None:
-        svg = (Path(__file__).resolve().parents[1] / "ssh_manager/gtkui/assets/icons/sshm-transfer-symbolic.svg")
+        svg = (Path(__file__).resolve().parents[1] / "ophion/gtkui/assets/icons/sshm-transfer-symbolic.svg")
         text = svg.read_text()
         self.assertNotIn("stroke", text)
         self.assertIn('viewBox="0 0 24 24"', text)
@@ -235,7 +235,7 @@ def _display() -> bool:
 @unittest.skipUnless(_display(), "needs a display")
 class HostDialogTests(unittest.TestCase):
     def dialog(self, host=None, **kwargs):
-        from ssh_manager.gtkui.dialogs.host_dialog import HostDialog
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
 
         dialog = HostDialog(None, host, **kwargs)
         self.addCleanup(dialog.destroy)
@@ -264,12 +264,12 @@ class HostDialogTests(unittest.TestCase):
     def test_ftp_drops_ssh_only_settings_after_confirmation(self) -> None:
         host = HostEntry("web", {"hostname": "10.0.0.5", "identityfile": "~/.ssh/id", "ServerAliveInterval": "30"})
         dialog = self.dialog(host)
-        with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=False) as ask:
+        with mock.patch("ophion.gtkui.dialogs.host_dialog.confirm", return_value=False) as ask:
             dialog.protocol_combo.set_active_id("ftp")
         self.assertIn("private key", ask.call_args[0][2])
         self.assertIn("SSH options", ask.call_args[0][2])
         self.assertEqual(dialog.selected_protocol(), "ssh")  # declined: unchanged
-        with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=True):
+        with mock.patch("ophion.gtkui.dialogs.host_dialog.confirm", return_value=True):
             dialog.protocol_combo.set_active_id("ftp")
         built = dialog.build_host("Acme", "")
         self.assertEqual(built.protocol, "ftp")
@@ -279,7 +279,7 @@ class HostDialogTests(unittest.TestCase):
     def test_new_hosts_switch_without_asking(self) -> None:
         dialog = self.dialog()
         dialog.identity_entry.set_text("~/.ssh/id")
-        with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm") as ask:
+        with mock.patch("ophion.gtkui.dialogs.host_dialog.confirm") as ask:
             dialog.protocol_combo.set_active_id("ftps")
         ask.assert_not_called()
 
@@ -289,7 +289,7 @@ class HostDialogTests(unittest.TestCase):
         dialog = self.dialog(host, metadata=host.metadata)
         saved = dialog.build_host("Acme", "").metadata["transfer"]  # normalized by the File transfer page
         self.assertEqual((saved["v"], saved["passive"]), (1, True))
-        with mock.patch("ssh_manager.gtkui.dialogs.host_dialog.confirm", return_value=True) as ask:
+        with mock.patch("ophion.gtkui.dialogs.host_dialog.confirm", return_value=True) as ask:
             dialog.protocol_combo.set_active_id("ssh")
         self.assertIn("file-transfer settings", ask.call_args[0][2])
         self.assertNotIn("transfer", dialog.build_host("Acme", "").metadata)
@@ -327,7 +327,7 @@ class WindowTests(unittest.TestCase):
         # Phase F2: SFTP hosts open a file browser (no network here: the tab class is replaced).
         with mock.patch.object(self.win.terminal_tabs, "new_terminal", return_value=mock.Mock()) as new_terminal, \
                 mock.patch.object(self.win.terminal_tabs, "add_page") as add_page, \
-                mock.patch("ssh_manager.gtkui.file_browser.tab.FileBrowserTab") as browser, \
+                mock.patch("ophion.gtkui.file_browser.tab.FileBrowserTab") as browser, \
                 mock.patch.object(self.win.sessions, "bind_tab_status"):
             self.win.sessions.open_hosts([web, self.files])
         self.assertEqual(new_terminal.call_count, 1)  # only the SSH host got a terminal

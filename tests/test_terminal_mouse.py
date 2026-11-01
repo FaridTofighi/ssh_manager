@@ -31,9 +31,9 @@ class TerminalMouseTests(unittest.TestCase):
         gi.require_version("Vte", "2.91")
         from gi.repository import Gdk, Gtk  # type: ignore
 
-        from ssh_manager import gtk_terminal
-        from ssh_manager.config import HostEntry
-        from ssh_manager.settings import TerminalInputSettings
+        from ophion import gtk_terminal
+        from ophion.config import HostEntry
+        from ophion.settings import TerminalInputSettings
 
         self.Gdk, self.Gtk, self.gt = Gdk, Gtk, gtk_terminal
         self.tab = gtk_terminal.TerminalTab(HostEntry("mouse-test", {"hostname": "example.invalid"}),
@@ -174,10 +174,10 @@ if __name__ == "__main__":
 @unittest.skipUnless(display_available(), "needs a display")
 class MousePreferencesTests(unittest.TestCase):
     def test_preferences_edit_the_shared_settings_in_place(self) -> None:
-        from ssh_manager.gtkui.controllers.app_dialogs import AppDialogs
-        from ssh_manager.gtkui.dialogs.preferences import PreferencesDialog
-        from ssh_manager.gtkui.theme.loader import ThemeMode
-        from ssh_manager.settings import AppSettings
+        from ophion.gtkui.controllers.app_dialogs import AppDialogs
+        from ophion.gtkui.dialogs.preferences import PreferencesDialog
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.settings import AppSettings
 
         settings = AppSettings()
         shared = settings.terminal_input  # what every open terminal holds

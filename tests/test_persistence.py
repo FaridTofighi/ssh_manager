@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.persistence import append_text, write_json_atomic, write_text_atomic
+from ophion.persistence import append_text, write_json_atomic, write_text_atomic
 
 
 class PersistenceTests(unittest.TestCase):

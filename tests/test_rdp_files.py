@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ssh_manager.rdp.rdpfile import RdpFileError, decode, encode_rdp, export_rdp, import_rdp, parse_lines
-from ssh_manager.rdp.settings import Gateway, RdpSettings, RemoteApp, SharedFolder
-from ssh_manager.rdp.wol import broadcast_ok, magic_packet, parse_mac, wake
+from ophion.rdp.rdpfile import RdpFileError, decode, encode_rdp, export_rdp, import_rdp, parse_lines
+from ophion.rdp.settings import Gateway, RdpSettings, RemoteApp, SharedFolder
+from ophion.rdp.wol import broadcast_ok, magic_packet, parse_mac, wake
 
 SAMPLE = "\r\n".join([
     "screen mode id:i:2",

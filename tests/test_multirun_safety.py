@@ -3,7 +3,7 @@
 import time
 import unittest
 
-from ssh_manager.multirun import safety as S
+from ophion.multirun import safety as S
 
 from tests.gtk_window_fixture import display_available
 
@@ -48,7 +48,7 @@ class MatcherTests(unittest.TestCase):
 @unittest.skipUnless(display_available(), "needs a display")
 class ConfirmDialogTests(unittest.TestCase):
     def targets(self, count):
-        from ssh_manager.multirun.engine import Target
+        from ophion.multirun.engine import Target
 
         return [Target(key=f"k{i}", alias=f"host-{i:04d}", hostname="x", group="Prod/web") for i in range(count)]
 
@@ -58,7 +58,7 @@ class ConfirmDialogTests(unittest.TestCase):
         self.assertTrue(S.needs_confirmation(1, "reboot"))
 
     def test_dangerous_command_needs_the_tick(self) -> None:
-        from ssh_manager.gtkui.dialogs.multirun_confirm import RunConfirmDialog
+        from ophion.gtkui.dialogs.multirun_confirm import RunConfirmDialog
 
         dialog = RunConfirmDialog(None, self.targets(3), "sudo reboot")
         self.addCleanup(dialog.destroy)
@@ -71,7 +71,7 @@ class ConfirmDialogTests(unittest.TestCase):
     def test_twelve_hundred_hosts_fit_the_screen_and_are_searchable(self) -> None:
         from gi.repository import Gdk, Gtk  # type: ignore
 
-        from ssh_manager.gtkui.dialogs.multirun_confirm import RunConfirmDialog
+        from ophion.gtkui.dialogs.multirun_confirm import RunConfirmDialog
 
         dialog = RunConfirmDialog(None, self.targets(1200), "uptime")
         self.addCleanup(dialog.destroy)

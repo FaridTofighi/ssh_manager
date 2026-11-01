@@ -1,7 +1,7 @@
 # SSH keys
 
 Creating, protecting and using SSH key pairs, installing them on servers, and
-the ssh-agent. Code: `ssh_manager/ssh_keys.py` (no GTK),
+the ssh-agent. Code: `ophion/ssh_keys.py` (no GTK),
 `gtkui/controllers/ssh_keys_controller.py`, `gtkui/dialogs/ssh_keys.py`,
 `gtkui/dialogs/ssh_keys_deploy.py`, `gtkui/dialogs/ssh_agent_section.py`.
 

@@ -12,11 +12,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ssh_manager.auth_flow import PasswordResolution
-from ssh_manager.config import HostEntry
-from ssh_manager.rdp import engines
-from ssh_manager.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
-from ssh_manager.trust import TrustStore, pin_key
+from ophion.auth_flow import PasswordResolution
+from ophion.config import HostEntry
+from ophion.rdp import engines
+from ophion.rdp.engines import ClientBinary, EngineReport, Platform, build_engines, parse_help_options
+from ophion.trust import TrustStore, pin_key
 from tests import fake_freerdp
 from tests.test_rdp_session import CONNECTED, FakePasswordDialog, FakeSaveDialog, probe_result
 
@@ -34,7 +34,7 @@ def _x11() -> bool:
         gi.require_version("GdkX11", "3.0")
         from gi.repository import Gdk, GdkX11, Gtk  # type: ignore
 
-        from ssh_manager.rdp.x11 import open_x11
+        from ophion.rdp.x11 import open_x11
 
         x11 = open_x11()
         if x11 is None:
@@ -64,8 +64,8 @@ class EmbedTests(unittest.TestCase):
     def setUp(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
-        from ssh_manager.gtkui.rdp.runtime import RdpRuntime
-        from ssh_manager.rdp.process import ChildRegistry
+        from ophion.gtkui.rdp.runtime import RdpRuntime
+        from ophion.rdp.process import ChildRegistry
 
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -89,12 +89,12 @@ class EmbedTests(unittest.TestCase):
         FakePasswordDialog.answers, FakePasswordDialog.requests, FakeSaveDialog.offers = [], [], []
         for target, value in (("PasswordRequestDialog", FakePasswordDialog), ("SavePasswordDialog", FakeSaveDialog),
                               ("RETRY_DELAY_S", 0)):
-            patcher = mock.patch(f"ssh_manager.gtkui.rdp.tab.{target}", value)
+            patcher = mock.patch(f"ophion.gtkui.rdp.tab.{target}", value)
             patcher.start()
             self.addCleanup(patcher.stop)
 
     def tab(self, **script):
-        from ssh_manager.gtkui.rdp.tab import RdpSessionTab
+        from ophion.gtkui.rdp.tab import RdpSessionTab
 
         env = mock.patch.dict(os.environ, fake_freerdp.env_for(self.record, **script))
         env.start()
@@ -155,10 +155,10 @@ class EmbedTests(unittest.TestCase):
         self.assertIsNone(tab.surface)
 
     def test_no_window_in_time_falls_back_to_external_and_is_remembered(self) -> None:
-        with mock.patch("ssh_manager.gtkui.rdp.display.EMBED_TIMEOUT_S", 1.0), \
-                mock.patch("ssh_manager.gtkui.rdp.display.SocketSurface.start_watch",
+        with mock.patch("ophion.gtkui.rdp.display.EMBED_TIMEOUT_S", 1.0), \
+                mock.patch("ophion.gtkui.rdp.display.SocketSurface.start_watch",
                            lambda surface, timeout_s=1.0, original=__import__(
-                               "ssh_manager.gtkui.rdp.display", fromlist=["x"]).SocketSurface.start_watch:
+                               "ophion.gtkui.rdp.display", fromlist=["x"]).SocketSurface.start_watch:
                            original(surface, 1.0)):
             tab = self.tab(lines=[CONNECTED], embed=True, no_reparent=True, sleep=30)
             self.assertTrue(pump_until(lambda: len(fake_freerdp.records(self.record)) == 2, 20),
@@ -186,8 +186,8 @@ class EmbedTests(unittest.TestCase):
         tab.disconnect()
 
     def test_dropped_connection_reconnects_with_backoff(self) -> None:
-        with mock.patch("ssh_manager.rdp.reconnect.BASE_S", 0.2), \
-                mock.patch("ssh_manager.gtkui.rdp.tab.ReconnectScheduler.next_delay",
+        with mock.patch("ophion.rdp.reconnect.BASE_S", 0.2), \
+                mock.patch("ophion.gtkui.rdp.tab.ReconnectScheduler.next_delay",
                            lambda self: None if self.cancelled or self.attempts >= self.limit
                            else (setattr(self, "attempts", self.attempts + 1) or 0.2)):
             tab = self.tab(lines=[CONNECTED, "ERRCONNECT_CONNECT_TRANSPORT_FAILED [0x0002000D]"], gap=1.5,
@@ -276,8 +276,8 @@ class FrdpAdapterTests(unittest.TestCase):
         return FakeFrdpDisplay
 
     def test_adapter_connects_and_answers_certificates_from_the_app(self) -> None:
-        from ssh_manager.gtkui.rdp.display import FrdpSurface
-        from ssh_manager.rdp.engines import frdp_missing
+        from ophion.gtkui.rdp.display import FrdpSurface
+        from ophion.rdp.engines import frdp_missing
 
         cls = self.fake_class()
         self.assertEqual(frdp_missing(cls), [])
