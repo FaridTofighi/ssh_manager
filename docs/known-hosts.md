@@ -1,6 +1,6 @@
 # Known hosts and SSH host keys
 
-How SSH Manager shows and handles SSH host keys: the terminal banner, the
+How Ophion shows and handles SSH host keys: the terminal banner, the
 Known Hosts manager, and the file browser / tunnel dialog. Code:
 `ssh_manager/known_hosts.py` (no GTK), `ssh_manager/host_key_output.py`,
 `gtkui/dialogs/known_hosts.py`, `gtkui/dialogs/host_key.py`.
@@ -44,7 +44,7 @@ source, or check from another network.
       something else now, the host's entries are searched again. With more than
       one candidate nothing is removed, and the manager is the place to decide.
     - **Then reconnects.** ssh asks again whether to trust the new key, **in the
-      terminal**. SSH Manager never answers that question for you.
+      terminal**. Ophion never answers that question for you.
 - **Unknown key (first connection):** an information bar shows the fingerprint
   with **Copy Fingerprint**. You answer ssh in the terminal as before. There is
   no "Trust" button.

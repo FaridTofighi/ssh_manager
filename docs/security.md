@@ -1,6 +1,6 @@
 # Security
 
-How SSH Manager protects saved passwords and macros, what it does not protect
+How Ophion protects saved passwords and macros, what it does not protect
 against, and how data of older versions is moved. Code:
 `ssh_manager/keybox.py`, `ssh_manager/aead.py`, `ssh_manager/secure_store.py`
 (`EncryptedFileKeyring`), `ssh_manager/macros.py`, `ssh_manager/unlock.py`,
@@ -43,15 +43,15 @@ thread with a spinner. After five wrong passwords, each next try waits 1, 2,
 
 ### Files
 
-| File (in `~/.config/ssh-manager/` unless noted) | Holds | Protection |
+| File (in `~/.config/ophion/` unless noted) | Holds | Protection |
 |---|---|---|
 | `keybox.json` | the wrapped data key, the KDF parameters, `migrated` counts | AES-256-GCM, 0600 |
 | `passwords.json` (version 3) | every saved password (`credential:<id>`, `host:port:user`) | AES-256-GCM with the `secrets` subkey, 0600 |
 | `macros.enc` (version 2) | macros, their shortcuts and secret steps | AES-256-GCM with the `macros` subkey, 0600 |
 | `credentials.json` | credential names, usernames and host bindings | not secret, not encrypted |
 | `settings.json`, `ui_state.json`, `smart_groups.json` | preferences and window state | not secret, not encrypted |
-| `~/.local/share/ssh-manager/inventory.db` | hosts, users, groups, notes | **not encrypted** |
-| `~/.local/share/ssh-manager/tls-pins.json` | accepted FTPS certificate fingerprints | not secret, not encrypted |
+| `~/.local/share/ophion/inventory.db` | hosts, users, groups, notes | **not encrypted** |
+| `~/.local/share/ophion/tls-pins.json` | accepted FTPS certificate fingerprints | not secret, not encrypted |
 
 Each encrypted file records the `keybox_id` in its authenticated header: a
 file of another key is refused ("This file belongs to a different key") and
@@ -107,13 +107,13 @@ Idle auto-lock is not implemented (a possible later addition).
 | an unfinished migration | unlock, then the migration resumes |
 | encrypted stores but **no** `keybox.json` | "The key file keybox.json is missing": quit without changes (the default), or start without them; the old files are kept as `*.orphaned-<time>`. A new key is never created silently. |
 
-### Unlock modes (Preferences → Security → When SSH Manager Starts)
+### Unlock modes (Preferences → Security → When Ophion Starts)
 
 - **Ask for the master password** (default).
 - **Remember on this computer (no prompt):** after confirming the master
   password, the data key goes to the OS keyring (service `ssh-manager`, key
   `keybox:<keybox id>`). Anyone who can sign in to this computer account can
-  open SSH Manager; your saved passwords stay encrypted on disk. Choosing
+  open Ophion; your saved passwords stay encrypted on disk. Choosing
   *Ask* again deletes the entry. Without a usable keyring the option is
   disabled and says why. The mode is only "is that keyring entry there":
   there is no flag in any JSON file.

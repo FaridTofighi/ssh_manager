@@ -6,6 +6,18 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 (commit b7597c5). Design reference: `docs/ui-design-system.md`. Code map:
 `docs/ui-architecture.md`.
 
+## Renamed to Ophion
+
+- Renamed to Ophion ("Connection manager for SSH, SFTP, FTP and RDP"), with a new icon. Your data
+  moves automatically to ~/.config/ophion and ~/.local/share/ophion. See "Upgrading from SSH
+  Manager" in the README.
+- The window title, header, About, menus, dialogs, reports and the OpenSSH export say Ophion. The
+  header's brand tile shows the new icon.
+- Command `ophion`, application id `io.github.ophion.Ophion`, desktop file
+  `io.github.ophion.Ophion.desktop`, AppImage `Ophion-<version>-x86_64.AppImage`.
+- `.sshm` exports, macros, the key file and saved passwords keep their formats: everything SSH
+  Manager wrote still opens.
+
 ## Application icon
 
 - Ophion has its new application icon (window, taskbar, About dialog, desktop

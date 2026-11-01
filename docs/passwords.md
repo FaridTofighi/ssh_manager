@@ -239,7 +239,7 @@ spawn adds
 OpenSSH runs `LocalCommand` on this machine right after a successful login,
 so the marker file appearing means "authenticated".
 
-- **The marker:** `$XDG_RUNTIME_DIR/ssh-manager/<uuid>.ok`, in a 0700
+- **The marker:** `$XDG_RUNTIME_DIR/ophion/<uuid>.ok`, in a 0700
   directory. It is deleted when the attempt ends. The path is shell-quoted,
   with `%` doubled, because `LocalCommand` expands `%` tokens.
 - **A host's own `LocalCommand`** still runs, after the marker

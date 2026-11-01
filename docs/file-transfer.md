@@ -54,7 +54,7 @@ Stored as `metadata["transfer"]` (`"v": 1`), never as SSH options.
   file) by default, TLS 1.2 minimum.
   - **Untrusted certificate:** subject, issuer, validity and the SHA-256
     fingerprint are shown. Trusting it pins the fingerprint in
-    `$XDG_DATA_HOME/ssh-manager/tls-pins.json` (0600), keyed by host id and
+    `$XDG_DATA_HOME/ophion/tls-pins.json` (0600), keyed by host id and
     `hostname:port`.
   - **Changed certificate:** a pinned certificate that changes is refused
     ("certificate has CHANGED").
@@ -170,7 +170,7 @@ Double-click an FTP, FTPS or SFTP host to open a **file-browser tab**:
   - **Bookmarks:** per host, in the bookmarks menu, with the recent server
     folders.
   - **Last folders:** the last local and remote folders are remembered per
-    host in `$XDG_DATA_HOME/ssh-manager/file-browser.json` (0600). Turn this
+    host in `$XDG_DATA_HOME/ophion/file-browser.json` (0600). Turn this
     off in Preferences.
 - **Read-only hosts** (local permission "Allow editing" off): browse and
   download only. Upload, new folder, rename and delete are disabled, and say
@@ -322,7 +322,7 @@ Stored as `file_transfer` in the settings file.
   characters from the server are shown as `?`. Nothing in the log, the
   clipboard copies or the file contains a password.
 - **Protocol log file** (off by default): the same lines, with the date and
-  the host alias, appended to `$XDG_STATE_HOME/ssh-manager/protocol.log`
+  the host alias, appended to `$XDG_STATE_HOME/ophion/protocol.log`
   (`~/.local/state/…`), mode 0600, rotated at 1 MiB with three old copies.
   It applies to tabs opened after it is turned on.
 

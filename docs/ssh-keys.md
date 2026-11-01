@@ -47,7 +47,7 @@ use the key. The key is made in the background; Cancel drops it.
 
 ## Passphrases
 
-**Remember the passphrase in SSH Manager (encrypted)** saves it in the app's password store, the same
+**Remember the passphrase in Ophion (encrypted)** saves it in the app's password store, the same
 place as host passwords, so the master password protects it (see
 `docs/security.md`). It is filed under the key's real path and never written
 to settings, the inventory, logs or messages. **Change Passphrase…** rewrites
@@ -92,7 +92,7 @@ or group's menu. This is what `ssh-copy-id` does:
 - **Set IdentityFile** (off by default): points the successful hosts at the
   key in the inventory, with Undo.
 
-Password login on the servers is left as it is; SSH Manager never offers to
+Password login on the servers is left as it is; Ophion never offers to
 turn it off.
 
 ## The ssh-agent
@@ -117,5 +117,5 @@ can use your keys while you are connected. When ticked, the host gets
 - Hardware (FIDO `-sk`) keys are listed when found, but can only be generated
   with `ssh-keygen`. OpenSSH certificates (`-cert.pub`) are not handled.
 - ECDSA keys can be imported and used but not generated here.
-- The agent row uses the agent of the environment SSH Manager was started
+- The agent row uses the agent of the environment Ophion was started
   from. Starting an agent is up to the desktop session.

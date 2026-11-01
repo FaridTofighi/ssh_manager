@@ -1,6 +1,6 @@
 # Connection protocols
 
-SSH Manager is a connection manager: a host is an SSH server, or an FTP,
+Ophion is a connection manager: a host is an SSH server, or an FTP,
 FTPS or SFTP server for file transfer. Remote desktop (RDP, VNC) can follow
 without touching the core. Code: `ssh_manager/protocols/__init__.py` (pure
 Python, no GTK).

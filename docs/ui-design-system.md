@@ -1,4 +1,4 @@
-# SSH Manager UI design system ("Relay")
+# Ophion UI design system ("Relay")
 
 Everything visual in the GTK 3 front-end comes from one place:
 `ssh_manager/gtkui/theme/`. The light theme reproduces the reference design

@@ -1,6 +1,9 @@
-# SSH Manager
+# Ophion
 
-SSH Manager is a local desktop and terminal UI for organising SSH hosts in
+*Connection manager for SSH, SFTP, FTP and RDP.* Ophion was called **SSH Manager** before; see
+[Upgrading from SSH Manager](#upgrading-from-ssh-manager).
+
+Ophion is a local desktop and terminal UI for organising SSH hosts in
 groups, launching SSH sessions, managing credentials, and editing host
 metadata. The desktop app keeps its own inventory; OpenSSH config files can be
 imported and exported.
@@ -61,7 +64,7 @@ On the first run:
   or the old `passwords.json`, and the macros, are moved to the new encrypted
   files automatically. Nothing is deleted until the move is verified. See
   `docs/security.md`.
-- **Inventory:** created at `~/.local/share/ssh-manager/inventory.db`.
+- **Inventory:** created at `~/.local/share/ophion/inventory.db`.
 - **Importing:** if `~/.ssh/config` or `~/.ssh/conf.d` has hosts, the app
   offers once to import them. MobaXterm exports, OpenSSH config files and
   `.rdp` files can be imported later from the app menu → Import.
@@ -115,7 +118,7 @@ place). The Textual app and `farid.py` work on folders (`--base-dir`, default
 ## Inventory
 
 The desktop app keeps groups and hosts in
-`~/.local/share/ssh-manager/inventory.db` (SQLite, mode 0600, rolling backups).
+`~/.local/share/ophion/inventory.db` (SQLite, mode 0600, rolling backups).
 Groups can be nested to any depth, a group can hold hosts and subgroups, and
 names can be any readable text — spaces, accents, Persian, … Your `~/.ssh`
 files are never changed implicitly:
@@ -125,7 +128,7 @@ files are never changed implicitly:
   bindings); "No" changes nothing.
 - **Import → From OpenSSH Config…** (files or folders, with a preview) and
   **Import → From MobaXterm…**.
-- **Export → To OpenSSH Config…** writes `~/.config/ssh-manager/ssh_config`
+- **Export → To OpenSSH Config…** writes `~/.config/ophion/ssh_config`
   and can add one `Include` line to `~/.ssh/config` (after a backup).
 - **Settings → Inventory** shows the location, with Back Up Now, Reveal and
   Export.
@@ -232,10 +235,10 @@ that direct file mode follows `Include` directives.
   sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
-- **SSH Manager export (.sshm)**: app menu → Export → SSH Manager Export, or
+- **Ophion export (.sshm)**: app menu → Export → Ophion Export, or
   Export Group… / Export Selected Hosts… in the sidebar, writes groups,
   subgroups, hosts of every protocol, colours and credential references (never
-  passwords; optionally encrypted with a passphrase). Import → From SSH Manager
+  passwords; optionally encrypted with a passphrase). Import → From Ophion
   Export brings them back with a wizard (credentials per user, colours, the
   same conflict rules as the MobaXterm import). See `docs/export-import.md`.
 - **Messages** appear as toasts; the activity button in the header keeps every
@@ -286,7 +289,7 @@ that credential is updated as well.
 
 ## Password Storage
 
-Saved passwords are stored in `~/.config/ssh-manager/passwords.json` (or under
+Saved passwords are stored in `~/.config/ophion/passwords.json` (or under
 `$XDG_CONFIG_HOME`), encrypted with AES-256-GCM. The key is in `keybox.json`,
 itself protected by the master password (scrypt; Argon2id where available)
 and optionally by a recovery key. The desktop keyring is no longer used to
@@ -313,12 +316,47 @@ With "Paramiko + VTE" enabled in Settings, connections honor the host's
 through the system `ssh` client in batch mode, so they need key or agent
 authentication.
 
+## Upgrading from SSH Manager
+
+The first time Ophion starts, it moves SSH Manager's folders to its own:
+
+| Before | After | Holds |
+|---|---|---|
+| `~/.config/ssh-manager` | `~/.config/ophion` | settings, the key file, saved passwords, credentials, macros, saved commands |
+| `~/.local/share/ssh-manager` | `~/.local/share/ophion` | the inventory database, file-browser state, TLS pins, import logs |
+| `~/.local/state/ssh-manager` | `~/.local/state/ophion` | the protocol log, Remote Desktop state |
+
+(`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` are honoured.)
+
+- **How:** each folder is renamed, and a symlink is left at the old place, so an older SSH Manager
+  started later still finds everything. When renaming is impossible (another file system), the
+  folder is **copied and checked** file by file. The old one is then left as it was, and a message
+  says it is no longer used. Nothing is ever deleted. `.migrated-from-ssh-manager` in each new
+  folder records when and how.
+- **Not while SSH Manager runs:** close the old window first. Ophion says so and quits without
+  changing anything.
+- **Nothing is merged:** a folder that already exists under the new name is left alone. If the move
+  fails, Ophion uses the old folders for that run and says so.
+- **Unchanged:** your master password, saved passwords, macros and `.sshm` exports (the file
+  formats keep their ids), and passwords in the system keyring (service `ssh-manager`).
+- **OpenSSH export:** the next export writes `~/.config/ophion/ssh_config`. The `Include` line
+  SSH Manager added to `~/.ssh/config` is replaced once, not duplicated.
+
+**Rolling back:**
+
+1. Quit Ophion.
+2. In each pair above, remove the symlink `ssh-manager`.
+3. Rename `ophion` back to `ssh-manager`.
+
+SSH Manager then starts with your data as it is now.
+
 ## Documentation
 
 - `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
 - `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
-- `docs/export-import.md` — SSH Manager's own export / import (.sshm): format, security, wizard, limits
+- `docs/export-import.md` — Ophion's own export / import (.sshm): format, security, wizard, limits
+- `docs/rename-audit.md` — the rename from SSH Manager: every old name, what changed and what stays
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
 - `docs/file-transfer.md` — FTP / FTPS / SFTP: settings, security, the file browser, transfers, diagnostics

@@ -1,6 +1,6 @@
 # Terminals: mouse, clipboard, shortcuts and the local shell
 
-Every terminal in SSH Manager (SSH tabs, both panes of a split, tiles and the
+Every terminal in Ophion (SSH tabs, both panes of a split, tiles and the
 local shell tab) behaves like gnome-terminal. Code: `ssh_manager/terminal_input.py`
 (mouse rules), `gtk_terminal.py` (`TerminalTab`), `gtkui/controllers/shortcut_registry.py`
 (shortcuts), `local_shell.py` and `gtkui/local_terminal.py` (the local shell).
@@ -118,7 +118,7 @@ Settings → Terminal → *Local terminal* (`settings.json`: `local_shell`):
 an executable file. If it cannot be started, the tab says why and offers
 *Choose Another Shell…*.
 
-**Its environment** is the app's, minus `SSHPASS` and every `SSH_MANAGER_*` /
+**Its environment** is the app's, minus `SSHPASS` and every `OPHION_*`, `SSH_MANAGER_*` /
 `SSHM_*` variable and the outer `TMUX`, `TMUX_PANE`, `STY` and `WINDOW`. `TERM`
 is `xterm-256color` and `COLORTERM=truecolor`, whatever terminal the app was
 started from (SSH tabs too; see *TERM* below). `HOME`,
@@ -126,7 +126,7 @@ started from (SSH tabs too; see *TERM* below). `HOME`,
 `DBUS_SESSION_BUS_ADDRESS` are kept. The shell gets exactly this list: VTE's
 `SPAWN_NO_PARENT_ENVV` stops VTE from adding the app's environment back.
 
-**AppImage:** when SSH Manager runs from its AppImage (`SSH_MANAGER_APPDIR` is
+**AppImage:** when Ophion runs from its AppImage (`OPHION_APPDIR`, formerly `SSH_MANAGER_APPDIR`, is
 set), the bundled folders are removed from `PATH`, `LD_LIBRARY_PATH`,
 `XDG_DATA_DIRS`, `GI_TYPELIB_PATH`, `GSETTINGS_SCHEMA_DIR`, `GTK_PATH`,
 `GIO_MODULE_DIR`, `PYTHONHOME`, `PYTHONPATH` and the launcher's other paths, and

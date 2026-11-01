@@ -2,14 +2,14 @@
 
 App menu → **Import → From MobaXterm (.mxtsessions)…**, or **Import from
 MobaXterm…** in the empty sidebar. A five-step wizard reads a MobaXterm
-sessions export and copies its folders and SSH sessions into the SSH Manager
+sessions export and copies its folders and SSH sessions into the Ophion
 inventory as groups and hosts. Nothing is written until you press **Import**. Nothing in
 the file is executed, connected to or resolved (no DNS, no ping).
 
 Code: `ssh_manager/importers/mobaxterm.py` (pure Python: parse, plan, map
 credentials, commit), `gtkui/dialogs/mobaxterm_import.py` (the wizard) and
-`gtkui/controllers/mobaxterm_import.py` (entry point). To move an inventory between SSH Manager
-installations, use SSH Manager's own export instead (`docs/export-import.md`).
+`gtkui/controllers/mobaxterm_import.py` (entry point). To move an inventory between Ophion
+installations, use Ophion's own export instead (`docs/export-import.md`).
 
 ## The `.mxtsessions` format
 
@@ -90,11 +90,11 @@ behind jump= #109#0%10.0.0.13%22%bob%%-1%-1%%10.0.0.254%22%alice%…
 
 ## How folders and sessions are mapped
 
-The import writes into the SSH Manager inventory (`docs/inventory-store.md`).
+The import writes into the Ophion inventory (`docs/inventory-store.md`).
 There, groups nest to any depth and a group can hold both hosts and
 subgroups, so the MobaXterm tree is copied **1:1**.
 
-| MobaXterm | SSH Manager |
+| MobaXterm | Ophion |
 |---|---|
 | Folder `S1\S2\…\Sn` | Group path `S1 / S2 / … / Sn` (any depth) |
 | Top-level folder `S1` | Top-level group `S1`; sessions directly in it are its hosts |
@@ -204,7 +204,7 @@ the transaction rolls back, then the wizard closes.
 ## The report
 
 The Review step shows a report you can copy. After the import, it is saved as
-`~/.local/share/ssh-manager/imports/mobaxterm-<timestamp>.log`, with mode
+`~/.local/share/ophion/imports/mobaxterm-<timestamp>.log`, with mode
 0600 (under `$XDG_DATA_HOME` when set).
 
 - **Contents:** counts, skipped types, issue codes with line numbers, the
@@ -226,4 +226,4 @@ The application log records only the outcome and counts.
 | `windows_key_path` | The key path points to Windows; edit the host and choose the key again. |
 | `slash_replaced` / `name_truncated` / `name_deduplicated` | A name had to change for the inventory; the report lists original → stored. |
 | `destination_missing` | The group chosen under “Import under an existing group” was deleted; choose it again. |
-| "The inventory is in use by another SSH Manager window" | Another instance is writing; try again in a moment. |
+| "The inventory is in use by another Ophion window" | Another instance is writing; try again in a moment. |

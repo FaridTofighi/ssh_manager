@@ -104,7 +104,7 @@ session first." otherwise).
   macro is already running in this session."). Other sessions can run their
   own macros meanwhile.
 
-**Asking first:** before a run on two or more sessions, SSH Manager asks "Run
+**Asking first:** before a run on two or more sessions, Ophion asks "Run
 macro “<name>” on N sessions?" with the list of sessions. *Cancel* runs nothing
 anywhere. *Don't ask again for multi-session runs* turns the question off; the
 checkbox *Ask before running a macro on several sessions* in Manage Macros
@@ -155,8 +155,8 @@ macro first.
 
 ## Storage and encryption
 
-`macros.enc` in the configuration folder (`$XDG_CONFIG_HOME/ssh-manager/`,
-usually `~/.config/ssh-manager/`):
+`macros.enc` in the configuration folder (`$XDG_CONFIG_HOME/ophion/`,
+usually `~/.config/ophion/`):
 
 ```json
 {"format": "ssh-manager-macros", "version": 2, "keybox_id": "<base64>",
@@ -166,7 +166,7 @@ usually `~/.config/ssh-manager/`):
 * **Everything** (names, shortcuts, descriptions, steps) is inside `data`.
 * **Key:** the `macros` subkey of the data key in `keybox.json`, the one key
   the master password protects (see [`docs/security.md`](security.md)).
-  There is no key derivation per file: once SSH Manager is unlocked, the
+  There is no key derivation per file: once Ophion is unlocked, the
   macros open at once.
 * **Cipher:** AES-256-GCM. The header (`format`, `version`, `keybox_id`,
   `cipher`) is authenticated. A file of another key, a changed header, a
@@ -174,7 +174,7 @@ usually `~/.config/ssh-manager/`):
 * **Writing:** a temporary file created with mode 0600 in the same folder,
   `fsync`, then rename; the folder is made 0700. The previous file is kept as
   `macros.enc.bak` (also encrypted). Before writing, the file is read again:
-  macros another SSH Manager window saved meanwhile are merged by id (the
+  macros another Ophion window saved meanwhile are merged by id (the
   newest change wins; deletions here stay deleted).
 * **No drafts:** a recording lives in memory only until you save or discard
   it. There are no temporary files, no autosave and no recovery after a crash.

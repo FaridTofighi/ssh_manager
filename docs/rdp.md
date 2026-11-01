@@ -1,7 +1,7 @@
 # Remote Desktop (RDP)
 
 RDP hosts use the protocol `rdp` (port 3389). The remote desktop itself is
-drawn by **FreeRDP**, an optional system package: SSH Manager starts and
+drawn by **FreeRDP**, an optional system package: Ophion starts and
 every other protocol works without it. Code: `ssh_manager/rdp/` (pure
 Python) and `ssh_manager/gtkui/dialogs/rdp_page.py`,
 `rdp_diagnostics.py`.
@@ -289,7 +289,7 @@ it accepted; such lines are ignored.
 - **Stopping:** **Disconnect**, closing the tab (which asks while
   connected) and quitting (which asks once for all sessions) send SIGTERM
   to the group, then SIGKILL after 2 s.
-- **Child registry:** `$XDG_RUNTIME_DIR/ssh-manager/rdp-children.json`
+- **Child registry:** `$XDG_RUNTIME_DIR/ophion/rdp-children.json`
   (0600) records each child. If the app was killed, the next start stops a
   recorded group only if that pid still runs the same client with the same
   start time, and only if the app instance that started it is gone.
@@ -339,7 +339,7 @@ it accepted; such lines are ignored.
 - **Fallback:** if no FreeRDP window appears within 10 s of connecting (a
   window manager or compositor that interferes), the tab notes it, switches
   to an external window and remembers the failure for this engine and
-  session type (`$XDG_STATE_HOME/ssh-manager/rdp-embed.json`).
+  session type (`$XDG_STATE_HOME/ophion/rdp-embed.json`).
 
 ### gtk-frdp
 
@@ -447,7 +447,7 @@ stays trusted for the tab's later attempts.
 - **Sensitive places:** the file system root, `/etc`, `/root`, `/boot`,
   `/proc`, `/sys`, `/dev`, `/var/lib`, `/usr` itself, the home folder,
   `~/.ssh`, `~/.gnupg`, `~/.password-store`, the keyrings, `~/.aws`,
-  `~/.kube`, `~/.docker` and SSH Manager's own configuration and data
+  `~/.kube`, `~/.docker` and Ophion's own configuration and data (and SSH Manager's old)
   folders. Any folder that *is*, *is inside* or *contains* one of them
   counts, and so does a symbolic link that leads into one. Ordinary folders
   in the home folder and `/usr/share` are fine.

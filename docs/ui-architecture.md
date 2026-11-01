@@ -1,4 +1,4 @@
-# SSH Manager GTK UI architecture
+# Ophion GTK UI architecture
 
 ```
 ssh_manager/
@@ -241,7 +241,9 @@ history popover in the header bar.
   sets an icon of its own.
 - **Where it shows:** the About logo, and the "Add your first host" welcome,
   which shows the mark at 128 px instead of the card
-  (`ReadyState.set_content(logo=True)`). The header bar has no Ophion logo.
+  (`ReadyState.set_content(logo=True)`). The header's brand tile draws it
+  too (`widgets/app_logo.py`): the smallest PNG at least as large as the tile
+  at the screen's scale, scaled down, corners rounded by a clip.
 - **Packaging:** the AppImage installs the same files under
   `usr/share/icons/hicolor` (`packaging/appimage/build.sh`). Its desktop
   entry says `Icon=ophion`, and `StartupWMClass` is the application id, which
@@ -252,10 +254,10 @@ history popover in the header bar.
   `index.theme`. The build script copies every size folder.
 - **Raster only:** there is no SVG. Never resample the PNGs (no enlarging, no
   "fixing"); sizes above 512 px or sharper small sizes need a vector redraw.
-- **Wordmark:** the package's wordmark (opaque white background) is not used
-  yet. It spells the new name and belongs with the rename. When it is added,
-  prepare a transparent light-theme copy at build time and show only the mark
-  on dark themes.
+- **Wordmark:** the package's wordmark (opaque white background) is not used;
+  the header writes the name as text. If it is ever used, prepare a
+  transparent light-theme copy at build time and show only the mark on dark
+  themes.
 - **Symbolic icons:** the UI's own `sshm-*-symbolic.svg` icons are separate
   (`assets/icons`, `make_icon`).
 

@@ -1,6 +1,6 @@
 # Port forwarding (tunnels)
 
-SSH Manager runs SSH port forwards for you: per host, started and stopped on
+Ophion runs SSH port forwards for you: per host, started and stopped on
 their own, with a status for each. Code: `ssh_manager/tunnels/model.py`
 (forwards, validation), `ssh_manager/tunnels/engine.py` (the Paramiko engine,
 no GTK), `gtkui/controllers/tunnels.py`, `gtkui/dialogs/tunnels.py`,
@@ -75,7 +75,7 @@ names are resolved on the server). **Copy Address** gives
   with **Import as Managed Forward**.
   - **The ssh option stays:** remove it on the SSH Options page if ssh should
     not open it too.
-  - **Not understood:** options SSH Manager cannot read are left as they are.
+  - **Not understood:** options Ophion cannot read are left as they are.
 - **The editor:** explains each type with one line and a small picture, checks
   as you type, and keeps **Save** disabled until the forward is valid. Its rules:
   - ports 1–65535 (a warning below 1024: those need administrator rights);
@@ -125,6 +125,6 @@ quit?". Closing the window stops them all.
 - **Limits:**
   - at most 64 simultaneous connections per forward (more are refused);
   - Unix-socket forwards (`LocalForward /path …`) are not managed.
-- **Stored** in the host's metadata (`forwards`), included in SSH Manager's
+- **Stored** in the host's metadata (`forwards`), included in Ophion's
   own export and import. The MobaXterm import does not read MobaXterm's
   tunnels.
