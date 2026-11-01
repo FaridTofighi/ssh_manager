@@ -1,0 +1,24 @@
+{
+ "format": "ssh-manager-keybox",
+ "version": 1,
+ "id": "llpvSP0VIWZMjfSEfY1TAA==",
+ "created": "2026-11-01T10:11:28Z",
+ "unlockers": [
+  {
+   "type": "passphrase",
+   "kdf": {
+    "name": "scrypt",
+    "n": 32768,
+    "r": 8,
+    "p": 1,
+    "salt": "pK7nRkxIObC4uwggDMsrGQ=="
+   },
+   "nonce": "9i2cCwNVftVzqss6",
+   "wrapped": "1+TVpEkW3EaqqSx2lPj4mzXuYV37DV6ynzjxIXIjre8GpoGzQ5ChG2BiSbDvS7yC"
+  }
+ ],
+ "check": {
+  "nonce": "ESLonVycSAUgXMim",
+  "data": "MJku94XQos2B2VWeK5bfJxOV7/hR0655N0rHZdGlifhGzDw0Z7C03Q=="
+ }
+}

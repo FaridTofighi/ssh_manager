@@ -8,6 +8,6 @@ Icon=ophion
 Terminal=false
 Categories=Network;RemoteAccess;
 Keywords=ssh;sftp;ftp;rdp;terminal;remote;
-StartupWMClass=org.codex.SSHManager
+StartupWMClass=io.github.ophion.Ophion
 StartupNotify=true
 X-AppImage-Name=SSH Manager

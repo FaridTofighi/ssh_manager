@@ -1,0 +1,3 @@
+Include ~/.config/ssh-manager/ssh_config  # added by SSH Manager
+Host other
+    HostName 10.9.9.9

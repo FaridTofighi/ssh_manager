@@ -97,6 +97,7 @@ from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
 from ssh_manager.gtkui.workspaces import workspace_list  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import UI_FONT_FAMILIES  # noqa: E402
 from ssh_manager.gtkui.widgets.icons import install_app_icon, register_icon_path  # noqa: E402
+from ssh_manager.identity import APP_ID, APP_NAME, APP_SLUG  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
@@ -130,7 +131,7 @@ def _home_relative(path: Path) -> str:
         return str(path)
 
 
-APPLICATION_ID = "org.codex.SSHManager"  # also StartupWMClass in packaging/appimage/ssh-manager.desktop
+APPLICATION_ID = APP_ID  # also the desktop file's name and StartupWMClass (packaging/appimage)
 
 
 class SSHManagerApplication(Gtk.Application):
@@ -139,9 +140,10 @@ class SSHManagerApplication(Gtk.Application):
     def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None,
                  startup_host: Optional[HostEntry] = None) -> None:
         Gtk.Application.__init__(self, application_id=APPLICATION_ID)
-        # X11 WM_CLASS = the desktop file's StartupWMClass (it was "main.py"), so docks group the windows
-        # under the launcher and its icon; on Wayland the app id is already this.
-        GLib.set_prgname(APPLICATION_ID)
+        # X11 WM_CLASS = (APP_SLUG, APP_ID): its class is the desktop file's StartupWMClass, so docks group the
+        # windows under the launcher and its icon; on Wayland the app id is already APP_ID.
+        GLib.set_prgname(APP_SLUG)
+        GLib.set_application_name(APP_NAME)
         Gdk.set_program_class(APPLICATION_ID)
         self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
         self._inventory = inventory  # --inventory: another database file

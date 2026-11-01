@@ -99,11 +99,13 @@ class WindowClassTests(unittest.TestCase):
         from tests.gtk_window_fixture import WindowSandbox
 
         from ssh_manager.gtk_app import APPLICATION_ID, SSHManagerApplication
+        from ssh_manager.identity import APP_ID, APP_SLUG
 
         sandbox = WindowSandbox()  # a temporary HOME: the application reads its settings there
         self.addCleanup(sandbox.close)
         SSHManagerApplication()
-        self.assertEqual((GLib.get_prgname(), Gdk.get_program_class()), (APPLICATION_ID, APPLICATION_ID))
+        self.assertEqual(APPLICATION_ID, APP_ID)
+        self.assertEqual((GLib.get_prgname(), Gdk.get_program_class()), (APP_SLUG, APP_ID))  # X11 WM_CLASS
         self.assertEqual(desktop_entry()["StartupWMClass"], APPLICATION_ID)
 
 
