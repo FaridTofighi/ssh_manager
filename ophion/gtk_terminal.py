@@ -2708,6 +2708,7 @@ class TerminalNotebook(Gtk.Box):
             return
         if not target.confirm_close():  # e.g. "3 transfers are in progress. Cancel them and close?"
             return
+        restore = self._focus_in_sessions()  # before: the closed session may hold the keyboard
         self._detach_tab(target)
         self._tabs.remove(target)
         if target in self._open_order:
@@ -2722,10 +2723,13 @@ class TerminalNotebook(Gtk.Box):
             self._last_current_tab = self._tabs[0] if self._tabs else None
         target.destroy()
         if self._tile_mode:
-            self._rebuild_tile_grid()
+            self._rebuild_tile_grid()  # re-parents every tile: GTK drops the keyboard focus
         self._update_placeholder()
         self._update_broadcast_ui()
         self._emit_sessions_changed()
+        current = self._current_tab()
+        if restore and current is not None:
+            GLib.idle_add(self._focus_after_layout, current)
 
     def close_current(self) -> None:
         self.close_tab()

@@ -35,6 +35,7 @@ class TileFocusTests(unittest.TestCase):
         self.addCleanup(self.screen.restore)
         for tab in tabs:
             self.spy(tab)
+        _wait(lambda: False, 2.2)  # the focus retries queued while they opened (up to 2 s) have run out
         return tabs
 
     def spy(self, tab):
@@ -135,11 +136,30 @@ class TileFocusTests(unittest.TestCase):
         self.assertIn(current, tabs[:2])
         self.assert_current(current, label="after closing the current tile")
 
+    def test_closing_a_session_keeps_the_keyboard_in_the_sessions(self) -> None:
+        tabs = self.open("web-01", "web-02", "db-primary", "stage-app")
+        self.notebook.activate_pane(tabs[1])
+        self.toggle(True)
+        self.assert_current(tabs[1], label="tile mode")
+        self.notebook.close_tab(tabs[3])  # another tile: the grid is rebuilt, the current one stays
+        del self.typed[tabs[3].active_terminal]
+        _pump()
+        self.assert_current(tabs[1], label="another tile closed")
+        self.notebook.close_tab(tabs[1])  # the current tile: the first one takes over
+        del self.typed[tabs[1].active_terminal]
+        _pump()
+        self.assert_current(tabs[0], label="the current tile closed")
+        self.toggle(False)
+        self.assert_current(tabs[0], label="tabs mode")
+        self.notebook.close_tab(tabs[0])  # tabs: the next page becomes current
+        del self.typed[tabs[0].active_terminal]
+        _pump()
+        self.assert_current(tabs[2], label="the current tab closed")
+
     def test_programmatic_change_leaves_focus_in_a_text_entry_outside(self) -> None:
         tabs = self.open("web-01", "web-02", "db-primary")
         self.notebook.activate_pane(tabs[1])
         _wait(lambda: self.focus() is tabs[1].active_terminal, 3.0)
-        _wait(lambda: False, 2.5)  # the focus retries queued when the sessions opened (up to 2 s) have run out
         entry = self.win._sidebar.search_entry
         entry.grab_focus()
         _pump()
