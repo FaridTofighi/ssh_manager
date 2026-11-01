@@ -65,6 +65,14 @@ On the first run:
   files automatically. Nothing is deleted until the move is verified. See
   `docs/security.md`.
 - **Inventory:** created at `~/.local/share/ophion/inventory.db`.
+- **Launcher and icon:** the app adds its own launcher,
+  `~/.local/share/applications/io.github.faridtofighi.Ophion.desktop`, and
+  copies its icon to `~/.local/share/icons/hicolor/`. The task switcher,
+  Activities and the dock then show Ophion's icon for its windows, and Ophion
+  is in the app grid (you can pin it). The launcher is refreshed when the
+  checkout or the AppImage moves. A launcher you edited yourself is never
+  changed (delete it, or remove the `X-Ophion-Generated=true` line). To remove
+  it, delete those files.
 - **Importing:** if `~/.ssh/config` or `~/.ssh/conf.d` has hosts, the app
   offers once to import them. MobaXterm exports, OpenSSH config files and
   `.rdp` files can be imported later from the app menu → Import.

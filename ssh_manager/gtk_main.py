@@ -62,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
     if moved.status == BLOCKED:
         show_legacy_app_running()
         return 0  # nothing changed
+    from .desktop_integration import ensure_launcher
+
+    ensure_launcher()  # the desktop then shows Ophion's icon for its windows (task switcher, dock)
     app = SSHManagerApplication(base_dir, inventory=inventory, startup_host=host, migration=moved)
 
     gtk_argv = (sys.argv[:1] if argv is None else [APP_SLUG]) + extras
