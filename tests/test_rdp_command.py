@@ -219,5 +219,41 @@ class ValidationTests(unittest.TestCase):
             build(ClientBinary("x", "/x", (0, 0, 0), "", frozenset(), error="broken"))
 
 
+
+class KerberosTests(unittest.TestCase):
+    """No domain and no realm anywhere: NTLM directly, without FreeRDP's failing Kerberos attempt."""
+
+    def setUp(self) -> None:
+        from unittest import mock
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.krb5 = Path(self.tmp.name) / "krb5.conf"
+        patcher = mock.patch.dict("os.environ", {"KRB5_CONFIG": str(self.krb5)})  # never this computer's file
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def filtered(self, **kwargs) -> bool:
+        return "/auth-pkg-list:!kerberos" in args_of(build(**kwargs))
+
+    def test_plain_user_without_a_realm_skips_kerberos_with_a_note(self) -> None:
+        plan = build(identity=RdpIdentity("farid"))
+        self.assertIn("/auth-pkg-list:!kerberos", args_of(plan))
+        self.assertTrue(any("NTLM directly" in note for note in plan.notes))
+
+    def test_kerberos_stays_whenever_it_might_work(self) -> None:
+        self.assertFalse(self.filtered(identity=RdpIdentity("alice", "CORP")))  # a domain
+        self.assertFalse(self.filtered(identity=RdpIdentity("alice@corp.example", upn=True)))  # user@realm
+        self.assertFalse(self.filtered(identity=RdpIdentity("farid"), settings=RdpSettings(remote_credential_guard=True)))
+        self.assertFalse(self.filtered(identity=RdpIdentity("farid"), settings=RdpSettings(restricted_admin=True)))
+        self.assertFalse(self.filtered(identity=RdpIdentity("farid"), settings=RdpSettings(security="tls")))
+        self.krb5.write_text("[libdefaults]\n    default_realm = CORP.EXAMPLE\n")  # a realm on this computer
+        self.assertFalse(self.filtered(identity=RdpIdentity("farid")))
+
+    def test_a_client_without_the_option_gets_nothing_and_no_note(self) -> None:
+        plan = build(client=V2, identity=RdpIdentity("farid"))
+        self.assertNotIn("/auth-pkg-list:!kerberos", args_of(plan))
+        self.assertFalse(any("auth-pkg-list" in note for note in plan.notes))
+
 if __name__ == "__main__":
     unittest.main()

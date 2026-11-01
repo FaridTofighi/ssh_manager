@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .engines import ClientBinary
@@ -149,6 +150,7 @@ def build_launch(*, hostname: str, port: int, settings: RdpSettings, identity: R
     o.items.extend(LOG_ARGS)
 
     _security(o, settings, v3, accepted_fingerprints, ignore_certificate, cert_tofu)
+    _kerberos(o, settings, identity)
     _display(o, settings, v3, window_size, parent_window)
     _performance(o, settings, v3, latency_ms)
     _input(o, settings, v3)
@@ -361,6 +363,39 @@ def _redirection(o: _Options, s: RdpSettings, v3: bool) -> None:
             o.notes.append("A USB selector was not understood; it was left out.")
     if s.smartcard:
         o.add("/smartcard")
+
+
+def krb5_default_realm(environ: Optional[Dict[str, str]] = None) -> str:
+    """The ``default_realm`` of the system's Kerberos configuration (``KRB5_CONFIG``, else /etc/krb5.conf)."""
+
+    environ = os.environ if environ is None else environ
+    for path in (environ.get("KRB5_CONFIG") or "/etc/krb5.conf").split(":"):
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace") if path else ""
+        except OSError:
+            continue
+        match = re.search(r"^\s*default_realm\s*=\s*(\S+)", text, re.MULTILINE)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def _kerberos(o: _Options, s: RdpSettings, identity: RdpIdentity, environ: Optional[Dict[str, str]] = None) -> None:
+    """Sign in with NTLM directly when Kerberos cannot work (no domain, no realm anywhere).
+
+    FreeRDP 3 tries Kerberos first; without a realm it fails at once and logs two errors ("Configuration
+    file does not specify default realm") before falling back to NTLM. Kerberos stays whenever it might
+    work: a domain or ``user@realm``, a default realm on this computer, or an option that needs it.
+    """
+
+    if s.security in ("rdp", "tls") or identity.domain or identity.upn or "@" in identity.user:
+        return
+    if s.restricted_admin or s.remote_credential_guard or not o.known("auth-pkg-list"):
+        return
+    if krb5_default_realm(environ):
+        return
+    o.add("/auth-pkg-list:!kerberos")
+    o.notes.append("No domain and no Kerberos realm: signing in with NTLM directly (no Kerberos attempt).")
 
 
 def _connection(o: _Options, s: RdpSettings, v3: bool, gateway_password: Optional[str]) -> str:
