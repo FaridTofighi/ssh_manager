@@ -2353,6 +2353,8 @@ class TerminalNotebook(Gtk.Box):
         self._tabs: List[TerminalTab] = []
         self._tile_wrappers: Dict[TerminalTab, TileFrame] = {}
         self._tile_mode = False
+        self._rebuilding_layout = False  # tile ↔ tabs: re-attaching pages must not change the current session
+        self._user_layout_change = False  # the user's own toggle: the current session gets the keyboard after
         self._zoomed_tile: Optional[TerminalTab] = None
         self._broadcast_mode = False
         self._broadcast_included: Dict[TerminalTab, bool] = {}
@@ -2377,7 +2379,7 @@ class TerminalNotebook(Gtk.Box):
 
         self._build_toolbar()
         self._build_strip()
-        self._broadcast_strip = BroadcastStrip(lambda: self.set_broadcast_mode(False))
+        self._broadcast_strip = BroadcastStrip(lambda: self._as_user(lambda: self.set_broadcast_mode(False)))
         self.pack_start(self._broadcast_strip, False, False, 0)
         self._build_stack()
         self._sync_toolbar()
@@ -2975,7 +2977,16 @@ class TerminalNotebook(Gtk.Box):
         self._sync_toolbar()
 
     def toggle_tile_mode(self) -> None:
-        self.set_tile_mode(not self._tile_mode)
+        self._as_user(lambda: self.set_tile_mode(not self._tile_mode))
+
+    def _as_user(self, change: Callable[[], None]) -> None:
+        """A toggle by the user (button, menu, shortcut): the current session gets the keyboard afterwards."""
+
+        self._user_layout_change = True
+        try:
+            change()
+        finally:
+            self._user_layout_change = False
 
     @property
     def broadcast_active(self) -> bool:
@@ -3003,7 +3014,7 @@ class TerminalNotebook(Gtk.Box):
         )
 
     def toggle_broadcast(self) -> None:
-        self.set_broadcast_mode(not self._broadcast_mode)
+        self._as_user(lambda: self.set_broadcast_mode(not self._broadcast_mode))
 
     def _terminal_tabs(self) -> List[SessionPage]:
         return [tab for tab in self._tabs if tab.is_terminal]
@@ -3136,25 +3147,58 @@ class TerminalNotebook(Gtk.Box):
         return True
 
     def _set_tile_mode(self, active: bool) -> None:
+        """Tile ↔ tabs. The session the user was in stays current and gets the keyboard back once shown.
+
+        Re-parenting the tabs drops GTK's focus, and the notebook's switch-page fired by removing and
+        re-adding pages used to make another session current: both are handled here, for every path
+        (toolbar, menu, shortcut, broadcast, the last-but-one session closed).
+        """
+
         if active == self._tile_mode:
             return
-        current = self._current_tab()
+        keep = self._current_tab() or (self._tabs[0] if self._tabs else None)
+        restore = self._user_layout_change or self._focus_in_sessions()
         self._tile_mode = active
+        self._rebuilding_layout = True
+        try:
+            if active:
+                self._last_current_tab = keep
+                self._rebuild_tile_grid()
+            else:
+                for tab in list(self._tabs):
+                    self._detach_tab(tab)
+                for tab in self._tabs:
+                    self._append_tab_to_notebook(tab)
+        finally:
+            self._rebuilding_layout = False
+        self._last_current_tab = keep
         if active:
-            if current:
-                self._last_current_tab = current
-            self._rebuild_tile_grid()
-        else:
-            for tab in list(self._tabs):
-                self._detach_tab(tab)
-            for tab in self._tabs:
-                self._append_tab_to_notebook(tab)
-            if self._last_current_tab in self._tabs:
-                page_num = self._notebook.page_num(self._last_current_tab)
-                if page_num != -1:
-                    self._notebook.set_current_page(page_num)
+            self._sync_tile_frames()
+        elif keep in self._tabs:
+            page_num = self._notebook.page_num(keep)
+            if page_num != -1:
+                self._notebook.set_current_page(page_num)
+                self._on_switch_page(self._notebook, keep, page_num)  # labels, strip (no signal if already current)
         self._update_placeholder()
         self._dock_statusbar()
+        self._sync_toolbar()
+        self._emit_sessions_changed()  # host bar, status bar
+        if restore and keep is not None:
+            GLib.idle_add(self._focus_after_layout, keep)
+
+    def _focus_in_sessions(self) -> bool:
+        """Keyboard focus is in the sessions area, or nowhere (then the session may take it)."""
+
+        toplevel = self.get_toplevel()
+        focus = toplevel.get_focus() if isinstance(toplevel, Gtk.Window) else None
+        return focus is None or focus is self or focus.is_ancestor(self)
+
+    def _focus_after_layout(self, tab: TerminalTab) -> bool:
+        """Once the new layout is shown: the kept session's active pane gets the keyboard (if still current)."""
+
+        if tab in self._tabs and tab is self._current_tab():
+            tab.focus_terminal()  # waits until the terminal is realized and mapped
+        return GLib.SOURCE_REMOVE
 
     # ----------------------------------------------------------------- helpers
     def _tab_label_text(self, tab: TerminalTab) -> str:
@@ -3202,6 +3246,8 @@ class TerminalNotebook(Gtk.Box):
         self.close_tab(tab)
 
     def _on_switch_page(self, _notebook: Gtk.Notebook, page: Gtk.Widget, _num: int) -> None:
+        if self._rebuilding_layout:  # pages removed / re-added by _set_tile_mode: not the user's choice
+            return
         if isinstance(page, SessionPage):
             self._last_current_tab = page
         for tab, label in self._tab_labels.items():
@@ -3447,10 +3493,10 @@ class TerminalNotebook(Gtk.Box):
             tab._set_strip_ansi(button.get_active())
 
     def _on_tile_toggled(self, button: Gtk.ToggleButton) -> None:
-        self.set_tile_mode(button.get_active())
+        self._as_user(lambda: self.set_tile_mode(button.get_active()))
 
     def _on_broadcast_toggled(self, button: Gtk.ToggleButton) -> None:
-        self.set_broadcast_mode(button.get_active())
+        self._as_user(lambda: self.set_broadcast_mode(button.get_active()))
 
     def _on_stats_toggled(self, button: Gtk.ToggleButton) -> None:
         tab = self._current_tab()

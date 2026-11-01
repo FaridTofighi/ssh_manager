@@ -86,10 +86,6 @@ class TileFocusTests(unittest.TestCase):
         _pump()
 
     # ---------------------------------------------------------------- tests
-    # Measured (expected failure until the fix): _set_tile_mode() never requests terminal focus (after the
-    # tabs are reparented no widget has it), and while the layout is rebuilt the notebook's switch-page
-    # (_on_switch_page) overwrites _last_current_tab, so another session becomes current.
-    @unittest.expectedFailure
     def test_entering_and_leaving_keeps_the_current_session(self) -> None:
         tabs = self.open("web-01", "web-02", "db-primary")
         for index in (1, 0, 2):  # the middle one, the first, the last
@@ -101,10 +97,6 @@ class TileFocusTests(unittest.TestCase):
                 self.toggle(False)
                 self.assert_current(tabs[index], label="tile mode off")
 
-    # Measured (expected failure until the fix): _set_tile_mode() never requests terminal focus (after the
-    # tabs are reparented no widget has it), and while the layout is rebuilt the notebook's switch-page
-    # (_on_switch_page) overwrites _last_current_tab, so another session becomes current.
-    @unittest.expectedFailure
     def test_a_split_session_keeps_its_active_pane(self) -> None:
         tabs = self.open("web-01", "web-02", "db-primary")
         tabs[1].toggle_split()
@@ -118,10 +110,6 @@ class TileFocusTests(unittest.TestCase):
         self.toggle(False)
         self.assert_current(tabs[1], second, "split, tile mode off")
 
-    # Measured (expected failure until the fix): _set_tile_mode() never requests terminal focus (after the
-    # tabs are reparented no widget has it), and while the layout is rebuilt the notebook's switch-page
-    # (_on_switch_page) overwrites _last_current_tab, so another session becomes current.
-    @unittest.expectedFailure
     def test_broadcast_enters_and_leaves_tile_mode_with_focus(self) -> None:
         tabs = self.open("web-01", "web-02", "db-primary")
         self.notebook.activate_pane(tabs[1])
@@ -147,10 +135,6 @@ class TileFocusTests(unittest.TestCase):
         self.assertIn(current, tabs[:2])
         self.assert_current(current, label="after closing the current tile")
 
-    # Measured (expected failure until the fix): _set_tile_mode() never requests terminal focus (after the
-    # tabs are reparented no widget has it), and while the layout is rebuilt the notebook's switch-page
-    # (_on_switch_page) overwrites _last_current_tab, so another session becomes current.
-    @unittest.expectedFailure
     def test_programmatic_change_leaves_focus_in_a_text_entry_outside(self) -> None:
         tabs = self.open("web-01", "web-02", "db-primary")
         self.notebook.activate_pane(tabs[1])
