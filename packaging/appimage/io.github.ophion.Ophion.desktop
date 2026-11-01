@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=SSH Manager
-GenericName=SSH, file transfer and remote desktop manager
+Name=Ophion
+GenericName=Connection manager for SSH, SFTP, FTP and RDP
 Comment=Organise SSH hosts, open terminals, transfer files and connect to remote desktops
-Exec=ssh-manager %U
+Exec=ophion %U
 Icon=ophion
 Terminal=false
 Categories=Network;RemoteAccess;
 Keywords=ssh;sftp;ftp;rdp;terminal;remote;
 StartupWMClass=io.github.ophion.Ophion
 StartupNotify=true
-X-AppImage-Name=SSH Manager
+X-AppImage-Name=Ophion

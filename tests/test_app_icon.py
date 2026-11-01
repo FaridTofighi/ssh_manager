@@ -9,6 +9,7 @@ from unittest import mock
 from tests.gtk_window_fixture import display_available
 
 REPO = Path(__file__).resolve().parent.parent
+APP_ID = "io.github.ophion.Ophion"
 
 
 @unittest.skipUnless(display_available(), "needs a display")
@@ -145,7 +146,7 @@ def desktop_entry():
 
     parser = configparser.ConfigParser(interpolation=None)
     parser.optionxform = str  # keys are case-sensitive
-    parser.read(REPO / "packaging" / "appimage" / "ssh-manager.desktop", encoding="utf-8")
+    parser.read(REPO / "packaging" / "appimage" / f"{APP_ID}.desktop", encoding="utf-8")
     return parser["Desktop Entry"]
 
 
@@ -155,12 +156,25 @@ class PackagingTests(unittest.TestCase):
         for key in ("Type", "Name", "Exec", "Icon", "Terminal", "Categories", "StartupWMClass"):
             self.assertTrue(entry.get(key), key)
         self.assertEqual(entry["Icon"], "ophion")
-        self.assertEqual(entry["Exec"].split()[0], "ssh-manager")  # the AppImage's launcher name
+        self.assertEqual(entry["Exec"].split()[0], "ophion")  # the command (the AppImage integration rewrites it)
+        self.assertEqual((entry["Name"], entry["StartupWMClass"]), ("Ophion", APP_ID))
+        self.assertEqual(entry["GenericName"], "Connection manager for SSH, SFTP, FTP and RDP")
         self.assertEqual(entry["Terminal"], "false")
         if shutil.which("desktop-file-validate"):
-            result = subprocess.run(["desktop-file-validate", str(REPO / "packaging/appimage/ssh-manager.desktop")],
+            result = subprocess.run(["desktop-file-validate", str(REPO / f"packaging/appimage/{APP_ID}.desktop")],
                                     capture_output=True, text=True)
             self.assertEqual((result.returncode, result.stdout.strip()), (0, ""))
+
+    def test_appstream_metainfo(self) -> None:
+        import xml.etree.ElementTree as ET
+
+        root = ET.parse(REPO / "packaging" / "appimage" / f"{APP_ID}.metainfo.xml").getroot()
+        self.assertEqual((root.findtext("id"), root.findtext("name")), (APP_ID, "Ophion"))
+        self.assertEqual(root.find("launchable").text, f"{APP_ID}.desktop")
+        self.assertEqual(root.findtext("summary"), "Connection manager for SSH, SFTP, FTP and RDP")
+        self.assertEqual(root.findtext("provides/binary"), "ophion")
+        self.assertEqual(root.findtext("provides/id"), "org.codex.SSHManager")  # the id before the rename
+        self.assertEqual(root.findtext("icon"), "ophion")
 
     def test_the_appimage_installs_every_size(self) -> None:
         script = (REPO / "packaging" / "appimage" / "build.sh").read_text(encoding="utf-8")
@@ -169,6 +183,11 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('ln -s ophion.png "$APPDIR/.DirIcon"', script)
         self.assertIn("gtk-update-icon-cache -f -t", script)
         self.assertNotIn("ssh-manager.svg", script)  # the old icon is gone
+        self.assertIn('NAME="Ophion-$VERSION-x86_64.AppImage"', script)
+        self.assertIn('DESKTOP_ID="io.github.ophion.Ophion"', script)
+        apprun = (REPO / "packaging" / "appimage" / "AppRun").read_text(encoding="utf-8")
+        self.assertIn('export OPHION_APPDIR="$HERE"', apprun)
+        self.assertIn("${OPHION_APPIMAGE_EXEC:-${SSH_MANAGER_APPIMAGE_EXEC:-}}", apprun)  # the old name works
 
     def test_every_icon_file_is_shipped(self) -> None:
         """The AppImage ships ``git archive HEAD -- ssh_manager``: the files must exist and be tracked."""

@@ -1,10 +1,10 @@
-# Build image for the SSH Manager AppImage (used only to build; nothing here runs on the user's machine).
+# Build image for the Ophion AppImage (used only to build; nothing here runs on the user's machine).
 #
 # Ubuntu 22.04 (glibc 2.35) so the AppImage runs on Ubuntu 22.04+, Debian 12+, Fedora 38+ and other
 # current distributions. Every input is pinned: the base image by digest, apt by a dated snapshot of
 # the Ubuntu archive, FreeRDP / appimagetool / the AppImage runtime by version and SHA-256.
 #
-#   docker build -f packaging/appimage/Dockerfile.build -t ssh-manager-appimage-build packaging/appimage
+#   docker build -f packaging/appimage/Dockerfile.build -t ophion-appimage-build packaging/appimage
 
 FROM ubuntu:22.04@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b
 
@@ -98,4 +98,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends libdbus-1-dev l
  && /opt/meson/bin/meson compile -C build && /opt/meson/bin/meson install -C build \
  && cd / && rm -rf /tmp/atspi
 
-LABEL org.opencontainers.image.title="ssh-manager-appimage-build"
+LABEL org.opencontainers.image.title="ophion-appimage-build"

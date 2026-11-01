@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the SSH Manager AppImage: ./packaging/appimage/build.sh
+# Build the Ophion AppImage: ./packaging/appimage/build.sh
 #
 # On the host (docker or podman present) it builds the pinned Ubuntu 22.04 build image, then runs itself
 # inside it with the committed sources (git archive HEAD) and writes to dist/:
-#   SSH_Manager-<version>-x86_64.AppImage, SHA256SUMS, MANIFEST.txt (every bundled file and its SHA-256),
+#   Ophion-<version>-x86_64.AppImage, SHA256SUMS, MANIFEST.txt (every bundled file and its SHA-256),
 #   host-libraries-used.txt (what the AppImage takes from the host).
 # Inside the build container it can also be run directly (SSHM_APPIMAGE_IN_CONTAINER=1, SRC_TAR, OUT).
 #
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-IMAGE="ssh-manager-appimage-build:1"
+IMAGE="ophion-appimage-build:1"
 
 log() { printf '\033[1m==> %s\033[0m\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -27,7 +27,7 @@ if [ "${SSHM_APPIMAGE_IN_CONTAINER:-}" != "1" ] && [ ! -x /opt/appimage/appimage
     fi
     VERSION="${VERSION:-git$(git -C "$REPO" rev-list --count HEAD).$(git -C "$REPO" rev-parse --short=7 HEAD)}"
     OUT="${OUT:-$REPO/dist}"
-    CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ssh-manager-appimage-build"  # downloads (checked by SHA-256)
+    CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ophion-appimage-build"  # downloads (checked by SHA-256)
     mkdir -p "$OUT" "$CACHE"
     STAGE="$(mktemp -d)"
     trap 'rm -rf "$STAGE"' EXIT
@@ -60,14 +60,14 @@ retry() { local n; for n in 1 2 3; do "$@" && return 0; log "retry $n/3: $*"; sl
 ARCH_TRIPLET=x86_64-linux-gnu
 PY=python3.10
 
-WORK=/tmp/ssh-manager-appimage.build  # a fixed path: it is recorded in .pyc files and wheel metadata
+WORK=/tmp/ophion-appimage.build  # a fixed path: it is recorded in .pyc files and wheel metadata
 rm -rf "$WORK" && mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 APPDIR="$WORK/AppDir"
 LIBDIR="$APPDIR/usr/lib"
 ARCHLIB="$APPDIR/usr/lib/$ARCH_TRIPLET"
 SITE="$APPDIR/usr/lib/python3/dist-packages"
-DATA="$APPDIR/usr/share/ssh-manager"
+DATA="$APPDIR/usr/share/ophion"
 mkdir -p "$APPDIR/usr/bin" "$ARCHLIB" "$SITE" "$DATA/caches" "$APPDIR/usr/share"
 
 # ---- Python: the interpreter and its standard library (no tests, IDLE, Tk, ensurepip, static lib)
@@ -109,7 +109,7 @@ done
 $PY -m pip install --no-compile --no-deps --target "$SITE" "$WORK"/wheels/*.whl >/dev/null
 
 # ---- the application (committed sources)
-log "SSH Manager sources"
+log "Ophion sources"
 tar -C "$DATA" -xf "$SRC_TAR"
 [ -f "$DATA/main.py" ] && [ -d "$DATA/ssh_manager" ] || die "SRC_TAR does not contain main.py and ssh_manager/"
 
@@ -152,17 +152,18 @@ cp "$PACKAGING/AppRun" "$APPDIR/AppRun"
 chmod 755 "$APPDIR/AppRun"
 # The application icon "ophion": the bundled hicolor PNGs (raster only; see gtkui/assets/app-icon/README.md).
 APP_ICONS="$DATA/ssh_manager/gtkui/assets/app-icon/hicolor"
-cp "$PACKAGING/ssh-manager.desktop" "$APPDIR/"
+DESKTOP_ID="io.github.ophion.Ophion"  # identity.APP_ID: the desktop file's and AppStream's name
+cp "$PACKAGING/$DESKTOP_ID.desktop" "$APPDIR/"
 cp "$APP_ICONS/256x256/apps/ophion.png" "$APPDIR/ophion.png"  # appimagetool: the Icon= file at the top
 ln -s ophion.png "$APPDIR/.DirIcon"
-install -Dm644 "$PACKAGING/ssh-manager.desktop" "$APPDIR/usr/share/applications/ssh-manager.desktop"
+install -Dm644 "$PACKAGING/$DESKTOP_ID.desktop" "$APPDIR/usr/share/applications/$DESKTOP_ID.desktop"
 for size_dir in "$APP_ICONS"/*x*; do
     install -Dm644 "$size_dir/apps/ophion.png" "$APPDIR/usr/share/icons/hicolor/$(basename "$size_dir")/apps/ophion.png"
 done
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then  # the copied hicolor cache would not list it
     gtk-update-icon-cache -f -t "$APPDIR/usr/share/icons/hicolor" || log "note: gtk-update-icon-cache failed"
 fi
-install -Dm644 "$PACKAGING/ssh-manager.metainfo.xml" "$APPDIR/usr/share/metainfo/ssh-manager.appdata.xml"
+install -Dm644 "$PACKAGING/$DESKTOP_ID.metainfo.xml" "$APPDIR/usr/share/metainfo/$DESKTOP_ID.appdata.xml"
 
 # ---- shared libraries: everything the ELF files need, except the host's (host-libraries.txt)
 HOST_PATTERNS="$(grep -v '^\s*#' "$PACKAGING/host-libraries.txt" | grep -v '^\s*$')"
@@ -272,7 +273,7 @@ log "host libraries used: $(tr '\n' ' ' < "$WORK/host-libraries-used.txt")"
 
 # ---- versions of everything bundled
 {
-    echo "SSH Manager $VERSION (commit ${SSHM_COMMIT:-unknown})"
+    echo "Ophion $VERSION (commit ${SSHM_COMMIT:-unknown})"
     echo "Built $(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ) on Ubuntu 22.04 (glibc $(ldd --version | awk 'NR == 1 {print $NF}'))"
     echo "FreeRDP: $(/opt/freerdp/bin/xfreerdp --version 2>/dev/null | awk 'NR == 1')"
     echo "at-spi2-core (ATK, atk-bridge, libatspi): $(PKG_CONFIG_PATH=/opt/atspi/lib/pkgconfig pkg-config --modversion atspi-2), from source"
@@ -289,7 +290,7 @@ log "host libraries used: $(tr '\n' ' ' < "$WORK/host-libraries-used.txt")"
 
 # ---- reproducible file list, fixed timestamps, the AppImage
 find "$APPDIR" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
-NAME="SSH_Manager-$VERSION-x86_64.AppImage"
+NAME="Ophion-$VERSION-x86_64.AppImage"
 mkdir -p "$OUT"
 (cd "$APPDIR" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$WORK/MANIFEST.txt"
 log "appimagetool -> $NAME"

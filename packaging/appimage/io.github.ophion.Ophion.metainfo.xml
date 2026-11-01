@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.ophion.Ophion</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>Ophion</name>
+  <summary>Connection manager for SSH, SFTP, FTP and RDP</summary>
+  <description>
+    <p>
+      Ophion keeps SSH, SFTP, FTP/FTPS and RDP hosts in groups, opens SSH sessions in built-in
+      terminals, transfers files in a two-pane browser and shows Windows desktops through FreeRDP.
+      Passwords are kept in an encrypted store or the desktop keyring, never in plain files.
+    </p>
+    <p>
+      Ophion was called SSH Manager before; its hosts, settings and saved passwords move over on the first start.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.ophion.Ophion.desktop</launchable>
+  <icon type="stock">ophion</icon>
+  <provides>
+    <binary>ophion</binary>
+    <id>org.codex.SSHManager</id>
+  </provides>
+  <categories>
+    <category>Network</category>
+    <category>RemoteAccess</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

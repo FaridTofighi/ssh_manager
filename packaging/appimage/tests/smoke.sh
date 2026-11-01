@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clean-room smoke test of the AppImage in fresh containers with no Python and no GTK.
 #
-#   packaging/appimage/tests/smoke.sh [dist/SSH_Manager-*.AppImage] [image ...]
+#   packaging/appimage/tests/smoke.sh [dist/Ophion-*.AppImage] [image ...]
 #
 # Default images: ubuntu:22.04 debian:12-slim fedora:40. Each container installs only test tools
 # (Xvfb, xauth, D-Bus, a font, xwd, strace, and an OpenSSH *server* for the login test), removes any
@@ -21,7 +21,7 @@ REPO="$(cd "$TESTS/../../.." && pwd)"
 
 # ----------------------------------------------------------------------------------------------- host side
 if [ "${1:-}" != "--inside" ]; then
-    APPIMAGE="${1:-$(ls -t "$REPO"/dist/SSH_Manager-*-x86_64.AppImage 2>/dev/null | head -1)}"
+    APPIMAGE="${1:-$(ls -t "$REPO"/dist/Ophion-*-x86_64.AppImage 2>/dev/null | head -1)}"
     [ -f "$APPIMAGE" ] || { echo "usage: $0 [AppImage] [image ...]" >&2; exit 2; }
     shift || true
     IMAGES=("$@")
@@ -34,7 +34,7 @@ if [ "${1:-}" != "--inside" ]; then
         tag="${image//[:\/]/_}"
         echo "=== $image"
         "$ENGINE" run --rm -e SMOKE_IMAGE="$image" -e FULL_SUITE="$([ "$image" = ubuntu:22.04 ] && echo 1 || echo 0)" \
-            -v "$(readlink -f "$APPIMAGE"):/smoke/SSH_Manager.AppImage:ro" -v "$TESTS:/smoke/tests:ro" \
+            -v "$(readlink -f "$APPIMAGE"):/smoke/Ophion.AppImage:ro" -v "$TESTS:/smoke/tests:ro" \
             -v "$REPO/tests:/smoke/repo-tests:ro" -v "$REPO/farid.py:/smoke/farid.py:ro" -v "$REPO/tools:/smoke/tools:ro" -v "$OUTDIR:/smoke/out" \
             "$image" bash /smoke/tests/smoke.sh --inside 2>&1 | tee "$OUTDIR/$tag.log"
         [ "${PIPESTATUS[0]}" = 0 ] || status=1
@@ -69,20 +69,20 @@ fi
 if command -v python3 >/dev/null || command -v python >/dev/null; then fail "host has no Python"; else pass "host has no Python"; fi
 if ldconfig -p | grep -q 'libgtk-3.so.0'; then fail "host has no GTK 3"; else pass "host has no GTK 3"; fi
 
-cp /smoke/SSH_Manager.AppImage /tmp/SSH_Manager.AppImage && chmod +x /tmp/SSH_Manager.AppImage
+cp /smoke/Ophion.AppImage /tmp/Ophion.AppImage && chmod +x /tmp/Ophion.AppImage
 export HOME=/tmp/home
-mkdir -p "$HOME/.config/ssh-manager"
-echo '{"master_password_disabled": true}' > "$HOME/.config/ssh-manager/settings.json"  # no first-run prompt
+mkdir -p "$HOME/.config/ophion"
+echo '{"master_password_disabled": true}' > "$HOME/.config/ophion/settings.json"  # no first-run prompt
 
 # 1. --help through the FUSE-less path
-if /tmp/SSH_Manager.AppImage --appimage-extract-and-run --help > /tmp/help.txt 2>&1 && grep -q -- "--rdp" /tmp/help.txt; then
+if /tmp/Ophion.AppImage --appimage-extract-and-run --help > /tmp/help.txt 2>&1 && grep -q -- "--rdp" /tmp/help.txt; then
     pass "--appimage-extract-and-run --help (exit 0)"
 else
     fail "--appimage-extract-and-run --help: $(head -c 400 /tmp/help.txt)"
 fi
-(cd /tmp && ./SSH_Manager.AppImage --appimage-extract >/dev/null 2>&1) || { fail "--appimage-extract"; exit 1; }
+(cd /tmp && ./Ophion.AppImage --appimage-extract >/dev/null 2>&1) || { fail "--appimage-extract"; exit 1; }
 APP=/tmp/squashfs-root/AppRun
-run() { SSH_MANAGER_APPIMAGE_EXEC=1 "$APP" "$@"; }
+run() { OPHION_APPIMAGE_EXEC=1 "$APP" "$@"; }
 
 Xvfb :99 -screen 0 1400x900x24 -nolisten tcp >/dev/null 2>&1 &
 XVFB=$!
@@ -93,7 +93,7 @@ for _ in $(seq 50); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
 ROOT_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)"
 mkdir -p "$ROOT_HOME/.ssh" && chmod 700 "$ROOT_HOME/.ssh"
 printf 'Host smoke-config-alias\n    HostName 192.0.2.20\n' > "$ROOT_HOME/.ssh/config" && chmod 600 "$ROOT_HOME/.ssh/config"
-if dbus-run-session -- env SSH_MANAGER_APPIMAGE_EXEC=1 "$APP" python3 /smoke/tests/selfcheck.py > /tmp/selfcheck.txt 2>&1; then
+if dbus-run-session -- env OPHION_APPIMAGE_EXEC=1 "$APP" python3 /smoke/tests/selfcheck.py > /tmp/selfcheck.txt 2>&1; then
     pass "selfcheck"
 else
     fail "selfcheck"
@@ -106,7 +106,7 @@ gui_run() {  # label, command...
     "$@" > "/tmp/gui-$label.log" 2>&1 &
     local pid=$! wid=""
     for _ in $(seq 120); do
-        wid="$(run xdotool search --onlyvisible --name '^SSH Manager$' 2>/dev/null | head -1)"
+        wid="$(run xdotool search --onlyvisible --name '^Ophion$' 2>/dev/null | head -1)"
         [ -n "$wid" ] && break
         kill -0 "$pid" 2>/dev/null || break
         sleep 0.5
@@ -126,7 +126,7 @@ gui_run() {  # label, command...
     if [ "$code" = 0 ]; then pass "main window ($label): shown, screenshot, Ctrl+Q exit 0"
     else fail "main window ($label): exit $code; $(tail -c 600 "/tmp/gui-$label.log")"; fi
 }
-gui_run fuse-less-dbus dbus-run-session -- /tmp/SSH_Manager.AppImage --appimage-extract-and-run
+gui_run fuse-less-dbus dbus-run-session -- /tmp/Ophion.AppImage --appimage-extract-and-run
 gui_run no-dbus env -u DBUS_SESSION_BUS_ADDRESS "$APP"
 
 # 4. nothing written inside the AppImage directory
@@ -151,7 +151,7 @@ sed 's/^/    /' /tmp/e2e.txt | tail -6
 # 6. transfer engine tests on the bundled Python
 # The tests find repo files relative to their own folder: a real copy, the bundled app next to it.
 mkdir -p /tmp/tt && cp -r /smoke/repo-tests /tmp/tt/tests && cp /smoke/farid.py /tmp/tt/ && cp -r /smoke/tools /tmp/tt/tools \
-    && ln -sfn /tmp/squashfs-root/usr/share/ssh-manager/ssh_manager /tmp/tt/ssh_manager
+    && ln -sfn /tmp/squashfs-root/usr/share/ophion/ssh_manager /tmp/tt/ssh_manager
 if (cd /tmp/tt && run python3 -m unittest tests.test_transfer_engine tests.test_transfer_backends > /tmp/transfer.txt 2>&1); then
     pass "transfer engine tests ($(grep -E '^Ran' /tmp/transfer.txt))"
 else

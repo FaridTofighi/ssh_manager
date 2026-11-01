@@ -1,6 +1,6 @@
 """Self-check inside the AppImage environment (bundled Python, run by tests/smoke.sh under Xvfb).
 
-    SSH_MANAGER_APPIMAGE_EXEC=1 ./SSH_Manager.AppImage python3 selfcheck.py
+    OPHION_APPIMAGE_EXEC=1 ./Ophion.AppImage python3 selfcheck.py
 
 Prints one ``PASS`` / ``FAIL`` line per check and exits 1 if any check failed.
 """
@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-APPDIR = os.environ.get("SSH_MANAGER_APPDIR", "")
+APPDIR = os.environ.get("OPHION_APPDIR", "")
 RESULTS = []
 
 
@@ -117,7 +117,7 @@ def terminal_and_icon():
     window.add(terminal)
     window.show_all()
     pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(APPDIR, "ophion.png"))
-    svg = os.path.join(APPDIR, "usr/share/ssh-manager/ssh_manager/gtkui/assets/icons/sshm-server-symbolic.svg")
+    svg = os.path.join(APPDIR, "usr/share/ophion/ssh_manager/gtkui/assets/icons/sshm-server-symbolic.svg")
     svg_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(svg, 64, 64)
     handle = Rsvg.Handle.new_from_file(svg)
     theme = Gtk.IconTheme.get_default().lookup_icon("window-close-symbolic", 16, 0)
@@ -139,7 +139,7 @@ def certificates():
 
 
 def the_app_imports():
-    sys.path.insert(0, os.path.join(APPDIR, "usr/share/ssh-manager"))
+    sys.path.insert(0, os.path.join(APPDIR, "usr/share/ophion"))
     import ssh_manager.gtk_app  # noqa: F401
     from ssh_manager.rdp import engines
 
@@ -195,7 +195,7 @@ def terminal_text_without_warnings():
              "while 'selfcheck line' not in terminal_text(term) and time.monotonic() < end:\n"
              "    Gtk.main_iteration_do(False)\n"
              "print(repr(terminal_text(term)[:40]), repr(TerminalTab._terminal_tail(object(), term)[-20:]))"
-             % os.path.join(APPDIR, "usr/share/ssh-manager"))
+             % os.path.join(APPDIR, "usr/share/ophion"))
     run = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
     assert run.returncode == 0, run.stderr[-500:]
     assert "selfcheck line" in run.stdout and "Password:" in run.stdout, run.stdout

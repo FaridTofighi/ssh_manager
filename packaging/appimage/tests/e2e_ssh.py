@@ -1,6 +1,6 @@
 """End-to-end password login through the app's own terminal path (VTE + bundled sshpass + bundled ssh).
 
-    SSH_MANAGER_APPIMAGE_EXEC=1 ./SSH_Manager.AppImage python3 e2e_ssh.py HOST PORT USER PASSWORD
+    OPHION_APPIMAGE_EXEC=1 ./Ophion.AppImage python3 e2e_ssh.py HOST PORT USER PASSWORD
 
 Run by tests/smoke.sh under Xvfb against a throw-away sshd whose host key is already in
 ~/.ssh/known_hosts. Passes when the session's LocalCommand sentinel reports the login
@@ -11,8 +11,8 @@ import os
 import sys
 import time
 
-APPDIR = os.environ["SSH_MANAGER_APPDIR"]
-sys.path.insert(0, os.path.join(APPDIR, "usr/share/ssh-manager"))
+APPDIR = os.environ["OPHION_APPDIR"]
+sys.path.insert(0, os.path.join(APPDIR, "usr/share/ophion"))
 
 import gi  # noqa: E402
 

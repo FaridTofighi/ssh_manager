@@ -1,6 +1,6 @@
-# SSH Manager AppImage
+# Ophion AppImage
 
-One file, `SSH_Manager-<version>-x86_64.AppImage`, that runs SSH Manager on a desktop Linux
+One file, `Ophion-<version>-x86_64.AppImage`, that runs Ophion on a desktop Linux
 without installing Python, GTK, VTE, PyGObject, paramiko, OpenSSH, sshpass or FreeRDP.
 
 ## Build
@@ -17,14 +17,14 @@ application is taken from the **committed** `HEAD` (`git archive`), so uncommitt
 
 | File | What |
 |---|---|
-| `SSH_Manager-<version>-x86_64.AppImage` | The application |
+| `Ophion-<version>-x86_64.AppImage` | The application |
 | `SHA256SUMS` | Checksum of the AppImage |
 | `MANIFEST.txt` | Every file inside, with its SHA-256 (compare two builds with `diff`) |
-| `BUNDLE-VERSIONS.txt` | Versions of everything bundled (also inside, `usr/share/ssh-manager/`) |
+| `BUNDLE-VERSIONS.txt` | Versions of everything bundled (also inside, `usr/share/ophion/`) |
 | `host-libraries-used.txt` | The libraries the AppImage takes from the host |
 
 The default version is `git<commits>.<short hash>` (the repository has no release tags yet).
-Downloads are cached in `~/.cache/ssh-manager-appimage-build` and always checked against their
+Downloads are cached in `~/.cache/ophion-appimage-build` and always checked against their
 SHA-256.
 
 ### Pinned inputs
@@ -54,19 +54,26 @@ taken from the host.
 ## Run
 
 ```bash
-chmod +x SSH_Manager-*-x86_64.AppImage
-./SSH_Manager-*-x86_64.AppImage
-./SSH_Manager-*-x86_64.AppImage --appimage-extract-and-run     # no FUSE (containers, some servers)
-./SSH_Manager-*-x86_64.AppImage --rdp host --user alice        # every command-line option works as usual
+chmod +x Ophion-*-x86_64.AppImage
+./Ophion-*-x86_64.AppImage
+./Ophion-*-x86_64.AppImage --appimage-extract-and-run     # no FUSE (containers, some servers)
+./Ophion-*-x86_64.AppImage --rdp host --user alice        # every command-line option works as usual
 ```
 
-Settings, the inventory, credentials and caches live in the usual places (`~/.config/ssh-manager`,
-`~/.local/share/ssh-manager`, `~/.cache`), exactly as with a normal install, so an AppImage and an
-installed copy share them. Nothing is written inside the AppImage. The only extra files are two tiny
-GTK module caches with the current mount path in `~/.cache/ssh-manager-appimage/` (stale ones are
-removed at the next start).
+Settings, the inventory, credentials and caches live in the usual places (`~/.config/ophion`,
+`~/.local/share/ophion`, `~/.cache`), exactly as with a normal install, so an AppImage and an
+installed copy share them. The first start moves an SSH Manager installation's folders there (see
+"Upgrading from SSH Manager" in the main README). Nothing is written inside the AppImage. The only extra
+files are two tiny GTK module caches with the current mount path in `~/.cache/ophion-appimage/` (stale
+ones are removed at the next start).
 
-`SSH_MANAGER_APPIMAGE_EXEC=1 ./SSH_Manager.AppImage <program> [args]` runs a bundled program with the
+The taskbar and dock show Ophion's icon once the AppImage is integrated into the desktop (for example
+with AppImageLauncher), which installs `io.github.ophion.Ophion.desktop` (`Icon=ophion`). GNOME on
+Wayland finds the icon through that desktop file and the application id. Without integration, the
+window still has the icon: the app sets it itself from the bundled `usr/share/icons/hicolor` (AppRun
+puts `usr/share` on `XDG_DATA_DIRS`).
+
+`OPHION_APPIMAGE_EXEC=1 ./Ophion.AppImage <program> [args]` (formerly `SSH_MANAGER_APPIMAGE_EXEC`) runs a bundled program with the
 AppImage's environment instead of the app (support and tests), e.g. `... ssh -V` or `... python3 script.py`.
 The program runs as a child of the launcher, which keeps the AppImage mounted: `ssh` closes every
 inherited file descriptor at start, and run directly by the AppImage runtime it would release the
@@ -110,7 +117,7 @@ host's PulseAudio / PipeWire server as usual).
   is not installed", and the app uses FreeRDP inside the tab (X11/XWayland) or in its own window.
 * The legacy terminal (Textual) interface and its `rich` / `textual` packages; only the GTK app is packaged.
 * `wmctrl` (the RDP tab's "Focus Window" also works with the bundled xdotool).
-* Translations: SSH Manager has none yet; GTK's own few strings use the host's GTK translations if present.
+* Translations: Ophion has none yet; GTK's own few strings use the host's GTK translations if present.
 
 ## How it behaves on the host
 
@@ -146,7 +153,7 @@ host's PulseAudio / PipeWire server as usual).
 | `AppRun` | The launcher: environment for the bundled Python / GTK / programs |
 | `host-libraries.txt` | Libraries allowed from the host (library audit) |
 | `requirements.lock`, `requirements-build.lock` | Hashed Python dependencies |
-| `ssh-manager.desktop`, `ssh-manager.metainfo.xml` | Desktop integration, AppStream (the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
+| `io.github.ophion.Ophion.desktop`, `io.github.ophion.Ophion.metainfo.xml` | Desktop integration, AppStream (named after the application id; the icon, `ophion`, comes from `ssh_manager/gtkui/assets/app-icon/hicolor`) |
 | `tests/smoke.sh`, `tests/selfcheck.py`, `tests/e2e_ssh.py` | Clean-room tests |
 
 There is no CI configuration: the repository does not use GitHub Actions yet. A CI job would run
