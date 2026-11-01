@@ -62,7 +62,7 @@ def app_icon_file(size: int = 256) -> Path:
 
 
 def install_app_icon(theme: Optional[Gtk.IconTheme] = None, search_dir: Optional[Path] = None) -> str:
-    """The default icon of every window: the ``ophion`` theme icon, else the 256 px file.
+    """The default icon of every window: the ``ophion`` theme icon, else the packaged files (16 … 256 px).
 
     Works from a source checkout too (the bundled hicolor folder joins the search path). Returns ``"name"``,
     ``"file"`` or ``""`` (no icon); never raises.
@@ -76,7 +76,17 @@ def install_app_icon(theme: Optional[Gtk.IconTheme] = None, search_dir: Optional
         if theme is not None and theme.has_icon(APP_ICON_NAME):
             Gtk.Window.set_default_icon_name(APP_ICON_NAME)
             return "name"
-        Gtk.Window.set_default_icon_from_file(str(app_icon_file()))
+        from gi.repository import GdkPixbuf  # type: ignore
+
+        pixbufs = []
+        for size in (s for s in APP_ICON_SIZES if s <= 256):
+            try:
+                pixbufs.append(GdkPixbuf.Pixbuf.new_from_file(str(app_icon_file(size))))
+            except Exception as exc:  # one missing size: the others still do
+                LOGGER.debug("app icon %d px: %s", size, type(exc).__name__)
+        if not pixbufs:
+            return ""
+        Gtk.Window.set_default_icon_list(pixbufs)
         return "file"
     except Exception as exc:  # a missing or unreadable icon must never stop the app
         LOGGER.info("app icon: not set (%s)", type(exc).__name__)

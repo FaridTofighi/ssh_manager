@@ -371,6 +371,7 @@ headerbar.sm-topbar button.titlebutton {
     min-height: ${logo}px;
     box-shadow: 0 1px 2px @sm_shadow;
 }
+.logo-tile.app-logo { background-color: transparent; box-shadow: none; }
 .wordmark { font-size: ${fs_wordmark}em; font-weight: 600; color: @sm_text_primary; }
 .workspace-label { font-size: ${fs_caps_14}em; letter-spacing: $caps_tracking; color: @sm_text_muted; font-weight: 500; }
 .workspace-name { font-size: ${fs_wordmark}em; font-weight: 500; color: @sm_text_primary; }

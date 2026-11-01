@@ -68,6 +68,34 @@ class AppIconTests(unittest.TestCase):
         ready.set_content("Ready to connect", "", "Connect", lambda: None)  # any other state: the card again
         self.assertEqual((ready.logo.get_visible(), ready._card.get_visible()), (False, True))
 
+    def test_header_logo_renders_at_1x_and_2x(self) -> None:
+        import cairo
+
+        from tests.gtk_window_fixture import WindowSandbox
+
+        sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        header = sandbox.window._header
+        logo = header.logo_image
+        self.assertEqual(header.logo.get_accessible().get_name(), "Ophion")
+        self.assertTrue(header.logo.get_style_context().has_class("app-logo"))
+        for scale in (1, 2):
+            pixels = logo.size * scale
+            self.assertEqual(logo.pixbuf_for(scale).get_width(), pixels)
+            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, pixels, pixels)
+            surface.set_device_scale(scale, scale)
+            self.assertTrue(logo.paint(cairo.Context(surface), scale))
+            data, stride = surface.get_data(), surface.get_stride()
+
+            def alpha(x, y):
+                return data[y * stride + x * 4 + 3]
+
+            self.assertEqual(alpha(0, 0), 0)  # rounded corner: clipped
+            self.assertEqual(alpha(pixels // 2, pixels // 2), 255)  # the opaque artwork
+        from ssh_manager.gtkui.widgets.app_logo import logo_pixbuf
+
+        self.assertEqual(logo_pixbuf(600).get_width(), 512)  # never enlarged past the largest file
+
     def test_about_shows_the_logo(self) -> None:
         from gi.repository import Gtk
 
@@ -86,7 +114,8 @@ class AppIconTests(unittest.TestCase):
 
         theme = Gtk.IconTheme.new()
         self.assertEqual(self.icons.install_app_icon(theme, Path("/nonexistent/icons")), "file")
-        self.assertEqual([p.get_width() for p in Gtk.Window.get_default_icon_list()], [256])
+        self.assertEqual([p.get_width() for p in Gtk.Window.get_default_icon_list()],
+                         [16, 22, 24, 32, 48, 64, 96, 128, 256])
         with mock.patch.object(self.icons, "app_icon_file", lambda size=256: Path("/nonexistent/ophion.png")):
             self.assertEqual(self.icons.install_app_icon(Gtk.IconTheme.new(), Path("/nonexistent/icons")), "")
 

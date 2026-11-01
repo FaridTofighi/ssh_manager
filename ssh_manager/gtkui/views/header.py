@@ -31,7 +31,9 @@ from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
 from ..health import Health  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
-from ..theme.tokens import Layout, Level, Size, Space  # noqa: E402
+from ...identity import APP_NAME  # noqa: E402
+from ..theme.tokens import Layout, Level, Radius, Size, Space  # noqa: E402
+from ..widgets.app_logo import AppLogo  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
@@ -131,10 +133,12 @@ class HeaderView(Gtk.HeaderBar):
         self.brand.get_style_context().add_class("topbar-brand")
         self.logo = logo = Gtk.Box()
         logo.get_style_context().add_class("logo-tile")
+        logo.get_style_context().add_class("app-logo")  # the icon is its own tile: no accent background
         logo.set_valign(Gtk.Align.CENTER)
-        self._logo_glyph = glyph = make_icon(Icons.TERMINAL, Size.LOGO_GLYPH)
-        glyph.set_valign(Gtk.Align.CENTER)
-        logo.set_center_widget(glyph)
+        self.logo_image = AppLogo(Size.LOGO_TILE, Radius.INPUT)
+        self.logo_image.set_valign(Gtk.Align.CENTER)
+        logo.set_center_widget(self.logo_image)
+        set_accessible_name(logo, APP_NAME)
         self.brand.pack_start(logo, False, False, 0)
         self.wordmark = Gtk.Label(label=_("SSH Manager"))
         self.wordmark.get_style_context().add_class("wordmark")
@@ -251,7 +255,7 @@ class HeaderView(Gtk.HeaderBar):
         self.set_size_request(-1, size.TOPBAR)
         self.logo.set_size_request(size.LOGO_TILE, size.LOGO_TILE)
         self.logo.set_margin_start(top.BRAND_INSET)
-        _set_icon_size(self._logo_glyph, size.LOGO_GLYPH)
+        self.logo_image.set_logo_size(size.LOGO_TILE, Radius.INPUT)
         self.wordmark.set_margin_start(top.WORDMARK_GAP)
         self.sidebar_expand_button.set_margin_start(Space.M)
         self.divider.set_size_request(1, top.DIVIDER_HEIGHT)
