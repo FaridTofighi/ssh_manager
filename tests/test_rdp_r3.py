@@ -36,7 +36,7 @@ class SharedFolderTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / "home"
-        for sub in (".ssh", ".gnupg", "work/projects", ".config/ssh-manager"):
+        for sub in (".ssh", ".gnupg", "work/projects", ".config/ssh-manager", ".config/ophion"):
             (self.home / sub).mkdir(parents=True)
         (self.home / "work" / "keys").symlink_to(self.home / ".ssh")
         (self.home / "work" / "up").symlink_to(self.home)
@@ -52,6 +52,7 @@ class SharedFolderTests(unittest.TestCase):
     def test_forbidden_places_and_symlink_escapes(self) -> None:
         for path, place in ((self.home, "~"), (self.home / ".ssh", "~/.ssh"), (self.home / ".gnupg", "~/.gnupg"),
                             (self.home / ".config" / "ssh-manager", "~/.config/ssh-manager"),
+                            (self.home / ".config" / "ophion", "~/.config/ophion"),
                             (self.home / "work" / "keys", "~/.ssh"), (self.home / "work" / "up", "~"),
                             ("/", "/"), ("/etc", "/etc")):
             result = self.check(path)

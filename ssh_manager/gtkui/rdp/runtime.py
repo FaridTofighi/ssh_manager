@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from pathlib import Path
 from typing import Any, List, Optional, Set, Tuple
@@ -27,8 +26,9 @@ class RdpRuntime:
         self.limiter = SessionLimiter(max_sessions)
         self._processes: List[RdpProcess] = []
         self._lock = threading.Lock()
-        base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-        self.state_path = state_path or Path(base) / "ssh-manager" / "rdp-embed.json"
+        from ...legacy_paths import app_dir
+
+        self.state_path = state_path or app_dir("state") / "rdp-embed.json"
         self.embed_failures: Set[Tuple[str, str]] = self._load_failures()
         if reap:
             threading.Thread(target=gc_guard.worker(self._reap), daemon=True, name="sshm-rdp-reap").start()

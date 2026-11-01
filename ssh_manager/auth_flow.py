@@ -175,20 +175,22 @@ def probably_authenticated(output: str, *, alive_s: float, output_after_password
 
 # --------------------------------------------------------------------- sentinel
 def marker_directory() -> Path:
-    """Private directory for success markers (``$XDG_RUNTIME_DIR/ssh-manager``, mode 0700)."""
+    """Private directory for success markers (``$XDG_RUNTIME_DIR/ophion``, mode 0700)."""
+
+    from .identity import APP_SLUG
 
     base = os.environ.get("XDG_RUNTIME_DIR")
     if base and os.path.isdir(base):
-        directory = Path(base) / "ssh-manager"
+        directory = Path(base) / APP_SLUG
     else:
-        directory = Path(tempfile.gettempdir()) / f"ssh-manager-{os.getuid()}"
+        directory = Path(tempfile.gettempdir()) / f"{APP_SLUG}-{os.getuid()}"
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         os.chmod(directory, 0o700)
         if os.stat(directory).st_uid != os.getuid():
             raise OSError("marker directory is not ours")
     except OSError:
-        directory = Path(tempfile.mkdtemp(prefix="ssh-manager-"))  # private, 0700
+        directory = Path(tempfile.mkdtemp(prefix=f"{APP_SLUG}-"))  # private, 0700
     return directory
 
 

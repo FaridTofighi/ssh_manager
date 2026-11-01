@@ -60,7 +60,7 @@ class LeftoverFileTests(unittest.TestCase):
 
         self.sandbox = WindowSandbox()
         self.addCleanup(self.sandbox.close)
-        self.config = self.sandbox.root / "config" / "ssh-manager"
+        self.config = self.sandbox.root / "config" / "ophion"
         self.config.mkdir(parents=True, exist_ok=True)
         self.leftover = self.config / LEFTOVER
         self.raw = b'{"version": 1, "salt": "c2FsdA==", "master_hash": "aGFzaA==", "data": "ZGF0YQ=="}'

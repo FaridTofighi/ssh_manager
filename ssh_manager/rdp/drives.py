@@ -17,9 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
 
+from ..identity import APP_SLUG, LEGACY_SLUG
+
 SYSTEM_SENSITIVE = ("/", "/etc", "/root", "/boot", "/proc", "/sys", "/dev", "/var/lib", "/usr")
 HOME_SENSITIVE = (".ssh", ".gnupg", ".password-store", ".local/share/keyrings", ".aws", ".kube", ".docker",
-                  ".config/ssh-manager", ".local/share/ssh-manager")
+                  ".config/ophion", ".local/share/ophion",
+                  ".config/ssh-manager", ".local/share/ssh-manager")  # the folders before the rename too
 
 
 @dataclass(frozen=True)
@@ -38,7 +41,7 @@ def sensitive_places(home: Optional[str] = None, extra: Iterable[str] = ()) -> L
     places = [os.path.realpath(p) for p in SYSTEM_SENSITIVE]
     places.append(home_dir)
     places += [os.path.realpath(os.path.join(home_dir, rel)) for rel in HOME_SENSITIVE]
-    for env, rel in (("XDG_CONFIG_HOME", "ssh-manager"), ("XDG_DATA_HOME", "ssh-manager")):
+    for env, rel in ((env, slug) for env in ("XDG_CONFIG_HOME", "XDG_DATA_HOME") for slug in (APP_SLUG, LEGACY_SLUG)):
         base = os.environ.get(env)
         if base:
             places.append(os.path.realpath(os.path.join(base, rel)))

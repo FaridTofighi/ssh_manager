@@ -1,6 +1,6 @@
 """Trusted TLS certificates, shared by FTPS and RDP (pure Python).
 
-One JSON file, ``$XDG_DATA_HOME/ssh-manager/tls-pins.json`` (mode 0600 in a
+One JSON file, ``$XDG_DATA_HOME/ophion/tls-pins.json`` (mode 0600 in a
 0700 folder): ``{"<key>": {"sha256": "AB:CD:…", "subject": "…", "added":
 <epoch>}}``. A key is :func:`pin_key` — the host id *and* the address, so
 moving a host to another server never reuses an old pin. RDP keys carry the
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import threading
 import time
 from dataclasses import dataclass
@@ -57,8 +56,9 @@ def certificate_info(der: bytes) -> CertificateInfo:
 
 
 def default_pins_path() -> Path:
-    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "ssh-manager" / "tls-pins.json"
+    from .legacy_paths import app_dir
+
+    return app_dir("data") / "tls-pins.json"
 
 
 def fingerprint(der: bytes) -> str:

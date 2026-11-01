@@ -30,7 +30,7 @@ UNICODE = "Prod DB (10.0.0.5) — مرکز"
 class StoreTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.dir = Path(self.tmp.name) / "data" / "ssh-manager"
+        self.dir = Path(self.tmp.name) / "data" / "ophion"
         self.path = self.dir / "inventory.db"
         self.store = InventoryStore(self.path)
 
@@ -49,7 +49,7 @@ class LifecycleTests(StoreTestCase):
 
     def test_default_path_respects_xdg(self) -> None:
         with mock.patch.dict(os.environ, {"XDG_DATA_HOME": "/x/data"}):
-            self.assertEqual(default_inventory_path(), Path("/x/data/ssh-manager/inventory.db"))
+            self.assertEqual(default_inventory_path(), Path("/x/data/ophion/inventory.db"))
 
     def test_migration_from_v0_fixture(self) -> None:
         v0 = Path(self.tmp.name) / "v0.db"

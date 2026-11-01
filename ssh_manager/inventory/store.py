@@ -1,6 +1,6 @@
 """``InventoryStore``: groups (any depth) and hosts in SQLite (stdlib only, no GTK).
 
-* One file, ``~/.local/share/ssh-manager/inventory.db`` (``$XDG_DATA_HOME``),
+* One file, ``~/.local/share/ophion/inventory.db`` (``$XDG_DATA_HOME``),
   mode 0600 in a 0700 folder; ``PRAGMA foreign_keys=ON``, WAL, schema version
   in ``PRAGMA user_version``.
 * Writers use ``BEGIN IMMEDIATE`` (:meth:`InventoryStore.transaction`); a
@@ -160,8 +160,9 @@ def _fold(text: str) -> str:
 
 
 def default_inventory_path() -> Path:
-    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "ssh-manager" / "inventory.db"
+    from ..legacy_paths import app_dir
+
+    return app_dir("data") / "inventory.db"
 
 
 # ---------------------------------------------------------------------- rows

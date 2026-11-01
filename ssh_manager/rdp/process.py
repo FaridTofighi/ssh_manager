@@ -10,7 +10,7 @@
 * **Stop:** ``SIGTERM`` to the whole process group, ``SIGKILL`` after a grace
   period; the exit is reaped by a waiter thread (no zombies).
 * **Registry:** every child's pid, process-group id, start time and client
-  path are recorded in ``$XDG_RUNTIME_DIR/ssh-manager/rdp-children.json``
+  path are recorded in ``$XDG_RUNTIME_DIR/ophion/rdp-children.json``
   (0600). After a crash of the app, :func:`reap_stale` kills a recorded
   group only if that pid still runs the same client with the same start time
   (a reused pid is never touched).
@@ -38,10 +38,12 @@ GRACE_S = 2.0
 
 
 def runtime_dir() -> Path:
+    from ..identity import APP_SLUG
+
     base = os.environ.get("XDG_RUNTIME_DIR")
     if base and os.path.isdir(base):
-        return Path(base) / "ssh-manager"
-    return Path("/tmp") / f"ssh-manager-{os.getuid()}"
+        return Path(base) / APP_SLUG
+    return Path("/tmp") / f"{APP_SLUG}-{os.getuid()}"
 
 
 def _start_time(pid: int) -> Optional[int]:

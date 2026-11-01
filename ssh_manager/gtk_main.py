@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .gtk_app import SSHManagerApplication
+from .gtk_app import SSHManagerApplication, show_legacy_app_running
 
 
 def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[str]]:
@@ -55,7 +55,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ssh-manager: {error}", file=sys.stderr)
         return 2
     extras = [item for item in extras if not item.lower().startswith("rdp://")]
-    app = SSHManagerApplication(base_dir, inventory=inventory, startup_host=host)
+    from .legacy_paths import BLOCKED, migrate
+
+    moved = migrate()  # SSH Manager's folders → Ophion's, before anything opens them
+    if moved.status == BLOCKED:
+        show_legacy_app_running()
+        return 0  # nothing changed
+    app = SSHManagerApplication(base_dir, inventory=inventory, startup_host=host, migration=moved)
 
     gtk_argv = (sys.argv[:1] if argv is None else ["ssh-manager"]) + extras
     return app.run(gtk_argv)

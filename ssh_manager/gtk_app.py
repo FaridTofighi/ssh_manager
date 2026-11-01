@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import gi
 
@@ -97,7 +97,7 @@ from ssh_manager.gtkui.theme.fonts import first_available  # noqa: E402
 from ssh_manager.gtkui.workspaces import workspace_list  # noqa: E402
 from ssh_manager.gtkui.theme.tokens import UI_FONT_FAMILIES  # noqa: E402
 from ssh_manager.gtkui.widgets.icons import install_app_icon, register_icon_path  # noqa: E402
-from ssh_manager.identity import APP_ID, APP_NAME, APP_SLUG  # noqa: E402
+from ssh_manager.identity import APP_ID, APP_NAME, APP_SLUG, LEGACY_APP_NAME  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
@@ -134,11 +134,42 @@ def _home_relative(path: Path) -> str:
 APPLICATION_ID = APP_ID  # also the desktop file's name and StartupWMClass (packaging/appimage)
 
 
+def migration_notice(result) -> Optional[Tuple[str, Level]]:
+    """The one-time message after moving SSH Manager's folders (``None``: nothing to say)."""
+
+    from .legacy_paths import COPIED, FAILED, legacy_dir
+
+    if result is None:
+        return None
+    if result.status == COPIED:
+        copied = next((m for m in result.copied if m.kind == "data"), result.copied[0])
+        return (_("Your data was copied to {path}; the old folder is no longer used and can be deleted.").format(
+            path=_home_relative(copied.new)), Level.INFO)
+    if result.status == FAILED:
+        return (_("Your {old} data could not be moved to {new}'s folders, so it is used where it is ({path}).").format(
+            old=LEGACY_APP_NAME, new=APP_NAME, path=_home_relative(legacy_dir("config"))), Level.WARNING)
+    return None
+
+
+def show_legacy_app_running() -> None:
+    """The old app is running: its data cannot move now (a blocking message; nothing is changed)."""
+
+    dialog = Gtk.MessageDialog(message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.CLOSE,
+                               text=_("Close the old {old} window first, then start {new} again.").format(
+                                   old=LEGACY_APP_NAME, new=APP_NAME))
+    dialog.format_secondary_text(_("{new} moves your hosts, settings and saved passwords from {old} the first "
+                                   "time it starts. That cannot happen while {old} is open.").format(
+                                       new=APP_NAME, old=LEGACY_APP_NAME))
+    dialog.set_title(APP_NAME)
+    dialog.run()
+    dialog.destroy()
+
+
 class SSHManagerApplication(Gtk.Application):
     """GTK application entry point."""
 
     def __init__(self, base_dir: Optional[Path] = None, *, inventory: Optional[Path] = None,
-                 startup_host: Optional[HostEntry] = None) -> None:
+                 startup_host: Optional[HostEntry] = None, migration=None) -> None:
         Gtk.Application.__init__(self, application_id=APPLICATION_ID)
         # X11 WM_CLASS = (APP_SLUG, APP_ID): its class is the desktop file's StartupWMClass, so docks group the
         # windows under the launcher and its icon; on Wayland the app id is already APP_ID.
@@ -151,6 +182,7 @@ class SSHManagerApplication(Gtk.Application):
         self._theme = get_theme_manager()
         self._settings = AppSettings.load()
         self._startup_host = startup_host  # --rdp / rdp://: opened once the window exists, never saved
+        self._migration = migration  # legacy_paths.MigrationResult: told once the window exists
 
     def do_startup(self) -> None:  # type: ignore[override]
         Gtk.Application.do_startup(self)
@@ -192,6 +224,9 @@ class SSHManagerApplication(Gtk.Application):
             if self._startup_host is not None:
                 host, self._startup_host = self._startup_host, None
                 GLib.timeout_add(500, self._open_startup_host, host)
+            notice = migration_notice(self._migration)
+            if notice is not None:
+                GLib.idle_add(lambda: self._window and self._window._notify(*notice) and False)
         self._window.present()
 
     def _ask_startup(self, kind: str, message: str) -> Choice:

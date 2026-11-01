@@ -7,7 +7,7 @@ the secrets it was given (the password of the current attempt) again, so a
 password never reaches the pane, the clipboard or the file.
 
 The file (Preferences → File transfer → "Keep a protocol log file", off by
-default) is ``$XDG_STATE_HOME/ssh-manager/protocol.log``, mode 0600, rotated
+default) is ``$XDG_STATE_HOME/ophion/protocol.log``, mode 0600, rotated
 at :data:`MAX_FILE_BYTES` with :data:`BACKUPS` old copies.
 """
 
@@ -29,8 +29,9 @@ BACKUPS = 3
 
 
 def default_log_path() -> Path:
-    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / "ssh-manager" / "protocol.log"
+    from ..legacy_paths import app_dir
+
+    return app_dir("state") / "protocol.log"
 
 
 def _printable(text: str) -> str:

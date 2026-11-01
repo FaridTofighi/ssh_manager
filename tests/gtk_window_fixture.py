@@ -97,7 +97,7 @@ class WindowSandbox:
             from ssh_manager.inventory.openssh import commit_openssh_import, plan_openssh_import
             from ssh_manager.inventory.store import InventoryStore
 
-            self.store = InventoryStore(self.root / "data" / "ssh-manager" / "inventory.db")
+            self.store = InventoryStore(self.root / "data" / "ophion" / "inventory.db")
             manager = StoreConfigManager(self.store)
             commit_openssh_import(plan_openssh_import([self.base]), manager)
         self.window = SSHManagerWindow(self.app, manager.base_dir if manager else self.base, settings,
@@ -109,7 +109,7 @@ class WindowSandbox:
 
         from ssh_manager import keybox as K
 
-        box = K.Keybox.create(password, self.root / "config" / "ssh-manager" / "keybox.json", scrypt_n=2 ** 15)
+        box = K.Keybox.create(password, self.root / "config" / "ophion" / "keybox.json", scrypt_n=2 ** 15)
         self.window.adopt_keybox(box)
         return box
 

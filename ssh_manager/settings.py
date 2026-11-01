@@ -5,30 +5,25 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .identity import APP_SLUG
+from .legacy_paths import app_dir, rebase
 from .persistence import write_json_atomic
 
 DEFAULT_CONFIG_FILENAME = "settings.json"
-APP_NAME = "ssh-manager"
+APP_NAME = APP_SLUG  # the folder name (``~/.config/ophion`` …); see legacy_paths for the move from ssh-manager
 LOGGER = logging.getLogger(__name__)
 
 
 def _default_config_dir() -> Path:
-    home = os.environ.get("XDG_CONFIG_HOME")
-    if home:
-        return Path(home).expanduser() / APP_NAME
-    return Path.home() / ".config" / APP_NAME
+    return app_dir("config")
 
 
 def _default_data_dir() -> Path:
-    home = os.environ.get("XDG_DATA_HOME")
-    if home:
-        return Path(home).expanduser() / APP_NAME
-    return Path.home() / ".local" / "share" / APP_NAME
+    return app_dir("data")
 
 
 @dataclass
@@ -378,6 +373,7 @@ class AppSettings:
             str,
             instance.audit_log_path,
         )
+        instance.audit_log_path = rebase(instance.audit_log_path)  # saved under ~/.local/share/ssh-manager
         instance.git_watch_enabled = get_value(
             data,
             "git_watch_enabled",

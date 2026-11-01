@@ -1,6 +1,6 @@
 """Per-host file-browser memory: bookmarks, the last local / remote folder, column widths (no GTK).
 
-One JSON file, ``$XDG_DATA_HOME/ssh-manager/file-browser.json`` (0600), keyed
+One JSON file, ``$XDG_DATA_HOME/ophion/file-browser.json`` (0600), keyed
 by the host's id (or its group path for folder inventories). Remembering the
 last folders can be turned off in Preferences; bookmarks are always kept.
 """
@@ -8,7 +8,6 @@ last folders can be turned off in Preferences; bookmarks are always kept.
 from __future__ import annotations
 
 import json
-import os
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -19,8 +18,9 @@ MAX_BOOKMARKS = 50
 
 
 def default_state_path() -> Path:
-    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "ssh-manager" / "file-browser.json"
+    from ..legacy_paths import app_dir
+
+    return app_dir("data") / "file-browser.json"
 
 
 def host_state_key(host: Any) -> str:

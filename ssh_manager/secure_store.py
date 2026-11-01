@@ -75,9 +75,9 @@ class SecureStoreError(Exception):
 
 
 def _default_store_path() -> Path:
-    home = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(home).expanduser() if home else Path.home() / ".config"
-    return base / "ssh-manager" / "passwords.json"
+    from .legacy_paths import app_dir
+
+    return app_dir("config") / "passwords.json"
 
 
 class FileKeyring:

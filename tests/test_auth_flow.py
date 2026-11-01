@@ -274,7 +274,7 @@ class TerminalAuthTests(unittest.TestCase):
         self.assertNotIn(SECRET, " ".join(argv))
         self.assertIn(f"SSHPASS={SECRET}", envv)
         self.assertEqual(tab._auth_method, "sentinel")
-        self.assertTrue(str(tab._marker).startswith(os.path.join(self.tmp.name, "ssh-manager")))
+        self.assertTrue(str(tab._marker).startswith(os.path.join(self.tmp.name, "ophion")))
         self.assertEqual(oct(os.stat(tab._marker.parent).st_mode & 0o777), "0o700")
 
     def test_rejected_credential_password_changes_no_store(self) -> None:

@@ -264,7 +264,7 @@ class WindowStoreTests(unittest.TestCase):
         self.addCleanup(sandbox.close)
         win = sandbox.window
         with mock.patch.object(K, "KEYBOX_SCRYPT_N", FAST):
-            box = K.Keybox.create(PASSWORD, sandbox.root / "config" / "ssh-manager" / "keybox.json", scrypt_n=FAST)
+            box = K.Keybox.create(PASSWORD, sandbox.root / "config" / "ophion" / "keybox.json", scrypt_n=FAST)
         credentials = win._credential_store
         win._secure_store = DisabledSecureStore()
         credentials._secure_store = win._secure_store
