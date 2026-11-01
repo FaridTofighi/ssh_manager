@@ -119,7 +119,12 @@ class TileFocusTests(unittest.TestCase):
         self.assertTrue(self.notebook.tile_mode)
         self.assertTrue(_wait(lambda: self.focus() is tabs[1].active_terminal, 3.0), "broadcast on")
         self.assertIs(self.notebook.current_tab(), tabs[1])
-        self.notebook.toggle_broadcast()
+        bar = self.notebook._toolbar
+        bar.broadcast.grab_focus()  # a click on the toolbar button takes the keyboard
+        bar.broadcast.set_active(False)  # broadcast off: the tile view stays, the session gets the keyboard
+        _pump()
+        self.assertTrue(self.notebook.tile_mode)
+        self.assert_current(tabs[1], label="broadcast off (tile view stays)")
         self.notebook.toggle_tile_mode()
         _pump()
         self.assert_current(tabs[1], label="broadcast and tile mode off")

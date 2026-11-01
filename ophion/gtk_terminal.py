@@ -2984,13 +2984,20 @@ class TerminalNotebook(Gtk.Box):
         self._as_user(lambda: self.set_tile_mode(not self._tile_mode))
 
     def _as_user(self, change: Callable[[], None]) -> None:
-        """A toggle by the user (button, menu, shortcut): the current session gets the keyboard afterwards."""
+        """A toggle by the user (button, menu, shortcut): the current session gets the keyboard afterwards.
+
+        Also when the layout stays (broadcast off keeps the tile view): a click on the toolbar button
+        would otherwise leave the keyboard on the button.
+        """
 
         self._user_layout_change = True
         try:
             change()
         finally:
             self._user_layout_change = False
+        current = self._current_tab()
+        if current is not None:
+            GLib.idle_add(self._focus_after_layout, current)
 
     @property
     def broadcast_active(self) -> bool:
@@ -3161,7 +3168,7 @@ class TerminalNotebook(Gtk.Box):
         if active == self._tile_mode:
             return
         keep = self._current_tab() or (self._tabs[0] if self._tabs else None)
-        restore = self._user_layout_change or self._focus_in_sessions()
+        restore = self._focus_in_sessions()
         self._tile_mode = active
         self._rebuilding_layout = True
         try:
@@ -3187,7 +3194,7 @@ class TerminalNotebook(Gtk.Box):
         self._dock_statusbar()
         self._sync_toolbar()
         self._emit_sessions_changed()  # host bar, status bar
-        if restore and keep is not None:
+        if restore and keep is not None and not self._user_layout_change:  # a user toggle: _as_user does it
             GLib.idle_add(self._focus_after_layout, keep)
 
     def _focus_in_sessions(self) -> bool:
