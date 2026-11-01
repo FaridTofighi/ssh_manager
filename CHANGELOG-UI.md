@@ -8,6 +8,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- Show all sessions: the current session keeps keyboard focus when entering
+  and leaving the tile view (also via Broadcast). Closing a session and
+  turning Broadcast off from the toolbar also leave the keyboard in the
+  current session.
 - Fixed the maximize/restore button in session tiles: it now reacts when the
   pointer is on the icon. Before, only its edges worked after the first zoom
   or restore. The macro Record/Stop button had the same problem and is fixed

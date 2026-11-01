@@ -149,6 +149,12 @@ activates its neighbour, a re-layout keeps it, and re-activating it is a no-op.
   the public entry point.
 - **Callers:** clicks, Alt+arrows, Ctrl+Tab, Alt+1…9, the session strip, new
   and closed splits, and the terminals' own focus-in all go through it.
+- **Layout changes:** tile ↔ tabs and closing a session preserve the current
+  session and restore terminal focus after mapping (`_set_tile_mode`,
+  `close_tab`, `_focus_after_layout`). The notebook's switch-page is ignored
+  while the layout is rebuilt. A user toggle (`_as_user`) always hands the
+  keyboard back; other changes do only if focus was in the sessions area. See
+  `tests/test_gtkui_tile_focus.py`.
 
 `PaneFrame` is an input-only `Gtk.EventBox` around the styled box
 (`frame.style()` carries `pane-frame` and the state classes). Every GdkWindow
