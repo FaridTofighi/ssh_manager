@@ -7,20 +7,21 @@ import sys
 from pathlib import Path
 
 from .gtk_app import SSHManagerApplication, show_legacy_app_running
+from .identity import APP_NAME, APP_SLUG, APP_TAGLINE
 
 
 def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[str]]:
-    parser = argparse.ArgumentParser(description="GTK SSH manager with embedded terminals")
+    parser = argparse.ArgumentParser(prog=APP_SLUG, description=f"{APP_NAME} — {APP_TAGLINE}")
     parser.add_argument(
         "--base-dir",
         default=None,
         help="Open a folder of grouped SSH config files (the layout of older versions) instead of the "
-             "SSH Manager inventory; changes are written to those files",
+             "Ophion inventory; changes are written to those files",
     )
     parser.add_argument(
         "--inventory",
         default=None,
-        help="Inventory database to use (default: $XDG_DATA_HOME/ssh-manager/inventory.db)",
+        help=f"Inventory database to use (default: $XDG_DATA_HOME/{APP_SLUG}/inventory.db)",
     )
     parser.add_argument("--rdp", metavar="HOST[:PORT]", default=None,
                         help="Open a Remote Desktop session to HOST without saving it (or pass an rdp:// address)")
@@ -52,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     inventory = Path(args.inventory).expanduser().resolve() if args.inventory else None
     host, error = startup_target(args, extras)
     if error:
-        print(f"ssh-manager: {error}", file=sys.stderr)
+        print(f"{APP_SLUG}: {error}", file=sys.stderr)
         return 2
     extras = [item for item in extras if not item.lower().startswith("rdp://")]
     from .legacy_paths import BLOCKED, migrate
@@ -63,5 +64,5 @@ def main(argv: list[str] | None = None) -> int:
         return 0  # nothing changed
     app = SSHManagerApplication(base_dir, inventory=inventory, startup_host=host, migration=moved)
 
-    gtk_argv = (sys.argv[:1] if argv is None else ["ssh-manager"]) + extras
+    gtk_argv = (sys.argv[:1] if argv is None else [APP_SLUG]) + extras
     return app.run(gtk_argv)

@@ -6,7 +6,7 @@
 * :func:`start_directory` — the current local tab's folder ("current") or the
   home folder; it must exist, else the home folder, else ``/``.
 * :func:`local_shell_env` — the app's environment without its own secrets and
-  internals. When the app runs from its AppImage (``SSH_MANAGER_APPDIR``), the
+  internals. When the app runs from its AppImage (``OPHION_APPDIR``, formerly ``SSH_MANAGER_APPDIR``), the
   bundled folders are removed from ``PATH`` and the other search paths, so the
   user's shell and the programs it starts (git, python, ssh …) are the host's.
 * :func:`terminal_env` — what every VTE child (the local shell, ssh) gets as
@@ -23,6 +23,8 @@ import pwd
 import shutil
 from typing import Callable, Dict, List, Mapping, Optional
 
+from .identity import env as env_value
+
 FALLBACK_SHELLS = ("/bin/bash", "/bin/sh")
 DEFAULT_TERM = "xterm-256color"
 # Path lists the AppImage launcher prepends its own folders to (``packaging/appimage/AppRun``).
@@ -34,7 +36,7 @@ APPIMAGE_PATH_LISTS = ("PATH", "LD_LIBRARY_PATH", "XDG_DATA_DIRS", "GI_TYPELIB_P
 APPIMAGE_ONLY = ("PYTHONNOUSERSITE", "PYTHONDONTWRITEBYTECODE", "GDK_PIXBUF_MODULE_FILE", "GTK_IM_MODULE_FILE",
                  "APPDIR", "APPIMAGE", "ARGV0", "OWD")
 SECRET_NAMES = ("SSHPASS",)
-SECRET_PREFIXES = ("SSH_MANAGER_", "SSHM_")
+SECRET_PREFIXES = ("OPHION_", "SSH_MANAGER_", "SSHM_")  # the app's own variables, before and after the rename
 # The terminal the app was started from (tmux, screen): not the terminal its tabs run in.
 OUTER_TERMINAL_NAMES = ("TMUX", "TMUX_PANE", "STY", "WINDOW")
 
@@ -115,7 +117,7 @@ def local_shell_env(environ: Optional[Mapping[str, str]] = None) -> List[str]:
     """``NAME=value`` entries for the local shell (see the module docstring)."""
 
     environ = dict(os.environ if environ is None else environ)
-    appdir = environ.get("SSH_MANAGER_APPDIR", "")
+    appdir = env_value("APPDIR", environ)  # OPHION_APPDIR, else the old SSH_MANAGER_APPDIR
     env: Dict[str, str] = {}
     for name, value in environ.items():
         if name in SECRET_NAMES or name.startswith(SECRET_PREFIXES):

@@ -235,7 +235,7 @@ class StartupFlow:
     def _ask_first_run(self) -> tuple:
         dialog = NewSecretDialog(None, _("Set Master Password"), _("Set a master password"),
                                  _("It encrypts your saved passwords and macros on this computer. Without it, "
-                                   "SSH Manager does not save passwords and asks for them every time."),
+                                   "Ophion does not save passwords and asks for them every time."),
                                  accept_label=_("_Set Master Password"))
         dialog.add_secondary(_("_Don't Save Passwords"), RESPONSE_OFF)
         dialog.show_all()
@@ -279,7 +279,7 @@ class StartupFlow:
         return True
 
     def _ask_password(self, keybox: Keybox) -> tuple:
-        dialog = UnlockDialog(None, _("Unlock SSH Manager"), _("Enter your master password"),
+        dialog = UnlockDialog(None, _("Unlock Ophion"), _("Enter your master password"),
                               _("It opens your saved passwords and macros."), keybox.unlock, in_thread=True,
                               error_text=_("Incorrect master password. Please try again."),
                               forgot_label=_("_Forgot master password?"))

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
 from .. import gc_guard
+from ..identity import APP_NAME
 
 BINARIES = ("xfreerdp3", "xfreerdp", "sdl-freerdp3", "sdl-freerdp", "wlfreerdp3", "wlfreerdp")
 EMBEDDABLE = ("xfreerdp3", "xfreerdp")  # clients with /parent-window (X11 window embedding)
@@ -406,7 +407,7 @@ class EngineReport:
         """Plain-text report for the Diagnostics dialog and its Copy button (no secrets, no user data)."""
 
         p = self.platform
-        lines = ["SSH Manager — Remote Desktop diagnostics",
+        lines = [f"{APP_NAME} — Remote Desktop diagnostics",
                  f"Session: {p.session_type or 'unknown'} · GTK backend: {'X11' if p.gdk_x11 else 'Wayland/other'}"
                  + (" · Flatpak" if p.flatpak else ""),
                  f"gtk-frdp: {p.frdp_version or 'not installed'}" + (f" ({p.frdp_problem})" if p.frdp_problem else ""),

@@ -104,10 +104,12 @@ class AppIconTests(unittest.TestCase):
         sandbox = WindowSandbox()
         self.addCleanup(sandbox.close)
         shown = []
-        with mock.patch.object(Gtk.AboutDialog, "run", lambda about: shown.append(about.get_logo_icon_name()) or 0,
-                               create=True):
+        with mock.patch.object(Gtk.AboutDialog, "run", lambda about: shown.append(
+                (about.get_program_name(), about.get_logo_icon_name(), about.get_comments())) or 0, create=True):
             sandbox.window.app_dialogs.show_about()
-        self.assertEqual(shown, ["ophion"])
+        self.assertEqual(shown, [("Ophion", "ophion", "Connection manager for SSH, SFTP, FTP and RDP")])
+        self.assertEqual(sandbox.window.get_title(), "Ophion")
+        self.assertEqual(sandbox.window._header.wordmark.get_text(), "Ophion")
 
     def test_a_missing_theme_icon_falls_back_to_the_file(self) -> None:
         from gi.repository import Gtk

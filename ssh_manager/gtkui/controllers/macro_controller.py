@@ -558,8 +558,8 @@ class MacroController:
             reason = str(exc)
             LOGGER.warning("macros: saving failed (%s)", reason)
             if reason == "changed_key":
-                text = _("The macros could not be saved: another SSH Manager window changed the master password. "
-                         "Restart SSH Manager.")
+                text = _("The macros could not be saved: another Ophion window changed the master password. "
+                         "Restart Ophion.")
             elif reason.startswith("external_"):
                 text = _("The macros could not be saved: macros.enc was changed and cannot be read.")
             else:

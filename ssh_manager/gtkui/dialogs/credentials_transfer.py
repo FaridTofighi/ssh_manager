@@ -168,7 +168,7 @@ def run_import(parent: Optional[Gtk.Window], credential_store, *,
     """Import from a ``*.sshcred`` file; returns the :class:`ImportResult` (``None``: cancelled or failed)."""
 
     path = (choose_path or (lambda: choose_open_file(parent, _("Import Credentials"), filters=[
-        (_("SSH Manager credentials (*.sshcred)"), ["*" + EXTENSION])])))()
+        (_("Ophion credentials (*.sshcred)"), ["*" + EXTENSION])])))()
     if not path:
         return None
     error = ""

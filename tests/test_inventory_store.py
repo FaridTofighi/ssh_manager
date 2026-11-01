@@ -112,7 +112,7 @@ class LifecycleTests(StoreTestCase):
                 self.store.conn.execute("PRAGMA busy_timeout=100")
                 with self.assertRaises(InventoryLocked) as ctx:
                     self.store.create_group(None, "blocked")
-            self.assertIn("another SSH Manager", str(ctx.exception))
+            self.assertIn("another Ophion", str(ctx.exception))
         finally:
             other.execute("ROLLBACK")
             other.close()

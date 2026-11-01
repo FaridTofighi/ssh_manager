@@ -101,7 +101,7 @@ class SecurityActions:
             remember(keyring, keybox)
         except Exception as exc:
             LOGGER.warning("security: the key could not be stored in the system keyring (%s)", type(exc).__name__)
-            self.win._notify_error(_("The system keyring did not accept the key. SSH Manager keeps asking for the "
+            self.win._notify_error(_("The system keyring did not accept the key. Ophion keeps asking for the "
                                      "master password."))
             return False
         return True
@@ -152,7 +152,7 @@ class SecurityActions:
         count = self.state().saved
         if count and not self.confirm(
                 ngettext("Delete {n} saved password?", "Delete {n} saved passwords?", count).format(n=count),
-                _("SSH Manager stops saving passwords and asks for them every time. The saved ones are deleted "
+                _("Ophion stops saving passwords and asks for them every time. The saved ones are deleted "
                   "and cannot be brought back."),
                 ngettext("_Delete {n} Password", "_Delete {n} Passwords", count).format(n=count)):
             return False

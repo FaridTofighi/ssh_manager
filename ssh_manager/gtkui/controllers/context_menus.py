@@ -97,7 +97,7 @@ def host_menu(
             MenuItemSpec(_("Forget Host _Key…"), cb.forget_host_key, Icons.FORGET, visible=is_ssh,
                          tooltip=_("Open Known Hosts on this host's stored keys")),
             MenuItemSpec(_("E_xport Selected Hosts…"), cb.export_selected_hosts, Icons.SAVE,
-                         tooltip=_("As an SSH Manager file (.sshm); no passwords")),
+                         tooltip=_("As an Ophion file (.sshm); no passwords")),
         ]),
         MenuSection("destructive", [
             MenuItemSpec(_("_Delete Host…"), cb.delete_selected, Icons.DELETE, accels.get("host-delete", ""),
@@ -143,7 +143,7 @@ def group_menu(
         MenuItemSpec(_("Change Group _Color…"), cb.change_group_color, Icons.COLOR),
         MenuItemSpec(_("Clear Group Color"), cb.clear_color, Icons.CLEAR),
         MenuItemSpec(_("E_xport Group…"), cb.export_group, Icons.SAVE,
-                     tooltip=_("This group and its subgroups as an SSH Manager file (.sshm); no passwords")),
+                     tooltip=_("This group and its subgroups as an Ophion file (.sshm); no passwords")),
     ]))
     if kind is RowKind.PARENT:
         sections.append(MenuSection("destructive", [

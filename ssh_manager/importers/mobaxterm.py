@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from ..config import HostEntry
+from ..identity import APP_NAME
 
 # ----------------------------------------------------------------- constants
 MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -615,7 +616,7 @@ class ExistingInventory:
     def from_manager(cls, manager) -> "ExistingInventory":
         store = getattr(manager, "store", None)
         if store is None:
-            raise TypeError("The MobaXterm import needs the SSH Manager inventory (InventoryStore).")
+            raise TypeError("The MobaXterm import needs the Ophion inventory (InventoryStore).")
         return cls.from_store(store)
 
     def group_id(self, path: Sequence[str]) -> Optional[str]:
@@ -1137,7 +1138,7 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
                   *, source_name: str = "") -> str:
     """Plain-text import report: counts, names, issue codes — no secrets, no raw session lines."""
 
-    lines = ["SSH Manager — MobaXterm import report", time.strftime("%Y-%m-%d %H:%M:%S")]
+    lines = [f"{APP_NAME} — MobaXterm import report", time.strftime("%Y-%m-%d %H:%M:%S")]
     if source_name:
         lines.append(f"File: {source_name}")
     if report is not None:
@@ -1173,7 +1174,7 @@ def render_report(plan: ImportPlan, job: Optional[ImportJob] = None, report: Opt
             label = entry.key or "(no username)"
             lines.append(f"  {label} ({entry.count} host(s)) → {target}")
     if plan.renamed:
-        lines += ["", "Names stored differently (MobaXterm → SSH Manager)"]
+        lines += ["", "Names stored differently (MobaXterm → Ophion)"]
         lines += [f"  {original} → {stored}" for original, stored in plan.renamed]
     if all_issues:
         lines += ["", "Details"]

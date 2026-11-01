@@ -32,7 +32,7 @@ TOKEN_PREFIX = "sm_"
 
 _TEMPLATE = Template(r"""
 /* ===================================================================
- * SSH Manager stylesheet ($name theme, $density density) - generated from
+ * Ophion stylesheet ($name theme, $density density) - generated from
  * tokens.py and density.py.
  * Do not edit by hand: change the tokens or stylesheet.py instead.
  * =================================================================== */

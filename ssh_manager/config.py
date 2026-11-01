@@ -510,7 +510,7 @@ class ConfigManager:
             if not self.base_dir.is_dir():
                 return (
                     f"'{self.base_dir}' is a single file, so groups cannot be added to it. "
-                    "SSH Manager keeps groups in its own inventory (or in a folder)."
+                    "Ophion keeps groups in its own inventory (or in a folder)."
                 )
             return None
         try:

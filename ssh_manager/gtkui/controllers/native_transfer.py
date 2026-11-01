@@ -85,7 +85,7 @@ class NativeTransferController:
     def _store(self):
         store = getattr(self.win.manager, "store", None)
         if store is None:
-            self.win._notify_info(_("SSH Manager exports are made from the SSH Manager inventory; this window shows a "
+            self.win._notify_info(_("Ophion exports are made from the Ophion inventory; this window shows a "
                                     "folder inventory. Use Export → To OpenSSH Config instead."))
         return store
 
@@ -159,7 +159,7 @@ class NativeTransferController:
             dialog.destroy()
 
     def _choose_path(self, name: str) -> Optional[str]:
-        return choose_save_file(self.win, _("Export as SSH Manager File"), current_name=name)
+        return choose_save_file(self.win, _("Export as Ophion File"), current_name=name)
 
     def _credential_for(self, host_id: str):
         try:
@@ -199,10 +199,10 @@ class NativeTransferController:
         self.worker = None
         if error is not None:
             reason = error.strerror if isinstance(error, OSError) and error.strerror else str(error)
-            LOGGER.warning("SSH Manager export failed (%s)", type(error).__name__)
+            LOGGER.warning("Ophion export failed (%s)", type(error).__name__)
             self.win._notify_error(_("The export could not be written: {reason}").format(reason=reason))
             return
-        LOGGER.info("SSH Manager export: %d group(s), %d host(s)", report.groups, report.hosts)
+        LOGGER.info("Ophion export: %d group(s), %d host(s)", report.groups, report.hosts)
         text = ngettext("Exported {n} host to {file}.", "Exported {n} hosts to {file}.", report.hosts).format(
             n=report.hosts, file=target.name)
         self.win._notify(text, Level.SUCCESS, action_label=_("_Details"),
@@ -221,7 +221,7 @@ class NativeTransferController:
             self.wizard.present()
             return
         if getattr(self.win.manager, "store", None) is None:
-            self.win._notify_info(_("SSH Manager exports are imported into the SSH Manager inventory; this window "
+            self.win._notify_info(_("Ophion exports are imported into the Ophion inventory; this window "
                                     "shows a folder inventory."))
             return
         if self.win.manager.read_only:
@@ -242,14 +242,14 @@ class NativeTransferController:
             self.wizard = None
         if report is None:
             return
-        LOGGER.info("SSH Manager import: %s, %d host(s), %d group(s)", report.status.value, report.hosts,
+        LOGGER.info("Ophion import: %s, %d host(s), %d group(s)", report.status.value, report.hosts,
                     report.groups)
         if report.status is ImportStatus.SUCCESS:
             warnings = self.apply_after_commit(report)
             self.win.tree.rebuild()
             self.win.tree.reveal_imported(report.parents)
-            self.win._notify(ngettext("Imported {n} host from the SSH Manager export.",
-                                      "Imported {n} hosts from the SSH Manager export.", report.hosts).format(
+            self.win._notify(ngettext("Imported {n} host from the Ophion export.",
+                                      "Imported {n} hosts from the Ophion export.", report.hosts).format(
                 n=report.hosts), Level.SUCCESS)
             for warning in warnings + list(report.warnings):
                 self.win._notify_warning(warning)
@@ -266,7 +266,7 @@ class NativeTransferController:
             try:
                 self.win._save_ui_state()
             except Exception as exc:  # the inventory import itself stays committed
-                LOGGER.warning("SSH Manager import: the colours could not be saved (%s)", type(exc).__name__)
+                LOGGER.warning("Ophion import: the colours could not be saved (%s)", type(exc).__name__)
                 warnings.append(_("The hosts were imported, but their colours could not be saved."))
         if report.smart_groups:
             from ...importers.native import merge_smart_groups

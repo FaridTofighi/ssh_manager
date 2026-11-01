@@ -107,7 +107,7 @@ class NativeImportDialog(BaseDialog):
     def __init__(self, parent: Optional[Gtk.Window], manager, credential_store, *, report_dir: Path,
                  group_colors: Optional[Dict[str, str]] = None, host_colors: Optional[Dict[str, str]] = None,
                  choose_file: Optional[Callable[[Gtk.Window], Optional[str]]] = None) -> None:
-        BaseDialog.__init__(self, parent, _("Import an SSH Manager Export"), size=DialogSize.LARGE, height=640)
+        BaseDialog.__init__(self, parent, _("Import an Ophion Export"), size=DialogSize.LARGE, height=640)
         self.get_style_context().add_class("import-wizard")
         self._manager = manager
         self._store = credential_store
@@ -160,13 +160,13 @@ class NativeImportDialog(BaseDialog):
     def _build_file_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         section = FormSection(
-            _("SSH Manager export"),
-            _("Choose a file exported by SSH Manager (*.sshm). Groups, subgroups, hosts, colours and per-protocol "
+            _("Ophion export"),
+            _("Choose a file exported by Ophion (*.sshm). Groups, subgroups, hosts, colours and per-protocol "
               "settings are imported; it contains no passwords, and nothing is connected to."))
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.choose_button = Gtk.Button.new_with_mnemonic(_("_Choose File…"))
         self.choose_button.connect("clicked", lambda *_a: self.choose_file())
-        set_accessible_name(self.choose_button, _("Choose an SSH Manager export"))
+        set_accessible_name(self.choose_button, _("Choose an Ophion export"))
         row.pack_start(self.choose_button, False, False, 0)
         self.file_spinner = Gtk.Spinner()
         row.pack_start(self.file_spinner, False, False, 0)
@@ -280,7 +280,7 @@ class NativeImportDialog(BaseDialog):
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         section = FormSection(
             _("Credentials for the users in the file"),
-            _("Choose the SSH Manager credential that replaces each user: its username is used for those hosts, "
+            _("Choose the Ophion credential that replaces each user: its username is used for those hosts, "
               "and the hosts are bound to it. With None the user stays as written. Passwords are never in the "
               "file; a new credential asks for one here."))
         self.default_combo = Gtk.ComboBoxText()
@@ -413,7 +413,7 @@ class NativeImportDialog(BaseDialog):
         if self.step == Step.FILE and self.document is not None:
             if self.document.integrity == "mismatch" and not self._integrity_accepted:
                 if not self.confirm(self, _("The file was edited after export"),
-                                    _("Its content differs from what SSH Manager wrote. Import it anyway?"),
+                                    _("Its content differs from what Ophion wrote. Import it anyway?"),
                                     confirm_label=_("_Continue")):
                     return False
                 self._integrity_accepted = True
@@ -476,8 +476,8 @@ class NativeImportDialog(BaseDialog):
 
     # ============================================================ step 1: file
     def _default_choose_file(self, parent: Gtk.Window) -> Optional[str]:
-        return choose_open_file(parent, _("Choose an SSH Manager Export"), accept_label=_("_Open"),
-                                filters=[(_("SSH Manager exports (*.sshm)"), ["*.sshm", "*.json"])])
+        return choose_open_file(parent, _("Choose an Ophion Export"), accept_label=_("_Open"),
+                                filters=[(_("Ophion exports (*.sshm)"), ["*.sshm", "*.json"])])
 
     def choose_file(self, path: Optional[str] = None) -> None:
         path = path or self._choose_file(self)
@@ -534,7 +534,7 @@ class NativeImportDialog(BaseDialog):
                      "mismatch": _("edited after export")}[value.integrity]
         self.file_label.set_text(f"{self.source_path.name} · {_human_size(value.size)}" if self.source_path
                                  else _human_size(value.size))
-        lines = [_("Exported {date} by SSH Manager {version}.").format(date=value.exported_at or _("(unknown date)"),
+        lines = [_("Exported {date} by Ophion {version}.").format(date=value.exported_at or _("(unknown date)"),
                                                                        version=value.app_version or "?"),
                  ngettext("{n} group", "{n} groups", groups).format(n=groups) + " · " +
                  ngettext("{n} host", "{n} hosts", len(value.hosts())).format(n=len(value.hosts())) +

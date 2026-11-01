@@ -663,7 +663,7 @@ class HostDialog(BaseDialog):
     def _page_forwarding(self, labels: Gtk.SizeGroup) -> None:
         self._forwarding_page = self.layout.new_page(
             "forwarding", _("Port Forwarding"),
-            _("Local, remote and SOCKS forwards of this host. SSH Manager runs them beside the terminal, so they "
+            _("Local, remote and SOCKS forwards of this host. Ophion runs them beside the terminal, so they "
               "can be stopped without disconnecting (see Tunnels…)."))
         self.layout.on_page_shown.append(self._show_forwarding)
 

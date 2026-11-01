@@ -52,7 +52,7 @@ class RdpFileActions:
 
         manager = self.win.manager
         if getattr(manager, "read_only", False) or not getattr(manager, "allows_display_names", False):
-            self.win._notify(_("RDP hosts can only be added to the SSH Manager inventory."), Level.INFO)
+            self.win._notify(_("RDP hosts can only be added to the Ophion inventory."), Level.INFO)
             return []
         paths = list(paths) if paths is not None else self.choose_files()
         if not paths:

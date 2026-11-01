@@ -93,7 +93,7 @@ def check_kdf(kdf: Any) -> None:
             raise AeadError("unsupported", "This file needs Argon2id, which the installed 'cryptography' package "
                                            "does not provide; update it.")
     else:
-        raise AeadError("unsupported", "This file uses a key method SSH Manager does not know.")
+        raise AeadError("unsupported", "This file uses a key method Ophion does not know.")
     if len(unb64(kdf.get("salt"), "salt")) < SALT_BYTES:
         raise AeadError("unsafe", "The key settings are damaged or unsafe.")
 

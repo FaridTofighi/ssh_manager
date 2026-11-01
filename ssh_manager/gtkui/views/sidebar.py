@@ -157,7 +157,7 @@ class SidebarView(Gtk.Box):
             on_link=lambda: self.on_open_folder(),
             compact=True,
         )
-        self.native_import_link = self.first_run.add_link(_("Import an SSH Manager e_xport…"),
+        self.native_import_link = self.first_run.add_link(_("Import an Ophion e_xport…"),
                                                           lambda: self.on_import_native())
         self.stack.add_named(self.first_run, TreePage.EMPTY.value)
         self.pack_start(self.stack, True, True, 0)

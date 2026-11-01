@@ -14,6 +14,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
+from ...identity import APP_NAME, APP_TAGLINE  # noqa: E402
 from ...persistence import write_json_atomic  # noqa: E402
 from ..dialogs.base import is_accept  # noqa: E402
 from ..dialogs.config_viewer import ConfigViewerDialog  # noqa: E402
@@ -23,6 +24,7 @@ from ..dialogs.preferences import PreferencesDialog, PreferencesValues  # noqa: 
 from ..dialogs.secrets import NewSecretDialog  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
+from ..widgets.icons import APP_ICON_NAME  # noqa: E402
 from .shortcuts import build_shortcuts_window, refresh_shortcuts_window  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -141,7 +143,7 @@ class AppDialogs:
         payload: Dict[str, Any] = {
             "version": 1,
             "generated_at": timestamp,
-            "app": {"name": "SSH Manager", "version": ""},
+            "app": {"name": APP_NAME, "version": ""},
             "security_policy": {
                 "host_key_checking": self.win._settings.host_key_policy,
                 "allowed_ciphers": self.win._settings.allowed_ciphers,
@@ -238,9 +240,13 @@ class AppDialogs:
 
     def show_about(self) -> None:
         about = Gtk.AboutDialog(transient_for=self.win, modal=True)
-        about.set_program_name(_("SSH Manager"))
-        about.set_logo_icon_name("ophion")
-        about.set_comments(_("Browse grouped OpenSSH configs, manage credentials and run embedded SSH sessions."))
+        about.set_program_name(APP_NAME)
+        about.set_logo_icon_name(APP_ICON_NAME)
+        about.set_comments(_(APP_TAGLINE))
+        from .native_transfer import app_version
+
+        if app_version():
+            about.set_version(app_version())
         about.run()
         about.destroy()
 

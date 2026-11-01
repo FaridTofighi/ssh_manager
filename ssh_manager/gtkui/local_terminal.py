@@ -108,7 +108,7 @@ class LocalTerminalTab(TerminalTab):
                 self._secondary_pid = pid
 
         # NO_PARENT_ENVV: VTE otherwise adds envv to the app's own environment, and the variables
-        # local_shell_env() removed (SSHPASS, SSH_MANAGER_*, the AppImage's folders) would come back.
+        # local_shell_env() removed (SSHPASS, OPHION_* and SSH_MANAGER_*, the AppImage's folders) would come back.
         flags = GLib.SpawnFlags(int(GLib.SpawnFlags.DEFAULT) | int(getattr(Vte, "SPAWN_NO_PARENT_ENVV", 0)))
         term.spawn_async(Vte.PtyFlags.DEFAULT, workdir, argv, local_shell_env(), flags,
                          None, None, -1, None, finished, None)

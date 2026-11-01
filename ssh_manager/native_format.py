@@ -25,7 +25,9 @@ ENCRYPTED_FORMAT = "ssh-manager-export-encrypted"
 VERSION = 1
 ENCRYPTED_VERSION = 1
 EXTENSION = ".sshm"
-MIME_TYPE = "application/x-ssh-manager+json"
+MIME_TYPE = "application/x-ophion+json"
+LEGACY_MIME_TYPE = "application/x-ssh-manager+json"  # files typed by SSH Manager still open
+MIME_TYPES = (MIME_TYPE, LEGACY_MIME_TYPE)
 KDF = "pbkdf2-sha256"
 KDF_ITERATIONS = 600_000
 MIN_KDF_ITERATIONS = 600_000
@@ -110,10 +112,10 @@ def decrypt_document(header: Dict[str, Any], passphrase: str) -> bytes:
     if not isinstance(version, int) or isinstance(version, bool):
         raise NativeFormatError("damaged", "The encrypted export is damaged.")
     if version > ENCRYPTED_VERSION:
-        raise NativeFormatError("newer", "This file was created by a newer SSH Manager.")
+        raise NativeFormatError("newer", "This file was created by a newer Ophion.")
     kdf = header.get("kdf")
     if header.get("cipher") != CIPHER or not isinstance(kdf, dict) or kdf.get("name") != KDF:
-        raise NativeFormatError("unsupported", "This encrypted export uses a method SSH Manager does not know.")
+        raise NativeFormatError("unsupported", "This encrypted export uses a method Ophion does not know.")
     iterations = kdf.get("iterations")
     if not isinstance(iterations, int) or isinstance(iterations, bool) or iterations < MIN_KDF_ITERATIONS \
             or iterations > 50_000_000:
@@ -136,11 +138,13 @@ def decrypt_document(header: Dict[str, Any], passphrase: str) -> bytes:
 def default_file_name(now: Optional[float] = None) -> str:
     import time
 
-    return time.strftime("ssh-manager-%Y%m%d-%H%M", time.localtime(now)) + EXTENSION
+    from .identity import APP_SLUG
+
+    return time.strftime(f"{APP_SLUG}-%Y%m%d-%H%M", time.localtime(now)) + EXTENSION
 
 
 __all__ = [
-    "FORMAT", "ENCRYPTED_FORMAT", "VERSION", "EXTENSION", "MIME_TYPE", "NativeFormatError", "canonical_json",
+    "FORMAT", "ENCRYPTED_FORMAT", "VERSION", "EXTENSION", "MIME_TYPE", "LEGACY_MIME_TYPE", "MIME_TYPES", "NativeFormatError", "canonical_json",
     "integrity_hash", "check_integrity", "dump_document", "encrypt_document", "decrypt_document", "is_encrypted",
     "default_file_name",
 ]

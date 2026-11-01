@@ -407,7 +407,7 @@ class EncryptedFileKeyring:
         if not isinstance(version, int) or isinstance(version, bool) or version < SECRETS_VERSION:
             raise KeyringError("The password file is not in the expected format.")
         if version > SECRETS_VERSION:
-            raise KeyringError("The password file was written by a newer SSH Manager.")
+            raise KeyringError("The password file was written by a newer Ophion.")
         if document.get("keybox_id") != self._keybox_id:
             raise KeyringError("This file belongs to a different key.")
         try:

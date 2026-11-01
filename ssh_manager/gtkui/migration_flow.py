@@ -46,7 +46,7 @@ RESPONSE_LATER = 12
 
 
 def intro_text() -> str:
-    return _("SSH Manager now encrypts saved passwords and macros with one key protected by your master "
+    return _("Ophion now encrypts saved passwords and macros with one key protected by your master "
              "password. Your data will be moved safely; nothing is deleted until the move is verified.")
 
 
@@ -97,11 +97,11 @@ class MigrationFlow:
         else:
             if found.has_hash:  # "don't ask on startup" was on
                 if keyring is not None:
-                    explain = _("Choose a master password. It is remembered on this computer, so SSH Manager "
+                    explain = _("Choose a master password. It is remembered on this computer, so Ophion "
                                 "still starts without asking; you need it to change security settings.")
                     remember_key = True
                 else:
-                    explain = _("Choose a master password. You will type it when SSH Manager starts: without a "
+                    explain = _("Choose a master password. You will type it when Ophion starts: without a "
                                 "system keyring, a key file next to the data would not protect anything.")
             else:
                 explain = _("Choose a master password to encrypt your saved passwords and macros.")
@@ -183,7 +183,7 @@ class MigrationFlow:
             dialog.destroy()
 
     def _ask_current_password(self, verify: Callable[[str], bool]) -> Optional[str]:
-        return UnlockDialog(self.parent, _("Unlock SSH Manager"), _("Enter your master password"),
+        return UnlockDialog(self.parent, _("Unlock Ophion"), _("Enter your master password"),
                             _("Your current master password protects the new key file too."), verify,
                             in_thread=True, error_text=_("Incorrect master password. Please try again.")).ask()
 
@@ -208,7 +208,7 @@ class MigrationFlow:
         dialog = Gtk.MessageDialog(transient_for=self.parent, modal=True, message_type=Gtk.MessageType.QUESTION,
                                    text=_("Moved {n} saved passwords. Remove the old copies from the system "
                                           "keyring?").format(n=count))
-        dialog.format_secondary_text(_("They are encrypted in SSH Manager's own file now. If you keep them, "
+        dialog.format_secondary_text(_("They are encrypted in Ophion's own file now. If you keep them, "
                                        "Preferences → Security can remove them later."))
         dialog.add_button(_("_Keep Them"), Gtk.ResponseType.NO)
         dialog.add_button(_("_Remove"), Gtk.ResponseType.YES)

@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from ..config import HostEntry
+from ..identity import APP_NAME
 from ..native_format import (
     ENCRYPTED_FORMAT,
     FORMAT,
@@ -220,7 +221,7 @@ def _load_json(data: bytes) -> Any:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        raise NativeFormatError("not_utf8", "This is not an SSH Manager export (the text is not UTF-8).") from None
+        raise NativeFormatError("not_utf8", "This is not an Ophion export (the text is not UTF-8).") from None
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
@@ -257,12 +258,12 @@ def read_native(source: Union[bytes, bytearray, Path, str], passphrase: Optional
         value = _load_json(decrypt_document(value, passphrase))
         encrypted = True
     if not isinstance(value, dict) or value.get("format") != FORMAT:
-        raise NativeFormatError("not_native", "This is not an SSH Manager export.")
+        raise NativeFormatError("not_native", "This is not an Ophion export.")
     version = value.get("version")
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         raise NativeFormatError("damaged", "The export has no valid version number.")
     if version > VERSION:
-        raise NativeFormatError("newer", "This file was created by a newer SSH Manager; update SSH Manager to "
+        raise NativeFormatError("newer", "This file was created by a newer Ophion; update Ophion to "
                                          "import it.")
     issues: List[Issue] = []
     integrity = check_integrity(value)
@@ -1049,10 +1050,10 @@ def render_native_report(plan: NativePlan, job: Optional[NativeJob] = None, repo
     """Plain-text import report: counts, names and issue codes — never a value from a host's fields."""
 
     document = plan.document
-    lines = ["SSH Manager — import report (SSH Manager export)", time.strftime("%Y-%m-%d %H:%M:%S")]
+    lines = [f"{APP_NAME} — import report ({APP_NAME} export)", time.strftime("%Y-%m-%d %H:%M:%S")]
     if source_name:
         lines.append(f"File: {source_name}")
-    lines.append(f"Exported: {document.exported_at or 'unknown'} by SSH Manager {document.app_version or '?'}"
+    lines.append(f"Exported: {document.exported_at or 'unknown'} by Ophion {document.app_version or '?'}"
                  + (" (encrypted)" if document.encrypted else ""))
     lines.append(f"Integrity: {document.integrity}")
     if report is not None:
@@ -1092,7 +1093,7 @@ def render_native_report(plan: NativePlan, job: Optional[NativeJob] = None, repo
             target = job.credential_names.get(cred_id, cred_id) if cred_id else "None (keep the user as written)"
             lines.append(f"  {entry.key or '(no user)'} ({entry.count} host(s)) → {target}")
     if plan.renamed:
-        lines += ["", "Names stored differently (file → SSH Manager)"] + [f"  {a} → {b}" for a, b in plan.renamed]
+        lines += ["", "Names stored differently (file → Ophion)"] + [f"  {a} → {b}" for a, b in plan.renamed]
     if all_issues:
         lines += ["", "Details"] + [f"  [{i.severity.value}] {i.code.value}: {i.message}" for i in all_issues]
     return "\n".join(lines) + "\n"

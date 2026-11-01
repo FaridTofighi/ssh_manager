@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+from ..identity import APP_NAME
 from ..native_format import FORMAT, VERSION, integrity_hash
 
 REDACTED = "<removed>"
@@ -347,7 +348,7 @@ def build_export(
 def render_export_report(report: ExportReport) -> str:
     """Plain text for the report dialog: counts, field names and host names — never a value that was removed."""
 
-    lines = ["SSH Manager — export report", "",
+    lines = [f"{APP_NAME} — export report", "",
              f"Groups: {report.groups}", f"Hosts: {report.hosts}"]
     lines += [f"  {name}: {count}" for name, count in sorted(report.by_protocol.items())]
     lines += [f"Colours: {report.colors}" + (f" ({report.colors_invalid} unreadable, left out)"

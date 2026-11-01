@@ -293,7 +293,7 @@ class MobaXtermImportDialog(BaseDialog):
         section = FormSection(
             _("Credentials for the usernames in the file"),
             _("A username in a MobaXterm export is often only the label of a credential saved in MobaXterm. "
-              "Choose the SSH Manager credential that replaces each one: its username is used for those hosts, "
+              "Choose the Ophion credential that replaces each one: its username is used for those hosts, "
               "and the hosts are bound to it."),
         )
         self.default_combo = Gtk.ComboBoxText()

@@ -28,6 +28,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gio, GLib, Gtk  # type: ignore  # noqa: E402
 
+from ...identity import APP_NAME  # noqa: E402
 from ..i18n import _  # noqa: E402
 
 
@@ -70,8 +71,8 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("import-rdp-files", _("Import .rdp files"), G_GENERAL),
     ActionSpec("export-rdp-file", _("Export the selected RDP host as a .rdp file"), G_GENERAL),
     ActionSpec("export-openssh", _("Export to OpenSSH config"), G_GENERAL),
-    ActionSpec("export-native", _("Export as SSH Manager file (.sshm)"), G_GENERAL),
-    ActionSpec("import-native", _("Import an SSH Manager export (.sshm)"), G_GENERAL),
+    ActionSpec("export-native", _("Export as Ophion file (.sshm)"), G_GENERAL),
+    ActionSpec("import-native", _("Import an Ophion export (.sshm)"), G_GENERAL),
     ActionSpec("backup-inventory", _("Back up the inventory"), G_GENERAL),
     ActionSpec("refresh", _("Reload configuration"), G_GENERAL, ("F5",)),
     ActionSpec("settings", _("Settings"), G_GENERAL, ("<Primary>comma",)),
@@ -268,7 +269,7 @@ def build_shortcuts_window(parent: Optional[Gtk.Window],
     window.connect("delete-event", lambda widget, _event: widget.hide_on_delete())
     if parent is not None:
         window.set_transient_for(parent)
-    section = Gtk.ShortcutsSection(section_name="main", title=_("SSH Manager"), max_height=12)
+    section = Gtk.ShortcutsSection(section_name="main", title=APP_NAME, max_height=12)
     section.show()
     rows: Dict[str, Gtk.ShortcutsShortcut] = {}
     groups: Dict[str, Gtk.ShortcutsGroup] = {}

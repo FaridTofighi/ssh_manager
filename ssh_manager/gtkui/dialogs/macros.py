@@ -653,7 +653,7 @@ def ask_damaged_file(parent: Optional[Gtk.Window], kind: str) -> str:
     details = {
         "wrong_key": _("It was not encrypted with the current master password, or it was changed."),
         "tampered": _("Its header was changed: it is not used, so that a weaker protection cannot be forced."),
-        "unsupported": _("It was written by a newer SSH Manager."),
+        "unsupported": _("It was written by a newer Ophion."),
         "unreadable": _("It cannot be read (permissions)."),
     }
     dialog = Gtk.MessageDialog(transient_for=parent, modal=True, message_type=Gtk.MessageType.WARNING,

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+from ..identity import APP_NAME
 from typing import Iterable, List, Optional, Sequence
 
 RECENT_LIMIT = 6
@@ -32,7 +34,7 @@ def workspace_name(path: Path) -> str:
 
     path = Path(path)
     if path.suffix == ".db":
-        return "SSH Manager"  # the app-owned inventory
+        return APP_NAME  # the app-owned inventory
     name = path.stem if path.suffix else path.name
     return name or str(path)
 

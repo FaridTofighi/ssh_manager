@@ -146,9 +146,9 @@ def release_hint(engine_id: str, configured: Optional[str] = None) -> str:
     """How the user gets the keyboard back, per engine (English; the UI translates)."""
 
     if engine_id == "frdp":
-        return f"{accelerator_label(configured or DEFAULT_RELEASE)} gives the keyboard back to SSH Manager."
+        return f"{accelerator_label(configured or DEFAULT_RELEASE)} gives the keyboard back to Ophion."
     if engine_id == "xfreerdp-embed":
-        return "Right Ctrl gives the keyboard back to SSH Manager (FreeRDP's own key)."
+        return "Right Ctrl gives the keyboard back to Ophion (FreeRDP's own key)."
     return "The remote desktop runs in its own window; it handles the keyboard itself."
 
 

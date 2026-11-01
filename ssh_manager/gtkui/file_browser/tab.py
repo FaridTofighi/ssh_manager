@@ -43,6 +43,7 @@ from ...auth_flow import (  # noqa: E402
     NO_PASSWORD, AuthOutcome, Decision, PasswordFlow, PasswordResolution, SaveContext, SaveOffer, source_phrase,
 )
 from ...host_utils import host_connection_params  # noqa: E402
+from ...identity import APP_NAME  # noqa: E402
 from ...transfer.backend import (  # noqa: E402
     AuthError, BackendError, CancelToken, CertificateChanged, Disconnected, EntryKind, HostKeyChanged, RemoteEntry,
     RemoteFileBackend, ServerInfo, UnknownHostKey, UntrustedCertificate,
@@ -289,7 +290,7 @@ class FileBrowserTab(SessionPage):
         hostname, port, user = host_connection_params(self._host)
         kind = protocols.kind_for(self._host)
         settings = self.settings
-        lines = ["SSH Manager — file transfer diagnostics",
+        lines = [f"{APP_NAME} — file transfer diagnostics",
                  f"Protocol: {kind.badge if kind else self.protocol}",
                  f"Server: {hostname}:{port or default_port_for(self.protocol, settings)}",
                  f"User: {'(anonymous)' if settings.anonymous else (user or '(none)')}",

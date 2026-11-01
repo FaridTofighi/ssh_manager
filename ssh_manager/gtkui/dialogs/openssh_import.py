@@ -37,7 +37,7 @@ class OpenSSHImportDialog(BaseDialog):
         self._plan: Optional[OpenSSHPlan] = None
         section = FormSection(
             _("Sources"),
-            _("Hosts are copied into SSH Manager; the files themselves are never changed. In a folder, each "
+            _("Hosts are copied into Ophion; the files themselves are never changed. In a folder, each "
               "folder and each file becomes a group."),
         )
         self._source_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)

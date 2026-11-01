@@ -46,7 +46,7 @@ class NativeExportDialog(BaseDialog):
 
     def __init__(self, parent: Optional[Gtk.Window], *, group_label: str = "", host_count: int = 0,
                  scope: str = "all", has_smart_groups: bool = False) -> None:
-        BaseDialog.__init__(self, parent, _("Export as SSH Manager File"), size=DialogSize.MEDIUM)
+        BaseDialog.__init__(self, parent, _("Export as Ophion File"), size=DialogSize.MEDIUM)
         what = FormSection(_("What to export"))
         self.all_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(None, _("The _whole inventory"))
         self.group_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(

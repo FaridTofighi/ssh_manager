@@ -154,7 +154,7 @@ class ExportFlowTests(unittest.TestCase):
                         collect(child)
 
         collect(menu)
-        self.assertIn("SSH Manager Export (.sshm)…", labels)
+        self.assertIn("Ophion Export (.sshm)…", labels)
 
 
 
@@ -361,7 +361,7 @@ class ImportControllerTests(unittest.TestCase):
         save.assert_called_once()
         reveal.assert_called_once_with(["prod"])
         self.assertEqual(self.win.colors.group_colors["prod"], "#123456")
-        self.assertIn("Imported 1 host from the SSH Manager export.", [m.text for m in self.win._toasts.history.items()])
+        self.assertIn("Imported 1 host from the Ophion export.", [m.text for m in self.win._toasts.history.items()])
         with mock.patch.object(self.win, "_save_ui_state", side_effect=OSError("disk full")):
             warnings = self.win.native.apply_after_commit(report)
         self.assertEqual(warnings, ["The hosts were imported, but their colours could not be saved."])
@@ -371,7 +371,7 @@ class ImportControllerTests(unittest.TestCase):
         link = self.win.sidebar.native_import_link if hasattr(self.win, "sidebar") else None
         if link is None:
             link = next(w for w in _walk(self.win) if getattr(w, "get_label", lambda: "")() ==
-                        "Import an SSH Manager e_xport…")
+                        "Import an Ophion e_xport…")
         with mock.patch.object(self.win.native, "import_file") as opened:
             link.clicked()
         opened.assert_called_once()

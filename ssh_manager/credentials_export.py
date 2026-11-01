@@ -75,14 +75,14 @@ def read_credentials_export(path: Path, passphrase: str) -> List[ExportedCredent
     try:
         document = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
-        raise CredentialExportError("not_export", "This is not an SSH Manager credentials export.") from None
+        raise CredentialExportError("not_export", "This is not an Ophion credentials export.") from None
     if not isinstance(document, dict) or document.get("format") != FORMAT:
-        raise CredentialExportError("not_export", "This is not an SSH Manager credentials export.")
+        raise CredentialExportError("not_export", "This is not an Ophion credentials export.")
     version = document.get("version")
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         raise CredentialExportError("damaged", "The credentials export is damaged.")
     if version > VERSION:
-        raise CredentialExportError("newer", "This file was created by a newer SSH Manager.")
+        raise CredentialExportError("newer", "This file was created by a newer Ophion.")
     kdf = document.get("kdf")
     try:
         key = derive(passphrase, kdf)  # checks the parameters first

@@ -89,7 +89,7 @@ class GenerateKeyDialog(BaseDialog):
         self.confirm = SecretEntry(_("Repeat the passphrase"))
         self.confirm_row = section.add(_("Con_firm"), self.confirm)
         self.add_body(section)
-        self.remember = Gtk.CheckButton.new_with_mnemonic(_("_Remember the passphrase in SSH Manager (encrypted)"))
+        self.remember = Gtk.CheckButton.new_with_mnemonic(_("_Remember the passphrase in Ophion (encrypted)"))
         self.add_body(self.remember)
         self.warning = Gtk.Label()
         self.warning.set_xalign(0.0)
@@ -422,7 +422,7 @@ class SshKeysDialog(BaseDialog):
         dialog = NewSecretDialog(self, _("Change Passphrase"), _("New passphrase for {name}").format(name=info.name),
                                  accept_label=_("_Change"), current_label=_("C_urrent"),
                                  verify_current=check if info.encrypted else None)
-        remember = Gtk.CheckButton.new_with_mnemonic(_("_Remember the passphrase in SSH Manager (encrypted)"))
+        remember = Gtk.CheckButton.new_with_mnemonic(_("_Remember the passphrase in Ophion (encrypted)"))
         remember.set_active(True)
         dialog.add_body(remember)
         new = dialog.ask()

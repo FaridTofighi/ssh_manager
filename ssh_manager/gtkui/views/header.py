@@ -68,11 +68,11 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     import_menu.append(_("From MobaXterm (.mxtsessions)…"), "win.import-mobaxterm")
     import_menu.append(_("From OpenSSH Config…"), "win.import-openssh")
     import_menu.append(_("From Remote Desktop Files (.rdp)…"), "win.import-rdp-files")
-    import_menu.append(_("From SSH Manager Export (.sshm)…"), "win.import-native")
+    import_menu.append(_("From Ophion Export (.sshm)…"), "win.import-native")
     inventory.append_submenu(_("Import"), import_menu)
     export_menu = Gio.Menu()
     export_menu.append(_("To OpenSSH Config…"), "win.export-openssh")
-    export_menu.append(_("SSH Manager Export (.sshm)…"), "win.export-native")
+    export_menu.append(_("Ophion Export (.sshm)…"), "win.export-native")
     export_menu.append(_("Selected RDP Host as .rdp File…"), "win.export-rdp-file")
     inventory.append_submenu(_("Export"), export_menu)
     inventory.append(_("Open Shared Inventory…"), "win.open-shared")
@@ -87,7 +87,7 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
 
     help_section = Gio.Menu()
     help_section.append(_("Keyboard Shortcuts"), "win.shortcuts")
-    help_section.append(_("About SSH Manager"), "win.about")
+    help_section.append(_("About Ophion"), "win.about")
     menu.append_section(None, help_section)
 
     quit_section = Gio.Menu()
@@ -100,7 +100,7 @@ def _help_menu_model() -> Gio.Menu:
     menu = Gio.Menu()
     menu.append(_("Keyboard Shortcuts"), "win.shortcuts")
     menu.append(_("Documentation"), "win.documentation")
-    menu.append(_("About SSH Manager"), "win.about")
+    menu.append(_("About Ophion"), "win.about")
     return menu
 
 
@@ -110,7 +110,7 @@ class HeaderView(Gtk.HeaderBar):
     def __init__(self, history: MessageHistory) -> None:
         Gtk.HeaderBar.__init__(self)
         self.set_show_close_button(True)
-        self.set_title(_("SSH Manager"))
+        self.set_title(APP_NAME)
         self.set_custom_title(Gtk.Box())  # no centred title: the wordmark is the title
         self.set_property("spacing", 0)
         self.get_style_context().add_class("sm-topbar")
@@ -140,7 +140,7 @@ class HeaderView(Gtk.HeaderBar):
         logo.set_center_widget(self.logo_image)
         set_accessible_name(logo, APP_NAME)
         self.brand.pack_start(logo, False, False, 0)
-        self.wordmark = Gtk.Label(label=_("SSH Manager"))
+        self.wordmark = Gtk.Label(label=APP_NAME)
         self.wordmark.get_style_context().add_class("wordmark")
         self.wordmark.set_ellipsize(Pango.EllipsizeMode.END)
         self.brand.pack_start(self.wordmark, False, False, 0)

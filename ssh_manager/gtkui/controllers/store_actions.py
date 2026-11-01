@@ -57,7 +57,7 @@ class StoreActions:
 
     def _require_store(self) -> bool:
         if self.manager is None:
-            self.win._notify_info(_("Imports go into the SSH Manager inventory; this window shows a folder inventory."))
+            self.win._notify_info(_("Imports go into the Ophion inventory; this window shows a folder inventory."))
             return False
         if self.manager.read_only:
             show_message(self.win, _("The inventory is read-only"), self.manager.read_only_reason, level=Level.WARNING)
@@ -110,7 +110,7 @@ class StoreActions:
             for path, count in found)
         ask = ask or (lambda title, text: confirm(self.win, title, text, confirm_label=_("_Import")))
         accepted = ask(_("Import existing SSH hosts?"),
-                       _("Found existing SSH hosts in {sources}. Import them into SSH Manager? Your files are not "
+                       _("Found existing SSH hosts in {sources}. Import them into Ophion? Your files are not "
                          "changed. You can also import later from the menu.").format(sources=listing))
         try:
             manager.store.set_meta(FIRST_RUN_META, "\n".join(sorted(offered | {str(p) for p, _c in found})))

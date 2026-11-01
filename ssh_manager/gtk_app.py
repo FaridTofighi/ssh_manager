@@ -242,7 +242,7 @@ class SSHManagerApplication(Gtk.Application):
         titles = {
             "locked": _("The inventory is in use"),
             "corrupt": _("The inventory is damaged"),
-            "too_new": _("The inventory is from a newer SSH Manager"),
+            "too_new": _("The inventory is from a newer Ophion"),
             "unavailable": _("The inventory cannot be saved"),
         }
         detail = message
@@ -305,7 +305,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         manager=None,
     ) -> None:
         Gtk.ApplicationWindow.__init__(self, application=app)
-        self.set_title(_("SSH Manager"))
+        self.set_title(APP_NAME)
         self.set_default_size(1280, 820)
         self.set_size_request(960, 600)
         self.set_name("ssh-manager-window")
@@ -740,7 +740,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         if not confirm(
             self,
             _("Use a folder for your groups?"),
-            _("‘{path}’ is a file. SSH Manager keeps its groups in a folder. Use ‘{folder}’ instead?").format(
+            _("‘{path}’ is a file. Ophion keeps its groups in a folder. Use ‘{folder}’ instead?").format(
                 path=_home_relative(manager.base_dir), folder=_home_relative(folder)),
             confirm_label=_("_Use Folder"),
         ):

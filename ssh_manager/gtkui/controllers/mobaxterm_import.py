@@ -35,7 +35,7 @@ class MobaXtermImportController:
             self.dialog.present()
             return
         if getattr(self.win.manager, "store", None) is None:
-            self.win._notify_info(_("MobaXterm imports go into the SSH Manager inventory; this window shows a "
+            self.win._notify_info(_("MobaXterm imports go into the Ophion inventory; this window shows a "
                                     "folder inventory."))
             return
         if self.win.manager.read_only:

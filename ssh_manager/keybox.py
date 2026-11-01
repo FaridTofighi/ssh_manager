@@ -157,7 +157,7 @@ class Keybox:
         if not isinstance(version, int) or isinstance(version, bool) or version < 1:
             raise KeyboxError("damaged", "The key file is damaged or unsafe.")
         if version > VERSION:
-            raise KeyboxError("newer", "The key file was written by a newer SSH Manager.")
+            raise KeyboxError("newer", "The key file was written by a newer Ophion.")
         try:
             if len(base64.b64decode(document.get("id", ""), validate=True)) != 16:
                 raise ValueError

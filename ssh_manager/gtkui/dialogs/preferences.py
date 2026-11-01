@@ -314,7 +314,7 @@ class PreferencesDialog(BaseDialog):
         self._preview_term = Vte.Terminal()
         self._preview_term.set_size_request(-1, Size.TERMINAL_PREVIEW)
         self._preview_term.set_scrollback_lines(100)
-        self._preview_term.feed(b"ssh-manager terminal preview\r\n\x1b[1;32mdeploy@web-01\x1b[0m:\x1b[1;34m~\x1b[0m$ echo example\r\nexample\r\n")
+        self._preview_term.feed(b"Ophion terminal preview\r\n\x1b[1;32mdeploy@web-01\x1b[0m:\x1b[1;34m~\x1b[0m$ echo example\r\nexample\r\n")
         frame = Gtk.Frame()
         frame.set_shadow_type(Gtk.ShadowType.IN)
         frame.add(self._preview_term)
@@ -522,7 +522,7 @@ class PreferencesDialog(BaseDialog):
         """Where the app keeps its groups and hosts, with backup, reveal and export."""
 
         page = self.layout.new_page("inventory", _("Inventory"),
-                                    _("SSH Manager keeps its groups and hosts in one database."))
+                                    _("Ophion keeps its groups and hosts in one database."))
         sec = self._section(page)
         location = Gtk.Label(label=str(inventory.get("location", "")), xalign=0.0)
         location.set_selectable(True)

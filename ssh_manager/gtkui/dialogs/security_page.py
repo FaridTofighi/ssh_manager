@@ -81,7 +81,7 @@ class SecurityPage(Gtk.Box):
         self.pack_start(section, False, False, 0)
 
     def _unlock_section(self, state) -> None:
-        section = FormSection(_("When SSH Manager Starts"))
+        section = FormSection(_("When Ophion Starts"))
         self.ask_radio = Gtk.RadioButton.new_with_mnemonic(None, _("_Ask for the master password"))
         self.remember_radio = Gtk.RadioButton.new_with_mnemonic_from_widget(
             self.ask_radio, _("_Remember on this computer (no prompt)"))
@@ -89,7 +89,7 @@ class SecurityPage(Gtk.Box):
         section.add_widget(self.ask_radio)
         section.add_widget(self.remember_radio)
         if state.keyring_available:
-            section.add_widget(_help(_("Anyone who can sign in to this computer account can open SSH Manager; "
+            section.add_widget(_help(_("Anyone who can sign in to this computer account can open Ophion; "
                                        "your saved passwords stay encrypted on disk.")))
         else:
             self.remember_radio.set_sensitive(False)
@@ -118,7 +118,7 @@ class SecurityPage(Gtk.Box):
     def _saved_section(self, state) -> None:
         section = FormSection(_("Saved Passwords"))
         if state.passwords_off:
-            text = _("Saving passwords is turned off: SSH Manager asks for them every time.")
+            text = _("Saving passwords is turned off: Ophion asks for them every time.")
         elif state.store_error:
             text = _("The password file cannot be opened: {reason}").format(reason=state.store_error)
         elif state.has_keybox:

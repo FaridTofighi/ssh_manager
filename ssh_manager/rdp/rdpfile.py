@@ -230,7 +230,7 @@ def import_rdp(data: bytes, name: str = "") -> RdpFileImport:
     # security
     level = _int(values, "authentication level")
     if level == 0:
-        notes.append("The file says to connect without checking the server; SSH Manager asks the first time "
+        notes.append("The file says to connect without checking the server; Ophion asks the first time "
                      "instead.")
         s.cert_policy = "ask"
     elif level == 1:

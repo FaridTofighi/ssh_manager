@@ -279,13 +279,13 @@ class InventoryStore:
         except sqlite3.DatabaseError as exc:
             self.close()
             if "locked" in str(exc).lower():
-                raise InventoryLocked("The inventory is in use by another SSH Manager window. Try again.") from exc
+                raise InventoryLocked("The inventory is in use by another Ophion window. Try again.") from exc
             raise InventoryCorrupt(f"The inventory {self.path} is damaged or not a database ({exc}).") from exc
         if version > SCHEMA_VERSION:
             self.close()
             raise InventoryTooNew(
-                f"The inventory {self.path} was written by a newer SSH Manager (schema {version}, this version "
-                f"understands {SCHEMA_VERSION}). Update SSH Manager to open it.")
+                f"The inventory {self.path} was written by a newer Ophion (schema {version}, this version "
+                f"understands {SCHEMA_VERSION}). Update Ophion to open it.")
         if version < SCHEMA_VERSION:
             if self.read_only:
                 self.close()
@@ -375,7 +375,7 @@ class InventoryStore:
     def _storage_error(exc: sqlite3.Error) -> InventoryError:
         text = str(exc).lower()
         if "locked" in text or "busy" in text:
-            return InventoryLocked("The inventory is in use by another SSH Manager window. Try again.")
+            return InventoryLocked("The inventory is in use by another Ophion window. Try again.")
         if "full" in text:
             return InventoryUnavailable("The disk is full; the inventory could not be saved.")
         if "readonly" in text or "read-only" in text:
