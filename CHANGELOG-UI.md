@@ -8,6 +8,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- Session tiles: the Broadcast badge and the chip's text were replaced by
+  one compact broadcast icon (violet when the tile is included, dimmed when
+  it is excluded; the tooltip says which). Header controls no longer overlap
+  the pane border.
 - Show all sessions: the current session keeps keyboard focus when entering
   and leaving the tile view (also via Broadcast). Closing a session and
   turning Broadcast off from the toolbar also leave the keyboard in the

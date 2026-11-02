@@ -173,6 +173,10 @@ own frame. The divider, the tile gutters and the scroll wheel never activate.
   stacked above it, and only the button's edges would react.
 - **No size changes on hover:** never change size-affecting CSS (padding,
   border, margin) on hover or focus; change colours only.
+- **Fit inside the header:** header controls must be at most the header's
+  inner height and vertically centred. Size them as icon buttons (`flat
+  toolbar-icon`, like zoom, close and the tile's broadcast toggle), never as
+  taller pills (see `tests/test_gtkui_pane_header_geometry.py`).
 
 `tests/test_gtkui_pane_header_hitarea.py` checks both.
 
