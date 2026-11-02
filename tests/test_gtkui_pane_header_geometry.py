@@ -107,5 +107,61 @@ class HeaderGeometryTests(HeaderCase):
         self.assertLess(header.close_button.get_allocation().x, header.title.get_allocation().x)  # mirrored
 
 
+
+@unittest.skipUnless(display_available(), "needs a display")
+class BroadcastChipTests(HeaderCase):
+    def test_icon_only_toggle_with_state_tooltip_and_accessible_state(self) -> None:
+        from gi.repository import Atk, Gtk
+
+        from ophion.gtkui.widgets.pane_frame import BroadcastChip
+
+        calls = []
+        chip = BroadcastChip(True, calls.append)
+        labels = []
+
+        def walk(widget):
+            if isinstance(widget, Gtk.Label):
+                labels.append(widget)
+            if isinstance(widget, Gtk.Container):
+                widget.forall(walk)
+        walk(chip)
+        self.assertEqual(labels, [], "icon only: no text")
+        self.assertTrue(chip.get_style_context().has_class("broadcast-chip"))
+        self.assertEqual(chip.get_accessible().get_name(), "Include in broadcast")
+        self.assertEqual(chip.get_tooltip_text(), "Included in broadcast — click to exclude")
+        self.assertTrue(chip.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED))
+        chip.set_active(False)
+        self.assertEqual(calls, [False])
+        self.assertEqual(chip.get_tooltip_text(), "Excluded from broadcast — click to include")
+        self.assertFalse(chip.get_accessible().ref_state_set().contains_state(Atk.StateType.CHECKED))
+        chip.set_active(True)
+        self.assertEqual(calls, [False, True])
+
+    def test_included_and_excluded_look_different_and_there_is_no_badge(self) -> None:
+        from gi.repository import Gtk
+
+        colours = {}
+        for state in ("included", "excluded"):
+            frame = self.frame(340, state)
+            chip = frame.header.broadcast_chip
+            ctx = chip.get_style_context()
+            self.assertEqual(bool(ctx.get_state() & Gtk.StateFlags.CHECKED), state == "included")
+            colours[state] = ctx.get_color(ctx.get_state()).to_string()
+
+            found = []
+
+            def walk(widget):
+                if widget.get_style_context().has_class("pane-badge"):
+                    found.append(widget)
+                if isinstance(widget, Gtk.Container):
+                    widget.forall(walk)
+            walk(frame)
+            self.assertEqual(found, [], "no BROADCAST badge")
+            frame.set_broadcast(False)
+            self.assertFalse(frame.style().has_class("broadcast"))
+            frame.set_broadcast(True)
+            self.assertTrue(frame.style().has_class("broadcast"))
+        self.assertNotEqual(colours["included"], colours["excluded"], colours)
+
 if __name__ == "__main__":
     unittest.main()
