@@ -4,17 +4,21 @@ A :class:`PaneFrame` encloses a terminal in a full border with a header and an
 optional footer, so panes shown together can be told apart at a glance::
 
     ╭───────────────────────────────────────────────────────────╮
-    │ ● web-01 · pane 1   deploy@web-01:22   BROADCAST [✓ Broadcast] ⤢ × │  header
+    │ ● web-01 · pane 1   deploy@web-01:22             (•))  ⤢  × │  header
     │ terminal                                                  │
     │ ● Connected · 59×35                                       │  footer
     ╰───────────────────────────────────────────────────────────╯
+
+Header controls (the tile's broadcast toggle, zoom, close) are icon buttons of
+one size (``toolbar-icon``), vertically centred and never taller than the
+header's inner height, so none touches the pane's border.
 
 States (CSS classes on the frame's styled box, ``frame.style()``; all token colors):
 
 * ``focused``   — 2 px accent outline (1 px border + 1 px inset ring, so the
   content does not move), accent-tinted header;
-* ``broadcast`` — 2 px violet outline and a ``BROADCAST`` badge (with an
-  accent inner ring when it is also focused);
+* ``broadcast`` — 2 px violet outline (with an accent inner ring when it is
+  also focused); a tile's broadcast icon is violet while it is included;
 * ``failed`` / ``disconnected`` — 1 px danger / warning border; the footer and
   the header tooltip spell the status out.
 
@@ -42,24 +46,29 @@ from .status_dot import StatusDot  # noqa: E402
 
 
 class BroadcastChip(Gtk.ToggleButton):
-    """Compact ``✓ Broadcast`` toggle (replaces the stock check box)."""
+    """Icon-only toggle: is this session included in broadcast input? (checked = included).
+
+    Sized like the header's other icon buttons; the icon is dimmed when excluded and turns violet
+    while broadcast is on and it is included (CSS ``broadcast-chip``). The tooltip says the state.
+    """
 
     def __init__(self, active: bool, on_toggled: Callable[[bool], None]) -> None:
         Gtk.ToggleButton.__init__(self)
-        self.get_style_context().add_class("broadcast-chip")
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
-        self._check = make_icon(Icons.CHECK, Size.ICON_SMALL)
-        box.pack_start(self._check, False, False, 0)
-        box.pack_start(Gtk.Label.new_with_mnemonic(_("_Broadcast")), False, False, 0)
-        self.add(box)
-        self.set_tooltip_text(_("Include this session when broadcasting input"))
+        self.set_image(make_icon(Icons.BROADCAST, Size.ICON))  # the same size as the zoom and close icons
+        self.set_always_show_image(True)
+        self.set_relief(Gtk.ReliefStyle.NONE)
+        self.set_valign(Gtk.Align.CENTER)
+        ctx = self.get_style_context()
+        for css in ("flat", "toolbar-icon", "broadcast-chip"):
+            ctx.add_class(css)
         set_accessible_name(self, _("Include in broadcast"))
         self.set_active(active)
         self._sync()
         self.connect("toggled", lambda button: (self._sync(), on_toggled(button.get_active())))
 
     def _sync(self) -> None:
-        self._check.set_opacity(1.0 if self.get_active() else 0.0)  # keeps the width; icon only
+        self.set_tooltip_text(_("Included in broadcast — click to exclude") if self.get_active()
+                              else _("Excluded from broadcast — click to include"))
 
 
 class PaneHeader(Gtk.EventBox):
@@ -83,19 +92,17 @@ class PaneHeader(Gtk.EventBox):
         self.dot = StatusDot(size=Size.DOT_TAB)
         self.box.pack_start(self.dot, False, False, 0)
         self.title = Gtk.Label(label=title)
+        self.title.set_valign(Gtk.Align.CENTER)
         self.title.get_style_context().add_class("pane-title")
         self.title.set_ellipsize(Pango.EllipsizeMode.END)
         self.title.set_xalign(0.0)
         self.box.pack_start(self.title, False, False, 0)
         self.address = Gtk.Label()
+        self.address.set_valign(Gtk.Align.CENTER)
         self.address.get_style_context().add_class("pane-address")
         self.address.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self.address.set_xalign(0.0)
         self.box.pack_start(self.address, True, True, 0)
-        self.badge = Gtk.Label(label=_("BROADCAST"))
-        self.badge.get_style_context().add_class("pane-badge")
-        self.badge.set_no_show_all(True)
-        self.box.pack_start(self.badge, False, False, 0)
         self.broadcast_chip = broadcast_chip
         if broadcast_chip is not None:
             self.box.pack_start(broadcast_chip, False, False, 0)
@@ -276,7 +283,6 @@ class PaneFrame(Gtk.EventBox):
     def set_broadcast(self, active: bool) -> None:
         ctx = self.style()
         (ctx.add_class if active else ctx.remove_class)("broadcast")
-        self.header.badge.set_visible(active)
 
     def set_zoomed(self, zoomed: bool) -> None:
         self.header.set_zoomed(zoomed)

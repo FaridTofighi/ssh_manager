@@ -422,7 +422,8 @@ class BroadcastColourTests(unittest.TestCase):
                     self.assertNotRegex(declarations, r"sm_(danger|danger_strong|on_danger)\b")
             styles = {sel.strip(): decl for sel, decl in rules}
             self.assertIn("@sm_danger", styles[".pane-frame.failed"])
-            self.assertIn("@sm_broadcast", styles[".pane-badge"])  # the BROADCAST badge
+            self.assertNotIn(".pane-badge", styles)  # no BROADCAST badge any more: the tile's icon shows it
+            self.assertIn("@sm_broadcast", styles[".sm-window .pane-frame.broadcasting button.broadcast-chip:checked"])
             self.assertIn("@sm_danger", styles[".statusbar .stat-critical"])
             self.assertTrue(any("destructive-action" in sel and "@sm_danger" in decl for sel, decl in rules
                                 if "broadcast" not in sel))

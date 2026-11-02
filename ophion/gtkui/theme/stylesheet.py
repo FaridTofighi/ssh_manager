@@ -792,7 +792,7 @@ notebook.session-tabs > stack {
     background-color: @sm_pane_header_bg;
     background-image: none;
     min-height: ${pane_header}px;
-    padding: 0 ${xs}px 0 ${s}px;
+    padding: 0 ${s}px;  /* the same on both sides: the close button as far from the border as the dot */
     border-bottom: 1px solid @sm_border_subtle;
     border-radius: ${pane_inner_radius}px ${pane_inner_radius}px 0 0;
     color: @sm_text_primary;
@@ -802,32 +802,14 @@ notebook.session-tabs > stack {
 .pane-header.focused .pane-title { color: @sm_accent_text; }
 .pane-title { font-weight: 600; font-size: ${fs_body}em; }
 .pane-address { font-family: $mono_fonts; font-size: ${fs_caption}em; color: @sm_text_muted; }
-.pane-badge {
-    background-color: alpha(@sm_broadcast, 0.12);
-    color: @sm_broadcast;
-    border-radius: ${r_pill}px;
-    padding: 0 ${s}px;
-    font-size: ${fs_badge}em;
-    font-weight: 700;
-    letter-spacing: $badge_tracking;
-}
 .pane-header button.toolbar-icon { min-width: 18px; min-height: 18px; padding: 2px; }
-.sm-window button.broadcast-chip {
-    min-height: 0;
-    padding: 0 ${s}px;
-    border-radius: ${r_pill}px;
-    background-color: @sm_pane_header_bg;
-    border-color: @sm_border_input;
-    color: @sm_text_secondary;
-    font-size: ${fs_caption}em;
-    font-weight: 500;
-}
-.sm-window button.broadcast-chip:hover { background-color: @sm_bg_hover; }
-/* Checked = included in broadcast; it turns violet only while broadcast is on. */
-.sm-window button.broadcast-chip:checked { background-color: @sm_bg_hover; color: @sm_text_primary; }
+/* The tile's broadcast toggle: sized by .pane-header button.toolbar-icon like zoom / close; colours only.
+   Unchecked = excluded: muted and dimmed. Checked = included: violet only while broadcast is on. */
+.sm-window button.broadcast-chip { color: alpha(@sm_text_muted, 0.55); }
+.sm-window button.broadcast-chip:hover { background-color: @sm_bg_hover; color: @sm_text_secondary; }
+.sm-window button.broadcast-chip:checked { background-color: transparent; color: @sm_text_primary; }
 .sm-window .pane-frame.broadcasting button.broadcast-chip:checked {
     background-color: alpha(@sm_broadcast, 0.14);
-    border-color: alpha(@sm_broadcast, 0.5);
     color: @sm_broadcast;
 }
 .pane-footer {

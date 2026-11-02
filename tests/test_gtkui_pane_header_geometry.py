@@ -13,8 +13,9 @@ from tests.test_local_terminal import pump
 WIDTHS = (260, 340, 450, 680)
 
 
-@unittest.skipUnless(display_available(), "needs a display")
-class HeaderGeometryTests(unittest.TestCase):
+class HeaderCase(unittest.TestCase):
+    """A TileFrame in an offscreen window with the app's stylesheet (light / dark restored after)."""
+
     def setUp(self) -> None:
         from ophion.gtkui.theme.loader import get_theme_manager
 
@@ -49,6 +50,9 @@ class HeaderGeometryTests(unittest.TestCase):
         pump(0.1)
         return frame
 
+
+@unittest.skipUnless(display_available(), "needs a display")
+class HeaderGeometryTests(HeaderCase):
     def check(self, frame, label: str) -> None:
         from gi.repository import Gtk
 
@@ -81,9 +85,6 @@ class HeaderGeometryTests(unittest.TestCase):
         for (_x1, end, first), (start, _x2, second) in zip(spans, spans[1:]):
             self.assertLessEqual(end, start, f"{label}: {first} overlaps {second}")
 
-    # Measured (expected failure until the change): badge and chip at y 0, 27 px tall in the 28 px header
-    # (they touch the pane border); right padding 2 px, left 4 px.
-    @unittest.expectedFailure
     def test_every_control_fits_in_every_state_width_and_theme(self) -> None:
         from ophion.gtkui.theme.loader import ThemeMode
 
@@ -95,9 +96,6 @@ class HeaderGeometryTests(unittest.TestCase):
                     with self.subTest(label):
                         self.check(self.frame(width, state), label)
 
-    # Measured (expected failure until the change): badge and chip at y 0, 27 px tall in the 28 px header
-    # (they touch the pane border); right padding 2 px, left 4 px.
-    @unittest.expectedFailure
     def test_right_to_left(self) -> None:
         from gi.repository import Gtk
 
