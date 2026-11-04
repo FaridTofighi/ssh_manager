@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- First connection to a host with a saved password now shows the host-key
+  trust dialog instead of failing with "Host key verification failed".
 - Session tiles: the Broadcast badge and the chip's text were replaced by
   one compact broadcast icon (violet when the tile is included, dimmed when
   it is excluded; the tooltip says which). Header controls no longer overlap

@@ -45,9 +45,10 @@ source, or check from another network.
       one candidate nothing is removed, and the manager is the place to decide.
     - **Then reconnects.** ssh asks again whether to trust the new key, **in the
       terminal**. Ophion never answers that question for you.
-- **Unknown key (first connection):** an information bar shows the fingerprint
-  with **Copy Fingerprint**. You answer ssh in the terminal as before. There is
-  no "Trust" button.
+- **Unknown key (first connection), no saved password:** an information bar
+  shows the fingerprint with **Copy Fingerprint**. You answer ssh in the
+  terminal as before. There is no "Trust" button. With a saved password, see
+  the next section.
 - **One tab only:** the bar belongs to that tab. Its buttons never act on other
   sessions, even with broadcast on. After the failed ssh exits, the tab is
   ended as usual (`r` reconnects, `q` closes).
@@ -58,6 +59,42 @@ in. For the first connection, ssh's question must be the last output while it
 waits. Text shown inside a session (`cat` of a saved warning) never triggers
 it.
 
+## Sessions with a saved password (pre-flight)
+
+**Why:** a saved password is typed by `sshpass -e ssh`. sshpass cannot answer
+ssh's first-connection question: on a key that is not in `known_hosts` it
+stops and exits with **status 6**, with no output. On a computer whose
+`known_hosts` is still empty (a fresh account, for example on Ubuntu) every
+password host failed that way.
+
+**The rule:** before a password session starts, Ophion checks the host key the
+way ssh will, off the main window's thread:
+
+- `ssh -G` with the session's own options gives the effective host name,
+  port, `HostKeyAlias`, `known_hosts` files and `HashKnownHosts`.
+- **Known** (plain, `[host]:port`, wildcard or hashed line): the session
+  starts as before. A **changed** key is still refused by ssh, and the
+  changed-key bar above appears; there is no trust offer.
+- **Unknown:** the server's key is read with a key exchange only (no login,
+  nothing sent, at most 5 seconds), and the first-connection dialog shows its
+  type and SHA-256 fingerprint.
+  - **Connect** adds it to the first `known_hosts` file ssh reads (hashed when
+    `HashKnownHosts` is on; file 0600, folder 0700), then the password is
+    sent.
+  - **Cancel** ends in "Connection cancelled". Nothing is written or sent.
+- **Unreachable:** "Could not read the server's key…"; nothing is sent.
+- **Left to ssh, unchanged:** your own `StrictHostKeyChecking` (`yes`, `no`,
+  `accept-new`) and hosts behind `ProxyJump` / `ProxyCommand`.
+
+If sshpass still exits 6, the tab says "Host key for *host* is not trusted
+yet. Click to review it.", and **Review Host Key…** runs the check again.
+
+**Background commands never accept a key.** Remote stats, Run Command on
+Hosts and port forwards never ask about an unknown key on their own and
+never trust one. They say "Host key not trusted yet — open the session once
+to accept it." (Run Command's **Details…** and starting a tunnel yourself
+still offer the same dialog.)
+
 ## File browser, SSH tunnels, Test Connection, remote stats
 
 - **File browser and RDP SSH tunnel:** the same dialog — **Details…**,
@@ -67,7 +104,8 @@ it.
   opens the same dialog, then offers **Re-run this host**.
 - **Test Connection:** shows both fingerprints in its result.
 - **Remote stats:** a background check never opens a dialog. The status bar shows
-  "Host key changed", and the log gets one warning per host per session.
+  "Host key changed" (or "Host key not trusted" for a key not in `known_hosts`
+  yet), and the log gets one warning per host per session.
 
 **Settings → SSH Security → Auto-add new hosts:**
 - **For:** the file browser, tunnels and the Paramiko backend.
