@@ -62,7 +62,7 @@ class ClassifyTests(unittest.TestCase):
         (255, "\x1b[1;31mPermission denied, please try again.\x1b[0m", AuthOutcome.AUTH_FAILED),
         (255, "Permission denied (publickey).", AuthOutcome.NO_PASSWORD_METHOD),
         (255, "Permission denied (publickey,gssapi-with-mic).", AuthOutcome.NO_PASSWORD_METHOD),
-        (6, "", AuthOutcome.HOSTKEY),
+        (6, "", AuthOutcome.HOSTKEY_UNKNOWN),
         (255, "Host key verification failed.", AuthOutcome.HOSTKEY),
         (255, "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@", AuthOutcome.HOSTKEY),
         (255, "ssh: connect to host h port 22: Connection refused", AuthOutcome.NETWORK),
@@ -209,6 +209,9 @@ class TerminalAuthTests(unittest.TestCase):
         self.which.start()
         self.kill = mock.patch("ophion.gtk_terminal.os.kill")
         self.kill.start()
+        # The host-key pre-flight (tests/test_hostkey_unknown_password_hosts.py) runs in a thread; here the key is known.
+        mock.patch("ophion.gtk_terminal.TerminalTab._preflight_then_start",
+                   lambda tab, argv, envv: tab._start_child(argv, envv)).start()
 
     def tearDown(self) -> None:
         mock.patch.stopall()

@@ -59,6 +59,7 @@ class AuthOutcome(str, Enum):
     OK = "ok"
     AUTH_FAILED = "auth_failed"
     HOSTKEY = "hostkey"
+    HOSTKEY_UNKNOWN = "hostkey_unknown"  # sshpass exit 6: ssh asked about a key not in known_hosts yet
     NETWORK = "network"
     NO_PASSWORD_METHOD = "no_password_method"
     OTP_REQUIRED = "otp_required"
@@ -109,8 +110,10 @@ def classify_exit(status: int, output: str) -> AuthOutcome:
     text = strip_ansi(output or "")
     if status == SSHPASS_WRONG_PASSWORD:
         return AuthOutcome.AUTH_FAILED
-    if status == SSHPASS_HOST_KEY or _HOSTKEY_RE.search(text):
+    if _HOSTKEY_RE.search(text):
         return AuthOutcome.HOSTKEY
+    if status == SSHPASS_HOST_KEY:
+        return AuthOutcome.HOSTKEY_UNKNOWN
     if _OTP_RE.search(text):
         return AuthOutcome.OTP_REQUIRED
     methods = _denied_methods(text)

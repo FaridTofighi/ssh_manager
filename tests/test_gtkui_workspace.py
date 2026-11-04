@@ -118,6 +118,12 @@ class NotebookTests(unittest.TestCase):
 class SpawnPathTests(unittest.TestCase):
     """Exercise the real spawn path with VTE's spawn mocked (no ssh process)."""
 
+    def setUp(self) -> None:
+        # The host-key pre-flight (tests/test_hostkey_unknown_password_hosts.py) runs in a thread; here the key is known.
+        mock.patch("ophion.gtk_terminal.TerminalTab._preflight_then_start",
+                   lambda tab, argv, envv: tab._start_child(argv, envv)).start()
+        self.addCleanup(mock.patch.stopall)
+
     def _tab(self):
         from ophion.gtk_terminal import TerminalTab
 

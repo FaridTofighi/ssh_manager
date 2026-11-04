@@ -48,6 +48,7 @@ from ophion.host_utils import host_connection_params, host_option
 from ophion.ssh_command import build_ssh_command
 from ophion.secure_store import SecureStore, SecureStoreError
 from ophion.text_utils import strip_ansi
+from ophion import host_key_preflight  # noqa: E402
 from ophion.host_key_output import HostKeyOutputDetector, UnknownHostKeyPrompt, split_host  # noqa: E402
 from ophion.gtkui.dialogs.host_key import ChangedKey, changed_key_names, remove_old_key, risk_text, show_details  # noqa: E402
 from ophion.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
@@ -246,6 +247,7 @@ FOCUS_RETRY_LIMIT = 40  # … and give up after ~2 s
 
 _RESPONSE_RECONNECT = 1
 _RESPONSE_HOST_KEY_DETAILS, _RESPONSE_HOST_KEY_REMOVE, _RESPONSE_HOST_KEY_COPY, _RESPONSE_HOST_KEY_DISMISS = 11, 12, 13, 14
+_RESPONSE_HOST_KEY_REVIEW = 15
 RECONNECT_STAGGER_MS = 150
 STATS_HOST_KEY_CHANGED = "host_key_changed"
 HOST_KEY_CHANGED_TEXT = "REMOTE HOST IDENTIFICATION HAS CHANGED"
@@ -1125,6 +1127,7 @@ class TerminalTab(SessionPage):
             "details": bar.add_button(_("_Details…"), _RESPONSE_HOST_KEY_DETAILS),
             "remove": bar.add_button(_("_Remove Old Key and Reconnect…"), _RESPONSE_HOST_KEY_REMOVE),
             "copy": bar.add_button(_("_Copy Fingerprint"), _RESPONSE_HOST_KEY_COPY),
+            "review": bar.add_button(_("_Review Host Key…"), _RESPONSE_HOST_KEY_REVIEW),
             "dismiss": bar.add_button(_("D_ismiss"), _RESPONSE_HOST_KEY_DISMISS),
         }
         bar.connect("response", self._on_host_key_response)
@@ -1148,7 +1151,8 @@ class TerminalTab(SessionPage):
                                                Gtk.IconSize.BUTTON)  # never colour only
         self._host_key_label.set_markup(text)
         for name, button in self._host_key_buttons.items():
-            button.set_visible(name in (("details", "remove", "dismiss") if changed else ("copy", "dismiss")))
+            button.set_visible(name in {"changed": ("details", "remove", "dismiss"),
+                                        "untrusted": ("review", "dismiss")}.get(kind, ("copy", "dismiss")))
         set_accessible_name(bar, _("SSH host key"))  # after set_message_type, which names it "Warning"
         bar.get_accessible().set_description(self._host_key_label.get_text())
         bar.show()
@@ -1214,6 +1218,9 @@ class TerminalTab(SessionPage):
         window = self.get_toplevel() if isinstance(self.get_toplevel(), Gtk.Window) else None
         if response == _RESPONSE_HOST_KEY_DISMISS:
             self._hide_host_key_bar()
+        elif response == _RESPONSE_HOST_KEY_REVIEW:
+            self._hide_host_key_bar()
+            self.reconnect()  # the pre-flight reads the key again and asks
         elif response == _RESPONSE_HOST_KEY_COPY and self._host_key_prompt is not None:
             Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(self._host_key_prompt.fingerprint, -1)
         elif response == _RESPONSE_HOST_KEY_DETAILS and change is not None:
@@ -1357,6 +1364,7 @@ class TerminalTab(SessionPage):
     def _on_tab_destroyed(self) -> None:
         """Tab closed: dismiss open password dialogs (doing nothing) and remove every GLib source."""
 
+        self._destroyed = True  # a pre-flight still running starts nothing
         self._close_password_dialog()
         dialog, self._save_dialog = self._save_dialog, None
         if dialog is not None:
@@ -1608,7 +1616,72 @@ class TerminalTab(SessionPage):
         self._attempt_password = password
         self._flow.attempt(self._password_source, password)
         argv, envv = self._spawn_command(password)
+        if password:
+            self._preflight_then_start(argv, envv)
+        else:
+            self._start_child(argv, envv)  # plain ssh asks about an unknown key itself (the host-key bar)
+
+    # ------------------------------------------------- host-key pre-flight (password sessions)
+    _preflight_generation = 0
+    _destroyed = False
+
+    def confirm_host_key(self, alias: str, key_type: str, fingerprint: str) -> bool:
+        """The first-connection trust dialog; ``True`` = trust the key and connect."""
+
+        from ophion.gtkui.dialogs.trust import trust_host_key
+
+        return trust_host_key(self._parent_window(), alias, key_type, fingerprint)
+
+    def _preflight_then_start(self, argv: List[str], envv: List[str]) -> None:
+        """sshpass cannot answer ssh's "Are you sure…" (it exits 6): check the key first, off the main thread."""
+
+        self._preflight_generation += 1
+        generation = self._preflight_generation
+        self._terminal.reset(True, True)
+        self._set_status("Connecting…", False)
+        ssh_argv = self._ssh_arguments()
+
+        def work() -> None:
+            try:
+                result = host_key_preflight.check(ssh_argv)
+            except Exception as exc:  # never block a connect on the check itself: ssh still verifies the key
+                LOGGER.warning("host-key pre-flight failed: %s", type(exc).__name__)
+                result = host_key_preflight.Preflight(host_key_preflight.SKIP)
+            GLib.idle_add(self._on_preflight, generation, result, argv, envv)
+
+        threading.Thread(target=work, name="host-key-preflight", daemon=True).start()
+
+    def _on_preflight(self, generation: int, result, argv: List[str], envv: List[str]) -> bool:
+        if generation != self._preflight_generation or self._destroyed:
+            return GLib.SOURCE_REMOVE  # reconnected or closed meanwhile
+        alias = self._host.alias
+        if result.state == host_key_preflight.UNREADABLE:
+            self._log(_("Could not read the server's key for {alias} ({error}); nothing was sent.").format(
+                alias=alias, error=result.error), Level.ERROR)
+            self._set_status("Connection failed", False)
+            self.emit("session-closed", alias, False)
+            return GLib.SOURCE_REMOVE
+        if result.state == host_key_preflight.UNKNOWN:
+            if not self.confirm_host_key(alias, result.key_type, result.fingerprint):
+                self._log(_("Connection to {alias} cancelled; its host key was not trusted.").format(alias=alias),
+                          Level.INFO)
+                self._set_status("Connection cancelled", False)
+                self.emit("session-closed", alias, False)
+                return GLib.SOURCE_REMOVE
+            if generation != self._preflight_generation or self._destroyed:
+                return GLib.SOURCE_REMOVE
+            try:
+                path = host_key_preflight.trust(result)
+            except Exception as exc:  # the key file could not be written: do not connect as if it were
+                self._log(_("Could not save the host key for {alias}: {error}").format(alias=alias, error=exc),
+                          Level.ERROR)
+                self._set_status("Connection failed", False)
+                self.emit("session-closed", alias, False)
+                return GLib.SOURCE_REMOVE
+            self._log(_("Trusted the {type} host key of {alias} ({file}).").format(
+                type=result.key_type, alias=alias, file=path), Level.SUCCESS)
         self._start_child(argv, envv)
+        return GLib.SOURCE_REMOVE
 
     def _resolve_password(self) -> PasswordResolution:
         if self._password_provider is not None:
@@ -1830,6 +1903,8 @@ class TerminalTab(SessionPage):
             outcome = classify_exit(exit_code, self._auth_failure_output(_term))
             if outcome is AuthOutcome.AUTH_FAILED and self._handle_auth_failure_retry():
                 return
+            if outcome is AuthOutcome.HOSTKEY_UNKNOWN and hasattr(self, "_host_key_bar"):
+                self._show_host_key_bar("untrusted", GLib.markup_escape_text(self._failure_message(outcome)))
             message = self._failure_message(outcome)
             if message:
                 self._log(message, Level.ERROR)
@@ -1842,6 +1917,8 @@ class TerminalTab(SessionPage):
             AuthOutcome.AUTH_FAILED: _("Authentication failed for {alias}.").format(alias=alias),
             AuthOutcome.NO_PASSWORD_METHOD: _(NO_PASSWORD_METHOD_MESSAGE) + f" ({alias}).",
             AuthOutcome.HOSTKEY: _("Host key verification failed for {alias}; check the server's key.").format(alias=alias),
+            AuthOutcome.HOSTKEY_UNKNOWN: _("Host key for {alias} is not trusted yet. Click to review it.").format(
+                alias=alias),
             AuthOutcome.NETWORK: _("Could not reach {alias}.").format(alias=alias),
             AuthOutcome.OTP_REQUIRED: _("{alias} asks for a one-time code; type it in the terminal.").format(alias=alias),
         }.get(outcome, "")

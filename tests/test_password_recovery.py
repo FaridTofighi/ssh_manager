@@ -317,6 +317,9 @@ class TabFlowTests(unittest.TestCase):
         mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": self.tmp.name}).start()
         mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
         mock.patch("ophion.gtk_terminal.os.kill").start()
+        # The host-key pre-flight (tests/test_hostkey_unknown_password_hosts.py) runs in a thread; here the key is known.
+        mock.patch("ophion.gtk_terminal.TerminalTab._preflight_then_start",
+                   lambda tab, argv, envv: tab._start_child(argv, envv)).start()
         self.requests = []
         self.offers = []
         mock.patch("ophion.gtk_terminal.PasswordRequestDialog",
@@ -675,6 +678,9 @@ class EndToEndTests(unittest.TestCase):
         mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": self.tmp.name}).start()
         mock.patch("ophion.gtk_terminal.shutil.which", return_value="/usr/bin/sshpass").start()
         mock.patch("ophion.gtk_terminal.os.kill").start()
+        # The host-key pre-flight (tests/test_hostkey_unknown_password_hosts.py) runs in a thread; here the key is known.
+        mock.patch("ophion.gtk_terminal.TerminalTab._preflight_then_start",
+                   lambda tab, argv, envv: tab._start_child(argv, envv)).start()
         self.spawn = mock.patch("ophion.gtk_terminal.Vte.Terminal.spawn_async").start()
         self.requests, self.offers = [], []
         mock.patch("ophion.gtk_terminal.PasswordRequestDialog",

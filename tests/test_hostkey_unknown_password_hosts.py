@@ -74,8 +74,6 @@ class ServerCase(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("ssh"), "needs ssh")
 class PreflightTests(ServerCase):
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_unknown_key_is_read_without_logging_in(self) -> None:
         from ophion import host_key_preflight as P
         from ophion.known_hosts import fingerprint_sha256
@@ -87,8 +85,6 @@ class PreflightTests(ServerCase):
         self.assertEqual(self.server.password_attempts, 0)  # no credential is ever sent
         self.assertFalse(self.known.exists())
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_already_trusted_plain_hashed_and_with_port(self) -> None:
         from ophion import host_key_preflight as P
         from ophion.known_hosts import hashed_host
@@ -101,8 +97,6 @@ class PreflightTests(ServerCase):
         self.known.write_text(f"web-alias {self.server_line()}\n")  # HostKeyAlias: the alias, without the port
         self.assertEqual(P.check(self.argv(HostKeyAlias="web-alias")).state, P.KNOWN)
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_users_own_strict_choice_and_jump_hosts_are_left_to_ssh(self) -> None:
         from ophion import host_key_preflight as P
 
@@ -112,8 +106,6 @@ class PreflightTests(ServerCase):
         self.assertEqual(P.check(self.argv(ProxyJump="jump.example"), probe=probe).state, P.PROXIED)
         probe.assert_not_called()  # the key cannot be read past the jump host
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_an_unreachable_server_is_reported_quickly(self) -> None:
         from ophion import host_key_preflight as P
 
@@ -124,8 +116,6 @@ class PreflightTests(ServerCase):
         self.assertLess(time.monotonic() - started, 8)
         self.assertTrue(result.error)
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_trusting_writes_the_key_like_ssh_would(self) -> None:
         from ophion import host_key_preflight as P
 
@@ -138,8 +128,6 @@ class PreflightTests(ServerCase):
 
 
 class ClassifyTests(unittest.TestCase):
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_sshpass_status_6_is_an_unknown_key_not_a_failure(self) -> None:
         from ophion.auth_flow import AuthOutcome, classify_exit
 
@@ -187,8 +175,6 @@ class PasswordSessionTests(ServerCase):
         tab._begin_connect()
         return tab
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_trusting_the_key_saves_it_and_the_password_logs_in(self) -> None:
         from ophion.known_hosts import fingerprint_sha256
 
@@ -203,8 +189,6 @@ class PasswordSessionTests(ServerCase):
         self.assertFalse(any(PASSWORD in message for message, _level in self.logs))
         self.assertIsNotNone(tab)
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_cancelling_writes_nothing_and_is_not_an_error(self) -> None:
         from ophion.gtkui.theme.tokens import Level
 
@@ -234,8 +218,6 @@ class PasswordSessionTests(ServerCase):
         self.assertEqual(self.asked, [])
         self.assertEqual(self.server.password_attempts, 0)
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
-    @unittest.expectedFailure
     def test_an_unreadable_server_says_so_and_asks_nothing(self) -> None:
         self.stop_server()
         tab = self.open(True)
@@ -246,7 +228,7 @@ class PasswordSessionTests(ServerCase):
 
 
 class AuxiliaryCommandTests(unittest.TestCase):
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
+    # Measured: no shared message for an untrusted key yet (expected failure).
     @unittest.expectedFailure
     def test_background_commands_never_ask_and_say_the_same(self) -> None:
         from ophion.host_key_preflight import untrusted_text
@@ -258,7 +240,7 @@ class AuxiliaryCommandTests(unittest.TestCase):
         self.assertTrue(message.startswith(untrusted_text()), message)
         self.assertEqual(untrusted_text(), "Host key not trusted yet — open the session once to accept it.")
 
-    # Measured: sshpass exits 6 with no output on an unknown key; there is no pre-flight yet (expected failure).
+    # Measured: no shared message for an untrusted key yet (expected failure).
     @unittest.expectedFailure
     def test_stats_report_an_untrusted_key(self) -> None:
         from ophion.remote_stats import STATS_HOST_KEY_UNKNOWN, stats_failure
