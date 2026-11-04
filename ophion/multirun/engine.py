@@ -157,8 +157,9 @@ def _classify(exc: BaseException) -> Tuple[str, str]:
     if isinstance(exc, HostKeyChanged):
         return HOST_KEY_CHANGED, _host_key_text(exc, _("The server's host key has changed; nothing was run."))
     if isinstance(exc, UnknownHostKey):
-        return HOST_KEY_UNKNOWN, _host_key_text(
-            exc, _("The host key is not known yet; connect once in a session to check it."))
+        from ..host_key_preflight import untrusted_text
+
+        return HOST_KEY_UNKNOWN, _host_key_text(exc, untrusted_text())  # never accepted here
     if isinstance(exc, AuthError):
         return AUTH_FAILED, _("Needs interactive login (no saved password or key was accepted).")
     if isinstance(exc, Timeout):

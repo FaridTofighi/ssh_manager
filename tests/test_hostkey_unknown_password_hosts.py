@@ -228,8 +228,6 @@ class PasswordSessionTests(ServerCase):
 
 
 class AuxiliaryCommandTests(unittest.TestCase):
-    # Measured: no shared message for an untrusted key yet (expected failure).
-    @unittest.expectedFailure
     def test_background_commands_never_ask_and_say_the_same(self) -> None:
         from ophion.host_key_preflight import untrusted_text
         from ophion.multirun.engine import HOST_KEY_UNKNOWN, _classify
@@ -240,8 +238,6 @@ class AuxiliaryCommandTests(unittest.TestCase):
         self.assertTrue(message.startswith(untrusted_text()), message)
         self.assertEqual(untrusted_text(), "Host key not trusted yet — open the session once to accept it.")
 
-    # Measured: no shared message for an untrusted key yet (expected failure).
-    @unittest.expectedFailure
     def test_stats_report_an_untrusted_key(self) -> None:
         from ophion.remote_stats import STATS_HOST_KEY_UNKNOWN, stats_failure
 

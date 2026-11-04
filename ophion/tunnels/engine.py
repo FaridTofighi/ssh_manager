@@ -82,7 +82,9 @@ def _classify(exc: BaseException) -> Tuple[str, str]:
     if HostKeyChanged and isinstance(exc, HostKeyChanged):
         return "host_key_changed", _("The server's host key has changed; the tunnel was not opened.")
     if UnknownHostKey and isinstance(exc, UnknownHostKey):
-        return "unknown_host_key", _("The server's host key is not known yet; start it again to check it.")
+        from ..host_key_preflight import untrusted_text
+
+        return "unknown_host_key", untrusted_text()  # never accepted here
     if AuthError and isinstance(exc, AuthError):
         return "auth", _("Needs password: the server did not accept the login.")
     if BackendError and isinstance(exc, BackendError):

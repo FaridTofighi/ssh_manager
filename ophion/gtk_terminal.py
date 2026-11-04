@@ -53,6 +53,7 @@ from ophion.host_key_output import HostKeyOutputDetector, UnknownHostKeyPrompt, 
 from ophion.gtkui.dialogs.host_key import ChangedKey, changed_key_names, remove_old_key, risk_text, show_details  # noqa: E402
 from ophion.remote_stats import (  # noqa: E402,F401  (moved; kept importable from here)
     _REMOTE_STATS_SCRIPT, build_remote_stats_command, parse_remote_stats_output,
+    HOST_KEY_CHANGED_TEXT, STATS_HOST_KEY_CHANGED, STATS_HOST_KEY_UNKNOWN, stats_failure,
 )
 from ophion.local_shell import terminal_env  # noqa: E402
 from ophion.persistence import write_text_atomic
@@ -249,8 +250,7 @@ _RESPONSE_RECONNECT = 1
 _RESPONSE_HOST_KEY_DETAILS, _RESPONSE_HOST_KEY_REMOVE, _RESPONSE_HOST_KEY_COPY, _RESPONSE_HOST_KEY_DISMISS = 11, 12, 13, 14
 _RESPONSE_HOST_KEY_REVIEW = 15
 RECONNECT_STAGGER_MS = 150
-STATS_HOST_KEY_CHANGED = "host_key_changed"
-HOST_KEY_CHANGED_TEXT = "REMOTE HOST IDENTIFICATION HAS CHANGED"
+_HOST_KEY_UNTRUSTED_WARNED: set = set()  # hosts whose untrusted key the stats probe reported
 _HOST_KEY_WARNED: set = set()  # hosts whose changed key the stats probe reported (once per session)  # broadcast: ended sessions reconnect one after another, not all at once
 _RESPONSE_CLOSE = 2
 _FAILURE_WORDS = ("failed", "denied", "terminated", "error")
@@ -2311,8 +2311,9 @@ class TerminalTab(SessionPage):
             )
             if proc.returncode == 0 and proc.stdout.strip():
                 return parse_remote_stats_output(proc.stdout)
-            if HOST_KEY_CHANGED_TEXT in (proc.stderr or ""):
-                return {"error": STATS_HOST_KEY_CHANGED}
+            failure = stats_failure(proc.returncode, proc.stderr)
+            if failure:
+                return {"error": failure}
             LOGGER.debug(
                 "Remote stats command failed for %s: rc=%s stderr=%s",
                 self._host.alias,
@@ -2344,12 +2345,28 @@ class TerminalTab(SessionPage):
             self._log(_("{alias}: the server's host key has changed; remote stats could not be read.").format(
                 alias=alias), Level.WARNING)
 
+    def _stats_host_key_untrusted(self) -> None:
+        """The stats command never asks about (or accepts) a key: the stats say so, the log once per host."""
+
+        self._cpu_label.set_text(_("Host key not trusted"))
+        _set_stat_tooltip(self._cpu_label, host_key_preflight.untrusted_text())
+        self._mem_label.set_text("Mem: —")
+        self._disk_label.set_text("Disk: —")
+        alias = self._host.alias
+        if alias not in _HOST_KEY_UNTRUSTED_WARNED:
+            _HOST_KEY_UNTRUSTED_WARNED.add(alias)
+            self._log(_("{alias}: remote stats: {reason}").format(
+                alias=alias, reason=host_key_preflight.untrusted_text()), Level.WARNING)
+
     def _apply_stats_result(self, data: Optional[Dict[str, float]]) -> bool:
         set_spinner_busy(self._info_spinner, False)
         with self._stats_lock:
             self._stats_updating = False
         if isinstance(data, dict) and data.get("error") == STATS_HOST_KEY_CHANGED:
             self._stats_host_key_changed()
+            return False
+        if isinstance(data, dict) and data.get("error") == STATS_HOST_KEY_UNKNOWN:
+            self._stats_host_key_untrusted()
             return False
         if not isinstance(data, dict):
             self._cpu_label.set_text("CPU: N/A")

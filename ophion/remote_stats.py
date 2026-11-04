@@ -10,6 +10,23 @@ import json
 import os
 from typing import Dict, Optional, Tuple
 
+STATS_HOST_KEY_CHANGED = "host_key_changed"
+STATS_HOST_KEY_UNKNOWN = "host_key_unknown"
+HOST_KEY_CHANGED_TEXT = "REMOTE HOST IDENTIFICATION HAS CHANGED"
+_SSHPASS_HOST_KEY_UNKNOWN = 6  # sshpass stopped at ssh's "Are you sure you want to continue connecting"
+
+
+def stats_failure(status: int, stderr: str) -> Optional[str]:
+    """A host-key reason the stats command failed (it never asks, never accepts a key), else ``None``."""
+
+    text = stderr or ""
+    if HOST_KEY_CHANGED_TEXT in text:
+        return STATS_HOST_KEY_CHANGED
+    if status == _SSHPASS_HOST_KEY_UNKNOWN or "host key verification failed" in text.lower():
+        return STATS_HOST_KEY_UNKNOWN  # sshpass exit 6, or BatchMode refusing an unknown key
+    return None
+
+
 _REMOTE_STATS_SCRIPT = """
 import functools
 import json
