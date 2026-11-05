@@ -126,9 +126,16 @@ class AppIconTests(unittest.TestCase):
             self.assertEqual(self.icons.install_app_icon(empty, Path("/nonexistent/icons")), "")
 
 
+# Measured before: in the light theme the header, welcome and About marks sat on a dark plate
+# (brand-plate, #212226) and the header mark was inset to 24 px (expected failure until the plate is removed).
+PLATE_STILL_THERE = unittest.expectedFailure
+# The brand block, measured before the change (identical in both themes at 700, 900 and 1366 px).
+LOGO_BOX = (12, 9, 28, 28)
+
+
 @unittest.skipUnless(display_available(), "needs a display")
-class BrandPlateTests(unittest.TestCase):
-    """The mark is never on a tile; in the light theme only it sits on a dark plate (the cream band is weak on white)."""
+class TransparentMarkTests(unittest.TestCase):
+    """The mark is drawn as it is, transparent, in light and dark theme: no tile, no plate (owner's decision)."""
 
     def setUp(self) -> None:
         from ophion.gtkui.theme.loader import get_theme_manager
@@ -136,9 +143,34 @@ class BrandPlateTests(unittest.TestCase):
         self.theme = get_theme_manager()
         self.addCleanup(self.theme.apply, self.theme.mode)
 
-    def test_header_brand_has_no_tile_and_the_plate_in_light_theme_only(self) -> None:
+    def header(self, width: int):
+        from gi.repository import Gtk
+
+        from ophion.gtkui.controllers.notifications import MessageHistory
+        from ophion.gtkui.views.header import HeaderView
+        from tests.test_local_terminal import pump
+
+        top = Gtk.OffscreenWindow()
+        self.addCleanup(top.destroy)
+        header = HeaderView(MessageHistory())
+        header.set_size_request(width, -1)
+        top.add(header)
+        top.show_all()
+        Gtk.Window.show(top)
+        pump(0.2)
+        return header
+
+    @staticmethod
+    def box(widget, header):
+        a, h = widget.get_allocation(), header.get_allocation()
+        return a.x - h.x, a.y - h.y, a.width, a.height
+
+    @PLATE_STILL_THERE
+    def test_header_mark_has_no_plate_in_either_theme(self) -> None:
+        from unittest import mock as _mock
+
         from ophion.gtkui.theme.loader import ThemeMode
-        from ophion.gtkui.theme.tokens import Size, Space
+        from ophion.gtkui.theme.tokens import Size
 
         from tests.gtk_window_fixture import WindowSandbox
 
@@ -146,14 +178,55 @@ class BrandPlateTests(unittest.TestCase):
         self.addCleanup(sandbox.close)
         header = sandbox.window._header
         context = header.logo.get_style_context()
-        self.assertFalse(context.has_class("logo-tile"))  # the old tile is gone
-        for mode, plate in ((ThemeMode.DARK, False), (ThemeMode.LIGHT, True), (ThemeMode.DARK, False)):
-            self.theme.apply(mode)
-            self.assertEqual(context.has_class("brand-plate"), plate, mode)
-            self.assertEqual(header.logo_image.size, Size.LOGO_TILE - (2 * Space.XS if plate else 0), mode)
+        self.assertFalse(context.has_class("logo-tile"))
+        flips = [(ThemeMode.LIGHT, None), (ThemeMode.DARK, None), (ThemeMode.SYSTEM, True), (ThemeMode.SYSTEM, False),
+                 (ThemeMode.LIGHT, None)]
+        for mode, system_dark in flips:
+            with _mock.patch.object(type(self.theme), "system_prefers_dark", return_value=bool(system_dark)):
+                self.theme.apply(mode)
+            label = f"{mode.value} (system dark: {system_dark})"
+            self.assertFalse(context.has_class("brand-plate"), label)
+            self.assertEqual(context.get_property("background-color", context.get_state()).alpha, 0.0, label)
+            self.assertEqual(header.logo_image.size, Size.LOGO_TILE, label)  # the full slot, never inset
             self.assertEqual(header.logo.get_size_request(), (Size.LOGO_TILE, Size.LOGO_TILE))
 
-    def test_welcome_and_about_logos_follow_the_theme(self) -> None:
+    def test_brand_block_does_not_move(self) -> None:
+        from ophion.gtkui.theme.loader import ThemeMode
+
+        for width in (700, 900, 1366):
+            places = {}
+            for mode in (ThemeMode.DARK, ThemeMode.LIGHT):
+                self.theme.apply(mode)
+                header = self.header(width)
+                places[mode] = [self.box(widget, header) for widget in
+                                (header.logo, header.wordmark, header.sidebar_toggle_button)]
+                self.assertEqual(places[mode][0], LOGO_BOX, f"{mode.value} {width}px")
+            self.assertEqual(places[ThemeMode.DARK], places[ThemeMode.LIGHT], f"{width}px")
+
+    @PLATE_STILL_THERE
+    def test_transparent_pixels_show_the_header_background(self) -> None:
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.gtkui.widgets.app_logo import logo_pixbuf
+
+        self.theme.apply(ThemeMode.LIGHT)
+        header = self.header(900)
+        shot = header.get_toplevel().get_pixbuf()
+        data, stride, channels = shot.get_pixels(), shot.get_rowstride(), shot.get_n_channels()
+
+        def pixel(x, y):
+            offset = y * stride + x * channels
+            return tuple(data[offset:offset + 3])
+
+        lx, ly, _lw, _lh = self.box(header.logo, header)
+        background = pixel(lx - 6, ly + 2)  # the header, left of the mark
+        mark = logo_pixbuf(28)
+        mdata, mstride = mark.get_pixels(), mark.get_rowstride()
+        leaks = [(x, y) for y in range(28) for x in range(28)
+                 if mdata[y * mstride + x * 4 + 3] == 0 and pixel(lx + x, ly + y) != background]
+        self.assertEqual(leaks, [], f"{len(leaks)} transparent pixels are not the header background {background}")
+
+    @PLATE_STILL_THERE
+    def test_welcome_and_about_marks_have_no_plate(self) -> None:
         from gi.repository import Gtk
 
         from ophion.gtkui.theme.loader import ThemeMode
@@ -171,19 +244,28 @@ class BrandPlateTests(unittest.TestCase):
             def walk(widget):
                 if isinstance(widget, Gtk.Image) and widget.get_icon_name()[0] == "ophion":
                     context = widget.get_style_context()
-                    logos.append((context.has_class("brand-plate"), context.has_class("icon-dropshadow")))
+                    logos.append((context.has_class("brand-plate"), context.has_class("icon-dropshadow"),
+                                  widget.get_pixel_size()))
                 elif isinstance(widget, Gtk.Container):
                     widget.forall(walk)
             walk(about)
             return 0
 
-        for mode, plate in ((ThemeMode.LIGHT, True), (ThemeMode.DARK, False)):
+        for mode in (ThemeMode.LIGHT, ThemeMode.DARK):
             self.theme.apply(mode)
-            self.assertEqual(welcome.get_style_context().has_class("brand-plate"), plate, mode)
+            self.assertFalse(welcome.get_style_context().has_class("brand-plate"), mode)
             logos.clear()
             with mock.patch.object(Gtk.AboutDialog, "run", capture, create=True):
                 sandbox.window.app_dialogs.show_about()
-            self.assertEqual(logos, [(plate, False)], mode)  # no theme drop shadow on the mark
+            self.assertEqual(logos, [(False, False, 128)], mode)  # the mark at 128 px, no plate, no shadow
+
+    @PLATE_STILL_THERE
+    def test_no_plate_left_in_code_or_docs(self) -> None:
+        if shutil.which("git") is None or not (REPO / ".git").exists():
+            self.skipTest("not a git checkout")
+        found = subprocess.run(["git", "grep", "-l", "-e", "brand-plate", "-e", "follow_theme_plate", "-e", "PLATE_CLASS",
+                                "-e", "brand_plate"], cwd=REPO, capture_output=True, text=True).stdout.split()
+        self.assertEqual([f for f in found if f not in ("CHANGELOG-UI.md", "tests/test_app_icon.py")], [])
 
 
 class IconAssetTests(unittest.TestCase):
