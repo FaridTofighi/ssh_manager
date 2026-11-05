@@ -130,6 +130,36 @@ class TunnelPickerTests(unittest.TestCase):
         self.assertLess(took, 0.15, f"{took:.3f} s")
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class TreePopulateTests(unittest.TestCase):
+    """The session tree is filled with insert_with_values (2.7x faster): every column keeps its value."""
+
+    def test_every_column_round_trips(self) -> None:
+        from ophion.gtkui.constants import RowKind, TreeColumn
+        from ophion.gtkui.controllers.tree_controller import TreeRow
+        from ophion.gtkui.views.session_tree import SessionTreeView
+
+        host = HostEntry("web-01", {"hostname": "10.0.0.5"}, parent_group="Prod", child_group="web")
+        child = TreeRow(RowKind.CHILD, "web", "Prod", "web", count=1, file_backed=False, children=[
+            TreeRow(RowKind.HOST, "web-01", "Prod", "web", "web-01", host=host, search="web-01 10.0.0.5",
+                    color="#ff0000", status="connected", tooltip="web-01 tip", read_only=True)])
+        view = SessionTreeView()
+        self.addCleanup(view.destroy)
+        iters = view.populate([TreeRow(RowKind.PARENT, "Prod", "Prod", count=1, children=[child])])
+        model = view.get_model()
+        row = iters[child.children[0].key]
+        self.assertIs(model.get_value(row, TreeColumn.HOST), host)  # the same object, not a copy
+        self.assertEqual([model.get_value(row, column) for column in (
+            TreeColumn.TEXT, TreeColumn.KIND, TreeColumn.PARENT, TreeColumn.CHILD, TreeColumn.ALIAS,
+            TreeColumn.SEARCH, TreeColumn.COLOR, TreeColumn.STATUS, TreeColumn.TOOLTIP, TreeColumn.READ_ONLY)],
+            ["web-01", "host", "Prod", "web", "web-01", "web-01 10.0.0.5", "#ff0000", "connected", "web-01 tip",
+             True])
+        group = model.iter_parent(row)
+        self.assertIsNone(model.get_value(group, TreeColumn.HOST))
+        self.assertEqual((model.get_value(group, TreeColumn.COUNT), model.get_value(group, TreeColumn.FILE_BACKED)),
+                         (1, False))
+
+
 class TunnelHostLabelsTests(unittest.TestCase):
     def setUp(self) -> None:
         import tempfile
