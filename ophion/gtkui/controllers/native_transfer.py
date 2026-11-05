@@ -38,17 +38,24 @@ _APP_VERSION: Optional[str] = None
 
 
 def app_version() -> str:
-    """``git describe`` of the source tree when there is one (cached), else ``""``."""
+    """``git describe`` of the source tree when there is one, else its ``VERSION`` file (install.sh), else ``""``."""
 
     global _APP_VERSION
     if _APP_VERSION is None:
         root = Path(__file__).resolve().parents[3]
-        try:
-            result = subprocess.run(["git", "-C", str(root), "describe", "--always", "--dirty"],
-                                    capture_output=True, text=True, timeout=2, check=False)
-            _APP_VERSION = result.stdout.strip() if result.returncode == 0 else ""
-        except (OSError, subprocess.SubprocessError):
-            _APP_VERSION = ""
+        _APP_VERSION = ""
+        if (root / ".git").exists():  # an installed copy has none (git would describe a repository above it)
+            try:
+                result = subprocess.run(["git", "-C", str(root), "describe", "--always", "--dirty"],
+                                        capture_output=True, text=True, timeout=2, check=False)
+                _APP_VERSION = result.stdout.strip() if result.returncode == 0 else ""
+            except (OSError, subprocess.SubprocessError):
+                pass
+        if not _APP_VERSION:
+            try:
+                _APP_VERSION = (root / "VERSION").read_text(encoding="utf-8").strip()
+            except OSError:
+                pass
     return _APP_VERSION
 
 

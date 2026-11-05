@@ -10,8 +10,22 @@ from .gtk_app import SSHManagerApplication, show_legacy_app_running
 from .identity import APP_NAME, APP_SLUG, APP_TAGLINE
 
 
+class _VersionAction(argparse.Action):
+    """``--version``: print the version and exit before any window opens (looked up only when asked)."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        from .gtkui.controllers.native_transfer import app_version
+
+        print(f"{APP_NAME} {app_version() or 'unknown'}")
+        parser.exit()
+
+
 def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(prog=APP_SLUG, description=f"{APP_NAME} — {APP_TAGLINE}")
+    parser.add_argument("--version", action=_VersionAction, help="Show the version and exit")
     parser.add_argument(
         "--base-dir",
         default=None,
