@@ -1,1 +1,1 @@
-"""Exporters of the SSH Manager inventory (no GTK)."""
+"""Exporters of the Ophion inventory (no GTK)."""

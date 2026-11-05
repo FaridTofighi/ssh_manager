@@ -132,8 +132,6 @@ class ImportFacingTextTests(unittest.TestCase):
         self.addCleanup(self.sandbox.close)
         self.win = self.sandbox.window
 
-    # Measured: the import side still says *.sshm (expected failure until the next commit).
-    @unittest.expectedFailure
     def test_file_chooser_filter(self) -> None:
         from ophion.gtkui.dialogs import native_import
         from ophion.gtkui.dialogs.native_import import NativeImportDialog
@@ -147,8 +145,6 @@ class ImportFacingTextTests(unittest.TestCase):
         self.assertEqual(choose.call_args.kwargs["filters"],
                          [("Ophion exports (*.ophion)", ["*.ophion", "*.sshm", "*.json"])])
 
-    # Measured: the import side still says *.sshm (expected failure until the next commit).
-    @unittest.expectedFailure
     def test_wizard_help_menus_tooltips_and_actions(self) -> None:
         from gi.repository import Gtk
 

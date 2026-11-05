@@ -1,4 +1,4 @@
-"""Import an "SSH Manager export" (``*.sshm``) — pure Python, no GTK.
+"""Import an Ophion export (``*.ophion``; ``*.sshm`` files from SSH Manager are the same format) — pure Python, no GTK.
 
 The same pipeline as the MobaXterm import (:mod:`ophion.importers.mobaxterm`,
 whose naming, merge and conflict rules are reused, not copied):
@@ -233,7 +233,7 @@ def _load_json(data: bytes) -> Any:
 
 
 def sniff(source: Union[bytes, bytearray, Path, str]) -> str:
-    """``"plain"``, ``"encrypted"`` or ``""`` (not an SSH Manager export), by content."""
+    """``"plain"``, ``"encrypted"`` or ``""`` (not an Ophion export), by content, whatever the file name."""
 
     try:
         value = _load_json(_read_bytes(source))
@@ -1100,15 +1100,15 @@ def render_native_report(plan: NativePlan, job: Optional[NativeJob] = None, repo
 
 
 def save_native_report(text: str, directory: Path) -> Path:
-    """``sshm-import-<timestamp>.log`` (mode 0600)."""
+    """``ophion-import-<timestamp>.log`` (mode 0600)."""
 
     from ..persistence import write_text_atomic
 
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / time.strftime("sshm-import-%Y%m%d-%H%M%S.log")
+    path = directory / time.strftime("ophion-import-%Y%m%d-%H%M%S.log")
     counter = 2
     while path.exists():
-        path = directory / time.strftime(f"sshm-import-%Y%m%d-%H%M%S-{counter}.log")
+        path = directory / time.strftime(f"ophion-import-%Y%m%d-%H%M%S-{counter}.log")
         counter += 1
     write_text_atomic(path, text, mode=0o600)
     return path

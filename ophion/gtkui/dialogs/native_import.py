@@ -1,4 +1,4 @@
-"""Import an SSH Manager export (``*.sshm``): a wizard over :mod:`ophion.importers.native`.
+"""Import an Ophion export (``*.ophion``, or ``*.sshm`` from SSH Manager): a wizard over :mod:`ophion.importers.native`.
 
 The steps and wording follow the MobaXterm import wizard:
 
@@ -60,6 +60,7 @@ from ...importers.native import (  # noqa: E402
     sniff,
     suggest_credentials,
 )
+from ...native_format import ACCEPTED_EXTENSIONS  # noqa: E402
 from ...secure_store import SecureStoreError  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
 from ..theme.tokens import Space  # noqa: E402
@@ -161,8 +162,9 @@ class NativeImportDialog(BaseDialog):
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.M)
         section = FormSection(
             _("Ophion export"),
-            _("Choose a file exported by Ophion (*.sshm). Groups, subgroups, hosts, colours and per-protocol "
-              "settings are imported; it contains no passwords, and nothing is connected to."))
+            _("Choose a file exported by Ophion (*.ophion). Groups, subgroups, hosts, colours and per-protocol "
+              "settings are imported; it contains no passwords, and nothing is connected to.") + " "
+            + _("Files exported by SSH Manager (*.sshm) can be imported too."))
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.choose_button = Gtk.Button.new_with_mnemonic(_("_Choose File…"))
         self.choose_button.connect("clicked", lambda *_a: self.choose_file())
@@ -454,7 +456,7 @@ class NativeImportDialog(BaseDialog):
                 value, error = None, exc
             GLib.idle_add(self._finish_worker, done, value, error)
 
-        self._worker = threading.Thread(target=target, name="sshm-import", daemon=True)
+        self._worker = threading.Thread(target=target, name="ophion-import", daemon=True)
         self._worker.start()
         self._sync_buttons()
 
@@ -476,8 +478,9 @@ class NativeImportDialog(BaseDialog):
 
     # ============================================================ step 1: file
     def _default_choose_file(self, parent: Gtk.Window) -> Optional[str]:
+        # One filter, labelled .ophion, that also lists earlier exports (the content decides, not the name).
         return choose_open_file(parent, _("Choose an Ophion Export"), accept_label=_("_Open"),
-                                filters=[(_("Ophion exports (*.sshm)"), ["*.sshm", "*.json"])])
+                                filters=[(_("Ophion exports (*.ophion)"), [f"*{ext}" for ext in ACCEPTED_EXTENSIONS])])
 
     def choose_file(self, path: Optional[str] = None) -> None:
         path = path or self._choose_file(self)

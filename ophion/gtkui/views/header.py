@@ -70,7 +70,7 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     import_menu.append(_("From MobaXterm (.mxtsessions)…"), "win.import-mobaxterm")
     import_menu.append(_("From OpenSSH Config…"), "win.import-openssh")
     import_menu.append(_("From Remote Desktop Files (.rdp)…"), "win.import-rdp-files")
-    import_menu.append(_("From Ophion Export (.sshm)…"), "win.import-native")
+    import_menu.append(_("From Ophion Export (.ophion)…"), "win.import-native")
     inventory.append_submenu(_("Import"), import_menu)
     export_menu = Gio.Menu()
     export_menu.append(_("To OpenSSH Config…"), "win.export-openssh")
