@@ -8,6 +8,9 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- New Ophion icon (spiral mark) in the window, taskbar, header and About
+  dialog. In the light theme the mark sits on a dark plate; the artwork is
+  never recoloured.
 - First connection to a host with a saved password now shows the host-key
   trust dialog instead of failing with "Host key verification failed".
 - Session tiles: the Broadcast badge and the chip's text were replaced by

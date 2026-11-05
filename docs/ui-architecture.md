@@ -22,7 +22,7 @@ ophion/
     unlock_flow.py      start-up: set / ask for the master password, recovery key, key file missing
     migration_flow.py   the dialogs of the move to the key file (ophion/migration.py does it)
     assets/icons/       bundled sshm-*-symbolic.svg outline icons
-    assets/app-icon/    the application icon "ophion" (hicolor PNGs, see "Icons" below)
+    assets/app-icon/    the application icon "ophion" (hicolor PNGs from data/icons, see "Icons" below)
     theme/              density (Compact/Comfortable presets), tokens (palette; live Space/Size/
                         Layout/FontScale views), stylesheet generator, fonts, css_dark/css_light,
                         loader, terminal_schemes
@@ -252,34 +252,55 @@ history popover in the header bar.
 
 ## Icons
 
-- **Application icon:** the icon name is `ophion`. Its files are in
-  `gtkui/assets/app-icon/hicolor/<size>x<size>/apps/ophion.png` (16, 22, 24,
-  32, 48, 64, 96, 128, 256, 512 px), copied unchanged from the approved Ophion
-  icon package (dark-multicolor).
-- **Startup:** `install_app_icon()` (`widgets/icons.py`) adds that folder to
-  the icon theme search path and makes `ophion` the default icon of every
-  window and dialog, before the first window opens. If the theme cannot find
-  it, the 256 px file is used; a missing icon never stops the app. No window
-  sets an icon of its own.
-- **Where it shows:** the About logo, and the "Add your first host" welcome,
-  which shows the mark at 128 px instead of the card
-  (`ReadyState.set_content(logo=True)`). The header's brand tile draws it
-  too (`widgets/app_logo.py`): the smallest PNG at least as large as the tile
-  at the screen's scale, scaled down, corners rounded by a clip.
+- **Application icon:** the icon name is `ophion`: a spiral mark (orange,
+  cream, dark green) on a transparent background, with no tile. Its files are
+  in `gtkui/assets/app-icon/hicolor/<size>x<size>/apps/ophion.png` (16, 22, 24,
+  32, 48, 64, 96, 128, 256, 512 px).
+- **Source:** `data/icons/source/SOURCE_ORIGINAL_UNMODIFIED.png`, the approved
+  artwork byte for byte (raster, RGBA). `tools/prepare_ophion_icon.py` makes
+  every size from it (Pillow + numpy, development only):
+  - **Crop:** a square centred on the mark's opaque core, with 6 % padding.
+  - **Resample:** each size is a downscale of that square.
+  - **Nothing else:** no recolouring, smoothing, sharpening or retouching.
+  - **Result:** the mark fills 87–92 % of each square, centred within 1 px
+    (asserted by `tests/test_app_icon.py`).
+  - **Regenerate:** `python tools/prepare_ophion_icon.py`. Change the script,
+    never the PNGs.
+  - **Haze:** the source's faint background haze is kept; inside the square its
+    alpha is at most 2/255. `--clear-haze` exists but is not used.
+- **Raster only:** there is no vector and no `ophion.svg` (an SVG wrapping the
+  PNG would mislead). Sizes above 1024 px, or print use, need a vector redraw.
+  At 16 px the three bands merge into a spiral blob.
+- **Startup:** `install_app_icon()` (`widgets/icons.py`) adds the hicolor
+  folder to the icon theme search path and makes `ophion` the default icon of
+  every window and dialog, before the first window opens. If the theme cannot
+  find it, the packaged files are used; a missing icon never stops the app.
+  No window sets an icon of its own.
+- **Where it shows:**
+  - **Header brand slot:** `widgets/app_logo.py` draws the mark as it is, with
+    no clip, border or shadow. It uses the smallest PNG at least as large as
+    the slot at the screen's scale, scaled down with HYPER, never enlarged.
+  - **About logo:** at 128 px; the theme's drop shadow is removed.
+  - **"Add your first host" welcome:** the mark at 128 px instead of the card
+    (`ReadyState.set_content(logo=True)`).
+- **Contrast rule:** the cream band is weak on white, and the dark-green accent
+  on near-black. The art is never recoloured. Instead, in the **light theme
+  only**, the header, welcome and About marks sit on a dark plate:
+  - `follow_theme_plate` adds the CSS class `brand-plate`.
+  - The plate is the dark theme's raised surface `#212226`, with the pane
+    inner radius.
+  - In the header the slot keeps its size and the mark is inset by `Space.XS`;
+    images get `Space.XS` padding.
 - **Packaging:** the AppImage installs the same files under
   `usr/share/icons/hicolor` (`packaging/appimage/build.sh`). Its desktop
   entry says `Icon=ophion`, and `StartupWMClass` is the application id, which
   is also the X11 `WM_CLASS` (`GLib.set_prgname` / `Gdk.set_program_class`
-  in `SSHManagerApplication`).
-- **Adding a size:** put the PNG at `hicolor/<n>x<n>/apps/ophion.png`, add `n`
-  to `APP_ICON_SIZES`, and make sure the size is in the hicolor theme's
+  in `SSHManagerApplication`). The per-user launcher (`desktop_integration`)
+  copies them to `$XDG_DATA_HOME/icons/hicolor` and refreshes changed files
+  at every start.
+- **Adding a size:** add `n` to `SIZES` in the script and to `APP_ICON_SIZES`,
+  run the script, and make sure the size is in the hicolor theme's
   `index.theme`. The build script copies every size folder.
-- **Raster only:** there is no SVG. Never resample the PNGs (no enlarging, no
-  "fixing"); sizes above 512 px or sharper small sizes need a vector redraw.
-- **Wordmark:** the package's wordmark (opaque white background) is not used;
-  the header writes the name as text. If it is ever used, prepare a
-  transparent light-theme copy at build time and show only the mark on dark
-  themes.
 - **Symbolic icons:** the UI's own `sshm-*-symbolic.svg` icons are separate
   (`assets/icons`, `make_icon`).
 
