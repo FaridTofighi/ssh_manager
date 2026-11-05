@@ -130,8 +130,8 @@ hosts:
   - **Re-imports:** importing the same hosts again adds nothing (same group,
     host name, port and user).
   - **Untouched sources:** the source files are only read.
-- **Export → Ophion Export (.sshm)…** and **Import → From Ophion
-  Export (.sshm)…:** Ophion's own lossless format (groups at any depth,
+- **Export → Ophion Export (.ophion)…** and **Import → From Ophion
+  Export (.ophion)…:** Ophion's own lossless format (groups at any depth,
   every protocol and its settings, colours, notes, credential references, no
   passwords; optionally encrypted). The import commits in one transaction,
   like the MobaXterm import. See `docs/export-import.md`.

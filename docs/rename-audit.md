@@ -28,7 +28,7 @@ The names now live in `ophion/identity.py` (`APP_NAME`, `APP_SLUG`,
 | 1 | `ssh_manager` (package, modules, imports, `python -m ssh_manager`) | everywhere | 1247 | I → E | kept at first; later renamed to `ophion` (a separate commit). A tiny `ssh_manager` package remains so that `python3 -m ssh_manager` still starts the app |
 | 2 | `SSHManagerApplication`, `SSHManagerWindow`, `SSHManagerApp` | `gtk_app.py`, `ui.py`, controllers, tools, tests | 92 | I | kept |
 | 3 | `sshm-*-symbolic` icon names, the `sshm-` prefix, `_sshm_rows` / `_sshm_groups` | `gtkui/assets/icons`, `widgets/icons.py`, `tree_icons.py`, tests | 169 | I | kept |
-| 4 | `.sshm` extension, `*.sshm` file filters | `native_format.py`, import / export dialogs, docs, tests | 50 | L | kept: the readers accept it, and no new extension is added |
+| 4 | `.sshm` extension, `*.sshm` file filters | `native_format.py`, import / export dialogs, docs, tests | 50 | L | later changed: exports are `.ophion`; `.sshm` stays in `LEGACY_EXTENSIONS` and the import filter |
 | 5 | `ssh-manager-keybox`, `ssh-manager-keybox-check` (`keybox.FORMAT`, `keybox.CHECK`) | `keybox.py` | 4 | C | kept |
 | 6 | HKDF `info=f"ssh-manager/{name}/v1"` | `keybox.py` | 1 | C | kept |
 | 7 | `ssh-manager-secrets` (`SECRETS_FORMAT`, also authenticated data) | `secure_store.py` | 2 | C | kept |
@@ -38,7 +38,7 @@ The names now live in `ophion/identity.py` (`APP_NAME`, `APP_SLUG`,
 | 11 | Drag-and-drop types `application/x-sshmanager-entries`, `ssh-manager/tree-row` | `transfer/dnd.py`, `controllers/drag_drop.py` | 4 | I | kept: in-process only |
 | 12 | Widget name `ssh-manager-window`; notification id `ssh-manager-connected-…` | `gtk_app.py`, `session_controller.py` | 2 | I | kept |
 | 13 | `SSHM_` secret prefix (variables removed from local shells) | `local_shell.py` | 1 | I | kept; `OPHION_` is removed too |
-| 14 | `~/.ssh/config.sshm-backup-…` backup suffix; `sshm-import-….log` | `inventory/openssh.py`, `importers/native.py` | 4 | I | kept: file names in the user's folders that nothing parses |
+| 14 | `~/.ssh/config.sshm-backup-…` backup suffix; `sshm-import-….log` | `inventory/openssh.py`, `importers/native.py` | 4 | I | backup suffix kept (nothing parses it); import reports are `ophion-import-….log` now |
 | 15 | Config directory `APP_NAME = "ssh-manager"` (`settings.json`, `ui_state.json`, `keybox.json`, `credentials.json`, macros, saved commands, `ssh_keys.json` …) | `settings.py` | 1 | E | `~/.config/ophion`, moved by `legacy_paths.py` |
 | 16 | Data directory `$XDG_DATA_HOME/ssh-manager` (`inventory.db` + WAL, `passwords.json`, `file-browser.json`, `tls-pins.json`) | `inventory/store.py`, `secure_store.py`, `transfer/state.py`, `trust.py` | 8 | E | `~/.local/share/ophion`, moved |
 | 17 | State directory `$XDG_STATE_HOME/ssh-manager` (`protocol.log`, `rdp-embed.json`) | `transfer/protolog.py`, `gtkui/rdp/runtime.py` | 4 | E | `~/.local/state/ophion`, moved |
@@ -50,7 +50,7 @@ The names now live in `ophion/identity.py` (`APP_NAME`, `APP_SLUG`,
 | 23 | Application id `org.codex.SSHManager` | `gtk_app.py`, desktop file, metainfo | 3 | E | `io.github.faridtofighi.Ophion` (`APP_ID`); the old id is only probed to refuse migrating while the old app runs |
 | 24 | `SSH_MANAGER_APPDIR`, `SSH_MANAGER_APPIMAGE_EXEC` | `local_shell.py`, `AppRun`, packaging tests, docs | 17 | E | `OPHION_*` first, the old name as a fallback |
 | 25 | `SSH_MANAGER_DEBUG`, `SSH_MANAGER_TEST_X` | `tests/test_local_shell.py`, `tests/test_local_terminal.py` | 4 | I | test values for the prefix stripping; kept, plus `OPHION_` cases |
-| 26 | Export default file name `ssh-manager-YYYYMMDD-HHMM.sshm` | `native_format.py` | 1 | U | `ophion-…` |
+| 26 | Export default file name `ssh-manager-YYYYMMDD-HHMM.sshm` | `native_format.py` | 1 | U | `ophion-YYYYMMDD-HHMM.ophion` |
 | 27 | "SSH Manager" in window title, header, About, menus, dialogs, toasts, errors, reports (export / import / MobaXterm / RDP / file-transfer diagnostics), shortcuts window, settings snapshot, terminal preview | about 45 files in `ophion/` | ~150 | U | Ophion (`APP_NAME`) |
 | 28 | "SSH Manager" / "SSH manager" in docstrings and comments | `ophion/` | ~45 | I | kept (not user-visible) |
 | 29 | Tests that assert the old product name or old paths | `tests/` | ~25 | U | updated with the code they check (listed in the final report) |

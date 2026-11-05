@@ -1,4 +1,4 @@
-# Ophion export and import (`*.sshm`)
+# Ophion export and import (`*.ophion`)
 
 Ophion's own file format: the inventory's groups and subgroups (any
 depth), hosts of every protocol with their settings, colours, notes, tags and
@@ -12,11 +12,11 @@ Code: `ophion/native_format.py` (format, integrity, encryption),
 
 ## Exporting
 
-* App menu → **Export → Ophion Export (.sshm)…** (the whole inventory).
+* App menu → **Export → Ophion Export (.ophion)…** (the whole inventory).
 * A group's context menu → **Export Group…** (the group and its subgroups).
 * A host's context menu → **Export Selected Hosts…** (the hosts selected in the
   sidebar, with the groups they are in).
-* The action *Export as Ophion file (.sshm)* can get a shortcut
+* The action *Export as Ophion file (.ophion)* can get a shortcut
   (Settings → Keyboard Shortcuts).
 
 The dialog asks what to export and what to include: **Colours** (on),
@@ -26,7 +26,7 @@ The passphrase is typed twice, gets a strength hint and is never stored.
 Without one, the dialog says: *This file lists your servers, users and
 settings. It contains no passwords.*
 
-The file (default name `ophion-YYYYMMDD-HHMM.sshm`) is written atomically
+The file (default name `ophion-YYYYMMDD-HHMM.ophion`) is written atomically
 with mode 0600; the file chooser asks before replacing a file; an unwritable
 folder shows the system's error. Read-only inventories can be exported. A
 toast reports the result; **Details** opens the export report (counts per
@@ -65,8 +65,12 @@ host's own data that could be a secret, and counts each removal in the report
 One UTF-8 JSON document (no BOM, LF line ends, one-space indent, keys in a
 stable order: two exports of the same inventory differ only in `exported_at`).
 Media type `application/x-ophion+json` (files from SSH Manager, typed `application/x-ssh-manager+json`, still
-open), extension `.sshm`. The format ids below kept their old names on purpose: renaming them would make
-existing files unreadable (`docs/rename-audit.md`).
+open), extension `.ophion`.
+
+**Earlier exports:** versions before this one named the same file `*.sshm`, and they are still imported. Only
+the extension changed, not the content: an `.ophion` file renamed to `.sshm` opens in an older version. The
+format ids below kept their old names on purpose: renaming them would make existing files unreadable
+(`docs/rename-audit.md`). A name typed without an extension gets `.ophion`; a typed `.sshm` is kept.
 
 ```json
 {
@@ -141,9 +145,11 @@ is authenticated: changing it makes decryption fail.
 
 ## Importing
 
-App menu → **Import → From Ophion Export (.sshm)…**, the empty sidebar's
+App menu → **Import → From Ophion Export (.ophion)…**, the empty sidebar's
 **Import an Ophion export…**, or the action *Import an Ophion export
-(.sshm)*. The file is recognised by its content, not its name. The wizard
+(.ophion)*. The file is recognised by its content, not its name: `.ophion`,
+`.sshm` (SSH Manager), `.json` or any other name. The file chooser's
+"Ophion exports" filter lists all three. The wizard
 follows the MobaXterm one (`docs/import-mobaxterm.md`):
 
 1. **File** — the summary: who exported it and when, groups, hosts per
@@ -180,7 +186,7 @@ follows the MobaXterm one (`docs/import-mobaxterm.md`):
 7. **Result** — written in one database transaction; *Cancel* / *Esc* before
    the end undo it; a failure leaves the inventory exactly as it was ("Import
    failed, no changes were made"). The report is saved next to the MobaXterm
-   ones (`<data dir>/imports/sshm-import-*.log`, mode 0600).
+   ones (`<data dir>/imports/ophion-import-*.log`, mode 0600).
 
 What the import does:
 

@@ -32,7 +32,7 @@ ophion/
                         host_dialog, preferences, credentials, credentials_transfer, group_picker,
                         child_group_chooser (New Host / drop on a top-level group: search +
                         list of its child groups, "Create new group"), config_viewer, password,
-                        bulk_tag, native_export / native_import (the .sshm export dialog and
+                        bulk_tag, native_export / native_import (the .ophion export dialog and
                         import wizard), security_page (Settings → Security)
     views/              header (top bar), sidebar, session_tree, host_page, workspace, statusbar
     controllers/
@@ -54,7 +54,7 @@ ophion/
       security.py           SecurityActions: Settings → Security (unlock mode, recovery key, saving off)
       layout.py             sidebar visibility and width, focus mode, narrow variant, brand alignment
       colors.py             per-item tree colors
-      native_transfer.py    NativeTransferController: .sshm export (dialog, worker write) and import
+      native_transfer.py    NativeTransferController: .ophion export (dialog, worker write) and import
                             (wizard, then colours / smart groups saved after the commit)
       host_page.py          HostPageController: page content, ready state, tabs, latency, history
 ```

@@ -305,7 +305,7 @@ that direct file mode follows `Include` directives.
   sessions, icons and colors are not imported, and passwords are never in an export. Any failure
   rolls back completely; re-running the same import adds nothing. See
   `docs/import-mobaxterm.md`.
-- **Ophion export (.sshm)**: app menu → Export → Ophion Export, or
+- **Ophion export (.ophion)**: app menu → Export → Ophion Export, or
   Export Group… / Export Selected Hosts… in the sidebar, writes groups,
   subgroups, hosts of every protocol, colours and credential references (never
   passwords; optionally encrypted with a passphrase). Import → From Ophion
@@ -408,7 +408,7 @@ The first time Ophion starts, it moves SSH Manager's folders to its own:
 - **Nothing is merged:** a folder that already exists under the new name is left alone. If the move
   fails, Ophion uses the old folders for that run and says so.
 - **Unchanged:** your master password, saved passwords, macros and `.sshm` exports (the file
-  formats keep their ids), and passwords in the system keyring (service `ssh-manager`).
+  formats keep their ids; new exports are named `.ophion`, `.sshm` files still import), and passwords in the system keyring (service `ssh-manager`).
 - **OpenSSH export:** the next export writes `~/.config/ophion/ssh_config`. The `Include` line
   SSH Manager added to `~/.ssh/config` is replaced once, not duplicated.
 
@@ -425,7 +425,7 @@ SSH Manager then starts with your data as it is now.
 - `docs/ui-design-system.md` — tokens, CSS classes, components, usage rules
 - `docs/ui-architecture.md` — module map and how to add dialogs, actions and toasts
 - `docs/import-mobaxterm.md` — the MobaXterm import: format, mapping, credentials, troubleshooting
-- `docs/export-import.md` — Ophion's own export / import (.sshm): format, security, wizard, limits
+- `docs/export-import.md` — Ophion's own export / import (.ophion; .sshm still imports): format, security, wizard, limits
 - `docs/rename-audit.md` — the rename from SSH Manager: every old name, what changed and what stays
 - `docs/inventory-store.md` — the inventory database, OpenSSH import/export, first-run import, recovery
 - `docs/protocols.md` — connection protocols, the registry, Quick Connect URLs
