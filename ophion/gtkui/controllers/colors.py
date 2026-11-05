@@ -135,7 +135,9 @@ class ColorController:
         alias = data.get("alias") or ""
         title = _("Choose Host Color") if kind == RowKind.HOST.value else _("Choose Group Color")
         dialog = Gtk.ColorChooserDialog(title=title, transient_for=self.win)
-        current = self.item_color_for(parent, child, alias) if kind == RowKind.HOST.value else self.group_color_for(parent, child)
+        # The colour drawn now (own, inherited or default), for hosts and groups alike.
+        current = self.item_color_for(parent, "" if kind == RowKind.PARENT.value else child,
+                                      alias if kind == RowKind.HOST.value else "")
         if current:
             rgba = Gdk.RGBA()
             if rgba.parse(current):

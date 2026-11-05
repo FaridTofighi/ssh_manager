@@ -92,7 +92,8 @@ def host_menu(
         MenuSection("organize", [
             MenuItemSpec(_("_Move to Group…"), cb.move_selected, Icons.MOVE, sensitive=can_edit),
             MenuItemSpec(_("Change Host _Color…"), cb.change_host_color, Icons.COLOR),
-            MenuItemSpec(_("Clear Host Color"), cb.clear_color, Icons.CLEAR),
+            MenuItemSpec(_("Use Default Colour"), cb.clear_color, Icons.CLEAR,
+                         tooltip=_("Remove this host's own colour: its group's, else the default, is used")),
             MenuItemSpec(_("_Forget Password"), cb.forget_password, Icons.FORGET),
             MenuItemSpec(_("Forget Host _Key…"), cb.forget_host_key, Icons.FORGET, visible=is_ssh,
                          tooltip=_("Open Known Hosts on this host's stored keys")),
@@ -141,7 +142,8 @@ def group_menu(
         ]
     sections.append(MenuSection("organize", [
         MenuItemSpec(_("Change Group _Color…"), cb.change_group_color, Icons.COLOR),
-        MenuItemSpec(_("Clear Group Color"), cb.clear_color, Icons.CLEAR),
+        MenuItemSpec(_("Use Default Colour"), cb.clear_color, Icons.CLEAR,
+                     tooltip=_("Remove this group's own colour: its parent group's, else the default, is used")),
         MenuItemSpec(_("E_xport Group…"), cb.export_group, Icons.SAVE,
                      tooltip=_("This group and its subgroups as an Ophion file (.ophion); no passwords")),
     ]))

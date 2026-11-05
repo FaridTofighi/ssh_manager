@@ -60,6 +60,7 @@ class AppDialogs:
             shortcuts=getattr(self.win, "shortcut_registry", None),
             security=getattr(self.win, "security", None),
             ssh_keys=getattr(self.win, "ssh_keys", None),
+            tree_colors=getattr(self.win, "colors", None),
         )
         if page:
             dialog.layout.show_page(page)
@@ -67,11 +68,15 @@ class AppDialogs:
             values = dialog.values() if is_accept(dialog.run()) else None
         finally:
             initial_accent = dialog.initial_accent
+            initial_tree_colors = dialog.initial_tree_colors
             dialog.destroy()
         if values is not None:
             self.apply_preferences(values)
-        else:
-            get_theme_manager().set_accent(initial_accent)  # the picker previewed live; Cancel undoes it
+        else:  # the pickers previewed live; Cancel undoes them
+            get_theme_manager().set_accent(initial_accent)
+            if initial_tree_colors is not None:
+                group, host = initial_tree_colors
+                self.win.colors.set_default_colors(group=group, host=host)
 
     def inventory_info(self):
         """Preferences → Inventory (app store only)."""

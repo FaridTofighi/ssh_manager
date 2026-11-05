@@ -166,6 +166,7 @@ class PreferencesDialog(BaseDialog):
         shortcuts: object = None,
         security: object = None,
         ssh_keys: object = None,
+        tree_colors: object = None,
     ) -> None:
         BaseDialog.__init__(self, parent, _("Settings"), size=DialogSize.LARGE, height=600)
         self._latency_probe = latency_probe
@@ -178,6 +179,7 @@ class PreferencesDialog(BaseDialog):
         self._on_reset = on_reset
         self._security = security
         self._ssh_keys = ssh_keys
+        self._tree_colors = tree_colors  # ColorController: the tree's default icon colours (applied live)
         self._on_export = on_export
         self._appearance = settings.terminal_appearance or TerminalAppearanceSettings()
         self._custom_font = self._appearance.custom_font
@@ -230,6 +232,22 @@ class PreferencesDialog(BaseDialog):
         sec.add(_("Accent colour"), self.accent_picker, label_group=self._labels,
                 help_text=_("Buttons and highlights. Status colours (connected, warnings, errors, Broadcast) "
                             "keep theirs."))
+        from ..widgets.accent_picker import IconColorPicker
+
+        colors = self._tree_colors
+        self.initial_tree_colors = ((colors.default_group_color, colors.default_host_color) if colors is not None
+                                    else None)  # Cancel restores them
+        self.group_color_picker = IconColorPicker(
+            "group", colors.default_group_color if colors is not None else "",
+            on_change=lambda value: colors is not None and colors.set_default_colors(group=value))
+        sec.add(_("Default group colour"), self.group_color_picker, label_group=self._labels,
+                help_text=_("Folders without a colour of their own or from a group above them."))
+        self.host_color_picker = IconColorPicker(
+            "host", colors.default_host_color if colors is not None else "",
+            on_change=lambda value: colors is not None and colors.set_default_colors(host=value))
+        sec.add(_("Default host colour"), self.host_color_picker, label_group=self._labels,
+                help_text=_("Hosts without a colour of their own or from their groups. Status badges keep "
+                            "their colours."))
         self._density_combo = _combo(DENSITY_CHOICES, self._density.value)
         sec.add(_("Interface _density"), self._density_combo, label_group=self._labels,
                 help_text=_("Compact gives the terminal more room; Comfortable uses larger text and spacing."))

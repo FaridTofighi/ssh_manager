@@ -431,6 +431,9 @@ ACCENT_PRESETS: List[Tuple[str, str, Optional[str]]] = [
     ("graphite", "Graphite", "#6B7280"),
 ]
 ACCENT_DEFAULT_SWATCH = LIGHT.accent  # what "default" looks like in the picker
+# Tree icon defaults (Preferences → Appearance): the accent presets' colours plus these.
+ICON_COLOR_EXTRA_PRESETS: List[Tuple[str, str]] = [("Orange", "#F28C28"), ("Yellow", "#E5B100"),
+                                                    ("Slate", "#8A94A6")]
 ON_ACCENT_LIGHT, ON_ACCENT_DARK = "#FFFFFF", "#0B1210"  # text on an accent button: white, else near-black
 
 

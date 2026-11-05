@@ -229,4 +229,148 @@ class AccentPicker(Gtk.Box):
         self.hint.set_visible(bool(lines))
 
 
-__all__ = ["AccentPicker", "CUSTOM"]
+AUTOMATIC = ""
+
+
+def icon_presets():
+    """(English name, colour) of the default icon colours: the accent presets' colours plus a few lighter ones."""
+
+    from ..theme.tokens import ICON_COLOR_EXTRA_PRESETS
+
+    extra = dict(ICON_COLOR_EXTRA_PRESETS)
+    presets = [(name, A.display_color(key)) for key, name, _color in A.PRESETS if name not in extra]
+    return presets + list(ICON_COLOR_EXTRA_PRESETS)
+
+
+class IconColorPicker(Gtk.Box):
+    """Default colour of group or host icons: "Automatic" (the theme's), presets, "Custom…" and a preview.
+
+    ``value`` is ``""`` (automatic) or ``#RRGGBB``; ``on_change(value)`` runs on every choice. The preview
+    and the hint show the colour as the tree draws it on this theme (lightness adjusted to stay readable).
+    """
+
+    def __init__(self, kind: str, value: str = AUTOMATIC, on_change: Callable[[str], None] = lambda _v: None) -> None:
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
+        from ..constants import Icons
+        from ..theme.loader import current_palette
+        from .icons import make_icon
+
+        self.kind = kind  # "group" | "host"
+        self._on_change = on_change
+        self._quiet = False
+        self.value = A.normalize_color(value or "") or AUTOMATIC
+        self._custom_color = self.value if self.value and self.value not in dict(
+            (color, name) for name, color in icon_presets()) else ""
+        title = _("Default group colour") if kind == "group" else _("Default host colour")
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        self.swatches: Dict[str, _Swatch] = {}
+        self.automatic = _Swatch(None, AUTOMATIC, current_palette().icon_default,
+                                 _("{title}: Automatic").format(title=title))
+        self.automatic.set_tooltip_text(_("Automatic (follows the theme)"))
+        self.automatic.connect("toggled", self._on_toggled)
+        row.pack_start(self.automatic, False, False, 0)
+        for name, color in icon_presets():
+            swatch = _Swatch(self.automatic, color, color, _("{title}: {name}").format(title=title, name=_(name)))
+            swatch.set_tooltip_text(_(name))
+            swatch.connect("toggled", self._on_toggled)
+            self.swatches[color] = swatch
+            row.pack_start(swatch, False, False, 0)
+        self.custom = _Swatch(self.automatic, CUSTOM, self._custom_color or None,
+                              _("{title}: Custom colour").format(title=title))
+        self.custom.set_tooltip_text(_("Custom…"))
+        self.custom.connect("toggled", self._on_toggled)
+        self.custom.connect("button-release-event",
+                            lambda _w, event: event.button == 1 and GLib.idle_add(self.pick_custom) and False)
+        self.custom.connect("key-press-event", lambda _w, event: event.keyval in (
+            Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space) and GLib.idle_add(self.pick_custom) and False)
+        row.pack_start(self.custom, False, False, 0)
+        set_accessible_name(row, title)
+        self.pack_start(row, False, False, 0)
+
+        preview = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        preview.get_style_context().add_class("icon-color-preview")
+        self.preview_icon = make_icon(Icons.FOLDER if kind == "group" else Icons.SERVER, 16)
+        preview.pack_start(self.preview_icon, False, False, 0)
+        preview.pack_start(Gtk.Label(label=_("Production") if kind == "group" else _("web-01")), False, False, 0)
+        set_accessible_name(preview, _("Preview"))
+        self.pack_start(preview, False, False, 0)
+
+        self.hint = Gtk.Label(xalign=0.0)
+        self.hint.set_line_wrap(True)
+        self.hint.get_style_context().add_class("form-help")
+        self.hint.set_no_show_all(True)
+        self.pack_start(self.hint, False, False, 0)
+        self.reset_button = Gtk.Button.new_with_mnemonic(_("Reset to automatic"))
+        self.reset_button.set_halign(Gtk.Align.START)
+        self.reset_button.connect("clicked", lambda *_a: self.set_value(AUTOMATIC, notify=True))
+        self.pack_start(self.reset_button, False, False, 0)
+        self.set_value(self.value)
+
+    choose_color = AccentPicker.choose_color
+
+    def pick_custom(self) -> bool:
+        color = A.normalize_color(self.choose_color() or "")
+        if color is None:
+            self.set_value(self.value)
+        else:
+            self._custom_color = color
+            self.set_value(color, notify=True)
+        return GLib.SOURCE_REMOVE
+
+    def _on_toggled(self, swatch: _Swatch) -> None:
+        swatch.queue_draw()
+        if self._quiet or not swatch.get_active():
+            return
+        if swatch is self.custom:
+            if self._custom_color:
+                self.set_value(self._custom_color, notify=True)
+            return
+        self.set_value(swatch.key, notify=True)
+
+    def set_value(self, value: str, *, notify: bool = False) -> None:
+        self.value = A.normalize_color(value or "") or AUTOMATIC
+        self._quiet = True
+        try:
+            if not self.value:
+                self.automatic.set_active(True)
+            elif self.value in self.swatches:
+                self.swatches[self.value].set_active(True)
+            else:
+                self._custom_color = self.value
+                self.custom.color = self.value
+                self.custom.set_active(True)
+        finally:
+            self._quiet = False
+        for swatch in [self.automatic, *self.swatches.values(), self.custom]:
+            swatch.queue_draw()
+        self.refresh()
+        if notify:
+            self._on_change(self.value)
+
+    def drawn(self):
+        """``(colour as the tree draws it on this theme, adjusted)``; automatic: the theme's icon colour."""
+
+        from ..theme.loader import current_palette
+
+        palette = current_palette()
+        if not self.value:
+            return palette.icon_default, False
+        return A.readable_color(self.value, (palette.bg_surface, palette.bg_selected))
+
+    def refresh(self) -> None:
+        """Preview and hint for the current theme (also after a theme switch)."""
+
+        from ..theme.loader import current_palette, get_theme_manager
+
+        self.automatic.color = current_palette().icon_default
+        self.automatic.queue_draw()
+        color, adjusted = self.drawn()
+        if hasattr(self.preview_icon, "set_color"):
+            self.preview_icon.set_color(color)
+        theme = _("dark") if get_theme_manager().is_dark else _("light")
+        self.hint.set_text(_("Adjusted for readability in the {theme} theme.").format(theme=theme) if adjusted else "")
+        self.hint.set_visible(adjusted)
+
+
+__all__ = ["AccentPicker", "IconColorPicker", "CUSTOM", "AUTOMATIC", "icon_presets"]
