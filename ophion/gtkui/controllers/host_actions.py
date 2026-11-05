@@ -44,6 +44,9 @@ class HostActions:
     def pick_group(self, title: str, **kwargs) -> Optional[Tuple[str, str, bool]]:
         """Run a :class:`GroupPickerDialog`; return ``(parent, child, create_child)``."""
 
+        colors = getattr(self.win, "colors", None)
+        if colors is not None:
+            kwargs.setdefault("color_for", colors.item_color_for)  # folder icons as in the tree
         picker = GroupPickerDialog(self.win, self.win.manager, title, **kwargs)
         try:
             return picker.selected() if is_accept(picker.run()) else None

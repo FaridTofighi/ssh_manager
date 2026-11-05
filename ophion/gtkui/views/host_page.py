@@ -85,6 +85,7 @@ class HostPageContent:
     environment: str = ""
     address: str = ""  # mono line under the title
     icon: str = Icons.HOST
+    icon_color: str = ""  # the item's tree colour (ColorController.item_color_for); "" = the theme's
     stats: List[Tuple[str, str, str]] = field(default_factory=list)  # (caption, value, level or "")
     primary_label: str = ""
     primary_outlined: bool = False
@@ -270,6 +271,8 @@ class HostHeader(Gtk.Box):
         self._content = content
         self.title.set_text(content.title)
         self._tile_icon.set_icon(content.icon)
+        if hasattr(self._tile_icon, "set_color"):
+            self._tile_icon.set_color(content.icon_color)  # as in the tree
         self.address.set_text(content.address)
         self.address.set_visible(bool(content.address) and not (self._narrow and _compact()))
         if self._badge_class:

@@ -292,6 +292,7 @@ class HostPageController:
             environment=environment,
             address=address_text(host, user),
             icon=tree_icon_for(RowKind.HOST, protocol=protocols.protocol_of(host)).name,
+            icon_color=self._item_color(host.parent_group, host.child_group, host.alias),
             stats=stats,
             primary_label=primary,
             primary_outlined=outlined,
@@ -307,6 +308,10 @@ class HostPageController:
             activity=self.history.events(key),
             now=now,
         )
+
+    def _item_color(self, parent: str, child: str, alias: str = "") -> str:
+        colors = getattr(self.win, "colors", None)
+        return colors.item_color_for(parent, child, alias) if colors is not None else ""
 
     def _group_content(self, kind: RowKind, data, now: float) -> HostPageContent:
         tree = self.win.tree
@@ -327,6 +332,7 @@ class HostPageController:
             title=title,
             address=ngettext("{n} host", "{n} hosts", count).format(n=count),
             icon=tree_icon_for(kind).name,  # folder, or file-conf for a *.conf group
+            icon_color=self._item_color(parent, "" if kind is RowKind.PARENT else child),
             stats=[
                 (_("Hosts"), str(count), ""),
                 (_("Connected"), str(connected), "good" if connected else ""),

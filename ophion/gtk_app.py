@@ -897,6 +897,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         if hasattr(self, "tree_view"):
             self.tree_view.clear_icon_cache()
+        colors = getattr(self, "colors", None)
+        if colors is not None and (colors.default_group_color or colors.default_host_color) and hasattr(self, "tree"):
+            self.tree.recolor()  # default icon colours are drawn to suit each theme's surfaces
         if hasattr(self, "_host_page"):
             self.host_page.refresh()  # markup colors (ready-state body) come from the palette
 

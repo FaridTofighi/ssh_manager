@@ -158,5 +158,91 @@ class ExportTests(unittest.TestCase):
         self.assertNotIn("default_group_color", json.dumps(document))
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class WindowColourTests(unittest.TestCase):
+    """The tree, the details header and the group picker draw what item_color_for resolves."""
+
+    def setUp(self) -> None:
+        from ophion.gtkui.theme.loader import ThemeMode, get_theme_manager
+        from tests.gtk_window_fixture import WindowSandbox
+
+        theme = get_theme_manager()
+        self.addCleanup(theme.apply, theme.mode)
+        theme.apply(ThemeMode.LIGHT)
+        self.theme = theme
+        self.sandbox = WindowSandbox(store=True)
+        self.addCleanup(self.sandbox.close)
+        self.win = self.sandbox.window
+        self.win.tree.rebuild()
+
+    def colours(self):
+        from ophion.gtkui.constants import TreeColumn
+
+        model, found = self.win.tree_store, {}
+
+        def walk(it):
+            while it is not None:
+                key = (model.get_value(it, TreeColumn.KIND), model.get_value(it, TreeColumn.PARENT),
+                       model.get_value(it, TreeColumn.CHILD), model.get_value(it, TreeColumn.ALIAS))
+                found[key] = model.get_value(it, TreeColumn.COLOR) or ""
+                walk(model.iter_children(it))
+                it = model.iter_next(it)
+        walk(model.get_iter_first())
+        return found
+
+    def test_defaults_recolour_the_open_tree_in_place(self) -> None:
+        from ophion.gtkui.theme.loader import ThemeMode
+
+        tree, colors = self.win.tree, self.win.colors
+        colors.set_group_color("staging", "", "#AA0000")
+        tree.rebuild()
+        tree.select_host("prod", "web.conf", "web-01")
+        expanded = set(self.win.tree_view.expanded_keys)
+        store = self.win.tree_view.get_model()
+        before = self.colours()
+        self.assertEqual(before[("parent", "prod", "", "")], "")  # automatic: the theme's colour
+        colors.set_default_colors(group="#E5B100", host="#8A94A6")
+        after = self.colours()
+        group, host = colors.drawn_default("#E5B100")[0], colors.drawn_default("#8A94A6")[0]
+        self.assertEqual(after[("parent", "prod", "", "")], group)
+        self.assertEqual(after[("host", "prod", "web.conf", "web-01")], host)
+        self.assertEqual(after[("parent", "staging", "", "")], "#AA0000")  # an explicit colour still wins
+        self.assertEqual(after[("host", "staging", "hosts.conf", "stage-app")], "#AA0000")
+        self.assertIs(self.win.tree_view.get_model(), store)  # recoloured, not rebuilt
+        self.assertEqual(tree.selected_host().alias, "web-01")
+        self.assertEqual(set(self.win.tree_view.expanded_keys), expanded)
+        self.assertEqual((self.win._ui.default_group_color, self.win._ui.default_host_color), ("#E5B100", "#8A94A6"))
+        self.theme.apply(ThemeMode.DARK)  # drawn for the dark surfaces now (the stored value stays)
+        self.assertEqual(self.colours()[("parent", "prod", "", "")], colors.drawn_default("#E5B100")[0])
+        colors.set_default_colors(group="", host="")
+        self.assertEqual(self.colours(), before)
+
+    def test_details_header_and_picker_use_the_same_colour(self) -> None:
+        from ophion.gtkui.controllers import host_actions
+
+        colors = self.win.colors
+        colors.set_default_colors(group="#E5B100", host="#8A94A6")
+        colors.set_group_color("prod", "web.conf", "#112233")
+        self.win.tree.rebuild()
+        for select, args in ((lambda: self.win.tree.select_host("prod", "web.conf", "web-01"), ("prod", "web.conf", "web-01")),
+                             (lambda: self.win.tree.select_parent_group("staging"), ("staging", "")),
+                             (lambda: self.win.tree.select_host("staging", "hosts.conf", "stage-app"),
+                              ("staging", "hosts.conf", "stage-app"))):
+            select()
+            self.win.host_page.refresh()
+            expected = colors.item_color_for(*args)
+            self.assertEqual(self.win.host_page.build_content().icon_color, expected, args)
+            self.assertEqual(self.win.host_page.view.header._tile_icon._color, expected, args)
+        self.assertEqual(colors.item_color_for("prod", "web.conf", "web-01"), "#112233")
+        self.assertEqual(colors.item_color_for("staging", ""), colors.drawn_default("#E5B100")[0])
+        self.assertEqual(colors.item_color_for("staging", "hosts.conf", "stage-app"), colors.drawn_default("#8A94A6")[0])
+
+        made = []
+        with mock.patch.object(host_actions, "GroupPickerDialog",
+                               side_effect=lambda *a, **kw: made.append(kw) or mock.Mock(run=lambda: 0)):
+            self.win.hosts.pick_group("Pick")
+        self.assertEqual(made[0]["color_for"], colors.item_color_for)  # the picker's folders: the same resolver
+
+
 if __name__ == "__main__":
     unittest.main()

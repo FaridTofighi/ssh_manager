@@ -8,7 +8,7 @@ answers the same either way.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import gi
 
@@ -43,6 +43,7 @@ class GroupPickerDialog(BaseDialog):
         initial_parent: Optional[str] = None,
         initial_child: Optional[str] = None,
         accept_label: str = "",
+        color_for: Optional[Callable[[str, str], str]] = None,
     ) -> None:
         parents = sorted(manager.tree.keys(), key=str.lower)
         large_parents = len(parents) > LARGE
@@ -55,7 +56,9 @@ class GroupPickerDialog(BaseDialog):
         section = FormSection()
         self._parent_combo = Gtk.ComboBoxText()
         self._parent_list: Optional[SearchableList] = None
-        add_combo_icon(self._parent_combo, Icons.FOLDER, "icon_default", Size.ICON)  # as in the tree
+        # The folder icons in each group's tree colour (ColorController.item_color_for), as in the tree.
+        add_combo_icon(self._parent_combo, Icons.FOLDER, "icon_default", Size.ICON,
+                       color_for=(lambda model, it: color_for(model.get_value(it, 0) or "", "")) if color_for else None)
         for name in parents:
             self._parent_combo.append_text(name)
         if initial_parent and initial_parent in parents:
@@ -73,7 +76,9 @@ class GroupPickerDialog(BaseDialog):
 
         self._child_combo = Gtk.ComboBoxText()
         self._child_list: Optional[SearchableList] = None
-        add_combo_icon(self._child_combo, Icons.FILE_CONF, "icon_default", Size.ICON)
+        add_combo_icon(self._child_combo, Icons.FILE_CONF, "icon_default", Size.ICON,
+                       color_for=(lambda model, it: color_for(self._active_parent() or "", model.get_value(it, 1) or ""))
+                       if color_for else None)
         if large_children:
             self._child_list = SearchableList(search_label=_("Search the child groups"), list_label=_("Child groups"),
                                               min_height=LIST_HEIGHT)

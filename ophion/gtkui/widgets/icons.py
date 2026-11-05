@@ -26,7 +26,7 @@ from __future__ import annotations
 import functools
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import cairo
 import gi
@@ -242,11 +242,13 @@ def render_tree_icon(
     return surface
 
 
-def add_combo_icon(combo: Gtk.ComboBox, icon_name: str, color_role: str, size: int = 16) -> Gtk.CellRendererPixbuf:
+def add_combo_icon(combo: Gtk.ComboBox, icon_name: str, color_role: str, size: int = 16,
+                   color_for: Optional[Callable[[Gtk.TreeModel, Gtk.TreeIter], str]] = None) -> Gtk.CellRendererPixbuf:
     """Put ``icon_name`` (in palette color ``color_role``) in front of every combo row.
 
     Used by pickers that list groups (folder / file-conf, as in the tree). The
-    color is read from the active palette at draw time, so theme switches apply.
+    color is read from the active palette at draw time, so theme switches apply;
+    ``color_for(model, iter)`` gives a row its own colour (``""``: the palette's).
     """
 
     from ..theme.loader import current_palette
@@ -257,7 +259,7 @@ def add_combo_icon(combo: Gtk.ComboBox, icon_name: str, color_role: str, size: i
     combo.reorder(cell, 0)
 
     def data(_layout, renderer, _model, _iter, _user=None) -> None:
-        color = getattr(current_palette(), color_role)
+        color = (color_for(_model, _iter) if color_for is not None else "") or getattr(current_palette(), color_role)
         renderer.set_property("surface", render_svg_surface(icon_name, color, size, combo.get_scale_factor()))
 
     combo.set_cell_data_func(cell, data)
@@ -274,6 +276,7 @@ class SvgIcon(Gtk.DrawingArea):
         self.set_has_window(False)
         self._name = name
         self._size = size
+        self._color = ""  # set_color: a fixed colour instead of the CSS one
         self.set_size_request(size, size)
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)
@@ -290,6 +293,13 @@ class SvgIcon(Gtk.DrawingArea):
         self._name = name
         self.queue_draw()
 
+    def set_color(self, color: str) -> None:
+        """Draw in ``color`` (``#RRGGBB``), e.g. an item's tree colour; ``""`` = the CSS colour again."""
+
+        if color != self._color:
+            self._color = color
+            self.queue_draw()
+
     @property
     def pixel_size(self) -> int:
         return self._size
@@ -304,8 +314,8 @@ class SvgIcon(Gtk.DrawingArea):
 
     def _on_draw(self, widget: Gtk.Widget, cr) -> bool:
         color = widget.get_style_context().get_color(widget.get_state_flags())
-        hex_color = _hex(color)
-        if color.alpha < 1.0:
+        hex_color = self._color or _hex(color)
+        if color.alpha < 1.0 and not self._color:
             hex_color = f"rgba({int(color.red*255)},{int(color.green*255)},{int(color.blue*255)},{color.alpha:.3f})"
         surface = render_svg_surface(self._name, hex_color, self._size, widget.get_scale_factor())
         if surface is None:
