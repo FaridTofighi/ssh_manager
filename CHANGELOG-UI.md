@@ -8,6 +8,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- New: choose the default colour of groups and hosts in Preferences → Appearance (per-item
+  colours still win). "Clear Color" in the tree's menu is now "Use Default Colour". A nested
+  folder now inherits the colour of the nearest coloured group above it (before, only its
+  top-level group's).
 - The Ophion mark is now drawn transparent in the light theme (the dark plate was removed).
 - New: choose the application's accent colour (buttons and highlights) in
   Preferences → Appearance. Ten presets or any colour; it is adjusted for

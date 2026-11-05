@@ -317,6 +317,38 @@ history popover in the header bar.
   "<Name> accent"), and the tests check its contrast and that its lightness
   alone changes.
 
+### Tree colours
+
+**Resolution order.** `ColorController.item_color_for(parent, child, alias)`
+(`controllers/colors.py`) is the one resolver. The tree (through
+`TreeRow.color`), the details header's icon tile and the group pickers'
+folder icons all use it. In order:
+1. the host's own colour (hosts only);
+2. the nearest coloured group above the item: its own path, each shorter path,
+   then the top-level group (`a/b/c` → `a/b` → `a` → the top-level group);
+3. the default for its kind: "Default group colour" or "Default host colour"
+   (Preferences → Appearance);
+4. `""`: the theme's `icon_default`. This is "Automatic", today's behaviour.
+
+**Readability guard.** A default is drawn at the nearest lightness that keeps
+3:1 against the tree surface and the selected row of the current theme
+(`theme/accent.readable_color`; hue and saturation are kept). The stored value
+never changes, and the picker says "Adjusted for readability in the
+light/dark theme." Per-item colours are drawn exactly as the user chose them.
+
+**Live changes.** A new default or a theme switch updates the colour column of
+the open tree in place (`TreeController.recolor`), so selection, expansion and
+scroll stay.
+
+**Storage.** The defaults are display preferences in the UI state
+(`default_group_color` / `default_host_color`, next to the accent colour).
+They are never exported: an item without its own colour exports `color: ""`.
+
+**Never recoloured:** status badges, the read-only lock and the broadcast
+violet.
+
+**Context menu.** "Use Default Colour" removes only the item's own colour.
+
 ## Icons
 
 - **Application icon:** the icon name is `ophion`: a spiral mark (orange,
