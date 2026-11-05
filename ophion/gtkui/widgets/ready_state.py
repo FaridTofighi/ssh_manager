@@ -27,7 +27,6 @@ from ..constants import Icons  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
-from .app_logo import follow_theme_plate  # noqa: E402
 from .icons import APP_ICON_NAME, make_icon  # noqa: E402
 
 LOGO_SIZE = 128  # the application mark on the welcome state: a file of that size exists (never stretched)
@@ -58,7 +57,6 @@ class ReadyState(Gtk.Box):
         self.logo.set_pixel_size(LOGO_SIZE)
         self.logo.set_halign(Gtk.Align.CENTER)
         self.logo.set_no_show_all(True)
-        follow_theme_plate(self.logo)  # light theme: the mark on a dark plate (never recoloured)
         self.pack_start(self.logo, False, False, 0)
 
         self.title = Gtk.Label()

@@ -259,9 +259,7 @@ class AppDialogs:
 
     @staticmethod
     def _present_about_logo(about: Gtk.AboutDialog) -> None:
-        """The mark as it is (the theme's drop shadow off), on the dark plate in the light theme only."""
-
-        from ..widgets.app_logo import follow_theme_plate
+        """The mark as it is, transparent, in both themes (the theme's drop shadow off)."""
 
         found = []
 
@@ -274,8 +272,6 @@ class AppDialogs:
         walk(about)
         for image in found:
             image.get_style_context().remove_class("icon-dropshadow")
-            image.set_halign(Gtk.Align.CENTER)  # the plate around the mark, not the dialog's width
-            follow_theme_plate(image)
 
     def change_master_password(self) -> None:
         keybox = getattr(self.win, "keybox", None)

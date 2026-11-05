@@ -350,14 +350,13 @@ history popover in the header bar.
   - **About logo:** at 128 px; the theme's drop shadow is removed.
   - **"Add your first host" welcome:** the mark at 128 px instead of the card
     (`ReadyState.set_content(logo=True)`).
-- **Contrast rule:** the cream band is weak on white, and the dark-green accent
-  on near-black. The art is never recoloured. Instead, in the **light theme
-  only**, the header, welcome and About marks sit on a dark plate:
-  - `follow_theme_plate` adds the CSS class `brand-plate`.
-  - The plate is the dark theme's raised surface `#212226`, with the pane
-    inner radius.
-  - In the header the slot keeps its size and the mark is inset by `Space.XS`;
-    images get `Space.XS` padding.
+- **Transparent in both themes:** the header, welcome and About marks are
+  drawn as they are, directly on the background. There is no plate, outline,
+  glow or shadow, and the mark fills the header's brand slot.
+- **Known limitation:** the cream band is weak on white, and the dark-green
+  accent on near-black; at header size the mark reads as an orange ring. This
+  is the owner's decision. It is not handled by recolouring, and the artwork
+  is never changed in code.
 - **Packaging:** the AppImage installs the same files under
   `usr/share/icons/hicolor` (`packaging/appimage/build.sh`). Its desktop
   entry says `Icon=ophion`, and `StartupWMClass` is the application id, which

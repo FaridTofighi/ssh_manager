@@ -126,9 +126,8 @@ class AppIconTests(unittest.TestCase):
             self.assertEqual(self.icons.install_app_icon(empty, Path("/nonexistent/icons")), "")
 
 
-# Measured before: in the light theme the header, welcome and About marks sat on a dark plate
-# (brand-plate, #212226) and the header mark was inset to 24 px (expected failure until the plate is removed).
-PLATE_STILL_THERE = unittest.expectedFailure
+# Before: in the light theme the header, welcome and About marks sat on a dark plate (#212226) and the
+# header mark was inset to 24 px.
 # The brand block, measured before the change (identical in both themes at 700, 900 and 1366 px).
 LOGO_BOX = (12, 9, 28, 28)
 
@@ -165,7 +164,6 @@ class TransparentMarkTests(unittest.TestCase):
         a, h = widget.get_allocation(), header.get_allocation()
         return a.x - h.x, a.y - h.y, a.width, a.height
 
-    @PLATE_STILL_THERE
     def test_header_mark_has_no_plate_in_either_theme(self) -> None:
         from unittest import mock as _mock
 
@@ -203,7 +201,6 @@ class TransparentMarkTests(unittest.TestCase):
                 self.assertEqual(places[mode][0], LOGO_BOX, f"{mode.value} {width}px")
             self.assertEqual(places[ThemeMode.DARK], places[ThemeMode.LIGHT], f"{width}px")
 
-    @PLATE_STILL_THERE
     def test_transparent_pixels_show_the_header_background(self) -> None:
         from ophion.gtkui.theme.loader import ThemeMode
         from ophion.gtkui.widgets.app_logo import logo_pixbuf
@@ -225,7 +222,6 @@ class TransparentMarkTests(unittest.TestCase):
                  if mdata[y * mstride + x * 4 + 3] == 0 and pixel(lx + x, ly + y) != background]
         self.assertEqual(leaks, [], f"{len(leaks)} transparent pixels are not the header background {background}")
 
-    @PLATE_STILL_THERE
     def test_welcome_and_about_marks_have_no_plate(self) -> None:
         from gi.repository import Gtk
 
@@ -259,7 +255,6 @@ class TransparentMarkTests(unittest.TestCase):
                 sandbox.window.app_dialogs.show_about()
             self.assertEqual(logos, [(False, False, 128)], mode)  # the mark at 128 px, no plate, no shadow
 
-    @PLATE_STILL_THERE
     def test_no_plate_left_in_code_or_docs(self) -> None:
         if shutil.which("git") is None or not (REPO / ".git").exists():
             self.skipTest("not a git checkout")

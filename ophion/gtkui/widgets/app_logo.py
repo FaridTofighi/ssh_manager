@@ -5,15 +5,14 @@ clip, no border or shadow (the PNG is never edited). The source is the smallest
 packaged size at least as large as the mark at the screen's scale factor,
 scaled down with HYPER — never enlarged past a file's own size.
 
-Contrast: the cream band is weak on white, so in the light theme the mark sits
-on a dark plate (:func:`follow_theme_plate`, CSS class ``brand-plate``); the
-artwork itself is never recoloured.
+The same transparent mark in light and dark theme (the cream band is weak on
+white; that is accepted, not compensated: no plate, outline or glow).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, Optional
+from typing import Dict, Optional
 
 import cairo
 import gi
@@ -26,31 +25,6 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # type: ignore  # noqa: E40
 from .icons import APP_ICON_SIZES, app_icon_file  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
-PLATE_CLASS = "brand-plate"
-
-
-def follow_theme_plate(widget: Gtk.Widget, on_change: Optional[Callable[[bool], None]] = None) -> None:
-    """Give ``widget`` the dark plate in the light theme only, now and on every theme change.
-
-    ``on_change(is_dark)`` runs after each change (a size that depends on the plate).
-    """
-
-    from ..theme.loader import get_theme_manager
-
-    manager = get_theme_manager()
-
-    def apply(dark: bool) -> None:
-        context = widget.get_style_context()
-        if dark:
-            context.remove_class(PLATE_CLASS)
-        else:
-            context.add_class(PLATE_CLASS)
-        if on_change is not None:
-            on_change(dark)
-
-    manager.add_listener(apply)
-    widget.connect("destroy", lambda *_a: manager.remove_listener(apply))
-    apply(manager.is_dark)
 
 
 def logo_pixbuf(pixels: int) -> Optional[GdkPixbuf.Pixbuf]:
@@ -100,4 +74,4 @@ class AppLogo(Gtk.DrawingArea):
         return True
 
 
-__all__ = ["AppLogo", "logo_pixbuf", "follow_theme_plate", "PLATE_CLASS"]
+__all__ = ["AppLogo", "logo_pixbuf"]
