@@ -32,7 +32,7 @@ class IdentityTests(unittest.TestCase):
         from ophion.inventory import openssh
 
         self.assertEqual(F.MIME_TYPES, ("application/x-ophion+json", "application/x-ssh-manager+json"))
-        self.assertEqual((F.FORMAT, F.EXTENSION), ("ssh-manager-export", ".sshm"))  # file format: unchanged
+        self.assertEqual((F.FORMAT, F.EXTENSION), ("ssh-manager-export", ".ophion"))  # format id: unchanged
         self.assertEqual(openssh.DEFAULT_EXPORT, Path("~/.config/ophion/ssh_config"))
         self.assertEqual((openssh.INCLUDE_MARK, openssh.LEGACY_INCLUDE_MARK),
                          ("# added by Ophion", "# added by SSH Manager"))

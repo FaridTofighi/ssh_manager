@@ -1,4 +1,4 @@
-"""Export the inventory as an "SSH Manager export" (``*.sshm``) document — pure Python, no GTK.
+"""Export the inventory as an Ophion export (``*.ophion``) document — pure Python, no GTK.
 
 :func:`build_export` walks the store's tree (groups in sidebar order, a group's
 hosts before its subgroups) and returns ``(document, report)``. Database ids

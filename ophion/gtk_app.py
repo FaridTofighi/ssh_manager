@@ -389,7 +389,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.macros = MacroController(self)  # terminal macros (encrypted with the master password)
         from ophion.gtkui.controllers.native_transfer import NativeTransferController
 
-        self.native = NativeTransferController(self)  # SSH Manager's own export / import (.sshm)
+        self.native = NativeTransferController(self)  # Ophion's own export / import (.ophion)
         self.security = SecurityActions(self)  # Preferences → Security
         from ophion.gtkui.controllers.tunnels import TunnelController
 

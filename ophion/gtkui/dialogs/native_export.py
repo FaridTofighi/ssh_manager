@@ -1,4 +1,4 @@
-"""Export as an SSH Manager file (``*.sshm``): what to export, what to include, an optional passphrase.
+"""Export as an Ophion file (``*.ophion``): what to export, what to include, an optional passphrase.
 
 One page. The scope is the whole inventory, the selected group (with its
 subgroups) or the selected hosts. The passphrase is typed twice, checked for

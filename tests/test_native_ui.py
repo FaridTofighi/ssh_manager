@@ -154,7 +154,7 @@ class ExportFlowTests(unittest.TestCase):
                         collect(child)
 
         collect(menu)
-        self.assertIn("Ophion Export (.sshm)…", labels)
+        self.assertIn("Ophion Export (.ophion)…", labels)
 
 
 

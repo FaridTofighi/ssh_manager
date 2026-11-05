@@ -217,7 +217,7 @@ class WriteTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     write_bytes_private(Path(tmp) / "second.sshm", b"x")
             self.assertEqual(os.listdir(tmp), ["out.sshm"])  # no temporary file left
-        self.assertRegex(F.default_file_name(0), r"^ophion-\d{8}-\d{4}\.sshm$")
+        self.assertRegex(F.default_file_name(0), r"^ophion-\d{8}-\d{4}\.ophion$")
 
 
 class SecretAuditTests(ExportCase):

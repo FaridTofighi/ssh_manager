@@ -74,7 +74,7 @@ def _avatar_menu_model(*, git_updates: bool = False, maximized: bool = False) ->
     inventory.append_submenu(_("Import"), import_menu)
     export_menu = Gio.Menu()
     export_menu.append(_("To OpenSSH Config…"), "win.export-openssh")
-    export_menu.append(_("Ophion Export (.sshm)…"), "win.export-native")
+    export_menu.append(_("Ophion Export (.ophion)…"), "win.export-native")
     export_menu.append(_("Selected RDP Host as .rdp File…"), "win.export-rdp-file")
     inventory.append_submenu(_("Export"), export_menu)
     inventory.append(_("Open Shared Inventory…"), "win.open-shared")

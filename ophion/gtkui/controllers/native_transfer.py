@@ -1,4 +1,4 @@
-"""SSH Manager's own export / import (``*.sshm``) in the window.
+"""Ophion's own export / import (``*.ophion``; ``*.sshm`` files still import) in the window.
 
 Export: the dialog (scope, options, passphrase), a file name, then the
 document is built from the store on the main thread (the store is not
@@ -187,7 +187,7 @@ class NativeTransferController:
                 error = exc
             GLib.idle_add(lambda: (done(error), False)[1])
 
-        self.worker = threading.Thread(target=target, name="sshm-export", daemon=True)
+        self.worker = threading.Thread(target=target, name="ophion-export", daemon=True)
         self.worker.start()
 
     def wait(self, timeout: float = 30.0) -> None:

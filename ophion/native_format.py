@@ -1,4 +1,4 @@
-"""The "SSH Manager export" file (``*.sshm``): constants, canonical JSON, integrity, encryption (no GTK).
+"""The Ophion export file (``*.ophion``; ``*.sshm`` before): constants, canonical JSON, integrity, encryption (no GTK).
 
 A plain export is one UTF-8 JSON document (``format: ssh-manager-export``); the
 exporter (:mod:`ophion.exporters.native`) builds it and the importer
@@ -20,14 +20,20 @@ import json
 import os
 from typing import Any, Dict, Optional
 
+# Internal identifiers are frozen for compatibility; only the file name extension is branded. The format ids,
+# versions and the encryption header are authenticated (AES-GCM associated data) and hashed: renaming them
+# would make every existing export unreadable. An .ophion file renamed to .sshm opens in older versions.
 FORMAT = "ssh-manager-export"
 ENCRYPTED_FORMAT = "ssh-manager-export-encrypted"
 VERSION = 1
 ENCRYPTED_VERSION = 1
-EXTENSION = ".sshm"
+EXTENSION = ".ophion"
+LEGACY_EXTENSIONS = (".sshm", ".json")  # earlier exports: still read (the content decides, not the name)
+ACCEPTED_EXTENSIONS = (EXTENSION,) + LEGACY_EXTENSIONS
 MIME_TYPE = "application/x-ophion+json"
 LEGACY_MIME_TYPE = "application/x-ssh-manager+json"  # files typed by SSH Manager still open
-MIME_TYPES = (MIME_TYPE, LEGACY_MIME_TYPE)
+LEGACY_MIME_TYPES = (LEGACY_MIME_TYPE,)
+MIME_TYPES = (MIME_TYPE,) + LEGACY_MIME_TYPES
 KDF = "pbkdf2-sha256"
 KDF_ITERATIONS = 600_000
 MIN_KDF_ITERATIONS = 600_000

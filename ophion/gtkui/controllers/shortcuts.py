@@ -71,7 +71,7 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("import-rdp-files", _("Import .rdp files"), G_GENERAL),
     ActionSpec("export-rdp-file", _("Export the selected RDP host as a .rdp file"), G_GENERAL),
     ActionSpec("export-openssh", _("Export to OpenSSH config"), G_GENERAL),
-    ActionSpec("export-native", _("Export as Ophion file (.sshm)"), G_GENERAL),
+    ActionSpec("export-native", _("Export as Ophion file (.ophion)"), G_GENERAL),
     ActionSpec("import-native", _("Import an Ophion export (.sshm)"), G_GENERAL),
     ActionSpec("backup-inventory", _("Back up the inventory"), G_GENERAL),
     ActionSpec("refresh", _("Reload configuration"), G_GENERAL, ("F5",)),
