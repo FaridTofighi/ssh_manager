@@ -139,6 +139,21 @@ class HostActions:
         manager = self.win.manager  # folder inventories (allows_display_names False) keep hosts in child files
         return getattr(manager, "allows_display_names", False) is True and manager.group_id(parent, "") is not None
 
+    def selected_target(self) -> Optional[Tuple[str, str]]:
+        """Where new hosts go from the tree selection: ``(parent, child)``, or ``None`` (ask with the chooser).
+
+        A host → its group; a sub-group → itself; a top-level group → itself when the inventory holds hosts
+        there (``child == ""``). Nothing selected, a folder inventory's top-level group or a shared
+        (read-only) inventory's group → ``None``.
+        """
+
+        parent, child = self.win.tree.infer_target_group()
+        if not parent or parent.startswith(SHARED_PREFIX):
+            return None
+        if child:
+            return parent, child
+        return (parent, "") if self.holds_hosts_directly(parent) else None
+
     @requires_editable_inventory
     def prompt_new_host(self, template: Optional[HostTemplate] = None, prefill: Optional[HostEntry] = None) -> None:
         """Add a host to the selected group (a top-level one too); the group chooser only when there is none.
@@ -146,13 +161,14 @@ class HostActions:
         ``prefill`` (an unsaved Quick Connect host) fills the dialog ("Save to Inventory").
         """
 
-        parent, child = self.win.tree.infer_target_group()
-        if parent and parent.startswith(SHARED_PREFIX):  # a shared inventory is read-only: choose one of yours
-            parent, child = None, None
-        if parent and not child and self.holds_hosts_directly(parent):
-            child = ""  # the top-level group itself
+        target = self.selected_target()
         create_child = False
-        if not parent or child is None or (not child and not self.holds_hosts_directly(parent)):
+        if target is not None:
+            parent, child = target
+        else:
+            parent, child = self.win.tree.infer_target_group()  # where the chooser starts
+            if parent and parent.startswith(SHARED_PREFIX):  # a shared inventory is read-only: one of yours
+                parent, child = None, None
             selection = self.pick_group(
                 _("Choose a Group for the New Host"),
                 allow_new_child=True,

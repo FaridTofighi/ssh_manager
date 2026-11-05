@@ -215,9 +215,10 @@ brand block exactly as wide as the sidebar so the two dividers line up.
 
 ### Where a new host goes
 
-`HostActions.prompt_new_host` and the group's right-click **New Host…**
-(`create_host_in_current_group`) use the selected row. A right-click
-selects the clicked row first.
+`HostActions.prompt_new_host`, the group's right-click **New Host…**
+(`create_host_in_current_group`) and **Import .rdp Files…**
+(`RdpFileActions.import_files`) use the selected row
+(`HostActions.selected_target`). A right-click selects the clicked row first.
 
 | Selected row | New host goes to |
 |---|---|

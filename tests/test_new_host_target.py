@@ -152,6 +152,55 @@ class NewHostTargetTests(unittest.TestCase):
 
 
 @unittest.skipUnless(display_available(), "needs a display")
+class RdpFileImportTargetTests(unittest.TestCase):
+    """Import .rdp Files… uses the same target as New Host: the selected group, the chooser only without one."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from ophion.rdp.rdpfile import encode_rdp
+        from tests.gtk_window_fixture import WindowSandbox
+
+        self.sandbox = WindowSandbox(store=True)
+        self.addCleanup(self.sandbox.close)
+        self.win = self.sandbox.window
+        self.win.tree.rebuild()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.file = Path(tmp.name) / "Win 01.rdp"
+        self.file.write_bytes(encode_rdp("full address:s:10.0.0.70\r\n"))
+
+    def import_file(self):
+        picked = []
+        with mock.patch.object(self.win.hosts, "pick_group", side_effect=lambda *a, **k: picked.append(a) or None), \
+                mock.patch.object(self.win, "_notify"):
+            self.win.rdp_files.import_files([str(self.file)])
+        return picked
+
+    def aliases(self, parent, child):
+        return [h.alias for h in self.win.manager.tree.get(parent, {}).get(child, mock.Mock(hosts=[])).hosts]
+
+    def test_a_selected_top_level_group(self) -> None:
+        self.win.tree.select_parent_group("staging")
+        self.assertEqual(self.import_file(), [])  # no chooser
+        self.assertEqual(self.aliases("staging", ""), ["Win 01"])
+
+    def test_a_selected_sub_group_or_host(self) -> None:
+        self.win.tree.select_child_group("prod", "web.conf")
+        self.assertEqual(self.import_file(), [])
+        self.assertIn("Win 01", self.aliases("prod", "web.conf"))
+        self.win.tree.select_host("staging", "hosts.conf", "stage-app")
+        self.assertEqual(self.import_file(), [])
+        self.assertIn("Win 01", self.aliases("staging", "hosts.conf"))
+
+    def test_nothing_selected_still_asks(self) -> None:
+        self.win.tree_view.get_selection().unselect_all()
+        self.assertEqual(len(self.import_file()), 1)  # the chooser (cancelled here): nothing imported
+        self.assertNotIn("Win 01", self.aliases("staging", ""))
+
+
+@unittest.skipUnless(display_available(), "needs a display")
 class FolderInventoryTests(unittest.TestCase):
     """A folder inventory keeps hosts in <group>/<child>.conf files: a top-level group still asks for one."""
 

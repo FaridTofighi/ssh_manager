@@ -48,7 +48,7 @@ class RdpFileActions:
             chooser.destroy()
 
     def import_files(self, paths: Optional[Sequence[str]] = None) -> List[str]:
-        """Import ``.rdp`` files as RDP hosts into a chosen group; returns the report lines."""
+        """Import ``.rdp`` files as RDP hosts into the selected group (else a chosen one); returns the report."""
 
         manager = self.win.manager
         if getattr(manager, "read_only", False) or not getattr(manager, "allows_display_names", False):
@@ -57,11 +57,15 @@ class RdpFileActions:
         paths = list(paths) if paths is not None else self.choose_files()
         if not paths:
             return []
-        selection = self.win.hosts.pick_group(_("Choose a Group for the Imported Hosts"), allow_new_child=True,
-                                              accept_label=_("_Import"))
-        if not selection:
-            return []
-        parent, child, create_child = selection
+        target = self.win.hosts.selected_target()  # the selected group, as for New Host
+        if target is not None:
+            parent, child, create_child = target[0], target[1], False
+        else:
+            selection = self.win.hosts.pick_group(_("Choose a Group for the Imported Hosts"), allow_new_child=True,
+                                                  accept_label=_("_Import"))
+            if not selection:
+                return []
+            parent, child, create_child = selection
         if create_child:
             ok, message = manager.create_child_group(parent, child)
             if not ok:
