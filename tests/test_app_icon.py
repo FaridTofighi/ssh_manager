@@ -92,7 +92,7 @@ class AppIconTests(unittest.TestCase):
                 return data[y * stride + x * 4 + 3]
 
             self.assertEqual(alpha(0, 0), 0)  # rounded corner: clipped
-            self.assertEqual(alpha(pixels // 2, pixels // 2), 255)  # the opaque artwork
+            self.assertGreaterEqual(max(alpha(x, y) for x in range(pixels) for y in range(pixels)), 250)  # artwork
         from ophion.gtkui.widgets.app_logo import logo_pixbuf
 
         self.assertEqual(logo_pixbuf(600).get_width(), 512)  # never enlarged past the largest file
@@ -124,6 +124,57 @@ class AppIconTests(unittest.TestCase):
             empty = Gtk.IconTheme.new()
             empty.set_search_path([])
             self.assertEqual(self.icons.install_app_icon(empty, Path("/nonexistent/icons")), "")
+
+
+class IconAssetTests(unittest.TestCase):
+    """The prepared spiral mark (tools/prepare_ophion_icon.py): crop + resample of the approved artwork only."""
+
+    def opaque_box(self, path: Path):
+        from gi.repository import GdkPixbuf
+
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(path))
+        self.assertTrue(pixbuf.get_has_alpha() and pixbuf.get_n_channels() == 4, path)
+        data, stride, size = pixbuf.get_pixels(), pixbuf.get_rowstride(), pixbuf.get_width()
+        self.assertEqual(pixbuf.get_height(), size, path)
+        self.assertEqual(data[3], 0, f"{path}: the corner is not transparent")
+        xs, ys = [], []
+        for y in range(size):
+            for x in range(size):
+                if data[y * stride + x * 4 + 3] >= 128:
+                    xs.append(x)
+                    ys.append(y)
+        return size, min(xs), min(ys), max(xs) + 1, max(ys) + 1
+
+    def test_every_size_is_filled_by_the_centred_mark(self) -> None:
+        from ophion.gtkui.widgets import icons
+
+        for size in icons.APP_ICON_SIZES:
+            with self.subTest(size=size):
+                path = icons.app_icon_file(size)
+                self.assertGreater(path.stat().st_size, 0)
+                canvas, x0, y0, x1, y1 = self.opaque_box(path)
+                self.assertEqual(canvas, size)
+                cover = max(x1 - x0, y1 - y0) / size
+                self.assertTrue(0.86 <= cover <= 0.94, f"{size} px: the mark covers {cover:.1%}")
+                self.assertLessEqual(abs((x0 + x1) / 2 - size / 2), 1, f"{size} px: off centre horizontally")
+                self.assertLessEqual(abs((y0 + y1) / 2 - size / 2), 1, f"{size} px: off centre vertically")
+
+    def test_the_source_and_master_are_kept(self) -> None:
+        import hashlib
+
+        source = REPO / "data" / "icons" / "source" / "SOURCE_ORIGINAL_UNMODIFIED.png"
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),
+                         "239940402af44de0ad68d4440bf694804de4ffcce683e7f755958f0a77cd4196")  # the approved file
+        self.assertEqual(self.opaque_box(REPO / "data" / "icons" / "ophion-master-1024.png")[0], 1024)
+
+    def test_no_fake_vector_and_no_old_artwork(self) -> None:
+        if shutil.which("git") is None or not (REPO / ".git").exists():
+            self.skipTest("not a git checkout")
+        files = subprocess.run(["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True).stdout
+        self.assertNotIn("ophion.svg", files)  # there is no vector: an SVG-wrapped PNG would mislead
+        found = subprocess.run(["git", "grep", "-l", "-e", "Ophion_wordmark", "-e", "Ophion_App_Icon_Package",
+                                "-e", "snake-and-loop"], cwd=REPO, capture_output=True, text=True).stdout.split()
+        self.assertEqual([f for f in found if f not in ("CHANGELOG-UI.md", "tests/test_app_icon.py")], [])
 
 
 @unittest.skipUnless(display_available(), "needs a display")
