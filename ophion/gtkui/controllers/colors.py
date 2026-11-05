@@ -1,9 +1,24 @@
-"""User-chosen tree colors for groups and hosts (stored in UI state)."""
+"""User-chosen tree colors for groups and hosts (stored in UI state).
+
+The colour an item's icon is drawn in (:meth:`ColorController.item_color_for`, the one resolver the tree,
+the details header and the group pickers share):
+
+1. the host's own colour (hosts only);
+2. the nearest coloured group above it: the item's own group path, then each shorter path, then the
+   top-level group (``a/b/c`` → ``a/b`` → ``a`` → the top-level group);
+3. the default for its kind (Preferences → Appearance: groups or hosts), drawn at a lightness that keeps
+   3:1 against the tree surface and the selected row of the current theme (the stored value never
+   changes);
+4. ``""``: the theme's own icon colour (``icon_default``).
+
+Per-item colours are drawn exactly as chosen. Only per-item colours are exported with the inventory; the
+defaults are a personal display preference.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 import gi
 
@@ -29,17 +44,54 @@ class ColorController:
         self.win = win
         self.group_colors: Dict[str, str] = dict(win._ui.group_colors)
         self.host_colors: Dict[str, str] = dict(win._ui.host_colors)
+        self.default_group_color: str = getattr(win._ui, "default_group_color", "") or ""
+        self.default_host_color: str = getattr(win._ui, "default_host_color", "") or ""
 
     def group_color_for(self, parent: str, child: str) -> str:
         key = parent if not child else f"{parent}/{child}"
         return self.group_colors.get(key, "")
 
     def resolved_group_color_for(self, parent: str, child: str) -> str:
-        if child:
-            color = self.group_color_for(parent, child)
+        """The nearest group colour: ``child``'s path, each shorter path, then the top-level group."""
+
+        parts = [part for part in (child or "").split("/") if part]
+        for depth in range(len(parts), 0, -1):
+            color = self.group_color_for(parent, "/".join(parts[:depth]))
             if color:
                 return color
         return self.group_color_for(parent, "")
+
+    def default_color(self, host: bool) -> str:
+        """The default for hosts or groups as drawn on the current theme; ``""`` = the theme's own."""
+
+        stored = self.default_host_color if host else self.default_group_color
+        if not stored:
+            return ""
+        return self.drawn_default(stored)[0]
+
+    @staticmethod
+    def drawn_default(stored: str) -> Tuple[str, bool]:
+        """``(colour drawn, adjusted)`` for a default: ≥ 3:1 on the tree surface and the selected row."""
+
+        from ..theme.accent import readable_color
+        from ..theme.loader import current_palette
+
+        palette = current_palette()
+        return readable_color(stored, (palette.bg_surface, palette.bg_selected))
+
+    def set_default_colors(self, *, group: Optional[str] = None, host: Optional[str] = None) -> None:
+        """New defaults (``""`` = automatic); saved, and the open tree recoloured in place."""
+
+        from ..theme.accent import normalize_color
+
+        if group is not None:
+            self.default_group_color = normalize_color(group) or ""
+            self.win._ui.default_group_color = self.default_group_color
+        if host is not None:
+            self.default_host_color = normalize_color(host) or ""
+            self.win._ui.default_host_color = self.default_host_color
+        self.win._save_ui_state()
+        self.win.tree.recolor()
 
     def set_group_color(self, parent: str, child: str, color: Optional[str]) -> None:
         key = parent if not child else f"{parent}/{child}"
@@ -61,9 +113,12 @@ class ColorController:
         self.win._save_ui_state()
 
     def item_color_for(self, parent: str, child: str, alias: str = "") -> str:
+        """The colour to draw a group (``alias == ""``) or host icon in (see the module docstring)."""
+
         if alias:
-            return self.host_color_for(parent, child, alias) or self.resolved_group_color_for(parent, child)
-        return self.resolved_group_color_for(parent, child)
+            return (self.host_color_for(parent, child, alias) or self.resolved_group_color_for(parent, child)
+                    or self.default_color(host=True))
+        return self.resolved_group_color_for(parent, child) or self.default_color(host=False)
 
     def rgba_to_hex(self, rgba: Gdk.RGBA) -> str:
         r = int(rgba.red * 255 + 0.5)

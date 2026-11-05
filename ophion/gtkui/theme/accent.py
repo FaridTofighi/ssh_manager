@@ -233,6 +233,30 @@ def derive_accent(base_hex: str, dark: bool, base: Optional[Palette] = None) -> 
     raise AssertionError("no readable accent (a grey always is)")  # pragma: no cover
 
 
+def readable_color(color: str, backgrounds, minimum: float = AA_UI) -> Tuple[str, bool]:
+    """``color`` at the nearest lightness reaching ``minimum`` against every background; ``(drawn, adjusted)``.
+
+    Hue and saturation are kept (saturation drops only if no lightness works). Used for the tree's default
+    icon colours: the stored value never changes, only the colour drawn on this theme's surfaces.
+    """
+
+    normalized = normalize_color(color)
+    if normalized is None:
+        raise ValueError(f"Not a colour: {color!r}")
+    if all(contrast_ratio(normalized, bg) >= minimum for bg in backgrounds):
+        return normalized, False
+    h, lightness, s = colorsys.rgb_to_hls(*(c / 255.0 for c in parse_hex(normalized)))
+    saturation = s
+    while True:
+        for candidate in _candidates(lightness):
+            drawn = _hls(h, candidate, saturation)
+            if all(contrast_ratio(drawn, bg) >= minimum + 0.05 for bg in backgrounds):
+                return drawn, True
+        if saturation <= 0.0:
+            return normalized, False  # pragma: no cover - a grey always reaches 3:1 on one side
+        saturation = max(0.0, saturation - 0.1)
+
+
 def accent_palette(base: Palette, value: object) -> Palette:
     """``base`` with the accent roles for ``value``; the default returns ``base`` itself."""
 
@@ -242,6 +266,6 @@ def accent_palette(base: Palette, value: object) -> Palette:
     return dataclasses.replace(base, **derive_accent(color, base.name == "dark", base).roles)
 
 
-__all__ = ["DEFAULT", "PRESETS", "PRESET_COLORS", "ACCENT_ROLES", "AccentRoles", "normalize_color",
+__all__ = ["DEFAULT", "PRESETS", "PRESET_COLORS", "ACCENT_ROLES", "AccentRoles", "normalize_color", "readable_color",
            "normalize_accent", "base_color", "display_color", "near_broadcast", "hue_of", "derive_accent",
            "accent_palette"]

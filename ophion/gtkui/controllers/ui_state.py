@@ -17,7 +17,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from ...persistence import write_json_atomic
 from ..tab_labels import TabLabelMode
 from ..theme.density import COMFORTABLE, DEFAULT_DENSITY, Density
-from ..theme.accent import normalize_accent
+from ..theme.accent import normalize_accent, normalize_color
+
+
+def _color(value: object) -> str:
+    """``#RRGGBB`` or ``""`` (automatic): anything else is automatic."""
+
+    return (normalize_color(value) or "") if isinstance(value, str) else ""
+
 
 # Stored when the user never resized the sidebar (the Comfortable default; with
 # the 1px pane separator the edge is at x = 408). It stands for "the active
@@ -94,6 +101,9 @@ class UiState:
     terminal_maximized: bool = False
     theme_mode: str = ""  # "", "system", "light" or "dark"; "" = derive from prefer_dark
     accent_color: str = "default"  # a preset id or #RRGGBB (gtkui/theme/accent.py); invalid → "default"
+    # Tree icon colours when an item and its groups have none: "" = automatic (the theme's icon colour).
+    default_group_color: str = ""
+    default_host_color: str = ""
     prefer_dark: Optional[bool] = None
     font_scale: float = 1.0
     ui_font_size: int = 11
@@ -130,6 +140,8 @@ class UiState:
             terminal_maximized=data.get("terminal_maximized") is True,
             theme_mode=_str(data.get("theme_mode"), ""),
             accent_color=normalize_accent(data.get("accent_color")),
+            default_group_color=_color(data.get("default_group_color")),
+            default_host_color=_color(data.get("default_host_color")),
             prefer_dark=prefer_dark if isinstance(prefer_dark, bool) else None,
             font_scale=_float(data.get("font_scale"), 1.0),
             ui_font_size=_int(data.get("ui_font_size"), 11),
@@ -152,6 +164,8 @@ class UiState:
             "prefer_dark": prefer_dark,
             "theme_mode": self.theme_mode or ("dark" if prefer_dark else "light"),
             "accent_color": normalize_accent(self.accent_color),
+            "default_group_color": _color(self.default_group_color),
+            "default_host_color": _color(self.default_host_color),
             "font_scale": self.font_scale,
             "ui_font_size": self.ui_font_size,
             "sidebar_visible": self.sidebar_visible,

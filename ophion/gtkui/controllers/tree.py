@@ -96,6 +96,27 @@ class TreeController:
         self.update_details()
         self.update_action_state()
 
+    def recolor(self) -> None:
+        """Icon colours again (defaults or theme changed), in place: selection, expansion and scroll stay."""
+
+        model = self.win.tree_store
+        color_for = self.win.colors.item_color_for
+
+        def walk(tree_iter) -> None:
+            while tree_iter is not None:
+                kind = model.get_value(tree_iter, TreeColumn.KIND)
+                parent = model.get_value(tree_iter, TreeColumn.PARENT) or ""
+                child = model.get_value(tree_iter, TreeColumn.CHILD) or ""
+                alias = (model.get_value(tree_iter, TreeColumn.ALIAS) or "") if kind == RowKind.HOST.value else ""
+                color = color_for(parent, "" if kind == RowKind.PARENT.value else child, alias)
+                if (model.get_value(tree_iter, TreeColumn.COLOR) or "") != color:
+                    model.set_value(tree_iter, TreeColumn.COLOR, color)
+                walk(model.iter_children(tree_iter))
+                tree_iter = model.iter_next(tree_iter)
+
+        walk(model.get_iter_first())
+        self.update_details()
+
     def restore_selection(self, kind: str, data: Dict[str, str]) -> None:
         """Re-select the previous row after a rebuild, only if it is visible: never expands anything."""
 
