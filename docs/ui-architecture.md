@@ -212,6 +212,9 @@ through `on_sessions_changed`.
 
 The pane separator is the sidebar border; `LayoutController` keeps the top-bar
 brand block exactly as wide as the sidebar so the two dividers line up.
+One control per function: the sidebar toggle lives in the top bar, never in the
+sidebar itself (`HeaderView.sidebar_toggle_button`, after the wordmark, so it
+stays put when the brand block changes width).
 
 ### Where a new host goes
 

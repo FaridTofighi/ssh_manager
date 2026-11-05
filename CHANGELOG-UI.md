@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- The sidebar now has a single toggle in the top bar (Ctrl+B); it stays in
+  the same place whether the sidebar is open or closed.
 - New Host and Import .rdp Files now use the group you selected or
   right-clicked; the group chooser only appears when nothing is selected.
 - The New Host dialog now opens instantly on large inventories (RDP pages and
