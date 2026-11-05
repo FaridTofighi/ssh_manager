@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- New Host now uses the group you selected or right-clicked; the group
+  chooser only appears when nothing is selected.
 - The New Host dialog now opens instantly on large inventories (RDP pages and
   the SSH-tunnel list are built on demand). With more than 30 SSH hosts the
   SSH-tunnel choice is a searchable list. The host tree also redraws about

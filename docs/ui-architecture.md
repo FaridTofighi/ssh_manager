@@ -213,6 +213,20 @@ through `on_sessions_changed`.
 The pane separator is the sidebar border; `LayoutController` keeps the top-bar
 brand block exactly as wide as the sidebar so the two dividers line up.
 
+### Where a new host goes
+
+`HostActions.prompt_new_host` and the group's right-click **New Host…**
+(`create_host_in_current_group`) use the selected row. A right-click
+selects the clicked row first.
+
+| Selected row | New host goes to |
+|---|---|
+| A host | That host's group |
+| A sub-group | That sub-group |
+| A top-level group (app store) | The top-level group itself, `(group, "")`; the tree lists such hosts under the group |
+| A top-level group (folder inventory) | A child group you choose: hosts live in its `.conf` files |
+| Nothing, or a shared (read-only) inventory | A group you choose ("Choose a Group for the New Host") |
+
 ## Adding things
 
 ### A new dialog
