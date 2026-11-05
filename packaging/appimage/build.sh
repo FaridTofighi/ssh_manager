@@ -7,7 +7,8 @@
 #   host-libraries-used.txt (what the AppImage takes from the host).
 # Inside the build container it can also be run directly (SSHM_APPIMAGE_IN_CONTAINER=1, SRC_TAR, OUT).
 #
-# Environment: VERSION (default git<commits>.<hash>), OUT (default <repo>/dist), CONTAINER_ENGINE.
+# Environment: VERSION (default git<commits>.<hash>), OUT (default <repo>/dist), CONTAINER_ENGINE,
+#   BUILD_PROXY (default http://127.0.0.1:10808; empty = no proxy): http_proxy / https_proxy of every download.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -29,13 +30,26 @@ if [ "${SSHM_APPIMAGE_IN_CONTAINER:-}" != "1" ] && [ ! -x /opt/appimage/appimage
     OUT="${OUT:-$REPO/dist}"
     CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ophion-appimage-build"  # downloads (checked by SHA-256)
     mkdir -p "$OUT" "$CACHE"
+    # Every download (apt, curl and pip in the image and the container; podman's image pull) goes through the
+    # proxy. It listens on the host's 127.0.0.1, so the image build and the container use the host's network.
+    PROXY="${BUILD_PROXY-http://127.0.0.1:10808}"
+    NET=() PROXY_BUILD=() PROXY_RUN=()
+    if [ -n "$PROXY" ]; then
+        export http_proxy="$PROXY" https_proxy="$PROXY" HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY"
+        NET=(--network host)
+        for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
+            PROXY_BUILD+=(--build-arg "$var=$PROXY")
+            PROXY_RUN+=(-e "$var=$PROXY")
+        done
+        log "proxy $PROXY"
+    fi
     STAGE="$(mktemp -d)"
     trap 'rm -rf "$STAGE"' EXIT
     git -C "$REPO" archive --format=tar HEAD -- main.py ophion > "$STAGE/src.tar"
     log "build image $IMAGE"
-    "$ENGINE" build -f "$HERE/Dockerfile.build" -t "$IMAGE" "$HERE"
+    "$ENGINE" build "${NET[@]}" "${PROXY_BUILD[@]}" -f "$HERE/Dockerfile.build" -t "$IMAGE" "$HERE"
     log "build the AppImage (version $VERSION)"
-    "$ENGINE" run --rm \
+    "$ENGINE" run --rm "${NET[@]}" "${PROXY_RUN[@]}" \
         -e SSHM_APPIMAGE_IN_CONTAINER=1 -e VERSION="$VERSION" -e OUT=/out -e SRC_TAR=/stage/src.tar \
         -e SSHM_COMMIT="$(git -C "$REPO" rev-parse HEAD)" \
         -e SOURCE_DATE_EPOCH="$(git -C "$REPO" log -1 --format=%ct HEAD)" \

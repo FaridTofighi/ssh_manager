@@ -13,7 +13,17 @@ packaging/appimage/tests/smoke.sh        # clean-room tests (ubuntu:22.04, debia
 
 `build.sh` builds the image from `Dockerfile.build` (Ubuntu 22.04), then runs itself inside it. The
 application is taken from the **committed** `HEAD` (`git archive`), so uncommitted changes in
-`main.py` / `ophion/` are not packaged (the script says so). Outputs in `dist/`:
+`main.py` / `ophion/` are not packaged (the script says so).
+
+**Proxy:** every download goes through `http://127.0.0.1:10808`:
+- apt, curl and pip, while the image is built and inside the build container;
+- the image pull when the engine is podman.
+
+To make this work, the image build and the container use the host's network (`--network host`). Use
+`BUILD_PROXY=http://host:port` for another proxy, or `BUILD_PROXY=` for none. With docker, the base image
+is pulled by the docker daemon, which takes its proxy from its own systemd configuration.
+
+Outputs in `dist/`:
 
 | File | What |
 |---|---|
