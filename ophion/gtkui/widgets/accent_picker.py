@@ -58,6 +58,10 @@ class _Swatch(Gtk.RadioButton):
             cr.set_source_rgb(*_rgb(self.color))
             cr.arc(cx, cy, radius, 0, 2 * math.pi)
             cr.fill()
+            cr.set_source_rgba(ink.red, ink.green, ink.blue, 0.25)  # a faint outline: pale colours on pale dialogs
+            cr.set_line_width(1.0)
+            cr.arc(cx, cy, radius - 0.5, 0, 2 * math.pi)
+            cr.stroke()
         else:  # custom, not chosen yet: an outlined circle with a plus
             cr.set_source_rgba(ink.red, ink.green, ink.blue, 0.7)
             cr.set_line_width(1.5)
