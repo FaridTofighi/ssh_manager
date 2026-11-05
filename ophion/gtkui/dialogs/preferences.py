@@ -221,6 +221,15 @@ class PreferencesDialog(BaseDialog):
         self._theme_combo = _combo(THEME_CHOICES, theme_mode.value)
         sec.add(_("_Theme"), self._theme_combo, label_group=self._labels,
                 help_text=_("“Follow system” uses the desktop's light or dark preference."))
+        from ..theme.loader import get_theme_manager
+        from ..widgets.accent_picker import AccentPicker
+
+        theme = get_theme_manager()
+        self.initial_accent = theme.accent  # Cancel restores it (the picker applies each choice at once)
+        self.accent_picker = AccentPicker(theme.accent, on_change=theme.set_accent, dark=theme.is_dark)
+        sec.add(_("Accent colour"), self.accent_picker, label_group=self._labels,
+                help_text=_("Buttons and highlights. Status colours (connected, warnings, errors, Broadcast) "
+                            "keep theirs."))
         self._density_combo = _combo(DENSITY_CHOICES, self._density.value)
         sec.add(_("Interface _density"), self._density_combo, label_group=self._labels,
                 help_text=_("Compact gives the terminal more room; Comfortable uses larger text and spacing."))
@@ -565,6 +574,7 @@ class PreferencesDialog(BaseDialog):
     def values(self) -> PreferencesValues:
         return PreferencesValues(
             theme_mode=ThemeMode.coerce(self._theme_combo.get_active_id()),
+            accent_color=self.accent_picker.value,
             terminal_font_scale=float(self._font_spin.get_value()),
             ui_font_size=int(self._ui_font_spin.get_value()),
             host_key_policy="auto-add" if self._policy_auto.get_active() else "reject",

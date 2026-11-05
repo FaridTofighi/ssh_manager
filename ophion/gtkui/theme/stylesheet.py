@@ -373,6 +373,29 @@ headerbar.sm-topbar button.titlebutton {
     box-shadow: 0 1px 2px @sm_shadow;
 }
 .logo-tile.app-logo { background-color: transparent; box-shadow: none; }
+/* Preferences → Appearance → Accent colour (widgets/accent_picker.py): round swatches and a live preview. */
+.sm-dialog button.accent-swatch {
+    padding: 2px;
+    min-width: 0;
+    min-height: 0;
+    border: none;
+    border-radius: 999px;
+    background-color: transparent;
+    box-shadow: none;
+}
+.sm-dialog button.accent-swatch:focus { box-shadow: 0 0 0 2px @sm_focus_ring; }
+.sm-dialog .accent-preview-selected {
+    background-color: @sm_bg_selected;
+    color: @sm_accent_text;
+    font-weight: 600;
+    padding: ${xs}px ${s}px;
+    border-radius: ${r_sm}px;
+}
+.sm-dialog .accent-preview-focus {
+    border: 2px solid @sm_focus_ring;
+    padding: ${xs}px ${s}px;
+    border-radius: ${r_sm}px;
+}
 /* Light theme only (widgets/app_logo.follow_theme_plate): the transparent mark on a dark plate. */
 .brand-plate { background-color: ${brand_plate}; border-radius: ${pane_inner_radius}px; }
 image.brand-plate { padding: ${xs}px; }

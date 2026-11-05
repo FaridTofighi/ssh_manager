@@ -66,9 +66,12 @@ class AppDialogs:
         try:
             values = dialog.values() if is_accept(dialog.run()) else None
         finally:
+            initial_accent = dialog.initial_accent
             dialog.destroy()
         if values is not None:
             self.apply_preferences(values)
+        else:
+            get_theme_manager().set_accent(initial_accent)  # the picker previewed live; Cancel undoes it
 
     def inventory_info(self):
         """Preferences → Inventory (app store only)."""
