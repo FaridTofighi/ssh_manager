@@ -13,8 +13,6 @@ from tests.gtk_window_fixture import display_available
 from tests.test_gtkui_pane_header_hitarea import window_at
 from tests.test_local_terminal import pump
 
-# Measured: two buttons, the header one hidden while the sidebar is open (expected failure until the fix).
-NEW_BEHAVIOUR = unittest.expectedFailure
 
 
 @unittest.skipUnless(display_available(), "needs a display")
@@ -48,7 +46,6 @@ class HeaderToggleGeometryTests(unittest.TestCase):
         header.set_brand_width(260 if open_ else None)
         pump(0.1)
 
-    @NEW_BEHAVIOUR
     def test_same_place_open_and_closed_at_every_width_and_density(self) -> None:
         from ophion.gtkui.theme import density
 
@@ -56,7 +53,7 @@ class HeaderToggleGeometryTests(unittest.TestCase):
         for preset in (density.COMFORTABLE, density.COMPACT):
             density.set_active(preset)
             for width in (700, 900, 1366):
-                with self.subTest(density=preset.name, width=width):
+                with self.subTest(density="compact" if preset is density.COMPACT else "comfortable", width=width):
                     header = self.header(width)
                     header.apply_density()
                     toggle = header.sidebar_toggle_button
@@ -68,7 +65,6 @@ class HeaderToggleGeometryTests(unittest.TestCase):
                         self.assertEqual(self.box(toggle, header), places[open_])
                     self.assertEqual(places[True], places[False])
 
-    @NEW_BEHAVIOUR
     def test_wordmark_toggle_and_divider_never_overlap(self) -> None:
         header = self.header(900)
         wordmark, toggle, divider = header.wordmark, header.sidebar_toggle_button, header.divider
@@ -85,7 +81,6 @@ class HeaderToggleGeometryTests(unittest.TestCase):
                 bx, _by, bw, _bh = self.box(header.brand, header)
                 self.assertEqual(bx + bw, 260 + bx, "the brand is as wide as the sidebar")
 
-    @NEW_BEHAVIOUR
     def test_the_whole_button_clicks_once(self) -> None:
         from gi.repository import Gdk, Gtk
 
@@ -95,8 +90,11 @@ class HeaderToggleGeometryTests(unittest.TestCase):
         toggle = header.sidebar_toggle_button
         top = header.get_toplevel()
         alloc = toggle.get_allocation()
-        points = [(alloc.width // 2, alloc.height // 2), (3, alloc.height // 2), (alloc.width - 4, alloc.height // 2),
-                  (alloc.width // 2, 3), (alloc.width // 2, alloc.height - 4)]
+        # The drawn button (its input window): the allocation also holds the topbar-icon CSS margin.
+        ex, ey, ew, eh = toggle.get_event_window().get_geometry()
+        left, top_edge = ex - alloc.x, ey - alloc.y
+        points = [(left + ew // 2, top_edge + eh // 2), (left + 3, top_edge + eh // 2), (left + ew - 4, top_edge + eh // 2),
+                  (left + ew // 2, top_edge + 3), (left + ew // 2, top_edge + eh - 4)]
         for px, py in points:
             before = len(toggled)
             wx, wy = toggle.translate_coordinates(top, px, py)
@@ -134,7 +132,6 @@ class WindowToggleTests(unittest.TestCase):
         self.assertEqual(toggle.get_accessible().get_name(), text)
         self.assertTrue(toggle.get_visible())
 
-    @NEW_BEHAVIOUR
     def test_one_toggle_and_no_footer_button(self) -> None:
         from gi.repository import Gtk
 
@@ -152,7 +149,6 @@ class WindowToggleTests(unittest.TestCase):
         walk(self.win)
         self.assertEqual(found, [])  # the toggle activates the action itself (no second bound button)
 
-    @NEW_BEHAVIOUR
     def test_state_follows_every_way_of_changing_it(self) -> None:
         layout = self.win.layout
         self.assert_state(True)
@@ -167,7 +163,6 @@ class WindowToggleTests(unittest.TestCase):
         layout.set_maximized(False)
         self.assert_state(True)
 
-    @NEW_BEHAVIOUR
     def test_click_and_ctrl_b_toggle_and_persist(self) -> None:
         from gi.repository import Gdk
 
@@ -177,6 +172,8 @@ class WindowToggleTests(unittest.TestCase):
             self.assert_state(False)
             event = Gdk.Event.new(Gdk.EventType.KEY_PRESS)
             event.key.keyval, event.key.state = Gdk.KEY_b, Gdk.ModifierType.CONTROL_MASK
+            key = Gdk.Keymap.get_for_display(Gdk.Display.get_default()).get_entries_for_keyval(Gdk.KEY_b)[1][0]
+            event.key.hardware_keycode, event.key.group = key.keycode, key.group
             event.key.window = self.win.get_window() or Gdk.get_default_root_window()
             self.assertTrue(self.win.activate_key(event.key))  # the window's accelerator, before any focus widget
             self.assert_state(True)

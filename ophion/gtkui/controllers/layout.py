@@ -56,9 +56,10 @@ class LayoutController:
         self.set_sidebar_visible(not self.sidebar_visible)
 
     def update_sidebar_toggle_ui(self) -> None:
-        """Keep the top-bar brand block aligned with the sidebar edge."""
+        """Keep the top-bar brand block aligned with the sidebar edge, and its toggle in step."""
 
         header = self.win._header
+        header.set_sidebar_shown(self.sidebar_visible)
         if self.sidebar_visible:
             header.set_brand_width(self.win._paned.get_position() + Layout.Topbar.BRAND_DIVIDER_OFFSET)
         else:

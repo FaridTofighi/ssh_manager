@@ -532,7 +532,6 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     min-height: ${sidebar_footer}px;
     padding: 0 ${l}px;
 }
-.sm-window button.footer-icon { color: @sm_text_muted; }
 .sm-window button.footer-link {
     background: transparent;
     border-color: transparent;

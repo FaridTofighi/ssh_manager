@@ -76,8 +76,14 @@ class IconToggleButton(Gtk.ToggleButton):
     ) -> None:
         Gtk.ToggleButton.__init__(self)
         _decorate(self, icon_name, tooltip, accessible_name, css_classes)
+        self.icon_name = icon_name
         if on_toggled is not None:
             self.connect("toggled", lambda btn: on_toggled(btn.get_active()))
+
+    def set_icon(self, icon_name: str) -> None:
+        if icon_name != self.icon_name:
+            self.icon_name = icon_name
+            self.set_image(make_icon(icon_name, Size.ICON))
 
     def set_active_silently(self, active: bool, handler: Callable) -> None:
         """Change state without re-entering the ``toggled`` handler."""

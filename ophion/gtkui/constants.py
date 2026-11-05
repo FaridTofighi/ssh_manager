@@ -80,6 +80,7 @@ class Icons:
     FILTER = "sshm-filter"
     SETTINGS = "sshm-settings"
     SIDEBAR = "sshm-sidebar"
+    SIDEBAR_SHOWN = "sshm-sidebar-shown"  # the same panel with its sidebar strip filled
     MAXIMIZE = "sshm-maximize"
     RESTORE = "sshm-restore"
     CREDENTIALS = "sshm-key"

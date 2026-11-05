@@ -4,8 +4,10 @@ Layout (start → end)::
 
     [▣ SSH Manager] │ WORKSPACE <inventory> ▾          ● All systems operational  [pulse] [?] (AF) [– □ ×]
 
-* The brand block is as wide as the sidebar so its divider lines up with the
-  sidebar edge; when the sidebar is hidden it shrinks and shows an expand button.
+* The brand block holds the mark, the name and the sidebar toggle (Ctrl+B), the
+  only control that shows and hides the sidebar. It is as wide as the sidebar
+  so its divider lines up with the sidebar edge; with the sidebar hidden it
+  shrinks to its content. The toggle follows the name, so it never moves.
 * The workspace switcher lists the loaded inventories.
 * The health indicator and the pulse button open the message history.
 * The help button holds *Keyboard Shortcuts*, *Documentation* and *About*.
@@ -35,7 +37,7 @@ from ...identity import APP_NAME  # noqa: E402
 from ..theme.tokens import Layout, Level, Radius, Size, Space  # noqa: E402
 from ..widgets.app_logo import AppLogo, follow_theme_plate  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
-from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
+from ..widgets.icon_button import IconToggleButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import MessageHistoryButton  # noqa: E402
 from ..workspaces import Workspace  # noqa: E402
@@ -143,15 +145,18 @@ class HeaderView(Gtk.HeaderBar):
         self.brand.pack_start(logo, False, False, 0)
         self.wordmark = Gtk.Label(label=APP_NAME)
         self.wordmark.get_style_context().add_class("wordmark")
-        self.wordmark.set_ellipsize(Pango.EllipsizeMode.END)
+        self.wordmark.set_ellipsize(Pango.EllipsizeMode.NONE)  # never clipped by the toggle after it
         self.brand.pack_start(self.wordmark, False, False, 0)
 
-        self.sidebar_expand_button = IconButton(
-            Icons.SIDEBAR, _("Show sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("topbar-icon",)
-        )
-        set_accel_tooltip(self.sidebar_expand_button, _("Show sidebar"), "toggle-sidebar")
-        self.sidebar_expand_button.set_no_show_all(True)
-        self.brand.pack_start(self.sidebar_expand_button, False, False, 0)
+        # One toggle for the sidebar, always here; it activates win.toggle-sidebar itself (not bound with
+        # action_name: syncing a bound toggle's state would emit "clicked" and toggle again).
+        self.on_sidebar_toggle: Callable[[], None] = lambda: self._activate_window_action("toggle-sidebar")
+        self.sidebar_toggle_button = IconToggleButton(Icons.SIDEBAR_SHOWN, _("Hide sidebar (Ctrl+B)"),
+                                                      css_classes=("topbar-icon",))
+        self._sidebar_toggled_id = self.sidebar_toggle_button.connect("toggled", lambda *_a: self.on_sidebar_toggle())
+        self.sidebar_expand_button = self.sidebar_toggle_button  # the name before there was one toggle
+        self.brand.pack_start(self.sidebar_toggle_button, False, False, 0)
+        self.set_sidebar_shown(True)
 
         self.divider = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         self.divider.get_style_context().add_class("topbar-divider")
@@ -264,7 +269,7 @@ class HeaderView(Gtk.HeaderBar):
         self.logo.set_margin_start(top.BRAND_INSET)
         self._size_logo()
         self.wordmark.set_margin_start(top.WORDMARK_GAP)
-        self.sidebar_expand_button.set_margin_start(Space.M)
+        self.sidebar_toggle_button.set_margin_start(Space.M)
         self.divider.set_size_request(1, top.DIVIDER_HEIGHT)
         self.workspace_button.set_margin_start(top.WORKSPACE_GAP)
         self._workspace_name.set_margin_start(top.WORKSPACE_NAME_GAP)
@@ -292,13 +297,29 @@ class HeaderView(Gtk.HeaderBar):
 
         self._brand_width = width
         if width is None:
-            self.brand.set_size_request(-1, -1)
-            self.sidebar_expand_button.show()
+            self.brand.set_size_request(-1, -1)  # its content: mark, name (never ellipsized), toggle
             self.divider.set_margin_start(Space.L)
         else:
             self.brand.set_size_request(max(1, int(width)), -1)
-            self.sidebar_expand_button.hide()
             self.divider.set_margin_start(0)
+
+    def set_sidebar_shown(self, shown: bool) -> None:
+        """The toggle's state, icon, tooltip and accessible name (it never moves or hides)."""
+
+        toggle = self.sidebar_toggle_button
+        toggle.handler_block(self._sidebar_toggled_id)
+        try:
+            toggle.set_active(shown)
+        finally:
+            toggle.handler_unblock(self._sidebar_toggled_id)
+        toggle.set_icon(Icons.SIDEBAR_SHOWN if shown else Icons.SIDEBAR)
+        set_accel_tooltip(toggle, _("Hide sidebar") if shown else _("Show sidebar"), "toggle-sidebar")
+        set_accessible_name(toggle, toggle.get_tooltip_text() or "")
+
+    def _activate_window_action(self, name: str) -> None:
+        window = self.get_toplevel()
+        if isinstance(window, Gio.ActionGroup) and window.has_action(name):
+            window.activate_action(name, None)
 
     def set_workspaces(self, workspaces: Sequence[Workspace]) -> None:
         for child in list(self._workspace_list.get_children()):

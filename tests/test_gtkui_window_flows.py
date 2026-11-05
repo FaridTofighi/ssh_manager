@@ -207,10 +207,12 @@ class TopBarTests(unittest.TestCase):
         for name in ("open-folder", "documentation", "quit", "focus-search"):
             self.assertIsNotNone(win.lookup_action(name), name)
         self.assertIsNotNone(win._sidebar.add_menu)
+        win.layout.toggle_sidebar()  # one toggle, always shown: its state follows the sidebar
+        self.assertTrue(win._header.sidebar_toggle_button.get_visible())
+        self.assertFalse(win._header.sidebar_toggle_button.get_active())
         win.layout.toggle_sidebar()
-        self.assertTrue(win._header.sidebar_expand_button.get_visible())
-        win.layout.toggle_sidebar()
-        self.assertFalse(win._header.sidebar_expand_button.get_visible())
+        self.assertTrue(win._header.sidebar_toggle_button.get_visible())
+        self.assertTrue(win._header.sidebar_toggle_button.get_active())
 
 
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")

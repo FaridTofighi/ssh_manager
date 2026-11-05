@@ -363,12 +363,7 @@ class SidebarView(Gtk.Box):
         footer.pack_start(self.settings_link, False, False, 0)
         self.keys_link = _footer_link(Icons.KEY, _("Keys"), "win.credentials", _("Credentials and keys"))
         footer.pack_start(self.keys_link, False, False, 0)
-        self.collapse_button = IconButton(
-            Icons.CHEVRON_LEFT, _("Hide sidebar (Ctrl+B)"), action_name="win.toggle-sidebar", css_classes=("footer-icon",)
-        )
-        set_accel_tooltip(self.collapse_button, _("Hide sidebar"), "toggle-sidebar")
-        footer.pack_end(self.collapse_button, False, False, 0)
-        return footer
+        return footer  # the sidebar toggle is in the top bar (HeaderView.sidebar_toggle_button)
 
     def _build_filter_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
