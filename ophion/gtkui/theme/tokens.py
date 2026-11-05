@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Dict, Iterator, List, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 
 def enum_value(value: object) -> str:
@@ -415,6 +415,23 @@ SURFACE_ROLES: Tuple[str, ...] = (
 
 
 PALETTES: Dict[str, Palette] = {"dark": DARK, "light": LIGHT}
+
+# The user's accent colour (gtkui/theme/accent.py derives the accent roles from one of these, or a custom
+# colour): (id, English name, base colour). "default" is the palettes' own green, unchanged.
+ACCENT_PRESETS: List[Tuple[str, str, Optional[str]]] = [
+    ("default", "Green", None),
+    ("teal", "Teal", "#0F9D9A"),
+    ("blue", "Blue", "#2F6FEB"),
+    ("indigo", "Indigo", "#5B5BD6"),
+    ("purple", "Purple", "#8E4EC6"),
+    ("pink", "Pink", "#D6409F"),
+    ("red", "Red", "#D64545"),
+    ("orange", "Orange", "#E8590C"),
+    ("amber", "Amber", "#D4A017"),
+    ("graphite", "Graphite", "#6B7280"),
+]
+ACCENT_DEFAULT_SWATCH = LIGHT.accent  # what "default" looks like in the picker
+ON_ACCENT_LIGHT, ON_ACCENT_DARK = "#FFFFFF", "#0B1210"  # text on an accent button: white, else near-black
 
 
 def palette_for(dark: bool) -> Palette:
