@@ -33,7 +33,7 @@ from ..i18n import _, ngettext  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
 from ...identity import APP_NAME  # noqa: E402
 from ..theme.tokens import Layout, Level, Radius, Size, Space  # noqa: E402
-from ..widgets.app_logo import AppLogo  # noqa: E402
+from ..widgets.app_logo import AppLogo, follow_theme_plate  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
@@ -132,13 +132,14 @@ class HeaderView(Gtk.HeaderBar):
         self.brand = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.brand.get_style_context().add_class("topbar-brand")
         self.logo = logo = Gtk.Box()
-        logo.get_style_context().add_class("logo-tile")
-        logo.get_style_context().add_class("app-logo")  # the icon is its own tile: no accent background
+        logo.get_style_context().add_class("app-logo")  # the transparent mark as it is: no tile
         logo.set_valign(Gtk.Align.CENTER)
         self.logo_image = AppLogo(Size.LOGO_TILE, Radius.INPUT)
         self.logo_image.set_valign(Gtk.Align.CENTER)
+        self.logo_image.set_halign(Gtk.Align.CENTER)
         logo.set_center_widget(self.logo_image)
         set_accessible_name(logo, APP_NAME)
+        follow_theme_plate(logo, lambda _dark: self._size_logo())  # light theme: the mark on a dark plate
         self.brand.pack_start(logo, False, False, 0)
         self.wordmark = Gtk.Label(label=APP_NAME)
         self.wordmark.get_style_context().add_class("wordmark")
@@ -248,14 +249,20 @@ class HeaderView(Gtk.HeaderBar):
         self.pack_end(self.tunnels_button)
 
     # ------------------------------------------------------------- density
+    def _size_logo(self) -> None:
+        """The brand slot keeps its size; on the light theme's plate the mark is inset by ``Space.XS``."""
+
+        plate = self.logo.get_style_context().has_class("brand-plate")
+        self.logo.set_size_request(Size.LOGO_TILE, Size.LOGO_TILE)
+        self.logo_image.set_logo_size(Size.LOGO_TILE - (2 * Space.XS if plate else 0), Radius.INPUT)
+
     def apply_density(self) -> None:
         """Lay the bar out with the active density preset (also on a runtime switch)."""
 
         top, size = Layout.Topbar, Size
         self.set_size_request(-1, size.TOPBAR)
-        self.logo.set_size_request(size.LOGO_TILE, size.LOGO_TILE)
         self.logo.set_margin_start(top.BRAND_INSET)
-        self.logo_image.set_logo_size(size.LOGO_TILE, Radius.INPUT)
+        self._size_logo()
         self.wordmark.set_margin_start(top.WORDMARK_GAP)
         self.sidebar_expand_button.set_margin_start(Space.M)
         self.divider.set_size_request(1, top.DIVIDER_HEIGHT)

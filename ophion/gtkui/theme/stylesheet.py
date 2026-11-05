@@ -24,6 +24,7 @@ from .tokens import (
     em,
     Motion,
     Palette,
+    DARK,
 )
 
 DEFAULT_FONT_PT = 11
@@ -372,6 +373,9 @@ headerbar.sm-topbar button.titlebutton {
     box-shadow: 0 1px 2px @sm_shadow;
 }
 .logo-tile.app-logo { background-color: transparent; box-shadow: none; }
+/* Light theme only (widgets/app_logo.follow_theme_plate): the transparent mark on a dark plate. */
+.brand-plate { background-color: ${brand_plate}; border-radius: ${pane_inner_radius}px; }
+image.brand-plate { padding: ${xs}px; }
 .wordmark { font-size: ${fs_wordmark}em; font-weight: 600; color: @sm_text_primary; }
 .workspace-label { font-size: ${fs_caps_14}em; letter-spacing: $caps_tracking; color: @sm_text_muted; font-weight: 500; }
 .workspace-name { font-size: ${fs_wordmark}em; font-weight: 500; color: @sm_text_primary; }
@@ -1044,6 +1048,7 @@ def _values(palette: Palette, motion: str, tokens: DensityTokens, font_pt: float
         "session_strip_inner": size.SESSION_STRIP - 1,  # + 1px bottom border
         "pane_gutter": size.PANE_GUTTER, "pane_radius": size.PANE_RADIUS,
         "pane_inner_radius": max(0, size.PANE_RADIUS - 2),
+        "brand_plate": DARK.bg_surface_raised,  # the dark surface the mark was designed for
         "pane_header": size.PANE_HEADER - 1, "pane_footer": size.PANE_FOOTER - 1,  # + 1px border
         "terminal_pad_x": size.TERMINAL_PAD_X, "terminal_pad_y": size.TERMINAL_PAD_Y,
         # GTK's min-height excludes the 1px borders: tokens are outer sizes.

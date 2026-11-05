@@ -242,6 +242,7 @@ class AppDialogs:
         about = Gtk.AboutDialog(transient_for=self.win, modal=True)
         about.set_program_name(APP_NAME)
         about.set_logo_icon_name(APP_ICON_NAME)
+        self._present_about_logo(about)
         about.set_comments(_(APP_TAGLINE))
         from .native_transfer import app_version
 
@@ -249,6 +250,26 @@ class AppDialogs:
             about.set_version(app_version())
         about.run()
         about.destroy()
+
+    @staticmethod
+    def _present_about_logo(about: Gtk.AboutDialog) -> None:
+        """The mark as it is (the theme's drop shadow off), on the dark plate in the light theme only."""
+
+        from ..widgets.app_logo import follow_theme_plate
+
+        found = []
+
+        def walk(widget: Gtk.Widget) -> None:
+            if isinstance(widget, Gtk.Image) and widget.get_icon_name()[0] == APP_ICON_NAME:
+                found.append(widget)
+            elif isinstance(widget, Gtk.Container):
+                widget.forall(walk)
+
+        walk(about)
+        for image in found:
+            image.get_style_context().remove_class("icon-dropshadow")
+            image.set_halign(Gtk.Align.CENTER)  # the plate around the mark, not the dialog's width
+            follow_theme_plate(image)
 
     def change_master_password(self) -> None:
         keybox = getattr(self.win, "keybox", None)

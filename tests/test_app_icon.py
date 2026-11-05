@@ -126,6 +126,66 @@ class AppIconTests(unittest.TestCase):
             self.assertEqual(self.icons.install_app_icon(empty, Path("/nonexistent/icons")), "")
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class BrandPlateTests(unittest.TestCase):
+    """The mark is never on a tile; in the light theme only it sits on a dark plate (the cream band is weak on white)."""
+
+    def setUp(self) -> None:
+        from ophion.gtkui.theme.loader import get_theme_manager
+
+        self.theme = get_theme_manager()
+        self.addCleanup(self.theme.apply, self.theme.mode)
+
+    def test_header_brand_has_no_tile_and_the_plate_in_light_theme_only(self) -> None:
+        from ophion.gtkui.theme.loader import ThemeMode
+        from ophion.gtkui.theme.tokens import Size, Space
+
+        from tests.gtk_window_fixture import WindowSandbox
+
+        sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        header = sandbox.window._header
+        context = header.logo.get_style_context()
+        self.assertFalse(context.has_class("logo-tile"))  # the old tile is gone
+        for mode, plate in ((ThemeMode.DARK, False), (ThemeMode.LIGHT, True), (ThemeMode.DARK, False)):
+            self.theme.apply(mode)
+            self.assertEqual(context.has_class("brand-plate"), plate, mode)
+            self.assertEqual(header.logo_image.size, Size.LOGO_TILE - (2 * Space.XS if plate else 0), mode)
+            self.assertEqual(header.logo.get_size_request(), (Size.LOGO_TILE, Size.LOGO_TILE))
+
+    def test_welcome_and_about_logos_follow_the_theme(self) -> None:
+        from gi.repository import Gtk
+
+        from ophion.gtkui.theme.loader import ThemeMode
+
+        from tests import gtk_window_fixture
+        from tests.gtk_window_fixture import WindowSandbox
+
+        with mock.patch.dict(gtk_window_fixture.SAMPLE, clear=True):
+            sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        welcome = sandbox.window.host_page.terminal_page.ready.logo
+        logos = []
+
+        def capture(about):
+            def walk(widget):
+                if isinstance(widget, Gtk.Image) and widget.get_icon_name()[0] == "ophion":
+                    context = widget.get_style_context()
+                    logos.append((context.has_class("brand-plate"), context.has_class("icon-dropshadow")))
+                elif isinstance(widget, Gtk.Container):
+                    widget.forall(walk)
+            walk(about)
+            return 0
+
+        for mode, plate in ((ThemeMode.LIGHT, True), (ThemeMode.DARK, False)):
+            self.theme.apply(mode)
+            self.assertEqual(welcome.get_style_context().has_class("brand-plate"), plate, mode)
+            logos.clear()
+            with mock.patch.object(Gtk.AboutDialog, "run", capture, create=True):
+                sandbox.window.app_dialogs.show_about()
+            self.assertEqual(logos, [(plate, False)], mode)  # no theme drop shadow on the mark
+
+
 class IconAssetTests(unittest.TestCase):
     """The prepared spiral mark (tools/prepare_ophion_icon.py): crop + resample of the approved artwork only."""
 

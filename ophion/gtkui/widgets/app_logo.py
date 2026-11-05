@@ -1,16 +1,19 @@
-"""The application icon as a small widget (the header's brand tile).
+"""The application icon as a small widget (the header's brand mark).
 
-The artwork is its own dark square tile (raster, opaque), so it is drawn as it
-is, with rounded corners clipped here (the PNG is never edited). The source is
-the smallest packaged size at least as large as the tile at the screen's scale
-factor, scaled down with HYPER — never enlarged past a file's own size.
+The artwork is a transparent spiral mark (raster), drawn as it is: no tile, no
+clip, no border or shadow (the PNG is never edited). The source is the smallest
+packaged size at least as large as the mark at the screen's scale factor,
+scaled down with HYPER — never enlarged past a file's own size.
+
+Contrast: the cream band is weak on white, so in the light theme the mark sits
+on a dark plate (:func:`follow_theme_plate`, CSS class ``brand-plate``); the
+artwork itself is never recoloured.
 """
 
 from __future__ import annotations
 
 import logging
-import math
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 import cairo
 import gi
@@ -23,6 +26,31 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk  # type: ignore  # noqa: E40
 from .icons import APP_ICON_SIZES, app_icon_file  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
+PLATE_CLASS = "brand-plate"
+
+
+def follow_theme_plate(widget: Gtk.Widget, on_change: Optional[Callable[[bool], None]] = None) -> None:
+    """Give ``widget`` the dark plate in the light theme only, now and on every theme change.
+
+    ``on_change(is_dark)`` runs after each change (a size that depends on the plate).
+    """
+
+    from ..theme.loader import get_theme_manager
+
+    manager = get_theme_manager()
+
+    def apply(dark: bool) -> None:
+        context = widget.get_style_context()
+        if dark:
+            context.remove_class(PLATE_CLASS)
+        else:
+            context.add_class(PLATE_CLASS)
+        if on_change is not None:
+            on_change(dark)
+
+    manager.add_listener(apply)
+    widget.connect("destroy", lambda *_a: manager.remove_listener(apply))
+    apply(manager.is_dark)
 
 
 def logo_pixbuf(pixels: int) -> Optional[GdkPixbuf.Pixbuf]:
@@ -39,7 +67,7 @@ def logo_pixbuf(pixels: int) -> Optional[GdkPixbuf.Pixbuf]:
 
 
 class AppLogo(Gtk.DrawingArea):
-    def __init__(self, size: int, radius: int = 6) -> None:
+    def __init__(self, size: int, radius: int = 6) -> None:  # radius: kept for callers; the mark is not clipped
         Gtk.DrawingArea.__init__(self)
         self.set_has_window(False)  # draws only: no input window that could cover a button's (see SvgIcon)
         self._cache: Dict[int, Optional[GdkPixbuf.Pixbuf]] = {}
@@ -65,14 +93,6 @@ class AppLogo(Gtk.DrawingArea):
         pixbuf = self.pixbuf_for(scale)
         if pixbuf is None:
             return False
-        size, radius = self.size, min(self.radius, self.size / 2)
-        cr.new_sub_path()
-        cr.arc(size - radius, radius, radius, -math.pi / 2, 0)
-        cr.arc(size - radius, size - radius, radius, 0, math.pi / 2)
-        cr.arc(radius, size - radius, radius, math.pi / 2, math.pi)
-        cr.arc(radius, radius, radius, math.pi, 3 * math.pi / 2)
-        cr.close_path()
-        cr.clip()
         # Device pixels 1:1 (a tile larger than every file shows the file's size, never an enlargement).
         surface = Gdk.cairo_surface_create_from_pixbuf(pixbuf, max(1, int(scale)), None)
         cr.set_source_surface(surface, 0, 0)
@@ -80,4 +100,4 @@ class AppLogo(Gtk.DrawingArea):
         return True
 
 
-__all__ = ["AppLogo", "logo_pixbuf"]
+__all__ = ["AppLogo", "logo_pixbuf", "follow_theme_plate", "PLATE_CLASS"]
