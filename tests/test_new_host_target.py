@@ -11,9 +11,6 @@ from unittest import mock
 from ophion.config import HostEntry
 from tests.gtk_window_fixture import display_available
 
-# Measured: the picker opens for a top-level group (expected failure until the fix).
-NEW_BEHAVIOUR = unittest.expectedFailure
-
 
 @unittest.skipUnless(display_available(), "needs a display")
 class NewHostTargetTests(unittest.TestCase):
@@ -56,7 +53,6 @@ class NewHostTargetTests(unittest.TestCase):
             and model.get_value(it, TreeColumn.PARENT) == parent)
 
     # ------------------------------------------------------------ the fix
-    @NEW_BEHAVIOUR
     def test_a_selected_top_level_group_is_the_target(self) -> None:
         self.win.tree.select_parent_group("prod")
         asked = self.new_host("api-01")
@@ -67,7 +63,6 @@ class NewHostTargetTests(unittest.TestCase):
         self.assertTrue(self.win.tree_view.row_expanded(self.parent_path("prod")))
         self.assertIn("api-01", [h.alias for h in self.win.manager.tree["prod"][""].hosts])
 
-    @NEW_BEHAVIOUR
     def test_right_click_on_an_unselected_top_level_group(self) -> None:
         from gi.repository import Gdk
 
@@ -98,7 +93,6 @@ class NewHostTargetTests(unittest.TestCase):
         self.assertEqual(asked, [("staging", "")])
         self.assertTrue(self.stored("staging", "", "cache-01"))
 
-    @NEW_BEHAVIOUR
     def test_template_and_save_to_inventory_use_the_same_target(self) -> None:
         self.win.tree.select_parent_group("staging")
         self.assertEqual(self.new_host("tpl-01", template=mock.Mock(defaults={"user": "ops"}))["dialog"],
@@ -107,7 +101,6 @@ class NewHostTargetTests(unittest.TestCase):
         self.assertEqual(self.new_host("saved-01", prefill=quick), {"picker": [], "dialog": [("staging", "")]})
         self.assertTrue(self.stored("staging", "", "saved-01"))
 
-    @NEW_BEHAVIOUR
     def test_a_shared_read_only_group_is_never_the_target(self) -> None:
         with mock.patch.object(type(self.win.tree), "infer_target_group",
                                lambda _tree: ("[Shared] corp", "web.conf")):
@@ -156,6 +149,29 @@ class NewHostTargetTests(unittest.TestCase):
         self.assertTrue(self.stored("staging", "hosts.conf", "edge-01"))
         ok, message = manager.delete_host("staging", "hosts.conf", "edge-01")
         self.assertTrue(ok, message)
+
+
+@unittest.skipUnless(display_available(), "needs a display")
+class FolderInventoryTests(unittest.TestCase):
+    """A folder inventory keeps hosts in <group>/<child>.conf files: a top-level group still asks for one."""
+
+    def test_top_level_group_keeps_the_choosers(self) -> None:
+        from ophion.gtkui.controllers.host_actions import HostActions
+        from tests.gtk_window_fixture import WindowSandbox
+
+        sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        win = sandbox.window
+        win.tree.rebuild()
+        parent = next(iter(win.manager.tree))
+        win.tree.select_parent_group(parent)
+        self.assertFalse(win.hosts.holds_hosts_directly(parent))
+        with mock.patch.object(HostActions, "pick_group", return_value=None) as pick:
+            win.hosts.prompt_new_host()
+        self.assertEqual(pick.call_args.kwargs["initial_parent"], parent)
+        with mock.patch.object(type(win.groups), "prompt_child_destination", return_value=None) as choose:
+            win.hosts.create_host_in_current_group()
+        choose.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ from ..i18n import _  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
 from ..validation import validators_for  # noqa: E402
 from .guards import requires_editable_inventory  # noqa: E402
+from .tree_controller import SHARED_PREFIX  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -132,18 +133,31 @@ class HostActions:
                             host_key_policy=getattr(self.win._settings, "host_key_policy", "reject"),
                             passphrase=self.win.sessions.saved_key_passphrase(host))
 
+    def holds_hosts_directly(self, parent: str) -> bool:
+        """The app store keeps hosts directly in a top-level group (the tree lists them under it)."""
+
+        manager = self.win.manager  # folder inventories (allows_display_names False) keep hosts in child files
+        return getattr(manager, "allows_display_names", False) is True and manager.group_id(parent, "") is not None
+
     @requires_editable_inventory
     def prompt_new_host(self, template: Optional[HostTemplate] = None, prefill: Optional[HostEntry] = None) -> None:
-        """Add a host; ``prefill`` (an unsaved Quick Connect host) fills the dialog ("Save to Inventory")."""
+        """Add a host to the selected group (a top-level one too); the group chooser only when there is none.
+
+        ``prefill`` (an unsaved Quick Connect host) fills the dialog ("Save to Inventory").
+        """
 
         parent, child = self.win.tree.infer_target_group()
+        if parent and parent.startswith(SHARED_PREFIX):  # a shared inventory is read-only: choose one of yours
+            parent, child = None, None
+        if parent and not child and self.holds_hosts_directly(parent):
+            child = ""  # the top-level group itself
         create_child = False
-        if not parent or not child:
+        if not parent or child is None or (not child and not self.holds_hosts_directly(parent)):
             selection = self.pick_group(
                 _("Choose a Group for the New Host"),
                 allow_new_child=True,
                 initial_parent=parent,
-                initial_child=child,
+                initial_child=child or None,
                 accept_label=_("_Continue"),
             )
             if not selection:
@@ -401,6 +415,8 @@ class HostActions:
                 if not ok:
                     return
             self.create_host_in_group(parent, child)
+        elif kind == RowKind.PARENT.value and self.holds_hosts_directly(parent):
+            self.create_host_in_group(parent, "")  # the group the user right-clicked, not one of its children
         elif kind == RowKind.PARENT.value:
             choice = self.win.groups.prompt_child_destination(
                 parent, title=_("New Host — choose a group"),
