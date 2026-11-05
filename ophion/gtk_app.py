@@ -358,6 +358,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             self._ui.prefer_dark if self._ui.prefer_dark is not None else True
         ))
         self._prefer_dark = self._theme_mode is ThemeMode.DARK
+        # The accent colour before any view is built (they may read the palette): no flash of the default.
+        get_theme_manager().set_accent(self._ui.accent_color)
         # Views read the active density while they are built, so set it first.
         self._density = Density.coerce(self._ui.density)
         density_tokens.set_active(self._density, notify=False)

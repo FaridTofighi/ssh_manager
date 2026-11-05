@@ -434,8 +434,15 @@ ACCENT_DEFAULT_SWATCH = LIGHT.accent  # what "default" looks like in the picker
 ON_ACCENT_LIGHT, ON_ACCENT_DARK = "#FFFFFF", "#0B1210"  # text on an accent button: white, else near-black
 
 
-def palette_for(dark: bool) -> Palette:
-    return DARK if dark else LIGHT
+def palette_for(dark: bool, accent: object = None) -> Palette:
+    """The light or dark palette, with the user's accent colour (``None`` / ``"default"``: the palette itself)."""
+
+    base = DARK if dark else LIGHT
+    if accent is None:
+        return base
+    from .accent import accent_palette
+
+    return accent_palette(base, accent)
 
 
 # ------------------------------------------------------------------ contrast

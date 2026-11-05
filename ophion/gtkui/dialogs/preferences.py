@@ -86,6 +86,7 @@ class PreferencesValues:
     file_transfer: Optional[FileTransferPreferences] = None
     remote_desktop: Optional[RemoteDesktopPreferences] = None
     terminal_input: Optional[TerminalInputSettings] = None
+    accent_color: Optional[str] = None  # a preset id or #RRGGBB; None: unchanged
     shortcuts: Optional[Dict[str, List[str]]] = None  # the user's shortcut changes (only differences)
     local_shell: Optional[LocalShellSettings] = None
 

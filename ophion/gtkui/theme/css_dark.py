@@ -8,7 +8,7 @@ from .tokens import DARK
 PALETTE = DARK
 
 
-def css(*, animations: bool = True, tokens=None, font_pt: float = 11) -> str:
-    """Return the dark stylesheet."""
+def css(*, animations: bool = True, tokens=None, font_pt: float = 11, palette=None) -> str:
+    """Return the dark stylesheet (``palette``: DARK with the user's accent, see theme/accent.py)."""
 
-    return build_css(DARK, animations=animations, tokens=tokens, font_pt=font_pt)
+    return build_css(palette or DARK, animations=animations, tokens=tokens, font_pt=font_pt)

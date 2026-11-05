@@ -8,7 +8,7 @@ from .tokens import LIGHT
 PALETTE = LIGHT
 
 
-def css(*, animations: bool = True, tokens=None, font_pt: float = 11) -> str:
-    """Return the light stylesheet."""
+def css(*, animations: bool = True, tokens=None, font_pt: float = 11, palette=None) -> str:
+    """Return the light stylesheet (``palette``: LIGHT with the user's accent, see theme/accent.py)."""
 
-    return build_css(LIGHT, animations=animations, tokens=tokens, font_pt=font_pt)
+    return build_css(palette or LIGHT, animations=animations, tokens=tokens, font_pt=font_pt)

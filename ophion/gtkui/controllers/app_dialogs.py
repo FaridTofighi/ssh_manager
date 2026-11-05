@@ -23,6 +23,7 @@ from ..dialogs.files import choose_save_file  # noqa: E402
 from ..dialogs.preferences import PreferencesDialog, PreferencesValues  # noqa: E402
 from ..dialogs.secrets import NewSecretDialog  # noqa: E402
 from ..i18n import _  # noqa: E402
+from ..theme.loader import get_theme_manager  # noqa: E402
 from ..theme.tokens import Level  # noqa: E402
 from ..widgets.icons import APP_ICON_NAME  # noqa: E402
 from .shortcuts import build_shortcuts_window, refresh_shortcuts_window  # noqa: E402
@@ -93,6 +94,8 @@ class AppDialogs:
         self.win._ui.tab_label_mode = values.tab_label_mode.value
         self.win.terminal_tabs.set_label_mode(values.tab_label_mode)
         self.win._ui.theme_mode = values.theme_mode.value
+        if values.accent_color is not None:
+            self.win._ui.accent_color = get_theme_manager().set_accent(values.accent_color)
         self.win._ui.font_scale = values.terminal_font_scale
         self.win._ui.ui_font_size = self.win._ui_font_size
         self.win._ui.latency_probe = values.latency_probe

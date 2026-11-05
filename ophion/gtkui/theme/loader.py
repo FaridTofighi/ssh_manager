@@ -71,6 +71,7 @@ class ThemeManager:
         self._dark = False
         self._listeners: List[Callable[[bool], None]] = []
         self._font_pt = 11
+        self._accent = "default"  # theme/accent.py: a preset id or #RRGGBB
         self._loaded_css = ""
         self._settings = Gtk.Settings.get_default()
         self._initial_prefer_dark = bool(
@@ -101,7 +102,24 @@ class ThemeManager:
 
     @property
     def palette(self) -> Palette:
-        return palette_for(self._dark)
+        return palette_for(self._dark, self._accent)
+
+    @property
+    def accent(self) -> str:
+        return self._accent
+
+    def set_accent(self, value: object) -> str:
+        """Use the accent ``value`` (normalized; invalid → default); restyles live and tells the listeners."""
+
+        from .accent import normalize_accent
+
+        accent = normalize_accent(value)
+        if accent != self._accent:
+            self._accent = accent
+            if self._provider is not None:
+                self._load_provider()
+                self._notify()
+        return accent
 
     @property
     def animations_enabled(self) -> bool:
@@ -152,16 +170,20 @@ class ThemeManager:
         if self._settings is not None:
             self._settings.set_property("gtk-application-prefer-dark-theme", self._dark)
         self._load_provider()
+        self._notify()
+        return self._dark
+
+    def _notify(self) -> None:
         for callback in list(self._listeners):
             try:
                 callback(self._dark)
             except Exception as exc:  # pragma: no cover - listener bugs must not break theming
                 LOGGER.warning("theme listener failed: %s", exc)
-        return self._dark
 
     def stylesheet(self) -> str:
         module = css_dark if self._dark else css_light
-        return module.css(animations=self.animations_enabled, tokens=density_tokens.active(), font_pt=self._font_pt)
+        return module.css(animations=self.animations_enabled, tokens=density_tokens.active(), font_pt=self._font_pt,
+                          palette=self.palette)
 
     @property
     def font_pt(self) -> int:
