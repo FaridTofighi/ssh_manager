@@ -31,7 +31,8 @@ class SearchableList(Gtk.Box):
     def __init__(self, items: Sequence[Tuple[str, str]] = (), *, allow_new: bool = False,
                  initial: Optional[str] = None, search_label: str = "", list_label: str = "",
                  placeholder: str = "", new_label: str = "",
-                 on_activate: Optional[Callable[[], None]] = None, min_height: int = LIST_MIN_HEIGHT) -> None:
+                 on_activate: Optional[Callable[[], None]] = None, min_height: int = LIST_MIN_HEIGHT,
+                 count_text: Optional[Callable[[int, int, bool], str]] = None, pinned: Sequence[str] = ()) -> None:
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
         self.allow_new = allow_new
         self.new_label = new_label or _("Create new group “{name}”")
@@ -39,6 +40,8 @@ class SearchableList(Gtk.Box):
         self._exact: dict = {}
         self._needle = ""
         self._quiet = False
+        self._count_text = count_text  # (shown, total, filtered) -> the line under the list; default: groups
+        self._pinned = frozenset(pinned)  # values shown whatever the search ("Connect directly")
 
         self.entry = Gtk.SearchEntry()
         self.entry.set_placeholder_text(placeholder or _("Search or type a new name") if allow_new
@@ -86,16 +89,22 @@ class SearchableList(Gtk.Box):
     def set_items(self, items: Sequence[Tuple[str, str]], initial: Optional[str] = None) -> None:
         """``items``: ``(value, label)`` pairs, in display order (the model is built once per call)."""
 
+        items = list(items)
         self._quiet = True
         self.view.set_model(None)  # no per-row signals while filling
-        self.store.clear()
+        # A new store, filled before a filter watches it (a watching filter tests every inserted row).
+        store = Gtk.ListStore(str, str, bool)
+        columns = [COL_LABEL, COL_VALUE, COL_NEW]
         if self.allow_new:
-            self.store.append(["", "", True])
-        self._exact = {}
-        for value, label in items:
-            self.store.append([label, value, False])
-            self._exact.setdefault(value.strip().casefold(), value)
+            store.insert_with_valuesv(-1, columns, ["", "", True])
+        for value, label in items:  # insert_with_valuesv: 5x faster than append (no Python value conversion)
+            store.insert_with_valuesv(-1, columns, [label, value, False])
+        self._exact = {value.strip().casefold(): value for value, _label in reversed(items)}  # the first wins
+        self.store = store
+        self.filter = store.filter_new()
+        self.filter.set_visible_func(self._visible)
         self.view.set_model(self.filter)
+        self._fresh = True  # its rows were just tested: no second pass
         self._quiet = False
         self.refilter(select=initial)
 
@@ -104,10 +113,13 @@ class SearchableList(Gtk.Box):
 
     # ------------------------------------------------------------ filtering
     def _visible(self, model, it, _data) -> bool:
-        if model[it][COL_NEW]:
-            return bool(self._needle) and self._needle not in self._exact
-        return not self._needle or self._needle in model[it][COL_LABEL].casefold() \
-            or self._needle in model[it][COL_VALUE].casefold()
+        if not self._needle:  # called once per row: the common case first
+            return not (self.allow_new and model.get_value(it, COL_NEW))
+        if model.get_value(it, COL_NEW):
+            return self._needle not in self._exact
+        value = model.get_value(it, COL_VALUE)
+        return value in self._pinned or self._needle in model.get_value(it, COL_LABEL).casefold() \
+            or self._needle in value.casefold()
 
     def refilter(self, select: Optional[str] = None) -> None:
         if self._quiet:
@@ -116,13 +128,18 @@ class SearchableList(Gtk.Box):
         self._needle = text.casefold()
         if self.allow_new and len(self.store):
             self.store[0][COL_LABEL] = self.new_label.format(name=text)
-        self.filter.refilter()
+        if not getattr(self, "_fresh", False) or self._needle:
+            self.filter.refilter()
+        self._fresh = False
         shown = self.filter.iter_n_children(None)
         offered = 1 if self.allow_new and self._needle and self._needle not in self._exact else 0
         visible = shown - offered
-        self.count.set_text(ngettext("{n} group", "{n} groups", visible).format(n=visible) if not self._needle
-                            else ngettext("{n} of {total} group", "{n} of {total} groups", len(self)).format(
-                                n=visible, total=len(self)))
+        if self._count_text is not None:
+            self.count.set_text(self._count_text(visible, len(self), bool(self._needle)))
+        else:
+            self.count.set_text(ngettext("{n} group", "{n} groups", visible).format(n=visible) if not self._needle
+                                else ngettext("{n} of {total} group", "{n} of {total} groups", len(self)).format(
+                                    n=visible, total=len(self)))
         if select is not None:
             self.select_value(select)
         elif self._needle in self._exact:

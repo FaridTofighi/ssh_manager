@@ -36,6 +36,7 @@ from ..i18n import _  # noqa: E402
 from ..theme.tokens import Size, Space  # noqa: E402
 from ..widgets.forms import FormRow, FormSection, entry  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
+from ..widgets.host_picker import COMBO_LIMIT, HostPicker  # noqa: E402
 from .confirm import confirm  # noqa: E402
 
 PAGES = ("rdp", "rdp_display", "rdp_devices", "rdp_connection")
@@ -348,12 +349,18 @@ class RdpPages:
 
         tunnel = self._section("rdp_connection", _("SSH tunnel"),
                                _("Reach the server through one of your SSH hosts (port forwarding)."))
-        self.via_ssh = Gtk.ComboBoxText()
-        self.via_ssh.append("", _("Connect directly"))
-        for host_id, label in ssh_hosts:
-            self.via_ssh.append(host_id, label)
+        if len(ssh_hosts) > COMBO_LIMIT:  # a combo measures every item: 3.6 s for 4,000 hosts
+            self.via_ssh = HostPicker(ssh_hosts, first=("", _("Connect directly")),
+                                      accessible_name=_("SSH host to tunnel through"))
+            add_stale = self.via_ssh.add_host
+        else:
+            self.via_ssh = Gtk.ComboBoxText()
+            self.via_ssh.append("", _("Connect directly"))
+            for host_id, label in ssh_hosts:
+                self.via_ssh.append(host_id, label)
+            add_stale = self.via_ssh.append
         if s.via_ssh and not self.via_ssh.set_active_id(s.via_ssh):
-            self.via_ssh.append(s.via_ssh, _("(a host that no longer exists)"))
+            add_stale(s.via_ssh, _("(a host that no longer exists)"))
             self.via_ssh.set_active_id(s.via_ssh)
         elif not s.via_ssh:
             self.via_ssh.set_active_id("")

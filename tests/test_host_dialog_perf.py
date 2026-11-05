@@ -72,6 +72,64 @@ class LazyRdpPagesTests(unittest.TestCase):
         self.assertEqual(dialog.build_host("Acme", "").metadata["rdp"], stored)
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class TunnelPickerTests(unittest.TestCase):
+    def pages(self, hosts, **rdp):
+        from ophion.gtkui.dialogs.host_dialog import HostDialog
+
+        dialog = HostDialog(None, rdp_host(**rdp), rdp_ssh_hosts=hosts)
+        self.addCleanup(dialog.destroy)
+        return dialog.rdp_pages
+
+    def test_up_to_30_hosts_keep_the_combo(self) -> None:
+        from gi.repository import Gtk
+
+        pages = self.pages([(f"id-{n}", f"host-{n}") for n in range(30)], via_ssh="id-7")
+        self.assertIsInstance(pages.via_ssh, Gtk.ComboBoxText)
+        self.assertEqual(pages.selected_via_ssh(), "id-7")
+
+    def test_more_hosts_get_a_searchable_list(self) -> None:
+        from gi.repository import Gtk
+
+        from ophion.gtkui.widgets.host_picker import HostPicker
+
+        hosts = [(f"id-{n}", f"host-{n} (10.0.0.{n})") for n in range(40)]
+        pages = self.pages(hosts)
+        picker = pages.via_ssh
+        self.assertIsInstance(picker, HostPicker)
+        self.assertNotIsInstance(picker, Gtk.ComboBox)
+        self.assertEqual((pages.selected_via_ssh(), picker.label.get_text()), ("", "Connect directly"))
+        values = picker.list.visible_values()
+        self.assertEqual(values[0], "")  # "Connect directly" first
+        self.assertEqual(len(values), 41)
+        picker.list.entry.set_text("host-1")  # host-1, host-10 … host-19, and "Connect directly"
+        self.assertEqual(picker.list.visible_values(), [""] + [f"id-{n}" for n in [1] + list(range(10, 20))])
+        self.assertEqual(picker.list.count.get_text(), "11 of 40 hosts")
+        picker.list.select_value("id-12")
+        picker.list.view.row_activated(picker.list.view.get_selection().get_selected_rows()[1][0],
+                                       picker.list.view.get_column(0))
+        self.assertEqual(pages.selected_via_ssh(), "id-12")
+        self.assertEqual(picker.label.get_text(), "host-12 (10.0.0.12)")
+        self.assertTrue(picker.set_active_id(""))
+        self.assertFalse(picker.set_active_id("nope"))
+
+    def test_a_deleted_tunnel_host_is_kept_and_named(self) -> None:
+        pages = self.pages([(f"id-{n}", f"host-{n}") for n in range(40)], via_ssh="gone")
+        self.assertEqual(pages.selected_via_ssh(), "gone")
+        self.assertEqual(pages.via_ssh.label.get_text(), "(a host that no longer exists)")
+        self.assertEqual(pages.settings().via_ssh, "gone")
+
+    def test_twenty_thousand_rows_build_fast(self) -> None:
+        from ophion.gtkui.widgets.host_picker import HostPicker
+
+        hosts = [(f"id-{n}", f"host-{n} (10.{n // 65536}.{n // 256 % 256}.{n % 256})") for n in range(20000)]
+        started = time.perf_counter()
+        picker = HostPicker(hosts, first=("", "Connect directly"))
+        took = time.perf_counter() - started
+        picker.destroy()
+        self.assertLess(took, 0.15, f"{took:.3f} s")
+
+
 class TunnelHostLabelsTests(unittest.TestCase):
     def setUp(self) -> None:
         import tempfile
@@ -134,8 +192,6 @@ class HostDialogBudgetTests(unittest.TestCase):
         took, small = self.best(), self.small["ssh"]
         self.assertLess(took, max(0.5, 3 * small), f"New SSH host: {took:.2f} s (10 hosts: {small:.2f} s)")
 
-    # Measured: 3.98 s with lazy pages alone; the SSH-tunnel combo of every SSH host (expected failure).
-    @unittest.expectedFailure
     def test_rdp_host(self) -> None:
         took, small = self.best(self.win_host), self.small["rdp"]
         self.assertLess(took, max(1.0, 3 * small), f"RDP host: {took:.2f} s (10 hosts: {small:.2f} s)")
