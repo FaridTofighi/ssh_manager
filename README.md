@@ -8,6 +8,72 @@ groups, launching SSH sessions, managing credentials, and editing host
 metadata. The desktop app keeps its own inventory; OpenSSH config files can be
 imported and exported.
 
+## Install
+
+Ophion installs for your user only (no `sudo` for Ophion itself), into the
+application menu with its icon:
+
+```bash
+git clone https://github.com/FaridTofighi/ssh_manager.git ophion
+cd ophion
+./install.sh
+```
+
+Then start **Ophion** from the application menu (search "Ophion"), or run
+`ophion` in a terminal.
+
+**System packages first.** GTK, VTE and PyGObject come from your
+distribution. `install.sh` checks them before it changes anything; if one is
+missing it prints the command for your system and stops. paramiko,
+cryptography and pexpect are taken from the system when installed, otherwise
+`install.sh` downloads them with pip into Ophion's own virtualenv.
+
+| System | Command |
+|---|---|
+| Debian / Ubuntu | `sudo apt install python3 python3-venv python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91 gir1.2-rsvg-2.0 python3-paramiko python3-cryptography python3-pexpect openssh-client sshpass` |
+| Fedora | `sudo dnf install python3 python3-gobject python3-cairo gtk3 vte291 librsvg2 python3-paramiko python3-cryptography python3-pexpect openssh-clients sshpass` |
+| Arch | `sudo pacman -S python python-gobject python-cairo gtk3 vte3 librsvg python-paramiko python-cryptography python-pexpect openssh sshpass` |
+| openSUSE | `sudo zypper install python3 python3-gobject python3-gobject-cairo typelib-1_0-Gtk-3_0 typelib-1_0-Vte-2_91 typelib-1_0-Rsvg-2_0 python3-paramiko python3-cryptography python3-pexpect openssh-clients sshpass` |
+
+Optional extras (FreeRDP for Remote Desktop, `python3-keyring`, `xdotool`)
+are listed in [How to install and run](#how-to-install-and-run).
+
+**Where it goes:**
+
+| Path | What |
+|---|---|
+| `~/.local/opt/ophion/` | The app, with its virtualenv |
+| `~/.local/opt/ophion/manifest.txt` | The list of installed files |
+| `~/.local/bin/ophion` | The `ophion` command |
+| `~/.local/share/applications/io.github.faridtofighi.Ophion.desktop` | The menu entry |
+| `~/.local/share/icons/hicolor/` | The icon |
+
+`--prefix DIR` installs somewhere else. If `~/.local/bin` is not in your
+`PATH`, the installer tells you the line to add to `~/.profile`.
+
+**AppImage instead:** put `Ophion-<version>-x86_64.AppImage` next to
+`install.sh` (or pass `--appimage PATH`). The AppImage is copied to
+`~/.local/opt/ophion/Ophion.AppImage`. It brings its own GTK and Python,
+so the packages above are not needed; see `packaging/appimage/README.md`
+for what it takes from the system (FUSE among them). `--source` installs
+from the checkout even when an AppImage is there.
+
+**Update:** `git pull`, then `./install.sh` again. The new version replaces
+the old one only when it is complete.
+
+**Uninstall:** run `./uninstall.sh`.
+- **What it removes:** exactly the files in the manifest.
+- **What it keeps:** your hosts, passwords and settings, in `~/.config/ophion`
+  and `~/.local/share/ophion`.
+- **`--purge`:** also deletes those folders (and `~/.local/state/ophion`),
+  after you type `DELETE`. It never touches the desktop keyring. If you used
+  *Remember on this computer*, remove that entry with
+  `secret-tool clear service ssh-manager`.
+
+`./install.sh --dry-run` (and `./uninstall.sh --dry-run`) prints every step
+without changing anything. An old SSH Manager launcher is replaced; its data
+is never removed.
+
 ## How to install and run
 
 These steps start from a fresh Debian 13 or Ubuntu 24.04 (or later) desktop.

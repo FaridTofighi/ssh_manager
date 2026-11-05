@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- Added install.sh / uninstall.sh: per-user install with application-menu
+  entry and icon.
 - New Ophion icon (spiral mark) in the window, taskbar, header and About
   dialog. In the light theme the mark sits on a dark plate; the artwork is
   never recoloured.
