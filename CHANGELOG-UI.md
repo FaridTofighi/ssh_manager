@@ -8,6 +8,7 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- The Ophion mark is now drawn transparent in the light theme (the dark plate was removed).
 - New: choose the application's accent colour (buttons and highlights) in
   Preferences → Appearance. Ten presets or any colour; it is adjusted for
   readability in the light and dark theme. Status colours (connected,
