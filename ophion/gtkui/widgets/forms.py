@@ -7,7 +7,7 @@ from typing import Callable, List, Optional
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..theme.tokens import Space  # noqa: E402
 from ..validation import Validator  # noqa: E402
@@ -144,6 +144,38 @@ class FormSection(Gtk.Box):
 
     def validate(self) -> bool:
         return all([row.validate() for row in self.rows])
+
+
+def wrapped_label(text: str = "", *, chars: int = 40, max_chars: int = 52, css_class: Optional[str] = None,
+                  width: Optional[int] = None) -> Gtk.Label:
+    """A label that wraps (left-aligned, not selectable) instead of widening its dialog.
+
+    In GTK 3 a wrapping label without ``width_chars`` / ``max_width_chars`` asks for its *unwrapped*
+    width, and a non-resizable dialog opens that wide. ``width`` (px) caps the natural width in pixels:
+    the character count is recomputed from the label's own font, so a larger font wraps into more lines
+    instead of a wider dialog. Long words (host names, addresses) break between characters.
+    """
+
+    label = Gtk.Label(label=text)
+    label.set_line_wrap(True)
+    label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+    label.set_xalign(0.0)
+    label.set_selectable(False)
+    if css_class:
+        label.get_style_context().add_class(css_class)
+    label.set_width_chars(min(chars, max_chars))
+    label.set_max_width_chars(max_chars)
+    if width is not None:
+        def fit(*_args) -> None:
+            metrics = label.get_pango_context().get_metrics(None, None)
+            char = max(metrics.get_approximate_char_width(), metrics.get_approximate_digit_width()) / Pango.SCALE
+            if char > 0:
+                fitting = max(8, int(width / char))
+                label.set_width_chars(min(chars, fitting))
+                label.set_max_width_chars(fitting)
+        fit()
+        label.connect("style-updated", fit)  # font or density changed
+    return label
 
 
 def entry(text: str = "", placeholder: str = "", *, activates_default: bool = True) -> Gtk.Entry:

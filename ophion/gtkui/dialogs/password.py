@@ -22,9 +22,10 @@ from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 from ...auth_flow import Decision, PasswordRequest, SaveOffer  # noqa: E402
 from ..i18n import _  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
-from ..widgets.forms import FormSection, entry  # noqa: E402
+from ..theme.tokens import Size  # noqa: E402
+from ..widgets.forms import FormSection, entry, wrapped_label  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
-from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
+from .base import BaseDialog, DialogSize, dialog_width, is_accept  # noqa: E402
 
 
 class HostDetails(Protocol):
@@ -40,10 +41,10 @@ class PasswordDialog(BaseDialog):
     def __init__(self) -> None:
         BaseDialog.__init__(self, None, _("Authenticate"), size=DialogSize.SMALL, resizable=False)
         self.set_destroy_with_parent(False)
-        self._heading = Gtk.Label()
-        self._heading.set_xalign(0.0)
-        self._heading.set_line_wrap(True)
-        self._heading.get_style_context().add_class("section-title")
+        # Wrapped to the dialog's width: a long "‘host’ rejected the saved password …" heading made the
+        # non-resizable dialog as wide as the unwrapped text (831 px).
+        text_width = dialog_width(DialogSize.SMALL) - 2 * Size.DIALOG_PADDING
+        self._heading = wrapped_label(css_class="section-title", width=text_width)
         self.add_body(self._heading)
 
         section = FormSection()
@@ -57,10 +58,7 @@ class PasswordDialog(BaseDialog):
         section.add(_("_Password"), self._secret)
         self.add_body(section)
 
-        self._error_label = Gtk.Label()
-        self._error_label.set_xalign(0.0)
-        self._error_label.set_line_wrap(True)
-        self._error_label.get_style_context().add_class("form-error")
+        self._error_label = wrapped_label(css_class="form-error", width=text_width)
         self._error_label.set_no_show_all(True)
         self.add_body(self._error_label)
 

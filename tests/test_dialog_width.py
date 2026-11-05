@@ -12,8 +12,6 @@ from unittest import mock
 from tests.gtk_window_fixture import display_available
 from tests.test_local_terminal import pump
 
-# Measured: 1101 px natural width (expected failure until the heading wraps).
-NOT_YET_WRAPPED = unittest.expectedFailure
 # Measured: no width clamp in BaseDialog (expected failure until _fit_width_to_screen).
 NOT_YET_CLAMPED = unittest.expectedFailure
 TOLERANCE = 1.08
@@ -64,7 +62,6 @@ class PasswordDialogWidthTests(DensityCase):
         dialog.get_content_area().show_all()
         dialog._error_label.set_visible(bool(dialog._error_label.get_text()))
 
-    @NOT_YET_WRAPPED
     def test_the_reported_message_wraps_inside_the_small_width(self) -> None:
         for name in self.densities():
             with self.subTest(density=name):
@@ -73,7 +70,6 @@ class PasswordDialogWidthTests(DensityCase):
                 self.assertLessEqual(natural, self.limit(), f"{name}: {natural} px")
                 self.assertGreaterEqual(dialog._heading.get_layout().get_line_count(), 1)
 
-    @NOT_YET_WRAPPED
     def test_width_is_stable_across_attempts_and_pathological_names(self) -> None:
         dialog = self.dialog()
         widths, heights = [], []
@@ -106,17 +102,13 @@ class WrappedLabelTests(unittest.TestCase):
     def test_natural_width_is_bounded_by_max_chars(self) -> None:
         from gi.repository import Pango
 
-        try:
-            from ophion.gtkui.widgets.forms import wrapped_label
-        except ImportError:
-            self.fail("wrapped_label is missing")
+        from ophion.gtkui.widgets.forms import wrapped_label
         label = wrapped_label(" ".join(["word"] * 100), chars=40, max_chars=52)
         metrics = label.get_pango_context().get_metrics(None, None)
         char = max(metrics.get_approximate_char_width(), metrics.get_approximate_digit_width()) / Pango.SCALE
         self.assertLessEqual(label.get_preferred_width()[1], 52 * char + 2)
         self.assertTrue(label.get_line_wrap())
         self.assertEqual((label.get_xalign(), label.get_selectable()), (0.0, False))
-    test_natural_width_is_bounded_by_max_chars = NOT_YET_WRAPPED(test_natural_width_is_bounded_by_max_chars)
 
 
 @unittest.skipUnless(display_available(), "needs a display")
