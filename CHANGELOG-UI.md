@@ -8,6 +8,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- New: choose the application's accent colour (buttons and highlights) in
+  Preferences → Appearance. Ten presets or any colour; it is adjusted for
+  readability in the light and dark theme. Status colours (connected,
+  warnings, errors, Broadcast) never change.
 - Exports now use the `.ophion` extension; `.sshm` files from earlier versions can still be
   imported. Only the name changed, not the file's content: rename an `.ophion` file to `.sshm` to
   open it in an older version.

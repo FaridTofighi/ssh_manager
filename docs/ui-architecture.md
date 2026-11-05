@@ -268,6 +268,55 @@ self.win._notify(_("Upload failed."), Level.ERROR,      # stays 30 s (warnings 2
 Use `Level.INFO` for hints. Every toast is also recorded in the message
 history popover in the header bar.
 
+## Theme
+
+- **Source of colours:** `theme/tokens.py` holds the light and dark palettes,
+  as roles; the stylesheet and cairo-drawn widgets read them through
+  `current_palette()`. Literal colours exist only in the token modules
+  (enforced by tests).
+- **Switching:** `ThemeManager` (`theme/loader.py`) keeps one CSS provider,
+  swapped on every change. Its listeners (`callback(is_dark)`) let drawn
+  widgets repaint.
+
+### Accent colour
+
+- **Choosing it:** Preferences → Appearance → Accent colour
+  (`widgets/accent_picker.py`): ten presets or a custom `#RRGGBB`.
+  - Each choice is applied at once (`ThemeManager.set_accent`); Cancel
+    restores the previous accent.
+  - It is saved as `accent_color` in the UI state, next to `theme_mode`, and
+    applied before the window is built. A missing or invalid value means
+    `"default"`.
+- **Default:** `"default"` returns the palette itself (today's green): no change
+  for anyone who never picks a colour.
+- **Accent roles** (`theme/accent.py: ACCENT_ROLES`): `accent`, its hover and
+  pressed shades, `accent_text`, `accent_tint`, `accent_soft_border`,
+  `on_accent`, `bg_selected`, `focus_ring`, `pane_border_focus`,
+  `pane_header_bg_focus` and `avatar_bg` (the avatar shows its initials in
+  `on_accent`).
+- **Derivation** (`derive_accent(base, dark)`, pure Python):
+  - **Hue and saturation:** kept from the chosen colour.
+  - **Button:** the lightness is tuned per theme so the button text (white,
+    else near-black `#0B1210`) reaches 4.5:1 and the button 3:1 on the
+    surface. Hover and pressed step away from the text colour.
+  - **Selected row and focused header:** the accent mixed into the theme's
+    surface (about 9–10 %), less if text or icons would lose contrast on it.
+  - **Links and focus ring:** a lighter shade in the dark theme; the button's
+    own shade or darker in the light theme.
+  - **Unreadable colours:** a colour that cannot pass by lightness alone loses
+    saturation step by step, and `adjusted` is set (the picker says "Adjusted
+    for readability").
+  - **Guarantee:** every `CONTRAST_PAIRS` row passes, for the presets and for
+    200 random colours, in both themes (`tests/test_accent.py`).
+- **Never changes with the accent:** success / connected, warning, danger,
+  info, the broadcast violet, neutral text and surfaces, environment badges,
+  and the terminal colours (including the dark scheme's selection `#28443a`).
+  A hue within ±25° of the broadcast violet only gets a hint in the picker.
+- **Adding a preset:** add `(id, English name, base colour)` to
+  `ACCENT_PRESETS` in `tokens.py`. The picker shows it (named
+  "<Name> accent"), and the tests check its contrast and that its lightness
+  alone changes.
+
 ## Icons
 
 - **Application icon:** the icon name is `ophion`: a spiral mark (orange,
