@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import gi
 
@@ -126,10 +126,10 @@ class HostDialog(BaseDialog):
         can_edit: bool = True,
         protocols_enabled: bool = True,
         transfer_backend_factory: Optional[Callable[[HostEntry, Optional[str]], object]] = None,
-        rdp_ssh_hosts: Sequence[Tuple[str, str]] = (),
+        rdp_ssh_hosts: Union[Sequence[Tuple[str, str]], Callable[[], Sequence[Tuple[str, str]]]] = (),
         rdp_engine_preference: str = "auto",
         forwards_host_id: str = "",
-        forwards_others: Sequence[Tuple[str, object]] = (),
+        forwards_others: Union[Sequence[Tuple[str, object]], Callable[[], Sequence[Tuple[str, object]]]] = (),
         identity_keys: Optional[Callable[[], Sequence[Tuple[str, str]]]] = None,
         open_keys: Optional[Callable[[], None]] = None,
     ) -> None:
@@ -137,14 +137,19 @@ class HostDialog(BaseDialog):
         self._editing = host is not None
         self._protocols_enabled = protocols_enabled
         self._transfer_backend_factory = transfer_backend_factory  # (host, credential id) -> backend
-        self._rdp_ssh_hosts = list(rdp_ssh_hosts)  # (inventory id, label) of SSH hosts an RDP host can tunnel through
+        # (inventory id, label) of the SSH hosts an RDP host can tunnel through, or a callable giving them:
+        # asked only when the RDP pages are built (thousands of hosts: never for an SSH host's dialog).
+        self._rdp_ssh_hosts = rdp_ssh_hosts
         self._rdp_engine_preference = rdp_engine_preference
         self._forwards_host_id = forwards_host_id  # Port Forwarding: this host's key, the inventory's forwards
-        self._forwards_others = list(forwards_others)
+        self._forwards_others = forwards_others  # or a callable giving them: asked when the page is built
         self._identity_keys = identity_keys  # () -> (path, label) of the keys SSH Manager knows (asked lazily)
         self._open_keys = open_keys
         self.forwards_page = None  # built when the page is first shown
         self._protocol = protocols.protocol_of(host) if host else protocols.DEFAULT_PROTOCOL
+        self._initial_protocol = self._protocol
+        self._transfer_page: Optional[TransferPage] = None  # see transfer_page
+        self.rdp_pages: Optional[RdpPages] = None  # built when the protocol is RDP or an RDP page is shown
         self._port_edited = False  # the user typed a port in this dialog
         self._suppress_protocol_events = False
         self._alias_validator = alias_validator or validate_alias  # app store: display names
@@ -243,8 +248,8 @@ class HostDialog(BaseDialog):
 
         kind = protocols.get(self._protocol)
         transfer = kind is not None and kind.family == "transfer"
-        page = getattr(self, "transfer_page", None)
-        if transfer and page is not None:  # implicit FTPS defaults to 990
+        page = self.transfer_page if transfer else self._transfer_page
+        if transfer:  # implicit FTPS defaults to 990
             port = default_port_for(self._protocol, TransferSettings(tls_mode=page.tls_mode_id()))
         else:
             port = protocols.default_port(self._protocol)
@@ -255,6 +260,8 @@ class HostDialog(BaseDialog):
         self.layout.set_page_visible("forwarding", self._protocol == "ssh")
         self.layout.set_page_visible("transfer", transfer)
         rdp = self._protocol == "rdp"
+        if rdp:
+            self._ensure_rdp_pages()
         for page_id in RDP_PAGES:
             self.layout.set_page_visible(page_id, rdp)
         if rdp:
@@ -337,42 +344,72 @@ class HostDialog(BaseDialog):
             build(labels)
 
     def _page_transfer(self, labels: Gtk.SizeGroup) -> None:
-        page = self.layout.new_page("transfer", _("File transfer"),
-                                    _("FTP, FTPS and SFTP: security, connection, folders and transfers."))
-        settings, warnings = TransferSettings.from_json(self._metadata.get("transfer"))
-        self._transfer_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
-        self._transfer_error.set_xalign(0.0)
-        self._transfer_error.set_line_wrap(True)
-        self._transfer_error.get_style_context().add_class("form-error")
-        self._transfer_error.set_no_show_all(not warnings)
-        page.append(self._transfer_error)
-        self.transfer_page = TransferPage(self, settings, labels, on_default_port=self._apply_protocol,
-                                          on_anonymous=self._on_anonymous)
-        self.transfer_page.append_to(page)
-        self.transfer_page.test_button.connect("clicked", lambda *_: self._test_connection())
-        self.connect("destroy", lambda *_: self.transfer_page.close())
+        """The File transfer page, empty: :attr:`transfer_page` fills it when it is first needed."""
+
+        self._transfer_labels = labels
+        self._transfer_shell = self.layout.new_page(
+            "transfer", _("File transfer"), _("FTP, FTPS and SFTP: security, connection, folders and transfers."))
+        self.layout.on_page_shown.append(lambda page_id: page_id == "transfer" and self.transfer_page)
+
+    @property
+    def transfer_page(self) -> TransferPage:
+        """The FTP / FTPS / SFTP settings, built on first use (a transfer protocol, or its page shown)."""
+
+        if self._transfer_page is None:
+            settings, warnings = TransferSettings.from_json(self._metadata.get("transfer"))
+            self._transfer_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
+            self._transfer_error.set_xalign(0.0)
+            self._transfer_error.set_line_wrap(True)
+            self._transfer_error.get_style_context().add_class("form-error")
+            self._transfer_error.set_no_show_all(not warnings)
+            self._transfer_shell.append(self._transfer_error)
+            page = TransferPage(self, settings, self._transfer_labels, on_default_port=self._apply_protocol,
+                                on_anonymous=self._on_anonymous)
+            page.append_to(self._transfer_shell)
+            page.test_button.connect("clicked", lambda *_: self._test_connection())
+            self.connect("destroy", lambda *_: page.close())
+            self._transfer_shell.show_all()
+            self._transfer_page = page
+        return self._transfer_page
 
     def _page_rdp(self, labels: Gtk.SizeGroup) -> None:
+        """The RDP pages, empty: :meth:`_ensure_rdp_pages` fills them when RDP is chosen or a page is shown."""
+
+        self._rdp_labels = labels
+        self._rdp_shells = {
+            "rdp": self.layout.new_page("rdp", _("Remote Desktop"),
+                                        _("RDP sign-in, security and the server's certificate.")),
+            "rdp_display": self.layout.new_page("rdp_display", _("Display & Input"),
+                                                _("Screen size, colors, performance and keyboard.")),
+            "rdp_devices": self.layout.new_page(
+                "rdp_devices", _("Devices"),
+                _("What the remote computer may use from this one. Everything but the clipboard is off by default.")),
+            "rdp_connection": self.layout.new_page(
+                "rdp_connection", _("RDP Connection"),
+                _("Reconnecting, RD Gateway, SSH tunnel, programs and advanced options.")),
+        }
+        self.layout.on_page_shown.append(lambda page_id: page_id in RDP_PAGES and self._ensure_rdp_pages())
+
+    def _ensure_rdp_pages(self) -> RdpPages:
+        if self.rdp_pages is not None:
+            return self.rdp_pages
         settings, warnings = RdpSettings.from_json(self._metadata.get("rdp"))
-        self.rdp_pages = RdpPages(self, settings, labels, ssh_hosts=self._rdp_ssh_hosts, target=self._rdp_target,
+        ssh_hosts = self._rdp_ssh_hosts() if callable(self._rdp_ssh_hosts) else self._rdp_ssh_hosts
+        self.rdp_pages = RdpPages(self, settings, self._rdp_labels, ssh_hosts=list(ssh_hosts), target=self._rdp_target,
                                   credentials=[(c.id, f"{c.name} ({c.username})") for c in self._credential_choices])
         self._rdp_error = Gtk.Label(label="\n".join(_(w) for w in warnings))
         self._rdp_error.set_xalign(0.0)
         self._rdp_error.set_line_wrap(True)
         self._rdp_error.get_style_context().add_class("form-error")
         self._rdp_error.set_no_show_all(not warnings)
-        first = self.rdp_pages.append_to(self.layout, "rdp", _("Remote Desktop"),
-                                         _("RDP sign-in, security and the server's certificate."))
-        first.append(self._rdp_error)
-        self.rdp_pages.append_to(self.layout, "rdp_display", _("Display & Input"),
-                                 _("Screen size, colors, performance and keyboard."))
-        self.rdp_pages.append_to(self.layout, "rdp_devices", _("Devices"),
-                                 _("What the remote computer may use from this one. Everything but the clipboard is "
-                                   "off by default."))
-        self.rdp_pages.append_to(self.layout, "rdp_connection", _("RDP Connection"),
-                                 _("Reconnecting, RD Gateway, SSH tunnel, programs and advanced options."))
+        for page_id in RDP_PAGES:
+            page = self.rdp_pages.fill(page_id, self._rdp_shells[page_id])
+            if page_id == "rdp":
+                page.append(self._rdp_error)
+            page.show_all()
         self.rdp_pages.engine.connect("changed", lambda *_: self._apply_rdp_engine())
         self.connect("destroy", lambda *_: self.rdp_pages.close())
+        return self.rdp_pages
 
     def _rdp_target(self) -> Tuple[str, int]:
         port = self.port_entry.get_text().strip()
@@ -674,7 +711,8 @@ class HostDialog(BaseDialog):
         from .forwards_page import ForwardsPage
 
         self.forwards_page = ForwardsPage(self, forwards_from_metadata(self._metadata), host_id=self._forwards_host_id,
-                                          others=self._forwards_others, host_label=self.alias_entry.get_text().strip(),
+                                          others=list(self._forwards_others() if callable(self._forwards_others)
+                                                      else self._forwards_others), host_label=self.alias_entry.get_text().strip(),
                                           ssh_options=lambda: parse_option_lines(self._extras_text())[0])
         self._forwarding_page.append(self.forwards_page, expand=True)
         self.forwards_page.show_all()
@@ -765,7 +803,7 @@ class HostDialog(BaseDialog):
     def _validate_rdp(self) -> bool:
         if self._protocol != "rdp":
             return True
-        problems = self.rdp_pages.problems()
+        problems = self._ensure_rdp_pages().problems()
         self._rdp_error.set_text("\n".join(_(p) for p in problems))
         self._rdp_error.set_visible(bool(problems))
         return not problems
@@ -836,7 +874,9 @@ class HostDialog(BaseDialog):
         if kind is not None and kind.family == "transfer":
             metadata["transfer"] = self.transfer_page.settings().to_json()  # protocol settings, never ssh options
         if self._protocol == "rdp":
-            metadata["rdp"] = self.rdp_pages.settings().to_json()
+            metadata["rdp"] = self._ensure_rdp_pages().settings().to_json()
+        elif self._metadata.get("rdp") and self._protocol == self._initial_protocol:
+            metadata["rdp"] = self._metadata["rdp"]  # not edited here: kept exactly as stored
         if self.forwards_page is not None:  # edited on the Port Forwarding page
             metadata["forwards"] = [forward.to_dict() for forward in self.forwards_page.forwards()]
         elif self._metadata.get("forwards"):  # not opened: kept exactly as stored
@@ -851,7 +891,7 @@ class HostDialog(BaseDialog):
         )
 
     def selected_credential_id(self) -> Optional[str]:
-        page = getattr(self, "transfer_page", None)
+        page = self._transfer_page
         if page is not None and self._protocol in ("ftp", "ftps") and page.anonymous_active():
             return None  # anonymous FTP needs no credential
         return self._credential_combo.get_active_id() or None

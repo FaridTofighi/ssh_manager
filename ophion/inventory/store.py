@@ -588,6 +588,13 @@ class InventoryStore:
             rows = self.conn.execute("SELECT * FROM hosts WHERE group_id=?", (group_id,)).fetchall()
         return sorted((_host(r) for r in rows), key=lambda h: (h.position, h.alias.casefold()))
 
+    def list_ssh_host_labels(self, exclude_id: str = "") -> List[Tuple[str, str, str]]:
+        """``(id, alias, hostname)`` of the SSH hosts, by alias (case-insensitive): one query, no JSON parsing."""
+
+        rows = self.conn.execute("SELECT id, alias, hostname FROM hosts WHERE protocol='ssh' AND id<>? "
+                                 "ORDER BY alias_key, position, id", (exclude_id,)).fetchall()
+        return [(row[0], row[1], row[2]) for row in rows]
+
     def get_host(self, host_id: str) -> Optional[HostRow]:
         row = self.conn.execute("SELECT * FROM hosts WHERE id=?", (host_id,)).fetchone()
         return _host(row) if row else None

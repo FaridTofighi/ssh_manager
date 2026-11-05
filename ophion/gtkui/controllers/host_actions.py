@@ -94,10 +94,11 @@ class HostActions:
             metadata=host.metadata if host else {},
             profiles=self.win._profiles,
             alias_validator=validators_for(self.win.manager)["alias"],
-            rdp_ssh_hosts=self.tunnel_hosts(exclude=getattr(host, "id", "") if host else ""),
+            # Asked only when the RDP pages are built (an RDP host, or RDP chosen): thousands of rows otherwise.
+            rdp_ssh_hosts=lambda exclude=getattr(host, "id", "") if host else "": self.tunnel_hosts(exclude=exclude),
             rdp_engine_preference=self.win._settings.remote_desktop.preferred_engine,
             forwards_host_id=self.win.creds.credential_key(host) if host else "",
-            forwards_others=self.win.tunnels.all_forwards() if getattr(self.win, "tunnels", None) else (),
+            forwards_others=self.win.tunnels.all_forwards if getattr(self.win, "tunnels", None) else (),
             identity_keys=(lambda: [(str(info.path), f"{info.name} — {info.type_label} — {info.path}")
                                     for info in self.win.ssh_keys.keys()]) if getattr(self.win, "ssh_keys", None)
             else None,
@@ -111,10 +112,8 @@ class HostActions:
         store = getattr(self.win.manager, "store", None)
         if store is None:
             return []
-        rows = [row for row in store.list_hosts() if (row.protocol or "ssh") == "ssh" and row.id != exclude]
-        rows.sort(key=lambda row: row.alias.casefold())
-        return [(row.id, f"{row.alias} ({row.hostname})" if row.hostname and row.hostname != row.alias else row.alias)
-                for row in rows]
+        return [(host_id, f"{alias} ({hostname})" if hostname and hostname != alias else alias)
+                for host_id, alias, hostname in store.list_ssh_host_labels(exclude_id=exclude)]
 
     def transfer_backend(self, host: HostEntry, cred_id: Optional[str], original: Optional[HostEntry] = None):
         """A not-connected backend for the host dialog's "Test connection" (credential or host password)."""

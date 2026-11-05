@@ -428,7 +428,11 @@ class RdpPages:
     def append_to(self, layout, page_id: str, title: str, description: str):
         """Create one of the :data:`PAGES` in ``layout`` and add its sections."""
 
-        page = layout.new_page(page_id, title, description)
+        return self.fill(page_id, layout.new_page(page_id, title, description))
+
+    def fill(self, page_id: str, page):
+        """Add the sections of one of the :data:`PAGES` to ``page`` (created earlier, possibly still empty)."""
+
         if page_id == "rdp":
             page.append(self.engine_note)
         for section in self.pages[page_id]:
@@ -686,7 +690,7 @@ class RdpPages:
                             self.gw_same.get_active(), self.gw_transport.get_active_id() or "auto",
                             self.gw_credential.get_active_id() or ""),
             load_balance_info=self.load_balance.get_text().strip(),
-            via_ssh=self.via_ssh.get_active_id() or "",
+            via_ssh=self.selected_via_ssh(),
             initial_program=self.initial_program.get_text().strip(),
             working_dir=self.working_dir.get_text().strip(),
             remote_app=RemoteApp(self.app_program.get_text().strip(), self.app_name.get_text().strip(),
@@ -701,6 +705,11 @@ class RdpPages:
             extra=dict(base.extra),
             **toggles,
         )
+
+    def selected_via_ssh(self) -> str:
+        """The inventory id of the SSH host to tunnel through; ``""``: connect directly."""
+
+        return self.via_ssh.get_active_id() or ""
 
     def problems(self) -> List[str]:
         problems = self.settings().problems()
