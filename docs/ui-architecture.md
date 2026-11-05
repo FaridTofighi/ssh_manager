@@ -304,6 +304,47 @@ history popover in the header bar.
 - **Symbolic icons:** the UI's own `sshm-*-symbolic.svg` icons are separate
   (`assets/icons`, `make_icon`).
 
+## Performance budgets
+
+**Measure on a large inventory.** Run
+
+```bash
+python3 tools/bench_large_inventory.py                       # median of 3 runs, every operation
+python3 tools/bench_large_inventory.py --profile "tree.rebuild()"   # cProfile top 25 of one operation
+```
+
+It needs a display and builds a throw-away inventory in a temporary HOME:
+3 top groups × 333 deep child groups × 4 hosts (3,996 hosts, about 1,000
+groups; `tests/large_inventory.py`). Dialogs are built, never run.
+
+**Budgets** (asserted by `tests/test_host_dialog_perf.py` on that inventory;
+when the 10-host time is slow, 3× that time is allowed instead):
+
+| What | Budget | Measured |
+|---|---|---|
+| New Host dialog (SSH) | < 0.5 s | 29 ms (was 3.9 s) |
+| Edit RDP host dialog | < 1.0 s | 85 ms (was 3.8 s) |
+| SSH-tunnel list, 20,000 rows | < 150 ms | |
+| `tree.rebuild()` | (not asserted) | 130 ms (was 356 ms) |
+
+**How the dialog stays fast:**
+- **RDP and File transfer pages:** empty shells until the protocol needs them
+  or the page is shown (`HostDialog._ensure_rdp_pages`,
+  `HostDialog.transfer_page`).
+- **Lists the dialog needs only later:** the tunnel hosts and the other
+  hosts' forwards are callables, asked at that moment.
+- **The SSH-tunnel row:** more than 30 SSH hosts get a searchable popover
+  (`widgets/host_picker.py`) instead of a combo box, which measures every item.
+- **Tunnel hosts query:** `InventoryStore.list_ssh_host_labels` reads only
+  `(id, alias, hostname)` in one query.
+
+**Filling GTK models fast:** use `insert_with_values` (TreeStore) or
+`insert_with_valuesv` (ListStore), not `append`. The `append` override
+converts each value in Python; it was 0.4 s of a 4,000-host tree rebuild, and
+5× slower for a list.
+- **Python objects:** pass them as `GObject.Value(GObject.TYPE_PYOBJECT, obj)`.
+- **Filters:** fill a new store before a `TreeModelFilter` watches it.
+
 ## Lifetimes and cleanup
 
 - `ToastController.shutdown()` (overlay destroy and window destroy) cancels
