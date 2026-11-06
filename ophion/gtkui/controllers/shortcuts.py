@@ -98,6 +98,8 @@ ACTIONS: List[ActionSpec] = [
     ActionSpec("copy-ssh", _("Copy SSH command"), G_HOSTS),
     ActionSpec("copy-scp", _("Copy SCP command"), G_HOSTS),
     ActionSpec("rename", _("Rename selected item or tab"), G_HOSTS, ("F2",)),
+    # Handled by the tree and the Favorites list only: in a terminal Ctrl+D is end-of-input.
+    ActionSpec("toggle-favorite", _("Add to or remove from Favorites"), G_HOSTS, (), ("<Primary>d",)),
     ActionSpec("context-menu", _("Open context menu"), G_HOSTS, (), ("<Shift>F10", "Menu")),
     # Ctrl+Shift+E / C are Split pane / Copy: O(pen) and L for the sidebar groups.
     ActionSpec("expand-all-groups", _("Expand all groups"), G_HOSTS, ("<Primary><Shift>o",)),

@@ -128,3 +128,5 @@ class Icons:
     WARNING = "sshm-warning"
     ERROR = "sshm-error"
     EYE = "sshm-eye"
+    STAR = "sshm-star"  # favorites: add (outline) / remove (filled)
+    STAR_FILLED = "sshm-star-filled"

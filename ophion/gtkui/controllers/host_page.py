@@ -96,6 +96,7 @@ class HostPageController:
         view.page_bar.on_primary = self.on_primary
         view.page_bar.on_more = self.on_more
         view.page_bar.on_info = self.toggle_details
+        view.header.on_toggle_favorite = lambda: self.win.favorites.toggle_selected()
         view.info_bar.on_copy = self.copy_command
         view.panel.on_edit = self._edit_subject
         view.panel.on_duplicate = self._duplicate_subject
@@ -223,6 +224,8 @@ class HostPageController:
         if self.view is None or getattr(self.win, "closing", False):
             return
         content = self.build_content()
+        if content.kind in ("host", "group"):
+            content.favorite = self.win.favorites.selection_state()
         self.view.set_content(content)
         if self.view.panel.is_open:  # sessions opened/closed: keep it below the strip
             self.view.panel.set_margin_top(self._strip_height())

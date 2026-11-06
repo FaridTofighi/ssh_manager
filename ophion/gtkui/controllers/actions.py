@@ -141,6 +141,10 @@ class WindowActions:
     def delete_child_group(self) -> None:
         self.win.groups.delete_child_group()
 
+    # favorites
+    def toggle_favorite(self) -> None:
+        self.win.favorites.toggle_selected()
+
     # colors
     def change_host_color(self) -> None:
         self.win.colors.change_host_color()

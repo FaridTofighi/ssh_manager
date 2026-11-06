@@ -315,6 +315,9 @@ class TreeController:
         if event.keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete) and not modifiers:
             self.win.hosts.delete_current_item()
             return True
+        if is_favorite_key(event):
+            self.win.favorites.toggle_selected()
+            return True
         return False
 
     def on_selection_changed(self, *_args) -> None:
@@ -364,7 +367,7 @@ class TreeController:
 
     def menu_accels(self) -> Dict[str, str]:
         return {name: accel_label(name) for name in ("host-connect", "rename", "host-delete", "new-host", "quick-connect",
-                                                     "expand-all-groups", "collapse-all-groups")}
+                                                     "expand-all-groups", "collapse-all-groups", "toggle-favorite")}
 
     def context_menu_spec(self):
         kind_value, data = self.current_item()
@@ -382,6 +385,7 @@ class TreeController:
                 is_ssh=bool(host) and protocols.is_ssh(host),
                 is_rdp=bool(host) and protocols.protocol_of(host) == "rdp",
                 can_wake=bool(host) and bool(((host.metadata or {}).get("rdp") or {}).get("wol_mac")),
+                favorite=self.win.favorites.selection_state(),
                 accels=accels,
             )
         if kind is not None:
@@ -392,7 +396,8 @@ class TreeController:
             else:
                 has_hosts = bool(self.hosts_in_child_group(parent, child))
             return context_menus.group_menu(
-                self.win.actions, kind, read_only=parent.startswith("[Shared] "), has_hosts=has_hosts, accels=accels
+                self.win.actions, kind, read_only=parent.startswith("[Shared] "), has_hosts=has_hosts,
+                favorite=self.win.favorites.selection_state(), accels=accels,
             )
         return context_menus.blank_menu(self.win.actions, accels=accels)
 
@@ -589,6 +594,13 @@ class TreeController:
                 read_only=parent.startswith("[Shared] "),
             )
         return details_presenter.empty_detail()
+
+
+def is_favorite_key(event: Gdk.EventKey) -> bool:
+    """Ctrl+D: handled by the tree and the Favorites list only (in a terminal it is end-of-input)."""
+
+    modifiers = event.state & Gtk.accelerator_get_default_mod_mask()
+    return modifiers == Gdk.ModifierType.CONTROL_MASK and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_d
 
 
 def search_reveal_keys(rows: Iterable[TreeRow], query: str, terms: Optional[FilterTerms]) -> Set[Tuple[str, str, str]]:

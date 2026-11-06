@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, List, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import gi
 
@@ -46,10 +46,10 @@ from ..theme import density as density_tokens  # noqa: E402
 from ..theme.loader import get_theme_manager  # noqa: E402
 from ..theme.tokens import Layout, Level, Motion, Size, Space, environment_kind  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
-from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
+from ..widgets.icon_button import IconButton, IconToggleButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..widgets.toast import level_icon  # noqa: E402
-from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
+from ..controllers.shortcuts import accel_tooltip, set_accel_tooltip  # noqa: E402
 
 
 def _compact() -> bool:
@@ -97,6 +97,7 @@ class HostPageContent:
     chips: List[str] = field(default_factory=list)
     activity: List[ActivityEvent] = field(default_factory=list)
     now: float = 0.0
+    favorite: Optional[bool] = None  # the star next to the title; None = no star (a multi-selection, shared items)
 
 
 def _caps(text: str, css: str) -> Gtk.Label:
@@ -218,6 +219,12 @@ class HostHeader(Gtk.Box):
         self.badge.set_valign(Gtk.Align.CENTER)
         self.badge.set_no_show_all(True)
         row.pack_start(self.badge, False, False, 0)
+        self.on_toggle_favorite: Callable[[], None] = lambda: None
+        self.favorite_button = IconToggleButton(Icons.STAR, _("Add to Favorites"), accessible_name=_("Favorite"),
+                                                css_classes=("favorite-star",))
+        self.favorite_button.connect("toggled", self._on_favorite_toggled)
+        self.favorite_button.set_no_show_all(True)  # set_content() decides
+        row.pack_start(self.favorite_button, False, False, 0)
         titles.pack_start(row, False, False, 0)
         self.address = Gtk.Label()
         self.address.get_style_context().add_class("host-address")
@@ -286,6 +293,7 @@ class HostHeader(Gtk.Box):
             self._badge_class = ""
             self.badge.hide()
         self._set_prefix(content)
+        self._set_favorite(content.favorite)
         for child in list(self.stats.get_children()):
             self.stats.remove(child)
         if _compact():
@@ -308,6 +316,20 @@ class HostHeader(Gtk.Box):
             set_accessible_name(column, f"{caption}: {value}")
             self.stats.pack_start(column, False, False, 0)
         self.stats.show_all()
+
+    def _set_favorite(self, favorite: Optional[bool]) -> None:
+        star = self.favorite_button
+        star.set_visible(favorite is not None)
+        if favorite is None:
+            return
+        star.set_active_silently(favorite, self._on_favorite_toggled)
+        star.set_icon(Icons.STAR_FILLED if favorite else Icons.STAR)
+        star.get_image().show()
+        star.set_tooltip_text(accel_tooltip(_("Remove from Favorites") if favorite else _("Add to Favorites"),
+                                            "toggle-favorite"))
+
+    def _on_favorite_toggled(self, _button: Gtk.ToggleButton) -> None:
+        self.on_toggle_favorite()
 
     def _inline_stats(self, content: HostPageContent) -> None:
         """Compact: ``Last connected 2 hours ago``  ``● 24 ms`` — captions move to tooltips."""

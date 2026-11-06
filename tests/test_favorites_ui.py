@@ -121,5 +121,120 @@ class FolderDataTests(FavoritesCase):
         self.assertEqual(self.fav.scope, str(Path(self.sandbox.base).resolve()))
 
 
+
+def favorite_item(spec):
+    """The Favorites entry of a context-menu spec (and the name of its section)."""
+
+    for section in spec:
+        for item in section.items:
+            if "Fa_vorites" in item.label:
+                return section.name, item
+    return None, None
+
+
+def key_event(widget, keyval, state=0):
+    from gi.repository import Gdk
+
+    event = Gdk.Event.new(Gdk.EventType.KEY_PRESS)
+    event.key.keyval = keyval
+    event.key.state = state
+    event.key.window = widget.get_window()
+    return event  # not event.key: the struct lives in the event
+
+
+class StarActionTests(FavoritesCase):
+    def test_host_menu_item_toggles_and_relabels(self) -> None:
+        from ophion.gtkui.constants import Icons
+
+        self.select("web-01")
+        section, item = favorite_item(self.win.tree.context_menu_spec())
+        self.assertEqual((section, item.label, item.icon, item.accel), ("organize", "Add to Fa_vorites", Icons.STAR,
+                                                                        "Ctrl+D"))
+        organize = next(s for s in self.win.tree.context_menu_spec() if s.name == "organize")
+        self.assertIs(organize.items[0], next(i for i in organize.items if "Fa_vorites" in i.label))  # first there
+        item.callback()
+        self.assertTrue(self.fav.is_favorite_host(self.host("web-01")))
+        _section, item = favorite_item(self.win.tree.context_menu_spec())
+        self.assertEqual((item.label, item.icon), ("Remove from Fa_vorites", Icons.STAR_FILLED))
+        item.callback()
+        self.assertEqual(self.fav.keys(), [])
+
+    def test_group_menus_have_it_too(self) -> None:
+        for select in (lambda: self.win.tree.select_parent_group("prod"),
+                       lambda: self.win.tree.select_child_group("prod", "web.conf")):
+            select()
+            section, item = favorite_item(self.win.tree.context_menu_spec())
+            self.assertEqual((section, item.sensitive), ("organize", True))
+            item.callback()
+        self.assertEqual(self.starred_aliases(), ["prod", "web.conf"])
+
+    def test_multi_selection_stars_all_then_removes_all(self) -> None:
+        self.star("web-02")
+        self.select("web-01", "web-02")
+        _section, item = favorite_item(self.win.tree.context_menu_spec())
+        self.assertEqual(item.label, "Add to Fa_vorites")  # not all of them are favorites yet
+        item.callback()
+        self.assertEqual(sorted(self.starred_aliases()), ["web-01", "web-02"])
+        self.select("web-01", "web-02")
+        _section, item = favorite_item(self.win.tree.context_menu_spec())
+        self.assertEqual(item.label, "Remove from Fa_vorites")
+        item.callback()
+        self.assertEqual(self.fav.keys(), [])
+
+    def test_shared_inventory_rows_cannot_be_favorites(self) -> None:
+        from ophion.config import ConfigManager
+
+        self.win.inventory.shared_manager = ConfigManager(self.sandbox.base)
+        self.win.tree.rebuild()
+        self.win.tree.select_parent_group("[Shared] prod")
+        _section, item = favorite_item(self.win.tree.context_menu_spec())
+        self.assertFalse(item.sensitive)
+        self.assertTrue(item.tooltip)
+        self.win.actions.toggle_favorite()
+        self.assertEqual(self.fav.keys(), [])
+
+    def test_ctrl_d_only_in_the_tree(self) -> None:
+        from gi.repository import Gdk
+
+        from ophion.gtkui.controllers.shortcuts import ACTION_BY_NAME
+
+        spec = ACTION_BY_NAME["toggle-favorite"]
+        self.assertEqual((spec.accels, spec.display_accels), ((), ("<Primary>d",)))
+        self.assertEqual(self.win.get_application().get_actions_for_accel("<Primary>d"), [])  # never a global key:
+        # in a terminal Ctrl+D is end-of-input and must reach the shell
+        self.select("web-01")
+        view = self.win.tree_view
+        self.assertTrue(self.win.tree.on_key_press(view, key_event(view, Gdk.KEY_d, Gdk.ModifierType.CONTROL_MASK)))
+        self.assertTrue(self.fav.is_favorite_host(self.host("web-01")))
+        self.assertFalse(self.win.tree.on_key_press(view, key_event(view, Gdk.KEY_d)))  # plain d: type-ahead
+        self.win.tree.on_key_press(view, key_event(view, Gdk.KEY_D, Gdk.ModifierType.CONTROL_MASK))
+        self.assertEqual(self.fav.keys(), [])
+
+    def test_header_star_follows_the_selection(self) -> None:
+        from gi.repository import Atk
+
+        header = self.win.host_page.view.header
+        star = header.favorite_button
+        self.select("web-01")
+        self.win.host_page.refresh()
+        self.assertTrue(star.get_visible())
+        self.assertFalse(star.get_active())
+        self.assertIn("Add to Favorites", star.get_tooltip_text())
+        self.assertIn("Ctrl+D", star.get_tooltip_text())
+        star.clicked()
+        self.assertTrue(self.fav.is_favorite_host(self.host("web-01")))
+        self.assertTrue(star.get_active())
+        self.assertIn("Remove from Favorites", star.get_tooltip_text())
+        states = star.get_accessible().ref_state_set()
+        self.assertTrue(states.contains_state(Atk.StateType.PRESSED) or states.contains_state(Atk.StateType.CHECKED))
+        self.win.tree.select_parent_group("staging")
+        self.win.host_page.refresh()
+        self.assertTrue(star.get_visible())  # groups have it too
+        self.assertFalse(star.get_active())
+        self.select("web-01", "web-02")
+        self.win.host_page.refresh()
+        self.assertFalse(star.get_visible())  # not for a multi-selection
+
+
 if __name__ == "__main__":
     unittest.main()

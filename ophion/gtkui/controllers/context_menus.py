@@ -9,7 +9,7 @@ its group).
 
 from __future__ import annotations
 
-from typing import Dict, List, Protocol
+from typing import Dict, List, Optional, Protocol
 
 from ..constants import Icons, RowKind
 from ..i18n import _
@@ -32,6 +32,7 @@ class TreeMenuCallbacks(Protocol):
     def change_host_color(self) -> None: ...
     def change_group_color(self) -> None: ...
     def clear_color(self) -> None: ...
+    def toggle_favorite(self) -> None: ...
     def forget_password(self) -> None: ...
     def forget_host_key(self) -> None: ...
     def run_command_on_selection(self) -> None: ...
@@ -56,6 +57,18 @@ class TreeMenuCallbacks(Protocol):
     def collapse_all_groups(self) -> None: ...
 
 
+def favorite_item(cb: TreeMenuCallbacks, favorite: Optional[bool], accels: Dict[str, str]) -> MenuItemSpec:
+    """*Add to* / *Remove from Favorites*; ``favorite`` None: the item cannot be one (a shared inventory's)."""
+
+    accel = accels.get("toggle-favorite", "")
+    if favorite:
+        return MenuItemSpec(_("Remove from Fa_vorites"), cb.toggle_favorite, Icons.STAR_FILLED, accel)
+    if favorite is None:
+        return MenuItemSpec(_("Add to Fa_vorites"), cb.toggle_favorite, Icons.STAR, accel, sensitive=False,
+                            tooltip=_("Items of a shared inventory cannot be favorites"))
+    return MenuItemSpec(_("Add to Fa_vorites"), cb.toggle_favorite, Icons.STAR, accel)
+
+
 def host_menu(
     cb: TreeMenuCallbacks,
     *,
@@ -64,6 +77,7 @@ def host_menu(
     is_ssh: bool = True,
     is_rdp: bool = False,
     can_wake: bool = False,
+    favorite: Optional[bool] = False,
     accels: Dict[str, str] = None,  # type: ignore[assignment]
 ) -> MenuSpec:
     accels = accels or {}
@@ -90,6 +104,7 @@ def host_menu(
             MenuItemSpec(_("D_uplicate…"), cb.duplicate_selected, Icons.DUPLICATE, sensitive=can_edit),
         ]),
         MenuSection("organize", [
+            favorite_item(cb, favorite, accels),
             MenuItemSpec(_("_Move to Group…"), cb.move_selected, Icons.MOVE, sensitive=can_edit),
             MenuItemSpec(_("Change Host _Color…"), cb.change_host_color, Icons.COLOR),
             MenuItemSpec(_("Use Default Colour"), cb.clear_color, Icons.CLEAR,
@@ -113,6 +128,7 @@ def group_menu(
     *,
     read_only: bool = False,
     has_hosts: bool = True,
+    favorite: Optional[bool] = False,
     accels: Dict[str, str] = None,  # type: ignore[assignment]
 ) -> MenuSpec:
     accels = accels or {}
@@ -141,6 +157,7 @@ def group_menu(
             MenuItemSpec(_("D_uplicate…"), cb.duplicate_child_group, Icons.DUPLICATE, sensitive=editable),
         ]
     sections.append(MenuSection("organize", [
+        favorite_item(cb, favorite, accels),
         MenuItemSpec(_("Change Group _Color…"), cb.change_group_color, Icons.COLOR),
         MenuItemSpec(_("Use Default Colour"), cb.clear_color, Icons.CLEAR,
                      tooltip=_("Remove this group's own colour: its parent group's, else the default, is used")),

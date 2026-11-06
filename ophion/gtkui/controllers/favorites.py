@@ -122,6 +122,7 @@ class FavoritesController:
 
     def _changed(self) -> None:
         self.win._save_ui_state()
+        self.win.tree.update_details()  # the header star
         for listener in list(self.listeners):
             listener()
 
