@@ -12,8 +12,6 @@ from unittest import mock
 from tests.gtk_window_fixture import display_available
 from tests.test_local_terminal import pump
 
-# Measured: no width clamp in BaseDialog (expected failure until _fit_width_to_screen).
-NOT_YET_CLAMPED = unittest.expectedFailure
 TOLERANCE = 1.08
 
 
@@ -83,6 +81,24 @@ class PasswordDialogWidthTests(DensityCase):
         self.assertLessEqual(widths[0], self.limit())
         self.assertGreater(heights[-1], heights[0])  # the long names make it taller, not wider
 
+    def test_a_large_ui_font_makes_it_taller_not_wider(self) -> None:
+        from gi.repository import Gtk
+
+        settings = Gtk.Settings.get_default()
+        original = settings.get_property("gtk-font-name")
+        self.addCleanup(settings.set_property, "gtk-font-name", original)
+        normal = self.dialog()
+        normal_width = normal.get_preferred_width()[1]
+        normal_height = normal.get_preferred_height_for_width(normal_width)[1]
+        settings.set_property("gtk-font-name", "Sans 20")  # far above the default 11 pt
+        pump(0.1)
+        large = self.dialog()
+        self.assertGreater(large.get_preferred_height_for_width(normal_width)[1], normal_height)  # taller
+        large.show_all()  # the form's own controls grow with the font: the clamp keeps the width
+        pump(0.3)
+        minimum = large.get_preferred_width()[0]  # the form's labels and entries cannot be narrower
+        self.assertLessEqual(large.get_allocated_width(), max(self.limit(), minimum + 1), "20 pt font")
+
     def test_behaviour_is_kept(self) -> None:
         from gi.repository import Gtk
 
@@ -140,7 +156,6 @@ class ClampTests(DensityCase):
         dialog.add_primary("_OK")
         return dialog
 
-    @NOT_YET_CLAMPED
     def test_monitor_sizes(self) -> None:
         from gi.repository import Gtk
 
@@ -156,7 +171,6 @@ class ClampTests(DensityCase):
                     if isinstance(button, Gtk.Button):
                         self.assertTrue(button.get_mapped())
 
-    @NOT_YET_CLAMPED
     def test_a_narrow_parent_bounds_the_dialog(self) -> None:
         from gi.repository import Gtk
 

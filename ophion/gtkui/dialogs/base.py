@@ -9,11 +9,16 @@
 * ``Esc`` = cancel and ``Enter`` = default response;
 * initial focus;
 * inline validation – a response validator can keep the dialog open;
-* :meth:`run_and_destroy` so call sites never forget ``destroy()``.
+* :meth:`run_and_destroy` so call sites never forget ``destroy()``;
+* the screen: never taller than 85 % of the work area (the body scrolls) and never wider than its
+  standard width, 85 % of the work area, or a narrower parent window (at least 320 px). Every wrapping
+  label should be a ``widgets.forms.wrapped_label``: a wrapping label without ``width_chars`` /
+  ``max_width_chars`` asks for its unwrapped width, and a non-resizable dialog would open that wide.
 """
 
 from __future__ import annotations
 
+import logging
 import warnings
 from enum import IntEnum
 from typing import Callable, Optional
@@ -21,7 +26,7 @@ from typing import Callable, Optional
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
 
 from ..i18n import _  # noqa: E402
 from ..theme import density as density_tokens  # noqa: E402
@@ -52,6 +57,8 @@ def dialog_height(height: int) -> int:
 
 
 MAX_SCREEN_FRACTION = 0.85  # of the monitor's work area
+MIN_DIALOG_WIDTH = 320  # a dialog over a narrower parent is never squeezed below this
+LOGGER = logging.getLogger(__name__)
 
 
 class BaseDialog(Gtk.Dialog):
@@ -69,6 +76,7 @@ class BaseDialog(Gtk.Dialog):
     ) -> None:
         Gtk.Dialog.__init__(self, title=title, transient_for=parent, modal=modal)
         self.set_destroy_with_parent(True)
+        self.size_class = size  # the declared DialogSize (the width clamp and the dialog sweep read it)
         self.set_default_size(dialog_width(size), dialog_height(height))
         self.set_resizable(resizable)
         self.get_style_context().add_class("sm-dialog")
@@ -101,17 +109,57 @@ class BaseDialog(Gtk.Dialog):
 
     # ------------------------------------------------------- fit the screen
     def do_show(self) -> None:  # type: ignore[override]
+        self._fit_width_to_screen()
         self._fit_to_screen()
         Gtk.Dialog.do_show(self)
 
-    def _work_area_height(self) -> int:
+    def _work_area(self):
         display = self.get_display()
         parent = self.get_transient_for()
         monitor = None
         if parent is not None and parent.get_window() is not None:
             monitor = display.get_monitor_at_window(parent.get_window())
         monitor = monitor or display.get_primary_monitor() or (display.get_monitor(0) if display.get_n_monitors() else None)
-        return monitor.get_workarea().height if monitor is not None else 0
+        return monitor.get_workarea() if monitor is not None else None
+
+    def _work_area_height(self) -> int:
+        area = self._work_area()
+        return area.height if area is not None else 0
+
+    def _work_area_width(self) -> int:
+        area = self._work_area()
+        return area.width if area is not None else 0
+
+    def width_limit(self) -> int:
+        """The widest this dialog may be: its standard width, 85 % of the work area, a narrower parent."""
+
+        limit = dialog_width(getattr(self, "size_class", DialogSize.MEDIUM))
+        work = self._work_area_width()
+        if work:
+            limit = min(limit, int(work * MAX_SCREEN_FRACTION))
+        parent = self.get_transient_for()
+        if parent is not None and parent.get_mapped():
+            parent_width = parent.get_allocated_width()
+            if 1 < parent_width < limit:
+                limit = parent_width
+        return max(MIN_DIALOG_WIDTH, limit)
+
+    def _fit_width_to_screen(self) -> None:
+        """Never wider than :meth:`width_limit`; large screens keep the standard width (no stretching)."""
+
+        limit = self.width_limit()
+        width, height = self.get_default_size()
+        if width > limit:
+            self.set_default_size(limit, height)
+        _minimum, natural = self.get_preferred_width()
+        if natural <= limit:
+            return
+        # A wrapping label without width_chars / max_width_chars (or a very large font): the content asks
+        # for more than the standard width. A resizable window takes its default width and wraps.
+        LOGGER.debug("%s asks for %d px, more than its %d px: clamped", type(self).__name__, natural, limit)
+        if not self.get_resizable():
+            self.set_resizable(True)
+        self.set_default_size(limit, height)
 
     def _fit_to_screen(self) -> None:
         """Never taller than 85 % of the work area: the body scrolls, the buttons stay on screen."""
@@ -119,9 +167,31 @@ class BaseDialog(Gtk.Dialog):
         if getattr(self, "_fitted", False):
             return
         limit = int(self._work_area_height() * MAX_SCREEN_FRACTION)
-        _minimum, natural = self.get_preferred_height()
+        width = self.get_default_size()[0]
+        if width <= 0 or not self.get_resizable():
+            width = self.get_preferred_width()[1]
+        # At the width the dialog will have: wrapped text is taller there than at its natural width.
+        _minimum, natural = self.get_preferred_height_for_width(max(width, self.get_preferred_width()[0]))
         if not limit or natural <= limit:
             return
+        self._scroll_body(limit)
+
+    def _check_height_after_map(self) -> bool:
+        """Wrapped text measured at the real width can still be taller than estimated: fit it then."""
+
+        if not self.get_mapped():  # closed meanwhile
+            return False
+        limit = int(self._work_area_height() * MAX_SCREEN_FRACTION)
+        if limit and not getattr(self, "_fitted", False) and self.get_allocated_height() > limit:
+            self._scroll_body(limit)
+            if not self.get_resizable():
+                self.set_resizable(True)
+            self.resize(self.get_allocated_width(), limit)
+        return False
+
+    def _scroll_body(self, limit: int) -> None:
+        """Move the body into a scrolled window and open ``limit`` px tall (the buttons stay visible)."""
+
         self._fitted = True
         content = self.get_content_area()
         with warnings.catch_warnings():
@@ -216,6 +286,7 @@ class BaseDialog(Gtk.Dialog):
     def _on_map(self, *_args) -> None:
         if self._initial_focus is not None:
             self._initial_focus.grab_focus()
+        GLib.idle_add(self._check_height_after_map)
 
 
 def is_accept(response: int) -> bool:
