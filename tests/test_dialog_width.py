@@ -113,6 +113,39 @@ class PasswordDialogWidthTests(DensityCase):
                          Gtk.ResponseType.OK)
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class SavePasswordDialogWidthTests(DensityCase):
+    """Measured before: the button row made both buttons as wide as "Save for This Host" (410 / 354 px)."""
+
+    def test_the_button_row_fits_the_small_width(self) -> None:
+        import warnings
+
+        from ophion.auth_flow import SaveContext, SaveOffer
+        from ophion.gtkui.dialogs.password import SavePasswordDialog
+        from tests.gtk_window_fixture import WindowSandbox
+
+        sandbox = WindowSandbox()
+        self.addCleanup(sandbox.close)
+        for name in self.densities():
+            for context in (SaveContext(), SaveContext(can_save=False, reason="The host is read-only.")):
+                with self.subTest(density=name, can_save=context.can_save):
+                    dialog = SavePasswordDialog(sandbox.window, SaveOffer(alias="web-01", verified=True,
+                                                                          context=context), lambda _d: None)
+                    self.addCleanup(dialog.destroy)
+                    dialog.get_content_area().show_all()
+                    dialog.fit_wrapping_labels()
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", DeprecationWarning)
+                        row = dialog.get_action_area()
+                    buttons = row.get_children()
+                    widths = [button.get_preferred_width()[1] for button in buttons]
+                    homogeneous = len(buttons) * max(widths) + row.get_margin_start() + row.get_margin_end()
+                    self.assertLess(row.get_preferred_width()[0], homogeneous)  # each button at its own width
+                    self.assertLessEqual(dialog.get_preferred_width()[1], self.limit(), name)
+                    dialog.save_button.set_label("_Retry Save")  # after a store error
+                    self.assertLessEqual(dialog.get_preferred_width()[1], self.limit(), name)
+
+
 class WrappedLabelTests(unittest.TestCase):
     @unittest.skipUnless(display_available(), "needs a display")
     def test_natural_width_is_bounded_by_max_chars(self) -> None:

@@ -193,6 +193,11 @@ class SavePasswordDialog(BaseDialog):
         self.dont_save_button = self.add_cancel(_("_Don't Save"))
         self.save_button: Gtk.Button = self.add_primary(
             _("_Save for This Host") if self._can_save else _("_Use for This Session"))
+        # Each button at its own width: a button box makes them all as wide as the widest by default, which
+        # put this SMALL dialog over its width (410 px for 420, 354 for 357 in Compact).
+        row = self.dont_save_button.get_parent()
+        for button in (self.dont_save_button, self.save_button):
+            row.set_child_non_homogeneous(button, True)
         set_accessible_name(self, _(offer.title))
         self.set_initial_focus(self.save_button)
         self.connect("response", self._on_save_response)
