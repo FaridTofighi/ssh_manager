@@ -36,8 +36,10 @@ class TargetChooserDialog(BaseDialog):
         set_accessible_name(self.search, _("Search hosts"))
         self.search.connect("search-changed", lambda *_a: self.refilter())
         filters.pack_start(self.search, True, True, 0)
+        self.search.set_width_chars(10)  # the entries expand; their default 150 px minimum widened the dialog
         self.tag = Gtk.Entry()
         self.tag.set_placeholder_text(_("Tag"))
+        self.tag.set_width_chars(8)
         set_accessible_name(self.tag, _("Only hosts with this tag"))
         self.tag.connect("changed", lambda *_a: self.refilter())
         filters.pack_start(self.tag, False, False, 0)

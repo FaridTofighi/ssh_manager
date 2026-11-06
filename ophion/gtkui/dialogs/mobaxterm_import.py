@@ -61,6 +61,7 @@ from ..theme.tokens import Space  # noqa: E402
 from ..widgets.forms import FormSection  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
+from .settings_layout import let_shrink  # noqa: E402
 from .confirm import confirm  # noqa: E402
 from .credentials import CredentialEditDialog  # noqa: E402
 from .files import choose_open_file  # noqa: E402
@@ -167,7 +168,9 @@ class MobaXtermImportDialog(BaseDialog):
         self.stack.set_vexpand(True)
         self.add_body(self.stack, expand=True)
         self.stack.add_named(self._build_file_page(), "file")
-        self.stack.add_named(self._build_options_page(), "options")
+        options = self._build_options_page()
+        let_shrink(options)  # the long radio label and the group paths made the dialog 812 px wide for 760
+        self.stack.add_named(options, "options")
         self.stack.add_named(self._build_credentials_page(), "credentials")
         self.stack.add_named(self._build_review_page(), "review")
         self.stack.add_named(self._build_result_page(), "result")

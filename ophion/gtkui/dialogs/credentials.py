@@ -41,6 +41,7 @@ class CredentialEditDialog(BaseDialog):
         )
         self.pass_secret = SecretEntry(_("Password"), generate=True)
         self.pass_entry = self.pass_secret.entry
+        self.pass_entry.set_width_chars(12)  # beside its two buttons the default minimum widened the dialog
         self._pass_row = section.add(
             _("_Password"),
             self.pass_secret,

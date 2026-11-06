@@ -158,7 +158,7 @@ class BaseDialog(Gtk.Dialog):
         from gi.repository import Pango
 
         limit = self.width_limit()
-        budget = limit - 2 * Size.DIALOG_PADDING
+        budget = limit - 2 * (Size.DIALOG_PADDING + self.get_content_area().get_border_width())
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             action_area = self.get_action_area()

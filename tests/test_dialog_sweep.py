@@ -34,6 +34,40 @@ class DialogSweepTests(unittest.TestCase):
                         sandbox.window, rows, long_text) if problem and opens > minimum]
                     self.assertEqual(offenders, [], f"wrapping text widens these dialogs:\n{report}")
 
+    def test_fixed_content_fits_the_standard_width_too(self) -> None:
+        """Toolbars, long check boxes, combos and entries can shrink: no dialog needs more than its DialogSize.
+
+        Measured before (Comfortable / Compact, standard width 760 / 646 unless noted): Known hosts 1124 / 975,
+        Tunnels 1053 / 890, SSH keys 821 / 690, MobaXterm import 812 / 722, credential import 909 / 799
+        (560 / 476), host targets 518 in Compact (476), credential editor 372 in Compact (357).
+        """
+
+        import tempfile
+        from pathlib import Path
+
+        from tests import dialog_sweep as S
+        from tests.gtk_window_fixture import WindowSandbox
+
+        from ophion.gtkui.theme import density
+
+        self.addCleanup(density.set_active, density.active())
+        sandbox = WindowSandbox(store=True)
+        self.addCleanup(sandbox.close)
+        for preset in (density.Density.COMFORTABLE, density.Density.COMPACT):
+            density.set_active(preset)
+            too_wide = []
+            with tempfile.TemporaryDirectory() as tmp:
+                for name, make in S.factories(sandbox.window, Path(tmp)).items():
+                    dialog = make()
+                    try:
+                        nominal, _opens, _resizable = S.measure(dialog, True)
+                        minimum = dialog.get_preferred_width()[0]
+                    finally:
+                        dialog.destroy()
+                    if minimum > nominal * S.TOLERANCE:
+                        too_wide.append(f"{name}: {minimum} px for {nominal}")
+            self.assertEqual(too_wide, [], preset.value)
+
     @staticmethod
     def with_minimum(win, rows, long_text):
         """The rows with each dialog's minimum width (what its fixed content needs)."""

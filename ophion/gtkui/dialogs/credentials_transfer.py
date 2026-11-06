@@ -30,6 +30,7 @@ from ..widgets.forms import FormSection  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from ..widgets.secret_entry import SecretEntry  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
+from .settings_layout import let_shrink  # noqa: E402
 from .files import choose_open_file, choose_save_file  # noqa: E402
 from .native_export import MIN_PASSPHRASE, passphrase_strength  # noqa: E402
 
@@ -120,6 +121,7 @@ class CredentialImportDialog(BaseDialog):
             self.policy.append(value, label)
         self.policy.set_active_id("rename")
         section.add(_("When the _name is already used"), self.policy)
+        let_shrink(section)  # the longest choice made the dialog 909 px wide for 560
         self.add_body(section)
         self.add_cancel()
         self.add_primary(_("_Import"))

@@ -72,7 +72,8 @@ class KnownHostsDialog(BaseDialog):
 
     # ----------------------------------------------------------------- build
     def _build(self) -> None:
-        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        # The views, then the filter: on one line with unwrapped names they made the dialog 1124 px wide.
+        top = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.S)
         group: Optional[Gtk.RadioButton] = None
         self.view_buttons: Dict[str, Gtk.RadioButton] = {}
         switcher = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -80,6 +81,10 @@ class KnownHostsDialog(BaseDialog):
         for view, label in _views():
             button = Gtk.RadioButton.new_with_label_from_widget(group, label)
             button.set_mode(False)  # a toggle button, not a radio dot
+            text = button.get_child()
+            text.set_line_wrap(True)
+            text.set_max_width_chars(20)
+            text.set_justify(Gtk.Justification.CENTER)
             button.connect("toggled", self._on_view_toggled, view)
             switcher.pack_start(button, False, False, 0)
             self.view_buttons[view] = button
@@ -89,7 +94,7 @@ class KnownHostsDialog(BaseDialog):
         self.search.set_placeholder_text(_("Filter"))
         set_accessible_name(self.search, _("Filter known hosts"))
         self.search.connect("search-changed", lambda *_a: self._refilter())
-        top.pack_end(self.search, False, False, 0)
+        top.pack_start(self.search, False, False, 0)
         self.add_body(top)
 
         self.store = Gtk.ListStore(str, str, str, str, int, str, str, bool, int, str, str)
@@ -123,14 +128,18 @@ class KnownHostsDialog(BaseDialog):
         self.status.get_style_context().add_class("form-help")
         self.add_body(self.status)
 
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        # Two lines (the selection, then files): seven buttons on one line were wider than the dialog.
+        actions = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        lines = [Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S) for _line in range(2)]
+        for line in lines:
+            actions.pack_start(line, False, False, 0)
 
-        def button(label: str, callback: Callable[[], object], tooltip: str = "") -> Gtk.Button:
+        def button(label: str, callback: Callable[[], object], tooltip: str = "", line: int = 0) -> Gtk.Button:
             widget = Gtk.Button.new_with_mnemonic(label)
             if tooltip:
                 widget.set_tooltip_text(tooltip)
             widget.connect("clicked", lambda *_a: callback())
-            actions.pack_start(widget, False, False, 0)
+            lines[line].pack_start(widget, False, False, 0)
             return widget
 
         self.copy_button = button(_("_Copy Fingerprint"), self.copy_fingerprints)
@@ -138,10 +147,11 @@ class KnownHostsDialog(BaseDialog):
         self.forget_button = button(_("_Forget Key for This Host…"), self.forget_host)
         self.forget_button.set_no_show_all(not self.host_key)
         self.verify_button = button(_("_Verify Host Key Now…"), self.verify_selected,
-                                    _("Connect without logging in and compare the server's key with the stored one"))
-        button(_("_Import…"), self.import_file, _("Add the entries of another known_hosts file"))
-        button(_("E_xport Selected…"), self.export_selected)
-        button(_("_Backup Folder"), self.show_backup_folder)
+                                    _("Connect without logging in and compare the server's key with the stored one"),
+                                    line=1)
+        button(_("_Import…"), self.import_file, _("Add the entries of another known_hosts file"), line=1)
+        button(_("E_xport Selected…"), self.export_selected, line=1)
+        button(_("_Backup Folder"), self.show_backup_folder, line=1)
         self.add_body(actions)
         self.add_primary(_("_Close"), Gtk.ResponseType.CLOSE)
         self.tree.get_selection().connect("changed", lambda *_a: self._sync_buttons())

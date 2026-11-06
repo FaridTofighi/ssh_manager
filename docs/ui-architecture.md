@@ -261,6 +261,11 @@ stays put when the brand block changes width).
      ellipsizes the combos of a page (Preferences and the Host dialog, also
      for the pages they fill later); buttons beside a field go on the next
      line; colour swatches are eight to a line (`widgets/accent_picker.py`).
+     Rows of many buttons are split into fixed lines by purpose (Known hosts,
+     Tunnels, SSH keys, Multi-Run); entries that expand get a small
+     `width_chars` (the default minimum is 150 px).
+   - **Checked by** also: `test_fixed_content_fits_the_standard_width_too`
+     (every dialog's minimum width, both densities).
    - **Checked by:** `tests/test_dialog_sweep.py` builds every dialog with
      long messages; `python3 -m tests.dialog_sweep` prints the table.
 5. Never put a list that grows with the inventory (groups, hosts) into a

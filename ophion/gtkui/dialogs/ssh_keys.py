@@ -247,8 +247,9 @@ class SshKeysDialog(BaseDialog):
             button = Gtk.Button.new_with_mnemonic(label)
             button.connect("clicked", lambda _b, cb=callback: cb())
             self.buttons[name] = button
-        rows = (("generate", "import", "copy", "show", "deploy"), ("derive", "passphrase", "rename", "delete",
-                                                                     "reveal"))
+        # Three lines: two of five buttons were wider than the dialog (821 px for 760).
+        rows = (("generate", "import", "deploy"), ("copy", "show", "derive"),
+                ("passphrase", "rename", "delete", "reveal"))
         for names in rows:
             line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
             for name in names:

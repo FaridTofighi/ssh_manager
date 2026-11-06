@@ -17,6 +17,9 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
   the line under their fields.
 - The Multi-Run dialog opens at its standard width (it was 873 px, and as wide as the longest
   command once that was in the history): the result buttons take two lines.
+- Known Hosts, Tunnels, SSH Keys, the MobaXterm and credential imports, the host chooser of
+  Multi-Run and the credential editor open at their standard widths (Known Hosts was
+  1124 px for 760): their button rows take two or three lines, long labels wrap.
 - New: choose the default colour of groups and hosts in Preferences → Appearance (per-item
   colours still win). "Clear Color" in the tree's menu is now "Use Default Colour". A nested
   folder now inherits the colour of the nearest coloured group above it (before, only its

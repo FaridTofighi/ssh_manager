@@ -239,13 +239,15 @@ class TunnelsDialog(BaseDialog):
         self.confirm: Callable[[str, str], bool] = \
             lambda title, text: confirm(self, title, text, confirm_label=_("_Delete"), destructive=True)
 
+        # Two lines (the forward, then the address and all): on one line the toolbar was 1017 px wide.
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        second = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
         self.buttons = {}
 
         def button(name: str, label: str, callback: Callable[[], object]) -> Gtk.Button:
             widget = Gtk.Button.new_with_mnemonic(label)
             widget.connect("clicked", lambda *_a: callback())
-            toolbar.pack_start(widget, False, False, 0)
+            (second if name in ("copy", "browser", "stop_all") else toolbar).pack_start(widget, False, False, 0)
             self.buttons[name] = widget
             return widget
 
@@ -262,6 +264,7 @@ class TunnelsDialog(BaseDialog):
         self.search.connect("search-changed", lambda *_a: self.refresh())
         toolbar.pack_end(self.search, False, False, 0)
         self.add_body(toolbar)
+        self.add_body(second)
 
         self.store = Gtk.TreeStore(str, str, str, str, str, str, str, str, str, str, str)
         self.tree = Gtk.TreeView(model=self.store)
