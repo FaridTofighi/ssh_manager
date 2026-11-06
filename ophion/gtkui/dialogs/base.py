@@ -109,6 +109,7 @@ class BaseDialog(Gtk.Dialog):
 
     # ------------------------------------------------------- fit the screen
     def do_show(self) -> None:  # type: ignore[override]
+        self.fit_wrapping_labels()
         self._fit_width_to_screen()
         self._fit_to_screen()
         Gtk.Dialog.do_show(self)
@@ -143,6 +144,54 @@ class BaseDialog(Gtk.Dialog):
             if 1 < parent_width < limit:
                 limit = parent_width
         return max(MIN_DIALOG_WIDTH, limit)
+
+    def fit_wrapping_labels(self) -> int:
+        """Keep every wrapping label of the body within the dialog's text width (in the label's own font).
+
+        A wrapping label without ``max_width_chars`` asks for its unwrapped width, so a long message made
+        the dialog as wide as the text; a limit in characters can still be wider than the dialog in a
+        wide font. Labels without a limit, or with a wider one, get the dialog's text width (never a
+        wider one; ``widgets.forms.wrapped_label`` does the same for the labels that use it). Returns how
+        many labels changed.
+        """
+
+        from gi.repository import Pango
+
+        limit = self.width_limit()
+        budget = limit - 2 * Size.DIALOG_PADDING
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            action_area = self.get_action_area()
+        labels = []
+
+        def collect(widget) -> None:
+            if isinstance(widget, Gtk.Label) and widget.get_line_wrap():
+                labels.append(widget)
+            if isinstance(widget, Gtk.Container):
+                widget.forall(collect)
+
+        for child in self.get_content_area().get_children():
+            if child is not action_area:
+                collect(child)
+        changed = set()
+        for _round in range(3):  # an icon or a second column beside a label: shrink by what is still over
+            for label in labels:
+                metrics = label.get_pango_context().get_metrics(None, None)
+                char = max(metrics.get_approximate_char_width(), metrics.get_approximate_digit_width()) / Pango.SCALE
+                fitting = max(8, int(budget / char)) if char > 0 else 0
+                current = label.get_max_width_chars()
+                if fitting and (current < 0 or current > fitting):  # none, or wider than the dialog's text
+                    label.set_max_width_chars(fitting)
+                    if label.get_width_chars() > fitting:
+                        label.set_width_chars(fitting)
+                    changed.add(label)
+            overflow = self.get_preferred_width()[1] - limit
+            if overflow <= 0 or not labels:
+                break
+            budget -= overflow
+        if changed:
+            LOGGER.debug("%s: %d wrapping label(s) fitted to the dialog's width", type(self).__name__, len(changed))
+        return len(changed)
 
     def _fit_width_to_screen(self) -> None:
         """Never wider than :meth:`width_limit`; large screens keep the standard width (no stretching)."""
