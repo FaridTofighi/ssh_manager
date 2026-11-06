@@ -242,7 +242,22 @@ stays put when the brand block changes width).
    call `set_response_validator(lambda r: not is_accept(r) or section.validate())`.
 3. Provide an `ask()` that runs, reads the values, destroys the dialog and
    returns a result. Call it from a controller.
-4. Never put a list that grows with the inventory (groups, hosts) into a
+4. **Width:** every wrapping label in a dialog uses `widgets.forms.wrapped_label`
+   (`width_chars` / `max_width_chars`; pass `width=` for a pixel budget). A
+   wrapping label without them asks for its unwrapped width, and a
+   non-resizable dialog would open that wide; the password dialog opened at
+   831 px instead of 420. `BaseDialog` also enforces the rule before every
+   show:
+   - **Labels:** `fit_wrapping_labels` limits every wrapping label to the
+     dialog's text width, in the label's own font.
+   - **Window:** `width_limit` caps the dialog at its `DialogSize`, 85 % of the
+     work area, and a narrower parent window (at least 320 px). A dialog
+     whose content still asks for more is logged at debug level and opened
+     at the limit, resizable, so the text wraps.
+   - **Large screens:** keep the standard width.
+   - **Checked by:** `tests/test_dialog_sweep.py` builds every dialog with
+     long messages; `python3 -m tests.dialog_sweep` prints the table.
+5. Never put a list that grows with the inventory (groups, hosts) into a
    message: use `widgets/searchable_list.py` (one `TreeView`, filtered) or
    "first N … (+M more)". `BaseDialog` caps any dialog at 85 % of the
    monitor's work area (the body scrolls) and `PromptDialog` scrolls long
