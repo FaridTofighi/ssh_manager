@@ -51,7 +51,7 @@ from ...rdp.engines import cached_report, choose_engine  # noqa: E402
 from ...rdp.settings import RdpSettings  # noqa: E402
 from .base import BaseDialog, DialogSize, is_accept  # noqa: E402
 from .confirm import confirm  # noqa: E402
-from .settings_layout import SettingsPageLayout  # noqa: E402
+from .settings_layout import SettingsPageLayout, let_shrink  # noqa: E402
 
 # Options edited through dedicated fields (everything else goes to "SSH options").
 DEDICATED_OPTIONS = {"hostname", "user", "port", "identityfile", "proxyjump", "jump_host", "tags", "forwardagent"}
@@ -342,6 +342,10 @@ class HostDialog(BaseDialog):
                       self._page_credentials, self._page_tags, self._page_ssh_options, self._page_forwarding,
                       self._page_permissions):
             build(labels)
+        # Long check box labels and combo items made the dialog wider than its standard width (1036 px for
+        # 760 with the File transfer and RDP pages, which are filled later and shrunk then).
+        for page_id in self.layout.page_ids:
+            let_shrink(self.layout.page(page_id), labels.get_widgets())
 
     def _page_transfer(self, labels: Gtk.SizeGroup) -> None:
         """The File transfer page, empty: :attr:`transfer_page` fills it when it is first needed."""
@@ -366,6 +370,7 @@ class HostDialog(BaseDialog):
             page = TransferPage(self, settings, self._transfer_labels, on_default_port=self._apply_protocol,
                                 on_anonymous=self._on_anonymous)
             page.append_to(self._transfer_shell)
+            let_shrink(self._transfer_shell, self._transfer_labels.get_widgets())
             page.test_button.connect("clicked", lambda *_: self._test_connection())
             self.connect("destroy", lambda *_: page.close())
             self._transfer_shell.show_all()
@@ -406,6 +411,7 @@ class HostDialog(BaseDialog):
             page = self.rdp_pages.fill(page_id, self._rdp_shells[page_id])
             if page_id == "rdp":
                 page.append(self._rdp_error)
+            let_shrink(page, self._rdp_labels.get_widgets())
             page.show_all()
         self.rdp_pages.engine.connect("changed", lambda *_: self._apply_rdp_engine())
         self.connect("destroy", lambda *_: self.rdp_pages.close())
@@ -460,15 +466,18 @@ class HostDialog(BaseDialog):
     def _page_connection(self, labels: Gtk.SizeGroup) -> None:
         connection = self.layout.new_page("connection", _("Connection"), _("Keys and jump hosts."))
         sec = FormSection()
-        picker = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        picker.pack_start(self.identity_combo, True, True, 0)
+        # The buttons under the path: beside it they made the dialog wider than its standard width.
+        picker = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        picker.pack_start(self.identity_combo, False, False, 0)
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         browse = Gtk.Button.new_with_mnemonic(_("_Browse…"))
         browse.connect("clicked", lambda *_a: self._browse_identity())
-        picker.pack_start(browse, False, False, 0)
+        buttons.pack_start(browse, False, False, 0)
         if self._open_keys is not None:
             keys = Gtk.Button.new_with_mnemonic(_("SSH _Keys…"))
             keys.connect("clicked", lambda *_a: self._open_keys())
-            picker.pack_start(keys, False, False, 0)
+            buttons.pack_start(keys, False, False, 0)
+        picker.pack_start(buttons, False, False, 0)
         self._identity_row = sec.add(_("Private _key"), picker, label_group=labels,
                                      help_text=_("Path of the identity file (IdentityFile)."))
         self.identity_warning = Gtk.Label()

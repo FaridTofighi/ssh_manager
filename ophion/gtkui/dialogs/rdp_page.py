@@ -187,9 +187,14 @@ class RdpPages:
         self.common_size.connect("changed", self._on_common_size)
         set_accessible_name(self.common_size, _("Common sizes"))
         times = Gtk.Label(label="×")
-        for widget in (self.width, times, self.height, self.common_size):
+        for widget in (self.width, times, self.height):
             size_box.pack_start(widget, False, False, 0)
-        self._size_row = self._row(section, _("_Resolution"), size_box)
+        # "Common sizes" on its own line: beside the two fields it made Display & Input wider than the dialog.
+        resolution = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        resolution.pack_start(size_box, False, False, 0)
+        self.common_size.set_halign(Gtk.Align.START)
+        resolution.pack_start(self.common_size, False, False, 0)
+        self._size_row = self._row(section, _("_Resolution"), resolution)
         self._size_row.label.set_mnemonic_widget(self.width)
         self.color_depth = _combo([("32", _("32 bit (best)")), ("24", "24 bit"), ("16", _("16 bit (faster)")),
                                    ("15", "15 bit"), ("8", _("8 bit (256 colors)"))], str(s.color_depth))

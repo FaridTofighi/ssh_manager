@@ -32,7 +32,7 @@ from ..widgets.forms import FormSection, entry  # noqa: E402
 from ..widgets.icon_button import set_accessible_name  # noqa: E402
 from .base import BaseDialog, DialogSize  # noqa: E402
 from .files import choose_folder, choose_open_file, choose_save_file  # noqa: E402
-from .settings_layout import SettingsPageLayout  # noqa: E402
+from .settings_layout import SettingsPageLayout, let_shrink  # noqa: E402
 
 TAB_LABEL_CHOICES = [
     (TabLabelMode.NAME.value, _("Name")),
@@ -203,7 +203,10 @@ class PreferencesDialog(BaseDialog):
         self.shortcuts_page = None
         if shortcuts is not None:
             self._build_shortcuts(shortcuts)
-        self._let_pages_shrink()
+        # Unwrapped, the check boxes, the labels column and the shortcut rows made it at least 1115 px wide
+        # for the LARGE 760 (991 for 646 in Compact).
+        for page_id in self.layout.page_ids:
+            let_shrink(self.layout.page(page_id), self._labels.get_widgets())
         self.add_body(self.layout, expand=True)
 
         self.add_cancel()
@@ -213,34 +216,6 @@ class PreferencesDialog(BaseDialog):
         self.show_all()
 
     # ------------------------------------------------------------- pages
-    def _let_pages_shrink(self) -> None:
-        """Texts wrap and combos ellipsize, so the dialog keeps its standard width.
-
-        Unwrapped, the longest check box label, the shared label column and the shortcut rows made it at
-        least 1115 px wide for the LARGE 760 (991 for 646 in Compact). Button labels stay on one line;
-        the labels column breaks only between words.
-        """
-
-        column = set(self._labels.get_widgets())
-
-        def walk(widget) -> None:
-            parent = widget.get_parent()
-            if isinstance(widget, Gtk.Label) and (not isinstance(parent, Gtk.Button)
-                                                  or isinstance(parent, Gtk.CheckButton)):
-                widget.set_line_wrap(True)
-                if widget in column:
-                    widget.set_justify(Gtk.Justification.RIGHT)
-                else:
-                    widget.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)  # a word longer than the line breaks
-            elif isinstance(widget, Gtk.ComboBox):
-                for cell in widget.get_cells():
-                    if isinstance(cell, Gtk.CellRendererText):
-                        cell.set_property("ellipsize", Pango.EllipsizeMode.END)
-            if isinstance(widget, Gtk.Container):
-                widget.forall(walk)
-
-        walk(self.layout._stack)
-
     def _section(self, page, title: str = "", description: str = "") -> FormSection:
         section = FormSection(title, description)
         page.append(section)

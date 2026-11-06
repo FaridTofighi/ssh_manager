@@ -213,6 +213,34 @@ class PreferencesWidthTests(DensityCase):
         self.assertEqual(positions, sorted(positions))  # reading order = the radio group's order
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class HostDialogWidthTests(DensityCase):
+    """Measured before, with every page shown (the File transfer and RDP pages are built when needed):
+    1036 px for the LARGE 760 (867 for 646 in Compact); 817 / 721 for an SSH host (the key picker row)."""
+
+    def test_every_page_fits_the_large_width(self) -> None:
+        from tests.gtk_window_fixture import WindowSandbox
+
+        from ophion.gtkui.dialogs.base import DialogSize, dialog_width
+
+        sandbox = WindowSandbox(store=True)
+        self.addCleanup(sandbox.close)
+        for name in self.densities():
+            for pages in ("ssh", "all"):
+                with self.subTest(density=name, pages=pages):
+                    dialog = sandbox.window.hosts.host_dialog()
+                    self.addCleanup(dialog.destroy)
+                    if pages == "all":
+                        dialog.transfer_page  # noqa: B018 - built on first use
+                        dialog._ensure_rdp_pages()
+                        for page_id in dialog.layout.page_ids:
+                            dialog.layout.set_page_visible(page_id, True)
+                    dialog.get_content_area().show_all()
+                    dialog.fit_wrapping_labels()
+                    minimum = dialog.get_preferred_width()[0]  # a resizable dialog opens at max(default, minimum)
+                    self.assertLessEqual(minimum, dialog_width(DialogSize.LARGE), f"{name}: {minimum} px")
+
+
 class WrappedLabelTests(unittest.TestCase):
     @unittest.skipUnless(display_available(), "needs a display")
     def test_natural_width_is_bounded_by_max_chars(self) -> None:

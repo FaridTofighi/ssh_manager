@@ -257,8 +257,10 @@ stays put when the brand block changes width).
    - **Large screens:** keep the standard width.
    - **Minimum width:** a resizable dialog opens at its minimum width when
      that is wider than the limit, so fixed rows must be able to shrink too.
-     Preferences wraps its labels and check boxes, ellipsizes its combos and
-     puts colour swatches eight to a line (`widgets/accent_picker.py`).
+     `settings_layout.let_shrink` wraps the labels and check boxes and
+     ellipsizes the combos of a page (Preferences and the Host dialog, also
+     for the pages they fill later); buttons beside a field go on the next
+     line; colour swatches are eight to a line (`widgets/accent_picker.py`).
    - **Checked by:** `tests/test_dialog_sweep.py` builds every dialog with
      long messages; `python3 -m tests.dialog_sweep` prints the table.
 5. Never put a list that grows with the inventory (groups, hosts) into a

@@ -12,6 +12,9 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
   dialogs are clamped to the screen width.
 - Preferences opens at its standard width (it was at least 1115 px): long labels wrap and
   the colour swatches take two lines.
+- The Host dialog opens at its standard width (up to 1036 px before, with the File transfer
+  and RDP pages): long labels wrap; "Browse…" / "SSH Keys…" and "Common sizes…" moved to
+  the line under their fields.
 - New: choose the default colour of groups and hosts in Preferences → Appearance (per-item
   colours still win). "Clear Color" in the tree's menu is now "Use Default Colour". A nested
   folder now inherits the colour of the nearest coloured group above it (before, only its

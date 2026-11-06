@@ -2,15 +2,39 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Collection, Dict, List, Optional
 
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ..theme.loader import get_theme_manager  # noqa: E402
 from ..theme.tokens import Motion, Size, Space  # noqa: E402
+
+
+def let_shrink(widget: Gtk.Widget, column: Collection[Gtk.Widget] = ()) -> None:
+    """Texts wrap and combos ellipsize under ``widget``, so a page fits its dialog's standard width.
+
+    Unwrapped, a long check box label or combo item made the whole dialog that wide (a resizable dialog
+    opens at its minimum width). Button labels stay on one line; the form's labels ``column`` breaks
+    only between words, other text also inside a word longer than the line.
+    """
+
+    parent = widget.get_parent()
+    if isinstance(widget, Gtk.Label) and widget.get_ellipsize() == Pango.EllipsizeMode.NONE and (
+            not isinstance(parent, Gtk.Button) or isinstance(parent, Gtk.CheckButton)):
+        widget.set_line_wrap(True)
+        if widget in column:
+            widget.set_justify(Gtk.Justification.RIGHT)
+        else:
+            widget.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+    elif isinstance(widget, Gtk.ComboBox):
+        for cell in widget.get_cells():
+            if isinstance(cell, Gtk.CellRendererText):
+                cell.set_property("ellipsize", Pango.EllipsizeMode.END)
+    if isinstance(widget, Gtk.Container):
+        widget.forall(lambda child: let_shrink(child, column))
 
 
 class SettingsPage(Gtk.ScrolledWindow):
@@ -113,6 +137,10 @@ class SettingsPageLayout(Gtk.Box):
     @property
     def current_page(self) -> Optional[str]:
         return self._stack.get_visible_child_name()
+
+    @property
+    def page_ids(self) -> List[str]:
+        return list(self._order)
 
     def page(self, page_id: str) -> SettingsPage:
         return self._pages[page_id]
