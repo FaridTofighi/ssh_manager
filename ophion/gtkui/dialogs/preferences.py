@@ -203,6 +203,7 @@ class PreferencesDialog(BaseDialog):
         self.shortcuts_page = None
         if shortcuts is not None:
             self._build_shortcuts(shortcuts)
+        self._let_pages_shrink()
         self.add_body(self.layout, expand=True)
 
         self.add_cancel()
@@ -212,6 +213,34 @@ class PreferencesDialog(BaseDialog):
         self.show_all()
 
     # ------------------------------------------------------------- pages
+    def _let_pages_shrink(self) -> None:
+        """Texts wrap and combos ellipsize, so the dialog keeps its standard width.
+
+        Unwrapped, the longest check box label, the shared label column and the shortcut rows made it at
+        least 1115 px wide for the LARGE 760 (991 for 646 in Compact). Button labels stay on one line;
+        the labels column breaks only between words.
+        """
+
+        column = set(self._labels.get_widgets())
+
+        def walk(widget) -> None:
+            parent = widget.get_parent()
+            if isinstance(widget, Gtk.Label) and (not isinstance(parent, Gtk.Button)
+                                                  or isinstance(parent, Gtk.CheckButton)):
+                widget.set_line_wrap(True)
+                if widget in column:
+                    widget.set_justify(Gtk.Justification.RIGHT)
+                else:
+                    widget.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)  # a word longer than the line breaks
+            elif isinstance(widget, Gtk.ComboBox):
+                for cell in widget.get_cells():
+                    if isinstance(cell, Gtk.CellRendererText):
+                        cell.set_property("ellipsize", Pango.EllipsizeMode.END)
+            if isinstance(widget, Gtk.Container):
+                widget.forall(walk)
+
+        walk(self.layout._stack)
+
     def _section(self, page, title: str = "", description: str = "") -> FormSection:
         section = FormSection(title, description)
         page.append(section)
@@ -569,7 +598,9 @@ class PreferencesDialog(BaseDialog):
                 button.connect("clicked", lambda _b, cb=callback: cb())
             buttons.pack_start(button, False, False, 0)
             self.inventory_buttons[key] = button
-        sec.add_widget(buttons)
+        # Across both columns: beside the labels column the three buttons made the page too wide.
+        buttons.set_halign(Gtk.Align.END)
+        sec.add_widget(buttons, full_width=True)
 
     def _build_audit(self) -> None:
         settings = self._settings

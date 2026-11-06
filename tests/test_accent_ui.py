@@ -60,8 +60,9 @@ class PickerTests(AccentCase):
         picker, changes = self.picker()
         swatches = list(picker.swatches.values()) + [picker.custom]
         self.assertTrue(all(swatch.get_can_focus() for swatch in swatches))
-        row = swatches[0].get_parent()
-        self.assertEqual(row.get_children(), swatches)  # the focus order is the visual order
+        row = swatches[0].get_parent()  # a grid: GTK moves focus in reading order
+        cells = [(row.child_get_property(s, "top-attach"), row.child_get_property(s, "left-attach")) for s in swatches]
+        self.assertEqual(cells, sorted(set(cells)))  # the focus order is the visual order
         picker.swatches["teal"].activate()  # Space / Enter on a focused swatch
         pump(0.4)  # a button activated from the keyboard clicks after its press animation
         self.assertEqual((picker.value, changes), ("teal", ["teal"]))

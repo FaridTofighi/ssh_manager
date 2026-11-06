@@ -177,6 +177,42 @@ class HostKeyDetailsWidthTests(DensityCase):
                 self.assertIn("SHA256:" + "Q" * 43, dialog.rows["New key"])  # the text itself is whole
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class PreferencesWidthTests(DensityCase):
+    """Measured before: at least 1115 px for the LARGE 760 (991 for 646 in Compact). The long check box
+    labels, the shared label column, the 15 colour swatches in one row, the combos and the shortcut rows
+    could not shrink."""
+
+    def test_every_page_fits_the_large_width(self) -> None:
+        from tests import dialog_sweep as S
+        from tests.gtk_window_fixture import WindowSandbox
+
+        from ophion.gtkui.dialogs.base import DialogSize, dialog_width
+
+        sandbox = WindowSandbox(store=True)
+        self.addCleanup(sandbox.close)
+        for name in self.densities():
+            with self.subTest(density=name):
+                dialog = S._preferences(sandbox.window)
+                self.addCleanup(dialog.destroy)
+                dialog.get_content_area().show_all()
+                dialog.fit_wrapping_labels()
+                minimum = dialog.get_preferred_width()[0]  # a resizable dialog opens at max(default, minimum)
+                self.assertLessEqual(minimum, dialog_width(DialogSize.LARGE), f"{name}: {minimum} px")
+
+    def test_the_colour_swatches_wrap_and_keep_their_order(self) -> None:
+        from ophion.gtkui.widgets.accent_picker import IconColorPicker
+
+        picker = IconColorPicker("group")
+        swatches = [picker.automatic, *picker.swatches.values(), picker.custom]
+        row = swatches[0].get_parent()
+        lines = sorted({row.child_get_property(swatch, "top-attach") for swatch in swatches})
+        self.assertGreater(len(lines), 1)
+        positions = [(row.child_get_property(s, "top-attach"), row.child_get_property(s, "left-attach"))
+                     for s in swatches]
+        self.assertEqual(positions, sorted(positions))  # reading order = the radio group's order
+
+
 class WrappedLabelTests(unittest.TestCase):
     @unittest.skipUnless(display_available(), "needs a display")
     def test_natural_width_is_bounded_by_max_chars(self) -> None:

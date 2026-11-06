@@ -10,6 +10,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 - The password dialog now follows the standard small dialog width and wraps long messages;
   dialogs are clamped to the screen width.
+- Preferences opens at its standard width (it was at least 1115 px): long labels wrap and
+  the colour swatches take two lines.
 - New: choose the default colour of groups and hosts in Preferences → Appearance (per-item
   colours still win). "Clear Color" in the tree's menu is now "Use Default Colour". A nested
   folder now inherits the colour of the nearest coloured group above it (before, only its

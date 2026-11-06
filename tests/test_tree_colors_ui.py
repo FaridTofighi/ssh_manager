@@ -72,7 +72,9 @@ class PickerTests(ThemeCase):
     def test_keyboard_order_and_activation(self) -> None:
         picker, changes = self.picker()
         swatches = [picker.automatic, *picker.swatches.values(), picker.custom]
-        self.assertEqual(swatches[0].get_parent().get_children(), swatches)  # focus order = visual order
+        row = swatches[0].get_parent()  # a grid: GTK moves focus in reading order
+        cells = [(row.child_get_property(s, "top-attach"), row.child_get_property(s, "left-attach")) for s in swatches]
+        self.assertEqual(cells, sorted(set(cells)))  # focus order = visual order
         self.assertTrue(all(swatch.get_can_focus() for swatch in swatches))
         swatches[1].activate()
         pump(0.4)

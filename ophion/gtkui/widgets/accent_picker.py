@@ -24,6 +24,13 @@ from .icon_button import set_accessible_name  # noqa: E402
 
 CUSTOM = "custom"
 SWATCH = 26
+SWATCHES_PER_LINE = 8  # swatches wrap onto a second line: one long row widened Preferences
+
+
+def _cell(index: int) -> tuple:
+    """``(column, line)`` of the ``index``-th swatch, in reading order (= the radio group's focus order)."""
+
+    return index % SWATCHES_PER_LINE, index // SWATCHES_PER_LINE
 
 
 def _rgb(color: str):
@@ -99,15 +106,15 @@ class AccentPicker(Gtk.Box):
         self.value = A.normalize_accent(value)
         self._custom_color = self.value if self.value.startswith("#") else ""
 
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        row = Gtk.Grid(column_spacing=Space.XS, row_spacing=Space.XS)
         self.swatches: Dict[str, _Swatch] = {}
         group: Optional[Gtk.RadioButton] = None
         for key, name, _color in A.PRESETS:
             swatch = _Swatch(group, key, A.display_color(key), _("{name} accent").format(name=_(name)))
             group = group or swatch
             swatch.connect("toggled", self._on_toggled)
+            row.attach(swatch, *_cell(len(self.swatches)), 1, 1)
             self.swatches[key] = swatch
-            row.pack_start(swatch, False, False, 0)
         self.custom = _Swatch(group, CUSTOM, self._custom_color or None, _("Custom accent colour"))
         self.custom.set_tooltip_text(_("Custom…"))
         self.custom.connect("toggled", self._on_toggled)
@@ -116,7 +123,7 @@ class AccentPicker(Gtk.Box):
                             lambda _w, event: event.button == 1 and GLib.idle_add(self.pick_custom) and False)
         self.custom.connect("key-press-event", lambda _w, event: event.keyval in (
             Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space) and GLib.idle_add(self.pick_custom) and False)
-        row.pack_start(self.custom, False, False, 0)
+        row.attach(self.custom, *_cell(len(self.swatches)), 1, 1)
         set_accessible_name(row, _("Accent colour"))
         self.pack_start(row, False, False, 0)
 
@@ -263,19 +270,19 @@ class IconColorPicker(Gtk.Box):
             (color, name) for name, color in icon_presets()) else ""
         title = _("Default group colour") if kind == "group" else _("Default host colour")
 
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.XS)
+        row = Gtk.Grid(column_spacing=Space.XS, row_spacing=Space.XS)
         self.swatches: Dict[str, _Swatch] = {}
         self.automatic = _Swatch(None, AUTOMATIC, current_palette().icon_default,
                                  _("{title}: Automatic").format(title=title))
         self.automatic.set_tooltip_text(_("Automatic (follows the theme)"))
         self.automatic.connect("toggled", self._on_toggled)
-        row.pack_start(self.automatic, False, False, 0)
+        row.attach(self.automatic, 0, 0, 1, 1)
         for name, color in icon_presets():
             swatch = _Swatch(self.automatic, color, color, _("{title}: {name}").format(title=title, name=_(name)))
             swatch.set_tooltip_text(_(name))
             swatch.connect("toggled", self._on_toggled)
             self.swatches[color] = swatch
-            row.pack_start(swatch, False, False, 0)
+            row.attach(swatch, *_cell(len(self.swatches)), 1, 1)
         self.custom = _Swatch(self.automatic, CUSTOM, self._custom_color or None,
                               _("{title}: Custom colour").format(title=title))
         self.custom.set_tooltip_text(_("Custom…"))
@@ -284,7 +291,7 @@ class IconColorPicker(Gtk.Box):
                             lambda _w, event: event.button == 1 and GLib.idle_add(self.pick_custom) and False)
         self.custom.connect("key-press-event", lambda _w, event: event.keyval in (
             Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space) and GLib.idle_add(self.pick_custom) and False)
-        row.pack_start(self.custom, False, False, 0)
+        row.attach(self.custom, *_cell(len(self.swatches) + 1), 1, 1)
         set_accessible_name(row, title)
         self.pack_start(row, False, False, 0)
 

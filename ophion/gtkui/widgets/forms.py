@@ -136,10 +136,13 @@ class FormSection(Gtk.Box):
         label_group = kwargs.pop("label_group", None)
         return self.add_row(FormRow(label, control, **kwargs), label_group)
 
-    def add_widget(self, widget: Gtk.Widget) -> None:
-        """Add a full-width widget (check boxes, explanatory text, …)."""
+    def add_widget(self, widget: Gtk.Widget, *, full_width: bool = False) -> None:
+        """Add a widget under the controls (check boxes, explanatory text, …); ``full_width``: under both columns."""
 
-        self.grid.attach(widget, 1, self._next_row, 1, 1)
+        if full_width:
+            self.grid.attach(widget, 0, self._next_row, 2, 1)
+        else:
+            self.grid.attach(widget, 1, self._next_row, 1, 1)
         self._next_row += 1
 
     def validate(self) -> bool:
