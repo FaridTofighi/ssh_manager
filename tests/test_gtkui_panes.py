@@ -141,6 +141,10 @@ def _child(theme: str, density_name: str) -> None:
                 notebook._tile_wrappers[tabs[2]].include.set_active(False)
         notebook.focus_tab(tabs[0])
         snap._pump()
+        # "Broadcast input enabled…" is a toast at the bottom end: in Comfortable its shadow fell on the
+        # bottom border of the last tile (#585B62 sampled for #5E6269). The borders are measured without it.
+        window._toasts.dismiss_all()
+        snap._pump()
 
         def hook(holder, kind=kind, window=window, tabs=tabs, notebook=notebook):
             pixbuf = holder._pixbuf
