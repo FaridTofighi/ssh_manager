@@ -2,6 +2,7 @@
 
 import gc
 import threading
+import time
 import unittest
 
 from ophion import gc_guard
@@ -9,6 +10,12 @@ from ophion import gc_guard
 
 class GcGuardTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Workers of earlier tests may still run (every main window starts the FreeRDP discovery): with one
+        # of them active, collection stayed off around this test's own worker and the checks failed.
+        deadline = time.monotonic() + 30
+        while gc_guard._active and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(gc_guard._active, 0, [thread.name for thread in threading.enumerate()])
         self.addCleanup(gc.enable if gc.isenabled() else gc.disable)
         gc.enable()
 

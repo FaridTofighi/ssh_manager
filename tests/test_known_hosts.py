@@ -137,11 +137,13 @@ class ParseTests(Case):
     def test_ten_thousand_lines_load_fast(self) -> None:
         big = self.dir / "big"
         big.write_text("".join(f"h{i}.example.org ssh-ed25519 {ED25519}\n" for i in range(10_000)))
-        started = time.perf_counter()
-        entries = KH.KnownHostsFile(big).entries()
-        elapsed = time.perf_counter() - started
+        timings = []
+        for _attempt in range(3):  # the best of three: a busy machine (the full suite) can stall one run
+            started = time.perf_counter()
+            entries = KH.KnownHostsFile(big).entries()
+            timings.append(time.perf_counter() - started)
         self.assertEqual(len(entries), 10_000)
-        self.assertLess(elapsed, 0.3)
+        self.assertLess(min(timings), 0.3, timings)  # about 0.04 s; a regression makes every run slow
 
 
 class EditTests(Case):
