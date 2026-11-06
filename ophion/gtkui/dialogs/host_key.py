@@ -16,7 +16,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # type: ignore  # noqa: E402
+from gi.repository import Gtk, Pango  # type: ignore  # noqa: E402
 
 from ... import known_hosts as KH  # noqa: E402
 from ..i18n import _  # noqa: E402
@@ -95,6 +95,9 @@ class HostKeyDetailsDialog(BaseDialog):
             text.set_xalign(0.0)
             text.set_selectable(True)
             text.set_line_wrap(True)
+            # Fingerprints and paths are single long words: they break between characters instead of
+            # widening the dialog (675 px for its 560); selecting still copies the whole value.
+            text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
             text.get_style_context().add_class("mono")
             grid.attach(key, 0, index, 1, 1)
             grid.attach(text, 1, index, 1, 1)

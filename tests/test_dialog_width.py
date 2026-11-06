@@ -146,6 +146,37 @@ class SavePasswordDialogWidthTests(DensityCase):
                     self.assertLessEqual(dialog.get_preferred_width()[1], self.limit(), name)
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class HostKeyDetailsWidthTests(DensityCase):
+    """Measured before: 675 px for the MEDIUM 560 (566 for 476 in Compact): a fingerprint is one long word."""
+
+    def test_fingerprints_and_paths_wrap_inside_the_medium_width(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from ophion.gtkui.dialogs.base import DialogSize, dialog_width
+        from ophion.gtkui.dialogs.host_key import ChangedKey, HostKeyDetailsDialog
+
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, folder, True)
+        known = folder / ("a-very-long-folder-name-" * 4) / "known_hosts"
+        known.parent.mkdir(parents=True)
+        known.write_text("web-01.example.internal ssh-ed25519 "
+                         "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n")
+        change = ChangedKey(host_label="web-01", names=[("web-01.example.internal", 22)],
+                            new_fingerprint="SHA256:" + "Q" * 43, key_type="ssh-ed25519",
+                            known_hosts_path=str(known), line_no=1)
+        for name in self.densities():
+            with self.subTest(density=name):
+                dialog = HostKeyDetailsDialog(None, change)
+                self.addCleanup(dialog.destroy)
+                dialog.get_content_area().show_all()
+                dialog.fit_wrapping_labels()
+                width = dialog.get_preferred_width()[1]
+                self.assertLessEqual(width, dialog_width(DialogSize.MEDIUM) * TOLERANCE, f"{name}: {width} px")
+                self.assertIn("SHA256:" + "Q" * 43, dialog.rows["New key"])  # the text itself is whole
+
+
 class WrappedLabelTests(unittest.TestCase):
     @unittest.skipUnless(display_available(), "needs a display")
     def test_natural_width_is_bounded_by_max_chars(self) -> None:
