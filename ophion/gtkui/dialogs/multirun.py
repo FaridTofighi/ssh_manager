@@ -15,7 +15,7 @@ from typing import Callable, List, Optional, Sequence
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk  # type: ignore  # noqa: E402
+from gi.repository import GLib, Gtk, Pango  # type: ignore  # noqa: E402
 
 from ...multirun import engine as R  # noqa: E402
 from ..i18n import _, ngettext  # noqa: E402
@@ -79,10 +79,13 @@ class MultiRunDialog(BaseDialog):
         for shell in SHELLS:
             self.shell.append_text(shell)
         self.shell.set_active(0)
+        self.shell.get_child().set_width_chars(10)  # short names; the default 150 px minimum widened the dialog
         set_accessible_name(self.shell, _("Shell that runs the script"))
         tools.pack_start(self.shell, False, False, 0)
         self.history = Gtk.ComboBoxText()
         set_accessible_name(self.history, _("Recent commands"))
+        for cell in self.history.get_cells():  # a long command made the dialog as wide as its text
+            cell.set_property("ellipsize", Pango.EllipsizeMode.END)
         self.history.connect("changed", self._on_history_chosen)
         tools.pack_end(self.history, False, False, 0)
         self.saved_button = Gtk.MenuButton(label=_("Saved Commands"))
@@ -152,7 +155,11 @@ class MultiRunDialog(BaseDialog):
         self.trust_new_key: Callable[[str, object], bool] = self._trust_new_key
         self.confirm_rerun: Callable[[str], bool] = self._confirm_rerun
         self.add_body(self.results, expand=True)
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S)
+        # Two lines (results, then re-runs): five buttons on one line made the dialog wider than its standard width.
+        actions = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=Space.XS)
+        lines = [Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=Space.S) for _line in range(2)]
+        for line in lines:
+            actions.pack_start(line, False, False, 0)
         self.result_buttons = {}
         for name, label, callback in (("copy", _("_Copy Results"), self.copy_results),
                                       ("export", _("_Export…"), self.export),
@@ -161,7 +168,7 @@ class MultiRunDialog(BaseDialog):
                                       ("sessions", _("Open _Sessions to Failed Hosts"), self.open_failed_sessions)):
             button = Gtk.Button.new_with_mnemonic(label)
             button.connect("clicked", lambda _b, cb=callback: cb())
-            actions.pack_start(button, False, False, 0)
+            lines[name not in ("copy", "export")].pack_start(button, False, False, 0)
             self.result_buttons[name] = button
         self.add_body(actions)
         self.choose_export: Callable[[], Optional[str]] = self._choose_export  # test hook

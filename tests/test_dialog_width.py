@@ -241,6 +241,33 @@ class HostDialogWidthTests(DensityCase):
                     self.assertLessEqual(minimum, dialog_width(DialogSize.LARGE), f"{name}: {minimum} px")
 
 
+@unittest.skipUnless(display_available(), "needs a display")
+class MultiRunWidthTests(DensityCase):
+    """Measured before: 873 px for the LARGE 760 (731 for 646 in Compact): five result buttons on one line,
+    the shell entry's 150 px minimum; a long command in the history made the toolbar wider still."""
+
+    def test_it_fits_the_large_width_with_a_long_history(self) -> None:
+        from tests import dialog_sweep as S
+        from tests.gtk_window_fixture import WindowSandbox
+
+        from ophion.gtkui.dialogs.base import DialogSize, dialog_width
+
+        sandbox = WindowSandbox(store=True)
+        self.addCleanup(sandbox.close)
+        for name in self.densities():
+            with self.subTest(density=name):
+                dialog = S._multirun(sandbox.window)
+                self.addCleanup(dialog.destroy)
+                dialog.history.append_text("for h in $(seq 1 100); do echo " + "x" * 200 + "; done")
+                dialog.history.set_active(-1)
+                dialog.get_content_area().show_all()
+                dialog.fit_wrapping_labels()
+                minimum = dialog.get_preferred_width()[0]  # a resizable dialog opens at max(default, minimum)
+                self.assertLessEqual(minimum, dialog_width(DialogSize.LARGE), f"{name}: {minimum} px")
+                self.assertEqual(list(dialog.result_buttons), ["copy", "export", "rerun_failed", "rerun_all",
+                                                               "sessions"])
+
+
 class WrappedLabelTests(unittest.TestCase):
     @unittest.skipUnless(display_available(), "needs a display")
     def test_natural_width_is_bounded_by_max_chars(self) -> None:
