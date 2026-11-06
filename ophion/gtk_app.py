@@ -382,6 +382,9 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         self.colors = ColorController(self)
         self.creds = CredentialController(self)
         self.tree = TreeController(self)
+        from ophion.gtkui.controllers.favorites import FavoritesController
+
+        self.favorites = FavoritesController(self)  # starred hosts and groups of the active inventory
         self.dnd = DragDropController(self)
         self.sessions = SessionController(self)
         self.hosts = HostActions(self)

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...persistence import write_json_atomic
+from ..favorites import clean_keys
 from ..tab_labels import TabLabelMode
 from ..theme.density import COMFORTABLE, DEFAULT_DENSITY, Density
 from ..theme.accent import normalize_accent, normalize_color
@@ -89,6 +90,15 @@ def _str_list(value: object) -> List[str]:
     return [item for item in value if isinstance(item, str) and item]
 
 
+def _favorites(value: object) -> Dict[str, List[str]]:
+    """``{inventory: [key, …]}``; anything else, and empty lists, are dropped."""
+
+    if not isinstance(value, dict):
+        return {}
+    lists = {scope: clean_keys(keys) for scope, keys in value.items() if isinstance(scope, str) and isinstance(keys, list)}
+    return {scope: keys for scope, keys in lists.items() if keys}
+
+
 @dataclass
 class UiState:
     """Typed view of the persisted UI state."""
@@ -115,6 +125,9 @@ class UiState:
     latency_probe: bool = True
     density: str = DEFAULT_DENSITY.value  # "compact" | "comfortable"
     tab_label_mode: str = TabLabelMode.NAME.value  # "name" | "ip" | "name_ip"
+    # Starred hosts and groups per inventory (gtkui/favorites.py) and whether their sidebar section is open.
+    favorites: Dict[str, List[str]] = field(default_factory=dict)
+    favorites_expanded: bool = True
     # Older files may carry an active content tab ("page_tab", Terminal/Details/
     # Activity); those tabs are gone, so the key is ignored and not written back.
 
@@ -153,6 +166,8 @@ class UiState:
             latency_probe=_bool(data.get("latency_probe"), True),
             density=Density.coerce(data.get("density")).value,
             tab_label_mode=TabLabelMode.coerce(data.get("tab_label_mode")).value,
+            favorites=_favorites(data.get("favorites")),
+            favorites_expanded=_bool(data.get("favorites_expanded"), True),
         )
 
     def to_dict(self) -> Dict[str, object]:
@@ -179,4 +194,6 @@ class UiState:
             "density": Density.coerce(self.density).value,
             "tab_label_mode": TabLabelMode.coerce(self.tab_label_mode).value,
             "host_colors": dict(self.host_colors),
+            "favorites": {scope: list(keys) for scope, keys in self.favorites.items() if keys},
+            "favorites_expanded": self.favorites_expanded,
         }

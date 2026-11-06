@@ -87,6 +87,9 @@ class TreeController:
         temporary = search_reveal_keys(rows, query, terms) if filtered else None
         self.host_iters = self.win.tree_view.populate(rows, temporary=temporary)
         self.win.creds.prune_bindings()  # app store: bindings of deleted hosts go away
+        favorites = getattr(self.win, "favorites", None)
+        if favorites is not None:
+            favorites.inventory_changed()  # a fresh lookup; favorites of deleted items go away
         self.restore_selection(*selected)
         self.win._sidebar.set_page(TreePage(sidebar_page_for(inventories, rows, bool(query or terms))))
         if hasattr(self.win._sidebar, "set_host_count"):
