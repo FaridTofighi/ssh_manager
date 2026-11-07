@@ -465,6 +465,9 @@ def chrome_budget(window, holder) -> dict:
         "width_share": (terminal[2] / total_w) if terminal else 0.0,
         "sidebar": sidebar[2] if sidebar else 0,
         "tree_rows": visible_rows,
+        # No compositing window manager (a private X server): Adwaita pulls the title bar 1px up over
+        # the window's border, so the top bar is 1px shorter.
+        "solid_csd": window.get_style_context().has_class("solid-csd"),
     }
 
 

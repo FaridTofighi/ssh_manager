@@ -567,6 +567,20 @@ converts each value in Python; it was 0.4 s of a 4,000-host tree rebuild, and
 GTK tests skip when `Gtk.init_check()` fails. Windows are never mapped and
 latency probing is disabled, so tests never open sockets.
 
+`tools/run_gtk_tests.py` runs any command on a private X server (Xvfb, else
+Xephyr) with fixed settings: 1920 × 1200 at 96 dpi, Adwaita and Sans 10 from a
+temporary `XDG_CONFIG_HOME`, GSettings in memory, its own D-Bus session with
+`XDG_DATA_DIRS` stripped of Flatpak exports (a Flatpak sync client started on
+the test bus asked for a login in a browser), and a no-op default handler for
+links, files and folders whose calls it lists at the end. Under a desktop
+compositor an unseen window may never get a frame, so CSS changes and layout
+are never applied (stale sizes after a density switch); with a private server
+frames run. Pixel goldens that depend on the display are taken under the runner
+and compared only when `OPHION_TEST_DISPLAY` is `private-96dpi`. Without a
+compositing window manager GTK draws the window `solid-csd`, where Adwaita pulls
+the title bar 1 px over the window border: `chrome_budget` reports
+`solid_csd` and the top bar check allows for it.
+
 Snapshots use the Compact density unless a scenario pins one: the `relay-*`
 scenarios use Comfortable, and `SSHM_DENSITY` overrides it for a whole run.
 The `compact-*` and `comfortable-session-dark` scenarios print and save a

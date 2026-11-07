@@ -1,6 +1,7 @@
 """Favorites in the main window: scoping, starring, the sidebar section, the filter and inventory changes."""
 
 import json
+import os
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -237,14 +238,17 @@ class StarActionTests(FavoritesCase):
 
 
 
-# Allocations of the sidebar's parts in a 1200x800 window before the Favorites section existed:
-# (x, y, width, height) relative to the sidebar. With no favorites the sidebar must look exactly like this.
+# Allocations of the sidebar's parts in a 1200x800 window before the Favorites section existed (7a80c3a),
+# taken with tools/run_gtk_tests.py (private X server, 96 dpi): (x, y, width, height) relative to the
+# sidebar. With no favorites the sidebar must look exactly like this. Other displays (DPI, fonts) give
+# other numbers, so it is only compared under the runner, which says so in OPHION_TEST_DISPLAY.
 GOLDEN = {
-    "comfortable": {"header": (24, 29, 244, 56), "search": (24, 107, 243, 46), "stack": (0, 153, 292, 580),
-                    "tree": (0, 173, 292, 560), "footer": (0, 733, 292, 67)},
+    "comfortable": {"header": (24, 29, 235, 52), "search": (24, 103, 234, 46), "stack": (0, 149, 283, 584),
+                    "tree": (0, 169, 283, 564), "footer": (0, 733, 283, 67)},
     "compact": {"header": (12, 0, 259, 40), "search": (12, 40, 259, 32), "stack": (0, 72, 283, 696),
                 "tree": (0, 78, 283, 690), "footer": (0, 768, 283, 32)},
 }
+GOLDEN_DISPLAY = "private-96dpi"
 
 
 class SectionCase(FavoritesCase):
@@ -300,7 +304,16 @@ class SectionVisibilityTests(SectionCase):
                 self.assertFalse(self.section.get_visible())
                 self.assertFalse(self.section.get_mapped())
                 self.assertEqual(self.section.get_allocated_height(), 1)  # never allocated: no height
-                self.assertEqual(self.parts(), GOLDEN[preset.value])
+                with_section = self.parts()
+                sidebar = self.win._sidebar
+                position = sidebar.get_children().index(self.section)
+                sidebar.remove(self.section)  # the sidebar as it was before the section existed
+                self.settle()
+                self.assertEqual(self.parts(), with_section)
+                sidebar.pack_start(self.section, False, False, 0)
+                sidebar.reorder_child(self.section, position)
+                if os.environ.get("OPHION_TEST_DISPLAY") == GOLDEN_DISPLAY:
+                    self.assertEqual(with_section, GOLDEN[preset.value])
 
     def test_appears_with_one_and_goes_with_the_last(self) -> None:
         self.show()

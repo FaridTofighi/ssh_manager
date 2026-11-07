@@ -459,6 +459,23 @@ python3 -m unittest discover
 python3 -m compileall ophion tests main.py
 ```
 
+For GTK layout tests, prefer the private X server runner. On a desktop session
+the compositor may never let an unseen test window draw a frame, so GTK never
+applies CSS changes or lays the window out again, and fonts, DPI and your own
+GTK settings change every measurement:
+
+```bash
+tools/run_gtk_tests.py                    # the whole suite (pytest, else unittest)
+tools/run_gtk_tests.py tests/test_x.py    # arguments go to pytest
+tools/run_gtk_tests.py -- <command>       # any command on the private display
+```
+
+It needs Xvfb (or Xephyr inside a desktop session, which shows its window
+while the tests run): 1920 × 1200 at 96 dpi, Adwaita and Sans 10 from a
+temporary config folder (your `~/.config` is not read or written), its own
+D-Bus session without Flatpak services, and a no-op opener: no browser or file
+manager is ever launched; the runner lists what the tests asked to open.
+
 The GTK and VTE bindings come from the distribution, so a virtualenv needs
 access to system packages:
 

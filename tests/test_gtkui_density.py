@@ -377,8 +377,10 @@ class RealLayoutTests(unittest.TestCase):
         budget = _run_child("comfortable")
         rows = budget["rows"]
         # Content heights from the reference + their 1px borders (the reference's
-        # Terminal/Details/Activity band is gone since Phase 6).
-        self.assertEqual((rows["top bar"], rows["page bar"], rows["host header / host bar"]), (77, 74, 124))
+        # Terminal/Details/Activity band is gone since Phase 6). Without a compositor (solid-csd)
+        # the title bar overlaps the window border by 1px.
+        top_bar = 77 - int(budget.get("solid_csd", False))
+        self.assertEqual((rows["top bar"], rows["page bar"], rows["host header / host bar"]), (top_bar, 74, 124))
         self.assertEqual(rows["session strip"], COMFORTABLE.size.SESSION_STRIP)
         self.assertEqual(rows["status bar"], 70)
         self.assertEqual(budget["sidebar"], 407)
