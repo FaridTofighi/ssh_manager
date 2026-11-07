@@ -134,6 +134,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
     gap = GObject.Property(type=int, default=0)
     protocol = GObject.Property(type=str, default="")  # hosts: ssh, ftp, ftps, sftp …
     badge = GObject.Property(type=str, default="")  # protocol pill text ("" for SSH)
+    flat = GObject.Property(type=bool, default=False)  # a flat list (Favorites): groups get the host row pitch
 
     def __init__(self, icon_cache: dict) -> None:
         Gtk.CellRendererText.__init__(self)
@@ -154,7 +155,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
             separator = int(widget.style_get_property("vertical-separator"))
         except (TypeError, ValueError):
             separator = 0
-        group = RowKind.coerce(self.props.kind) is not RowKind.HOST and self.props.depth == 0
+        group = RowKind.coerce(self.props.kind) is not RowKind.HOST and self.props.depth == 0 and not self.props.flat
         height = row_height_for(widget, group=group) + self.props.gap - separator
         return height, height
 
@@ -235,7 +236,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
 
         layout = widget.create_pango_layout(self.props.text or "")
         font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
-        bold = selected or (kind is not RowKind.HOST and self.props.depth == 0)
+        bold = selected or (kind is not RowKind.HOST and self.props.depth == 0 and not self.props.flat)
         font.set_weight(Pango.Weight.SEMIBOLD if bold else Pango.Weight.NORMAL)
         layout.set_font_description(font)
         layout.set_ellipsize(Pango.EllipsizeMode.END)

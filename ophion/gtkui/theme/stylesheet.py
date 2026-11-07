@@ -560,6 +560,19 @@ paned.main-paned > separator, paned.main-paned > separator.wide {
     padding: ${xs}px ${s}px;
 }
 .sm-window button.footer-link:hover { color: @sm_text_primary; background-color: @sm_bg_hover; }
+/* Favorites section header: a quiet caption row lined up with the tree's chevrons and counts. */
+.sm-window button.favorites-header {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    min-height: 0;
+    padding: 0;
+    color: @sm_text_muted;
+}
+.sm-window button.favorites-header:hover { color: @sm_text_primary; background-color: @sm_bg_hover; }
+.favorites-title { font-size: ${fs_caps}em; font-weight: 600; letter-spacing: $caps_tracking; }
+.favorites-count { font-size: ${fs_caps}em; color: @sm_text_muted; }
 .bulk-bar {
     background-color: @sm_accent_tint;
     border-top: 1px solid @sm_accent_soft_border;

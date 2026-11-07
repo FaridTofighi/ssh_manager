@@ -61,11 +61,17 @@ def _option(host: HostEntry, *names: str) -> str:
     return host.option(*names) or ""
 
 
-def filter_host(host: HostEntry, terms: Sequence[Tuple[str, str]]) -> bool:
-    """True when ``host`` satisfies every filter term."""
+FAVORITE_VALUES = {"favorite", "favourite", "fav"}
+
+
+def filter_host(host: HostEntry, terms: Sequence[Tuple[str, str]],
+                favorite: Optional[Callable[[HostEntry], bool]] = None) -> bool:
+    """True when ``host`` satisfies every filter term (``is:favorite`` asks ``favorite``)."""
 
     for key, val in terms:
-        if key in {"proto", "protocol"}:  # proto:ftp, protocol:sftp
+        if key == "is" and val in FAVORITE_VALUES:
+            matched = favorite is not None and bool(favorite(host))
+        elif key in {"proto", "protocol"}:  # proto:ftp, protocol:sftp
             matched = (getattr(host, "protocol", "ssh") or "ssh").lower() == val
         elif key in {"tag", "tags"}:
             tags = [t.strip().lower() for t in _option(host, "tags").split(",") if t.strip()]
@@ -144,6 +150,7 @@ class TreeCallbacks:
     color: Callable[..., str] = lambda _parent, _child, _alias="": ""
     read_only: Callable[[HostEntry], bool] = lambda _host: False  # besides shared inventories
     password: Callable[[HostEntry], str] = lambda _host: ""  # "credential ‘X’" / "host-specific" (never a value)
+    favorite: Callable[[HostEntry], bool] = lambda _host: False  # is:favorite
 
 
 def host_tooltip(host: HostEntry, user: str, status: str, password: str = "") -> str:
@@ -259,7 +266,7 @@ def _host_rows(
         search = search_text_for_host(host, user)
         if query and not (include_all_hosts or query in search):
             continue
-        if terms and not filter_host(host, terms):
+        if terms and not filter_host(host, terms, None if shared else callbacks.favorite):
             continue
         key = host_key(label_parent, child_name, host.alias)
         status = ConnectionStatus.coerce(callbacks.status(key)).value

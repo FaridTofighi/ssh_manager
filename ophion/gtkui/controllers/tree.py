@@ -69,6 +69,7 @@ class TreeController:
                 color=self.win.colors.item_color_for,
                 read_only=lambda host: not self.win.creds.permissions_for_host(host).get("can_edit", True),
                 password=self.win.creds.password_summary,
+                favorite=self.win.favorites.is_favorite_host,
             ),
         )
         selected = self.current_item()
@@ -84,7 +85,7 @@ class TreeController:
                         self.read_only_keys.add(row.key)
         # Unfiltered: exactly the groups the user opened this session (none at startup).
         # Filtered: the ancestors of the matches, temporarily (clearing restores the user's view).
-        temporary = search_reveal_keys(rows, query, terms) if filtered else None
+        temporary = search_reveal_keys(rows, query, terms, self.win.favorites.is_favorite_host) if filtered else None
         self.host_iters = self.win.tree_view.populate(rows, temporary=temporary)
         self.win.creds.prune_bindings()  # app store: bindings of deleted hosts go away
         favorites = getattr(self.win, "favorites", None)
@@ -293,6 +294,9 @@ class TreeController:
                                                   host_tooltip(host, user, state, self.win.creds.password_summary(host)))
             except Exception:
                 pass
+        favorites = getattr(self.win, "favorites", None)
+        if favorites is not None:
+            favorites.on_status(key, state)
         if getattr(self.win, "closing", False):
             return
         if host_page is not None and self.selected_host() is not None:
@@ -321,6 +325,7 @@ class TreeController:
         return False
 
     def on_selection_changed(self, *_args) -> None:
+        self.win.favorites.sync_selection()
         self.update_details()
         self.update_action_state()
         sidebar = getattr(self.win, "_sidebar", None)
@@ -603,7 +608,8 @@ def is_favorite_key(event: Gdk.EventKey) -> bool:
     return modifiers == Gdk.ModifierType.CONTROL_MASK and Gdk.keyval_to_lower(event.keyval) == Gdk.KEY_d
 
 
-def search_reveal_keys(rows: Iterable[TreeRow], query: str, terms: Optional[FilterTerms]) -> Set[Tuple[str, str, str]]:
+def search_reveal_keys(rows: Iterable[TreeRow], query: str, terms: Optional[FilterTerms],
+                       favorite=None) -> Set[Tuple[str, str, str]]:
     """Group keys to open (temporarily) so every match of a search/filter is visible.
 
     A host matches when the query is in its search text (or, with only filter
@@ -616,7 +622,8 @@ def search_reveal_keys(rows: Iterable[TreeRow], query: str, terms: Optional[Filt
 
     def visit(row: TreeRow, ancestors: List[Tuple[str, str, str]]) -> None:
         if row.kind is RowKind.HOST:
-            matched = (needle in row.search) if needle else bool(terms and row.host and filter_host(row.host, terms))
+            matched = (needle in row.search) if needle else bool(
+                terms and row.host and filter_host(row.host, terms, None if row.shared else favorite))
         else:
             matched = bool(needle) and needle in row.search
         if matched:

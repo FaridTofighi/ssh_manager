@@ -574,6 +574,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
         sidebar.set_filter_text(self.tree.filter_query)
         sidebar.set_filter_active(self.tree.filter_query)
         sidebar.set_smart_groups([group.name for group in self.tree.smart_groups])
+        self.favorites.attach(sidebar.favorites)
         return sidebar
 
     def _build_tree_view(self) -> SessionTreeView:
@@ -901,6 +902,8 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
 
         if hasattr(self, "tree_view"):
             self.tree_view.clear_icon_cache()
+        if hasattr(self, "_sidebar"):
+            self._sidebar.favorites.list.clear_icon_cache()
         colors = getattr(self, "colors", None)
         if colors is not None and (colors.default_group_color or colors.default_host_color) and hasattr(self, "tree"):
             self.tree.recolor()  # default icon colours are drawn to suit each theme's surfaces

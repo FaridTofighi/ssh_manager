@@ -36,6 +36,7 @@ from ..theme import density as density_tokens  # noqa: E402
 from ..theme.tokens import Layout, Size, Space  # noqa: E402
 from ..widgets.dot import Dot  # noqa: E402
 from ..widgets.empty_state import EmptyState  # noqa: E402
+from .favorites import FavoritesSection  # noqa: E402
 from ..widgets.icon_button import IconButton, set_accessible_name  # noqa: E402
 from ..widgets.icons import make_icon  # noqa: E402
 from ..controllers.shortcuts import set_accel_tooltip  # noqa: E402
@@ -45,6 +46,7 @@ FILTER_HELP = _(
     "Keys: <tt>tag</tt>, <tt>environment</tt>, <tt>owner</tt>, <tt>service</tt>, "
     "<tt>proto</tt> (<tt>ssh</tt>, <tt>ftp</tt>, <tt>ftps</tt>, <tt>sftp</tt>), "
     "or any SSH option such as <tt>user</tt> or <tt>port</tt>.\n"
+    "<tt>is:favorite</tt> keeps the favorites.\n"
     "Example: <tt>tag:prod AND owner:alice</tt>"
 )
 
@@ -121,6 +123,8 @@ class SidebarView(Gtk.Box):
         self.pack_start(self._build_header(list(template_items)), False, False, 0)
         self.pack_start(self._build_search_row(), False, False, 0)
         self.pack_start(self._build_filter_chip(), False, False, 0)
+        self.favorites = FavoritesSection()  # hidden while there are no favorites
+        self.pack_start(self.favorites, False, False, 0)
 
         self.tree_view = tree_view
         scroller = Gtk.ScrolledWindow()
@@ -163,6 +167,7 @@ class SidebarView(Gtk.Box):
         self.pack_start(self.stack, True, True, 0)
         self.pack_end(self._build_footer(), False, False, 0)
         self.pack_end(self._build_bulk_bar(), False, False, 0)
+        self.stack.connect("size-allocate", lambda *_: GLib.idle_add(self._fit_favorites))
         self.apply_density()
 
     # ------------------------------------------------------------- density
@@ -202,6 +207,7 @@ class SidebarView(Gtk.Box):
         self._filter_badge.set_margin_end(Space.XS + 2)
         self._scroller.set_margin_top(side.TREE_TOP_GAP)
 
+        self.favorites.apply_density()
         for state in (self.no_results, self.first_run):
             state.apply_density()
         self._footer.set_spacing(side.FOOTER_GAP)
@@ -209,6 +215,16 @@ class SidebarView(Gtk.Box):
         for link in (self.settings_link, self.keys_link):
             link.icon.set_pixel_size(size.ICON_FOOTER)
             link.get_child().set_spacing(Space.M - 2 if not tokens.compact else Space.S)
+
+    def _fit_favorites(self) -> bool:
+        """The Favorites list and the tree share the height between the search row and the footer."""
+
+        if self.favorites.get_visible():
+            shared = self.stack.get_allocated_height()
+            if self.favorites.scroller.get_visible():
+                shared += self.favorites.scroller.get_allocated_height()
+            self.favorites.fit(shared)
+        return GLib.SOURCE_REMOVE
 
     def set_host_count(self, count: int) -> None:
         """Number shown in the Compact header's count chip."""

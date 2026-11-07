@@ -10,14 +10,14 @@ costs nothing.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 from ...config import HostEntry
 from ..constants import RowKind, TreeColumn
 from ..favorites import FAVORITES_LIMIT, Favorites, group_key, group_path, host_key, scope_for
-from ..i18n import ngettext
-from ..theme.tokens import Level
-from .tree_controller import SHARED_PREFIX
+from ..i18n import _, ngettext
+from ..theme.tokens import ConnectionStatus, Level
+from .tree_controller import SHARED_PREFIX, TreeRow, host_tooltip
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...gtk_app import SSHManagerWindow
@@ -40,8 +40,11 @@ class FavoritesController:
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
         self.lists = Favorites(win._ui.favorites)
-        self.listeners: List[Callable[[], None]] = []  # the list or the inventory changed
+        self.listeners: List[Callable[[], None]] = [self.refresh_section]  # the list or the inventory changed
         self._index: Optional[Dict[str, Target]] = None
+        self.section = None  # views.favorites.FavoritesSection (attach())
+        self._shown: List[Tuple[str, Target]] = []  # the section's rows, in order
+        self.section_refreshes = 0  # tests and benchmarks
 
     # ------------------------------------------------------------ keys
     @property
@@ -196,4 +199,133 @@ class FavoritesController:
             return []
         index = self.index()
         return [(key, index[key]) for key in keys if key in index]
+
+    # --------------------------------------------------------- section
+    def attach(self, section) -> None:
+        self.section = section
+        section.on_expanded = self._on_expanded
+        section.on_selected = lambda index: self.reveal(index)
+        section.on_activated = self.activate
+        section.on_context_menu = self.show_context_menu
+        section.on_toggle_favorite = lambda index: self.toggle([self._shown[index][0]])
+        section.set_expanded(self.win._ui.favorites_expanded)
+
+    def _on_expanded(self, expanded: bool) -> None:
+        if self.win._ui.favorites_expanded != expanded:
+            self.win._ui.favorites_expanded = expanded
+            self.win._save_ui_state()
+
+    def refresh_section(self) -> None:
+        """Rows again (O(favorites)); none while a search or filter is active: the tree shows the results."""
+
+        if self.section is None:
+            return
+        self.section_refreshes += 1
+        filtering = bool(self.win._sidebar.search_text or self.win.tree.filter_query.strip())
+        self._shown = [] if filtering else self.targets()
+        self.section.set_rows([self._row(key, target) for key, target in self._shown])
+        self.sync_selection()
+
+    def _row(self, key: str, target: Target) -> TreeRow:
+        tree, colors = self.win.tree, self.win.colors
+        if target.kind is RowKind.HOST and target.host is not None:
+            host = target.host
+            status = ConnectionStatus.coerce(tree.host_status.get(self.win.creds.host_key(host), "unknown")).value
+            return TreeRow(RowKind.HOST, target.alias, target.parent, target.child, target.alias, host,
+                           color=colors.item_color_for(target.parent, target.child, target.alias), status=status,
+                           tooltip=self._host_tooltip(target, status),
+                           read_only=not self.win.creds.permissions_for_host(host).get("can_edit", True))
+        child = "" if target.kind is RowKind.PARENT else target.child
+        hosts = tree.hosts_in_parent_group(target.parent) if not child else tree.hosts_in_child_group(target.parent,
+                                                                                                         child)
+        group = self.win.manager.tree.get(target.parent, {}).get(child)
+        count = len(hosts)
+        return TreeRow(target.kind, child.rsplit("/", 1)[-1] if child else target.parent, target.parent, child,
+                       color=colors.item_color_for(target.parent, child), count=count,
+                       tooltip="\n".join(filter(None, (self._location(target.parent, child.rpartition("/")[0]),
+                                                      ngettext("{n} host", "{n} hosts", count).format(n=count)))),
+                       file_backed=group.file_backed if group is not None else True)
+
+    @staticmethod
+    def _location(parent: str, child: str) -> str:
+        """Where an item lives: ``prod › db``; ``""`` for a top-level group."""
+
+        return " › ".join([parent] + [part for part in child.split("/") if part]) if parent else ""
+
+    def _host_tooltip(self, target: Target, status: str) -> str:
+        host = target.host
+        user = self.win.creds.display_username_for_host(host)
+        text = host_tooltip(host, user, status, self.win.creds.password_summary(host))
+        return text + "\n" + _("In {location}").format(location=self._location(target.parent, target.child))
+
+    def on_status(self, path_key: str, state: str) -> None:
+        """The tree's status event for a host (the same source; no polling of its own)."""
+
+        for index, (_key, target) in enumerate(self._shown):
+            if target.host is not None and self.win.creds.host_key(target.host) == path_key:
+                self.section.update_row(index, ConnectionStatus.coerce(state).value, self._host_tooltip(target, state))
+
+    def sync_selection(self) -> None:
+        """Mirror the tree's selection into the list (the tree stays the one selection)."""
+
+        if self.section is None:
+            return
+        keys = self.selected_keys()
+        index = None
+        if len(keys) == 1:
+            index = next((i for i, (key, _t) in enumerate(self._shown) if key == keys[0]), None)
+        self.section.select_index(index)
+
+    def tree_path(self, target: Target):
+        if target.kind is RowKind.HOST and target.host is not None:
+            tree_iter = self.win.tree.host_iters.get(self.win.creds.host_key(target.host))
+            return self.win.tree_store.get_path(tree_iter) if tree_iter is not None else None
+        child = "" if target.kind is RowKind.PARENT else target.child
+        return self.win.tree_view._find_path(target.kind.value, target.parent, child)
+
+    def reveal(self, index: int):
+        """Select the favorite in the tree: its groups open and it scrolls into view."""
+
+        if not 0 <= index < len(self._shown):
+            return None
+        path = self.tree_path(self._shown[index][1])
+        if path is not None:
+            selection = self.win.tree_view.get_selection()
+            selection.unselect_all()
+            self.win.tree.select_path(path)
+        return path
+
+    def activate(self, index: int) -> None:
+        """Enter / double-click: a host connects; a group opens in the tree."""
+
+        path = self.reveal(index)
+        target = self._shown[index][1] if 0 <= index < len(self._shown) else None
+        if target is None or path is None:
+            return
+        if target.kind is RowKind.HOST:
+            self.win.sessions.open_hosts([target.host])
+        else:
+            self.win.tree_view.expand_row(path, False)
+            self.win.tree_view.scroll_to_cell(path, None, False, 0.0, 0.0)
+
+    def show_context_menu(self, event=None) -> None:
+        """The tree row's own menu, next to the favorite."""
+
+        from gi.repository import Gdk
+
+        from ..widgets.menus import build_context_menu, popup_menu
+
+        index = self.section.list.selected_index()
+        if index is None:
+            return
+        self.reveal(index)
+        menu = build_context_menu(self.win.tree.context_menu_spec(), attach_to=self.section.list)
+        if event is not None:
+            popup_menu(menu, event)
+            return
+        rect, window = self.section.selected_row_rect(), self.section.list.get_bin_window()
+        if rect is not None and window is not None:
+            menu.popup_at_rect(window, rect, Gdk.Gravity.SOUTH_WEST, Gdk.Gravity.NORTH_WEST, None)
+        else:
+            popup_menu(menu, None, widget=self.section.list)
 
