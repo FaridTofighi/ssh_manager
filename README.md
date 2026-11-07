@@ -228,6 +228,13 @@ that direct file mode follows `Include` directives.
   filter button next to the search field takes `key:value` terms joined with
   `AND` (for example `tag:prod AND owner:alice`) and saves filters as smart
   groups. Right-click a row, or press Shift+F10, for its actions.
+- **Favorites**: star a host or group with *Add to Favorites* in its menu, the
+  star next to its name in the host bar, or Ctrl+D while the tree has focus
+  (in a terminal Ctrl+D stays end-of-input). Favorites are listed in a
+  section at the top of the sidebar (hidden while you have none, and while a
+  search or filter is active); `is:favorite` in the filter shows them in the
+  tree, also with other terms (`is:favorite AND tag:prod`). Each inventory
+  keeps its own favorites; they are not part of exports.
 - **Host bar**: shows the host of the session in front (or the tree selection
   when no session is open), with Connect/Reconnect and a `···` menu. The ⓘ
   button (Ctrl+I, F9) opens a panel on the right edge of the workspace with
@@ -324,7 +331,8 @@ that direct file mode follows `Include` directives.
   Connect. Every shortcut can be changed in Settings → Keyboard Shortcuts.
   The sidebar starts with every group collapsed;
   Ctrl+Shift+O expands all groups and Ctrl+Shift+L collapses them again (also
-  in the filter popover and the tree's empty-space menu).
+  in the filter popover and the tree's empty-space menu). Ctrl+D in the tree
+  or the Favorites list adds or removes favorites.
 
 ## Broadcast Input
 

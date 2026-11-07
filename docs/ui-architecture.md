@@ -101,7 +101,7 @@ ophion/
 
 ```
 HeaderView (top bar: 44 px Compact, 76 px Comfortable)
-Paned ─┬─ SidebarView ─ header · search · SessionTreeView · bulk bar · footer
+Paned ─┬─ SidebarView ─ header · search · FavoritesSection · SessionTreeView · bulk bar · footer
        └─ HostPageView ─ page bar · host header ·
                          Overlay[ TerminalPage(ReadyState | TerminalNotebook) + HostPanel ] ·
                          info bar (docks the current session's status bar)
@@ -342,6 +342,48 @@ history popover in the header bar.
   `ACCENT_PRESETS` in `tokens.py`. The picker shows it (named
   "<Name> accent"), and the tests check its contrast and that its lightness
   alone changes.
+
+### Sidebar: Favorites
+
+`views/favorites.FavoritesSection` sits between the search row and the tree;
+`controllers/favorites.FavoritesController` (`win.favorites`) feeds it. Rules:
+- **Hidden when empty.** No favorites, or a search or filter active: the
+  section is not shown (`no_show_all`, never allocated), so the sidebar's
+  layout is exactly the one without it (`tests/test_favorites_ui.py` compares
+  it with a golden).
+- **The tree stays authoritative.** The list has no selection of its own: a
+  click selects and reveals the item in the tree (its groups open), and the
+  tree's selection is mirrored back (`sync_selection`). Enter / double-click
+  connects a host or opens a group; the context menu is the tree row's
+  (`TreeController.context_menu_spec`). Status badges change with the tree's
+  own status event (`set_host_status_for_key` → `on_status`); nothing polls.
+- **Id-keyed.** `host:<id>` / `group:<id>` in the app store; folder
+  inventories have no ids, so their keys are paths (`host:parent::child::alias`,
+  `group:parent::child::`) and are moved next to the credential bindings:
+  `FavoritesController.rename_host` / `remap_prefix` are called beside every
+  `rebind_credential` / `remap_credential_prefix` (Edit, Move, bulk move, drag
+  and drop, group rename and move). Keys of deleted items are skipped when
+  shown and pruned after each rebuild (`inventory_changed`, beside
+  `prune_bindings`); a duplicate gets a new id or path, so it is not a favorite.
+- **Per inventory, never exported.** `UiState.favorites` is
+  `{resolved inventory path: [keys]}` (as `recent_inventories` names
+  inventories), at most 100 in starring order; `favorites_expanded` keeps the
+  section open or closed. It lives only in `.ui_state.json`: not in exports,
+  credentials or the keybox.
+- **Size.** One row per favorite at the tree's row pitch (the tree's
+  `RelayRowRenderer` with `flat=True`); at most 5 rows (7 in Compact) before the
+  list scrolls inside, and the tree keeps at least `MIN_TREE_ROWS` (3) rows, so
+  on a short window the list closes to its header.
+- **Cost.** The key → item lookup is built from the parsed inventory once per
+  rebuild and only while the inventory has favorites; starring saves the UI
+  state and refreshes the section (O(favorites)), never the tree.
+- **Keys and menus.** *Add to / Remove from Favorites* is first in the
+  Organize section of host and group menus (disabled for a shared inventory's
+  rows). Ctrl+D is handled by the tree's and the list's own key handlers, never
+  as an application accelerator, so a terminal still gets end-of-input
+  (`toggle-favorite` has `display_accels` only). The header star is
+  `HostHeader.favorite_button`. `is:favorite` (`is:fav`, `is:favourite`) is a
+  filter term (`tree_controller.filter_host`).
 
 ### Tree colours
 

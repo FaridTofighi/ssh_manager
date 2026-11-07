@@ -174,7 +174,7 @@ class FavoritesController:
         index: Dict[str, Target] = {}
         manager = self.win.manager
         group_id = getattr(manager, "group_id", None)
-        credential_key = self.win.creds.credential_key
+        host = RowKind.HOST
         for parent, children in manager.tree.items():
             top = group_id(parent) if group_id is not None else None
             index[group_key(top or group_path(parent, ""))] = Target(RowKind.PARENT, parent)
@@ -187,8 +187,11 @@ class FavoritesController:
                             index.setdefault(group_key(group_path(parent, folder)),
                                              Target(RowKind.CHILD_FOLDER, parent, folder))
                     index[group_key(group.id or group_path(parent, child))] = Target(RowKind.CHILD, parent, child)
-                for host in group.hosts:
-                    index[host_key(credential_key(host))] = Target(RowKind.HOST, parent, child, host.alias, host)
+                # host_key(creds.credential_key(entry)), spelled out: this loop sees every host of the inventory
+                path = f"host:{parent}::{child}::"
+                for entry in group.hosts:
+                    index[f"host:{entry.id}" if entry.id else path + entry.alias] = Target(
+                        host, parent, child, entry.alias, entry)
         return index
 
     def targets(self) -> List[tuple]:
@@ -230,6 +233,14 @@ class FavoritesController:
         tree, colors = self.win.tree, self.win.colors
         if target.kind is RowKind.HOST and target.host is not None:
             host = target.host
+            tree_iter = tree.host_iters.get(self.win.creds.host_key(host))
+            if tree_iter is not None:  # the tree's row has it all already (status, colour, tooltip)
+                model = self.win.tree_store
+                status = model.get_value(tree_iter, TreeColumn.STATUS) or ConnectionStatus.UNKNOWN.value
+                return TreeRow(RowKind.HOST, target.alias, target.parent, target.child, target.alias, host,
+                               color=model.get_value(tree_iter, TreeColumn.COLOR) or "", status=status,
+                               tooltip=self._with_location(model.get_value(tree_iter, TreeColumn.TOOLTIP) or "", target),
+                               read_only=bool(model.get_value(tree_iter, TreeColumn.READ_ONLY)))
             status = ConnectionStatus.coerce(tree.host_status.get(self.win.creds.host_key(host), "unknown")).value
             return TreeRow(RowKind.HOST, target.alias, target.parent, target.child, target.alias, host,
                            color=colors.item_color_for(target.parent, target.child, target.alias), status=status,
@@ -255,15 +266,20 @@ class FavoritesController:
     def _host_tooltip(self, target: Target, status: str) -> str:
         host = target.host
         user = self.win.creds.display_username_for_host(host)
-        text = host_tooltip(host, user, status, self.win.creds.password_summary(host))
-        return text + "\n" + _("In {location}").format(location=self._location(target.parent, target.child))
+        return self._with_location(host_tooltip(host, user, status, self.win.creds.password_summary(host)), target)
+
+    def _with_location(self, tooltip: str, target: Target) -> str:
+        return tooltip + "\n" + _("In {location}").format(location=self._location(target.parent, target.child))
 
     def on_status(self, path_key: str, state: str) -> None:
         """The tree's status event for a host (the same source; no polling of its own)."""
 
         for index, (_key, target) in enumerate(self._shown):
             if target.host is not None and self.win.creds.host_key(target.host) == path_key:
-                self.section.update_row(index, ConnectionStatus.coerce(state).value, self._host_tooltip(target, state))
+                tree_iter = self.win.tree.host_iters.get(path_key)  # the tree set its tooltip just before
+                tooltip = (self._with_location(self.win.tree_store.get_value(tree_iter, TreeColumn.TOOLTIP) or "", target)
+                           if tree_iter is not None else self._host_tooltip(target, state))
+                self.section.update_row(index, ConnectionStatus.coerce(state).value, tooltip)
 
     def sync_selection(self) -> None:
         """Mirror the tree's selection into the list (the tree stays the one selection)."""

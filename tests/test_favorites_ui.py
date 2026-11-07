@@ -585,5 +585,109 @@ class SmokeTests(SectionCase):
         self.assertLess(count_x, chevron_x)
 
 
+
+class ConsistencyTests(FavoritesCase):
+    """Favorites follow renames and moves and lose deleted items (app store: ids; folder inventory: paths)."""
+
+    def edit(self, alias: str, new_alias: str) -> None:
+        import dataclasses
+
+        self.select(alias)
+        host = self.host(alias)
+        updated = dataclasses.replace(host, alias=new_alias, options=dict(host.options), metadata=dict(host.metadata))
+        hosts = self.win.hosts
+        with mock.patch.object(hosts, "host_dialog"), \
+                mock.patch.object(hosts, "run_host_dialog", return_value=(updated, None, None)), \
+                mock.patch.object(self.win.creds, "check_secrets_policy", return_value=True), \
+                mock.patch.object(self.win.creds, "apply_host_credentials"):
+            hosts.edit_selected()
+
+    def prompt(self, answer: str):
+        return mock.patch.object(self.win, "_prompt_text", return_value=answer)
+
+    def test_a_renamed_host_stays_a_favorite(self) -> None:
+        self.star("web-01")
+        self.edit("web-01", "www-01")
+        self.assertEqual(self.starred_aliases(), ["www-01"])
+
+    def test_moved_hosts_stay_favorites(self) -> None:
+        self.star("web-01", "web-02")
+        self.select("web-01")
+        with mock.patch.object(self.win.hosts, "pick_group", return_value=("staging", "hosts.conf", False)):
+            self.win.hosts.move_selected()  # the Move dialog
+        self.select("web-01", "web-02")
+        with mock.patch.object(self.win.hosts, "pick_group", return_value=("prod", "db/primary.conf", False)):
+            self.win.hosts.bulk_move_selected()  # several at once
+        self.win.dnd._drop_hosts([{"parent": "prod", "child": "db/primary.conf", "alias": "web-02"}],
+                                 {"type": "child", "parent": "staging", "child": "hosts.conf"})  # a drag
+        self.assertEqual(sorted(self.starred_aliases()), ["web-01", "web-02"])
+        self.assertEqual({(t.alias, t.parent, t.child) for _k, t in self.fav.targets()},
+                         {("web-01", "prod", "db/primary.conf"), ("web-02", "staging", "hosts.conf")})
+
+    def test_renamed_and_moved_groups_stay_favorites_with_their_hosts(self) -> None:
+        self.star("web-01")
+        self.win.tree.select_parent_group("prod")
+        self.fav.toggle_selected()
+        self.win.tree.select_child_group("prod", "web.conf")
+        self.fav.toggle_selected()
+        self.win.tree.select_parent_group("prod")
+        with self.prompt("production"):
+            self.win.groups.rename_parent_group()
+        self.win.tree.select_child_group("production", "web.conf")
+        with self.prompt("www.conf"):
+            self.win.groups.rename_child_group()
+        self.assertEqual(self.starred_aliases(), ["web-01", "production", "www.conf"])
+        self.win.dnd._drop_child_group([{"parent": "production", "child": "www.conf"}],
+                                       {"type": "parent", "parent": "staging"})
+        self.assertEqual([(t.kind.value, t.parent, t.child) for _k, t in self.fav.targets()],
+                         [("host", "staging", "www.conf"), ("parent", "production", ""), ("child", "staging", "www.conf")])
+
+    def test_deleted_items_go_and_a_duplicate_is_not_a_favorite(self) -> None:
+        self.star("web-01", "db-primary")
+        self.win.tree.select_parent_group("staging")
+        self.fav.toggle_selected()
+        self.select("web-01")
+        dialog = mock.Mock()
+        clone = None
+
+        def run(dialog_, parent, child):
+            import dataclasses
+
+            host = self.host("web-01")
+            return dataclasses.replace(host, alias="web-01-copy", id="", options=dict(host.options),
+                                       metadata=dict(host.metadata)), None, None
+
+        with mock.patch.object(self.win.hosts, "host_dialog", return_value=dialog), \
+                mock.patch.object(self.win.hosts, "run_host_dialog", side_effect=run), \
+                mock.patch.object(self.win.creds, "check_secrets_policy", return_value=True), \
+                mock.patch.object(self.win.creds, "apply_host_credentials"):
+            self.win.hosts.duplicate_selected()
+        self.assertIsNone(clone)
+        self.assertFalse(self.fav.is_favorite_host(self.host("web-01-copy")))
+        self.select("db-primary")
+        with mock.patch.object(self.win, "_confirm", return_value=True):
+            self.win.hosts.delete_selected()
+            self.win.tree.select_parent_group("staging")
+            self.win.groups.delete_parent_group()
+        self.assertEqual(self.starred_aliases(), ["web-01"])
+        self.assertEqual(len(self.fav.keys()), 1)  # pruned, not only hidden
+
+    def test_replacing_the_inventory_drops_what_is_gone(self) -> None:
+        self.star("web-01", "stage-app")
+        manager = self.win.manager
+        if self.store:
+            self.sandbox.store.delete_hosts([h.id for g in manager.tree.values() for c in g.values() for h in c.hosts
+                                            if h.alias == "stage-app"])
+        else:
+            (self.sandbox.base / "staging" / "hosts.conf").write_text("")
+        self.win.inventory.refresh()  # what an import (replace) or a reload ends with
+        self.assertEqual(self.starred_aliases(), ["web-01"])
+        self.assertEqual(len(self.fav.keys()), 1)
+
+
+class FolderConsistencyTests(ConsistencyTests):
+    store = False
+
+
 if __name__ == "__main__":
     unittest.main()

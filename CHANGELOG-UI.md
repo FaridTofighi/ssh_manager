@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- New: Favorites — star hosts and groups (context menu, Ctrl+D, header star) and reach them
+  from the Favorites section at the top of the sidebar; filter with `is:favorite`.
 - The password dialog now follows the standard small dialog width and wraps long messages;
   dialogs are clamped to the screen width.
 - Preferences opens at its standard width (it was at least 1115 px): long labels wrap and

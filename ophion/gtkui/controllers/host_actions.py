@@ -244,6 +244,7 @@ class HostActions:
             old_key, new_key = self.win.creds.credential_key(host), self.win.creds.credential_key(updated)
             if new_key != old_key:  # folder inventory rename: the binding (and a private credential) follows
                 self.win.creds.rebind_credential(old_key, new_key)
+                self.win.favorites.rename_host(old_key, new_key)
             self.win.creds.apply_host_credentials(updated, cred_id, choice)
             if changed:
                 self.win.sessions.audit_log("edit", updated, extra={"fields": ",".join(changed)})
@@ -317,6 +318,8 @@ class HostActions:
         )
         self.win._log_event(msg, success)
         if success:
+            self.win.favorites.rename_host(self.win.creds.credential_key(host),
+                                           f"{target_parent}::{target_child}::{host.alias}")
             if binding and not host.id:  # folder inventories key bindings by path; app-store ids are stable
                 self.win.creds.bind_credential(
                     f"{target_parent}::{target_child}::{host.alias}",
@@ -369,6 +372,7 @@ class HostActions:
                     f"{parent}::{child}::{alias}",
                     f"{target_parent}::{target_child}::{alias}",
                 )
+                self.win.favorites.rename_host(f"{parent}::{child}::{alias}", f"{target_parent}::{target_child}::{alias}")
             self.win.tree.rebuild(refresh=True)
 
     @requires_editable_inventory
