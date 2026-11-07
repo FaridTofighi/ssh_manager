@@ -213,6 +213,7 @@ class GroupActions:
         if success:
             self.win.creds.remap_credential_prefix(f"{current}::", f"{new_name}::")
             self.win.favorites.remap_prefix(f"{current}::", f"{new_name}::")
+            self.win.colors.move_group(current, "", new_name, "")
             self.win.tree.remap_group_keys(current, new_name)  # an open group stays open
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_parent_group(new_name)
@@ -261,6 +262,7 @@ class GroupActions:
                 f"{parent}::{new_name}::",
             )
             self.win.favorites.remap_prefix(f"{parent}::{current}::", f"{parent}::{new_name}::")
+            self.win.colors.move_group(parent, current, parent, new_name)
             self.win.tree.remap_group_keys(parent, parent, current, new_name)
             self.win.tree.rebuild(refresh=True)
             self.win.tree.select_child_group(parent, new_name)
@@ -307,6 +309,7 @@ class GroupActions:
         self.win._log_event(msg, success)
         if success:
             self.win.creds.unbind_credential_prefix(f"{name}::")
+            self.win.colors.forget_group(name)
             self.win.tree.rebuild(refresh=True)
 
     @requires_editable_inventory
@@ -332,6 +335,7 @@ class GroupActions:
         self.win._log_event(msg, success)
         if success:
             self.win.creds.unbind_credential_prefix(f"{parent}::{child}::")
+            self.win.colors.forget_group(parent, child)
             self.win.tree.rebuild(refresh=True)
 
     def prompt_child_destination(self, parent: str, *, title: Optional[str] = None, message: Optional[str] = None,

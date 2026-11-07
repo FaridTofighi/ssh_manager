@@ -13,6 +13,11 @@ the details header and the group pickers share):
 
 Per-item colours are drawn exactly as chosen. Only per-item colours are exported with the inventory; the
 defaults are a personal display preference.
+
+Per-item colours are keyed by path (groups ``parent`` / ``parent/child``, hosts ``parent::child::alias``),
+so they are moved with their item (:func:`remap_color_keys`, after a rename or move) and removed with it
+(:func:`forget_color_keys`, after a delete); otherwise a renamed item lost its colour and a later item of
+the old name inherited it.
 """
 
 from __future__ import annotations
@@ -35,6 +40,58 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _group_under(key: str, parent: str, child: str) -> Optional[str]:
+    """The part of group key ``key`` below ``parent``/``child`` (``""`` = the group itself), else None."""
+
+    base = parent if not child else f"{parent}/{child}"
+    if key == base:
+        return ""
+    return key[len(base):] if key.startswith(base + "/") else None
+
+
+def _host_under(key: str, parent: str, child: str) -> Optional[Tuple[str, str]]:
+    """``(child path below child, alias)`` when host key ``key`` is inside ``parent``/``child``, else None."""
+
+    parts = key.split("::", 2)
+    if len(parts) != 3 or parts[0] != parent:
+        return None
+    if not child:
+        return parts[1], parts[2]
+    if parts[1] == child or parts[1].startswith(child + "/"):
+        return parts[1][len(child):], parts[2]
+    return None
+
+
+def remap_color_keys(group_colors: Dict[str, str], host_colors: Dict[str, str], old_parent: str, old_child: str,
+                     new_parent: str, new_child: str) -> None:
+    """A group (``old_child`` empty: a top-level one) was renamed or moved: it and everything below it keep
+    their colours at the new place; keys left at the new place by an earlier rename are dropped."""
+
+    def group_key(rest: str) -> str:
+        return (new_parent if not new_child else f"{new_parent}/{new_child}") + rest
+
+    def host_key(rest: str, alias: str) -> str:
+        return f"{new_parent}::{(new_child + rest) if new_child else rest}::{alias}"
+
+    moved_groups = {group_key(rest): color for key, color in group_colors.items()
+                    if (rest := _group_under(key, old_parent, old_child)) is not None}
+    moved_hosts = {host_key(*found): color for key, color in host_colors.items()
+                   if (found := _host_under(key, old_parent, old_child)) is not None}
+    forget_color_keys(group_colors, host_colors, old_parent, old_child)
+    forget_color_keys(group_colors, host_colors, new_parent, new_child)
+    group_colors.update(moved_groups)
+    host_colors.update(moved_hosts)
+
+
+def forget_color_keys(group_colors: Dict[str, str], host_colors: Dict[str, str], parent: str, child: str) -> None:
+    """A group was deleted: its colour and those of its subgroups and hosts go too."""
+
+    for key in [key for key in group_colors if _group_under(key, parent, child) is not None]:
+        del group_colors[key]
+    for key in [key for key in host_colors if _host_under(key, parent, child) is not None]:
+        del host_colors[key]
 
 
 class ColorController:
@@ -111,6 +168,36 @@ class ColorController:
         else:
             self.host_colors.pop(key, None)
         self.win._save_ui_state()
+
+    def move_host(self, old: Tuple[str, str, str], new: Tuple[str, str, str]) -> None:
+        """A host got a new ``(parent, child, alias)``: its own colour (or none) goes with it."""
+
+        old_key, new_key = self.win.tree.make_host_key(*old), self.win.tree.make_host_key(*new)
+        if old_key == new_key or (old_key not in self.host_colors and new_key not in self.host_colors):
+            return
+        color = self.host_colors.pop(old_key, None)
+        self.host_colors.pop(new_key, None)  # left there by an earlier rename
+        if color:
+            self.host_colors[new_key] = color
+        self.win._save_ui_state()
+
+    def forget_host(self, parent: str, child: str, alias: str) -> None:
+        if self.host_colors.pop(self.win.tree.make_host_key(parent, child, alias), None) is not None:
+            self.win._save_ui_state()
+
+    def move_group(self, old_parent: str, old_child: str, new_parent: str, new_child: str) -> None:
+        """A group was renamed or moved (``old_child`` empty: a top-level one); see :func:`remap_color_keys`."""
+
+        before = (dict(self.group_colors), dict(self.host_colors))
+        remap_color_keys(self.group_colors, self.host_colors, old_parent, old_child, new_parent, new_child)
+        if (self.group_colors, self.host_colors) != before:
+            self.win._save_ui_state()
+
+    def forget_group(self, parent: str, child: str = "") -> None:
+        before = (dict(self.group_colors), dict(self.host_colors))
+        forget_color_keys(self.group_colors, self.host_colors, parent, child)
+        if (self.group_colors, self.host_colors) != before:
+            self.win._save_ui_state()
 
     def item_color_for(self, parent: str, child: str, alias: str = "") -> str:
         """The colour to draw a group (``alias == ""``) or host icon in (see the module docstring)."""

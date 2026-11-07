@@ -241,6 +241,8 @@ class HostActions:
         success, msg = self.win.manager.update_host(host.parent_group, host.child_group, host.alias, updated)
         self.win._log_event(msg, success)
         if success:
+            self.win.colors.move_host((host.parent_group, host.child_group, host.alias),
+                                      (host.parent_group, host.child_group, updated.alias))
             old_key, new_key = self.win.creds.credential_key(host), self.win.creds.credential_key(updated)
             if new_key != old_key:  # folder inventory rename: the binding (and a private credential) follows
                 self.win.creds.rebind_credential(old_key, new_key)
@@ -318,6 +320,8 @@ class HostActions:
         )
         self.win._log_event(msg, success)
         if success:
+            self.win.colors.move_host((host.parent_group, host.child_group, host.alias),
+                                      (target_parent, target_child, host.alias))
             self.win.favorites.rename_host(self.win.creds.credential_key(host),
                                            f"{target_parent}::{target_child}::{host.alias}")
             if binding and not host.id:  # folder inventories key bindings by path; app-store ids are stable
@@ -351,6 +355,7 @@ class HostActions:
         self.win._log_event(msg, success)
         if success:
             self.win.creds.bind_credential(self.win.creds.credential_key(host), None)
+            self.win.colors.forget_host(host.parent_group, host.child_group, host.alias)
             self.win.sessions.audit_log("delete", host)
             self.win.tree.rebuild(refresh=True)
 
@@ -373,6 +378,7 @@ class HostActions:
                     f"{target_parent}::{target_child}::{alias}",
                 )
                 self.win.favorites.rename_host(f"{parent}::{child}::{alias}", f"{target_parent}::{target_child}::{alias}")
+                self.win.colors.move_host((parent, child, alias), (target_parent, target_child, alias))
             self.win.tree.rebuild(refresh=True)
 
     @requires_editable_inventory

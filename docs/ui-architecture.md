@@ -417,6 +417,13 @@ violet.
 
 **Context menu.** "Use Default Colour" removes only the item's own colour.
 
+**Keys follow the item.** Per-item colours are keyed by path (groups
+`parent` / `parent/child`, hosts `parent::child::alias`) in both inventory
+kinds. `ColorController.move_host` / `move_group` (`remap_color_keys`) carry
+them after a rename or move (Edit, Move, bulk move, drag and drop, group
+rename and move, next to the credential and favorite sync) and drop stale keys
+at the new place; `forget_host` / `forget_group` remove them after a delete.
+
 ## Icons
 
 - **Application icon:** the icon name is `ophion`: a spiral mark (orange,

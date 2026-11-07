@@ -8,6 +8,8 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- A renamed or moved host or group keeps its tree colour (it lost it, and a later item with
+  the old name took it over); deleting an item removes its colour.
 - New: Favorites — star hosts and groups (context menu, Ctrl+D, header star) and reach them
   from the Favorites section at the top of the sidebar; filter with `is:favorite`.
 - The password dialog now follows the standard small dialog width and wraps long messages;

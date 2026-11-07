@@ -235,6 +235,7 @@ class DragDropController:
                 )
                 win.favorites.rename_host(f"{source_parent}::{source_child}::{alias}",
                                           f"{target_parent}::{target_child}::{alias}")
+                win.colors.move_host((source_parent, source_child, alias), (target_parent, target_child, alias))
             win.tree.rebuild(refresh=True)
             win.tree.select_child_group(target_parent, target_child)
         return success
@@ -262,6 +263,7 @@ class DragDropController:
         if success:
             win.creds.remap_credential_prefix(f"{source_parent}::{source_child}::", f"{target_parent}::{source_child}::")
             win.favorites.remap_prefix(f"{source_parent}::{source_child}::", f"{target_parent}::{source_child}::")
+            win.colors.move_group(source_parent, source_child, target_parent, source_child)
             win.tree.remap_group_keys(source_parent, target_parent, source_child, source_child)
             win.tree.rebuild(refresh=True)
             win.tree.select_child_group(target_parent, source_child)
