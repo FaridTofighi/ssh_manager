@@ -99,10 +99,60 @@ class ColorController:
 
     def __init__(self, win: "SSHManagerWindow") -> None:
         self.win = win
-        self.group_colors: Dict[str, str] = dict(win._ui.group_colors)
-        self.host_colors: Dict[str, str] = dict(win._ui.host_colors)
+        self.scope = ""
+        self.group_colors: Dict[str, str] = {}
+        self.host_colors: Dict[str, str] = {}
+        ui = win._ui
+        if getattr(ui, "unscoped_colors", None) is None:  # a file from before per-inventory colours: one set
+            ui.unscoped_colors = {"groups": dict(ui.group_colors), "hosts": dict(ui.host_colors)}
+        self.activate()
         self.default_group_color: str = getattr(win._ui, "default_group_color", "") or ""
         self.default_host_color: str = getattr(win._ui, "default_host_color", "") or ""
+
+    # ------------------------------------------------------- per inventory
+    def activate(self) -> None:
+        """Use the active inventory's colours (at start, and after a workspace switch before the rebuild)."""
+
+        from ..favorites import scope_for
+
+        ui = self.win._ui
+        manager = getattr(self.win, "manager", None)
+        if manager is None or getattr(ui, "inventory_colors", None) is None:  # no inventory to scope by
+            self.group_colors, self.host_colors = dict(ui.group_colors), dict(ui.host_colors)
+            return
+        self.scope = scope_for(manager.base_dir)
+        maps = ui.inventory_colors.get(self.scope)
+        if maps is None:
+            maps = self._first_colors()
+            if manager.tree or not getattr(manager, "read_only", False):  # not a store that failed to open
+                ui.inventory_colors[self.scope] = maps
+        self.group_colors, self.host_colors = maps["groups"], maps["hosts"]  # edited in place, saved with the state
+
+    def _first_colors(self) -> Dict[str, Dict[str, str]]:
+        """An inventory seen for the first time: the old shared colours of its own items (what it showed)."""
+
+        from .tree_controller import SHARED_PREFIX
+
+        unscoped = self.win._ui.unscoped_colors or {}
+        groups, hosts = unscoped.get("groups") or {}, unscoped.get("hosts") or {}
+        tree = getattr(self.win.manager, "tree", None)
+        if not isinstance(tree, dict):  # no parsed inventory to match against: all of them, as before
+            return {"groups": dict(groups), "hosts": dict(hosts)}
+        if not groups and not hosts:
+            return {"groups": {}, "hosts": {}}
+        group_keys, host_keys = set(), set()
+        for parent, children in tree.items():
+            group_keys.add(parent)
+            for child, group in children.items():
+                parts = [part for part in child.split("/") if part]
+                group_keys.update(f"{parent}/{'/'.join(parts[:depth])}" for depth in range(1, len(parts) + 1))
+                host_keys.update(f"{parent}::{child}::{host.alias}" for host in group.hosts)
+
+        def own(key: str, known: set) -> bool:
+            return key in known or key.startswith(SHARED_PREFIX)  # a shared inventory shows next to every one
+
+        return {"groups": {k: v for k, v in groups.items() if own(k, group_keys)},
+                "hosts": {k: v for k, v in hosts.items() if own(k, host_keys)}}
 
     def group_color_for(self, parent: str, child: str) -> str:
         key = parent if not child else f"{parent}/{child}"

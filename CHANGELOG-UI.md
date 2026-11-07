@@ -8,6 +8,9 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- Tree colours are per inventory: a workspace no longer shows another one's colours for groups
+  or hosts with the same names. After the update, each inventory keeps the colours of its own
+  items it showed before.
 - A renamed or moved host or group keeps its tree colour (it lost it, and a later item with
   the old name took it over); deleting an item removes its colour.
 - New: Favorites — star hosts and groups (context menu, Ctrl+D, header star) and reach them

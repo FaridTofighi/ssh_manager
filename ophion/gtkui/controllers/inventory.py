@@ -63,6 +63,7 @@ class InventoryController:
         ui = self.win._ui
         ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
         self.win.manager = self._manager_for(Path(path))
+        self.win.colors.activate()  # each inventory has its own tree colours
         ui.recent_inventories = remember_workspace(ui.recent_inventories, self.win.manager.base_dir)
         self.win.refresh_workspaces()
         self.win.tree.rebuild(refresh=False)

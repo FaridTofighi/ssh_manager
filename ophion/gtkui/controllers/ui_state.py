@@ -90,6 +90,19 @@ def _str_list(value: object) -> List[str]:
     return [item for item in value if isinstance(item, str) and item]
 
 
+def _color_maps(value: object) -> Dict[str, Dict[str, str]]:
+    """``{"groups": {key: colour}, "hosts": {key: colour}}``; anything else is empty."""
+
+    value = value if isinstance(value, dict) else {}
+    return {"groups": _str_map(value.get("groups")), "hosts": _str_map(value.get("hosts"))}
+
+
+def _inventory_colors(value: object) -> Dict[str, Dict[str, Dict[str, str]]]:
+    if not isinstance(value, dict):
+        return {}
+    return {scope: _color_maps(maps) for scope, maps in value.items() if isinstance(scope, str)}
+
+
 def _favorites(value: object) -> Dict[str, List[str]]:
     """``{inventory: [key, …]}``; anything else, and empty lists, are dropped."""
 
@@ -119,6 +132,13 @@ class UiState:
     ui_font_size: int = 11
     details_expanded: bool = True
     filter_query: str = ""
+    # Per-item tree colours of each inventory (scope as for favorites); ColorController uses the active one's.
+    # group_colors / host_colors are the active inventory's, still written for older versions.
+    inventory_colors: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
+    # Colours of a file from before inventory_colors (one set for every inventory): an inventory opened for
+    # the first time takes the ones of its own items.
+    # None: not split up yet; ColorController takes group_colors / host_colors as they were at the start.
+    unscoped_colors: Optional[Dict[str, Dict[str, str]]] = None
     group_colors: Dict[str, str] = field(default_factory=dict)
     host_colors: Dict[str, str] = field(default_factory=dict)
     recent_inventories: List[str] = field(default_factory=list)
@@ -160,6 +180,8 @@ class UiState:
             ui_font_size=_int(data.get("ui_font_size"), 11),
             details_expanded=data.get("details_expanded") is not False,
             filter_query=_str(data.get("filter_query"), ""),
+            inventory_colors=_inventory_colors(data.get("inventory_colors")),
+            unscoped_colors=_color_maps(data.get("unscoped_colors")) if "inventory_colors" in data else None,
             group_colors=_str_map(data.get("group_colors")),
             host_colors=_str_map(data.get("host_colors")),
             recent_inventories=_str_list(data.get("recent_inventories")),
@@ -194,6 +216,9 @@ class UiState:
             "density": Density.coerce(self.density).value,
             "tab_label_mode": TabLabelMode.coerce(self.tab_label_mode).value,
             "host_colors": dict(self.host_colors),
+            "inventory_colors": {scope: _color_maps(maps) for scope, maps in self.inventory_colors.items()},
+            "unscoped_colors": _color_maps(self.unscoped_colors if self.unscoped_colors is not None else
+                                           {"groups": self.group_colors, "hosts": self.host_colors}),
             "favorites": {scope: list(keys) for scope, keys in self.favorites.items() if keys},
             "favorites_expanded": self.favorites_expanded,
         }

@@ -417,6 +417,19 @@ violet.
 
 **Context menu.** "Use Default Colour" removes only the item's own colour.
 
+**Per inventory.** `UiState.inventory_colors` holds one
+`{"groups": {…}, "hosts": {…}}` per inventory (the resolved inventory path, as
+for favorites); `ColorController.activate()` picks the active one at start and
+on a workspace switch (`InventoryController.load_workspace`), and edits go to
+those dicts in place. The flat `group_colors` / `host_colors` keys are still
+written with the active inventory's colours, for older versions. A file from
+before (no `inventory_colors`) had one set for every inventory: it is kept as
+`unscoped_colors`, and each inventory, the first time it opens, takes the
+entries that match its own items (what it showed before, without the other
+inventories' and the orphaned ones). A store that failed to open (read-only and
+empty) does not take its share yet. Colours of `[Shared] …` rows go with every
+inventory, as the shared inventory shows next to each one.
+
 **Keys follow the item.** Per-item colours are keyed by path (groups
 `parent` / `parent/child`, hosts `parent::child::alias`) in both inventory
 kinds. `ColorController.move_host` / `move_group` (`remap_color_keys`) carry

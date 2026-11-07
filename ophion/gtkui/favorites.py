@@ -43,7 +43,7 @@ def scope_for(base_dir: Path) -> str:
 
     try:
         return str(Path(base_dir).expanduser().resolve())
-    except OSError:
+    except (OSError, TypeError):
         return str(base_dir)
 
 
