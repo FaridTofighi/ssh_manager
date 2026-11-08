@@ -68,5 +68,18 @@ class ClosingTests(unittest.TestCase):
         self.assertEqual(page.get_visible_child_name(), "ready")
 
 
+    def test_window_tests_never_send_desktop_notifications(self) -> None:
+        from tests.gtk_window_fixture import WindowSandbox
+
+        sandbox = WindowSandbox(store=True)
+        self.addCleanup(sandbox.close)
+        host = next(h for groups in sandbox.window.manager.tree.values() for g in groups.values() for h in g.hosts)
+        app = sandbox.window.get_application()
+        before = len(app.sent_notifications)
+        sandbox.window.sessions.notify_connection_success(host)  # a real one on the desktop
+        self.assertEqual(len(app.sent_notifications), before + 1)
+        self.assertEqual(app.sent_notifications[-1][1].__class__.__name__, "Notification")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -67,6 +67,7 @@ class Offscreen:
 
         self.window = window
         self.child = window.get_child()
+        self._popovers = self._detach_popovers()
         window.remove(self.child)
         self.top = Gtk.OffscreenWindow()
         self.top.set_default_size(width, height)
@@ -82,8 +83,36 @@ class Offscreen:
         self.top.remove(self.child)
         self.child.set_size_request(-1, -1)
         self.window.add(self.child)
+        for attach in self._popovers:
+            attach()
         self.top.destroy()
         _pump()
+
+    def _detach_popovers(self):
+        """A GtkPopover needs a real toplevel: in an OffscreenWindow GDK reports a critical for each one.
+
+        The content's popovers (the sidebar's filter and Add host menus) are not used here; they are
+        detached while it is offscreen. Returns the calls that attach them again.
+        """
+
+        from gi.repository import Gtk  # type: ignore
+
+        attach = []
+
+        def walk(widget) -> None:
+            if isinstance(widget, Gtk.MenuButton) and widget.get_popover() is not None:
+                popover = widget.get_popover()
+                widget.set_popover(None)
+                attach.append(lambda button=widget, popover=popover: button.set_popover(popover))
+            if isinstance(widget, Gtk.Container):
+                widget.forall(walk)
+
+        walk(self.child)
+        sidebar = getattr(self.window, "_sidebar", None)
+        if sidebar is not None:
+            sidebar.add_menu.set_relative_to(None)
+            attach.append(lambda: sidebar.add_menu.set_relative_to(sidebar.add_host_button))
+        return attach
 
     @staticmethod
     def _pointer():
@@ -210,6 +239,17 @@ class PaneClickTests(unittest.TestCase):
         self.spawn_secondary.stop()
         self.popup.stop()
         self.sandbox.close()
+
+    def test_offscreen_detaches_the_popovers_and_restore_puts_them_back(self) -> None:
+        sidebar = self.win._sidebar
+        filter_popover = sidebar.filter_button.get_popover()
+        self.screen = Offscreen(self.win)
+        self.assertIsNone(sidebar.filter_button.get_popover())
+        self.assertIsNone(sidebar.add_menu.get_relative_to())
+        self.screen.restore()
+        self.screen = None
+        self.assertIs(sidebar.filter_button.get_popover(), filter_popover)
+        self.assertIs(sidebar.add_menu.get_relative_to(), sidebar.add_host_button)
 
     # ------------------------------------------------------------ helpers
     def open(self, *aliases: str):

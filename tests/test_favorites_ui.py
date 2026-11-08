@@ -425,8 +425,9 @@ class SectionBehaviourTests(SectionCase):
         self.win.tree_view.get_selection().unselect_all()
         self.section.list.set_cursor(Gtk.TreePath.new_from_indices([0]), None, False)
         shown = []
+        # A stand-in menu: emitted here, the popup has no key press behind it ("no trigger event" warning).
         with mock.patch("ophion.gtkui.widgets.menus.build_context_menu",
-                        side_effect=lambda spec, **kw: shown.append(spec) or Gtk.Menu()):
+                        side_effect=lambda spec, **kw: shown.append(spec) or mock.Mock()):
             self.section.list.emit("popup-menu")
         self.assertEqual([[i.label for i in s.items] for s in shown[0]], tree_labels)
         self.assertTrue(F)

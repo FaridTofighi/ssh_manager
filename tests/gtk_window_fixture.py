@@ -27,6 +27,10 @@ def shared_application():
 
         _APP = Gtk.Application(application_id="org.codex.SSHManager.Tests", flags=Gio.ApplicationFlags.NON_UNIQUE)
         _APP.register(None)
+        # Never a desktop notification from a test (on a desktop they would pop up): they are recorded.
+        _APP.sent_notifications = []
+        _APP.send_notification = lambda notification_id, notification: _APP.sent_notifications.append(
+            (notification_id, notification))
     return _APP
 
 

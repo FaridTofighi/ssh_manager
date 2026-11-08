@@ -91,12 +91,19 @@ class LeftoverFileTests(unittest.TestCase):
     def test_the_app_starts_without_a_dialog(self) -> None:
         from gi.repository import Gtk  # type: ignore
 
+        from ophion import gtk_app
         from ophion.gtk_app import SSHManagerApplication
         from ophion.gtkui.unlock_flow import StartupResult
+        from tests.gtk_window_fixture import shared_application
 
         app = SSHManagerApplication(base_dir=self.sandbox.base)
         dialogs = []
-        with mock.patch("ophion.gtk_app.StartupFlow") as flow, \
+        # One registered GtkApplication per process (a second registration fails), and windows may only be
+        # added to a registered one: the window do_activate() builds joins the tests' shared application.
+        real_window = gtk_app.SSHManagerWindow
+        with mock.patch("ophion.gtk_app.SSHManagerWindow",
+                        side_effect=lambda _app, *args, **kwargs: real_window(shared_application(), *args, **kwargs)), \
+                mock.patch("ophion.gtk_app.StartupFlow") as flow, \
                 mock.patch.object(Gtk.Dialog, "run", lambda d: dialogs.append(d) or Gtk.ResponseType.CANCEL), \
                 mock.patch.object(Gtk.Window, "present", lambda w: None):
             flow.return_value.run.return_value = StartupResult(passwords_off=True)
