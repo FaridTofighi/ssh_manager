@@ -71,8 +71,9 @@ class TerminalPage(Gtk.Stack):
     def show_sessions(self, sessions: bool) -> None:
         name = "sessions" if sessions else "ready"
         child = self.get_child_by_name(name)
-        if child is not None:
-            child.show()
+        if child is None:  # the notebook is laid out elsewhere for now (tests): GTK warns for a missing name
+            return
+        child.show()
         self.set_visible_child_name(name)
 
 

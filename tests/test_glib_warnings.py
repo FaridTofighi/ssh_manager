@@ -48,6 +48,25 @@ class ClosingTests(unittest.TestCase):
         self.assertEqual(glib_warnings(record), [])
         self.assertEqual(tab._input_commit_handlers, {})
 
+    def test_the_session_page_is_not_shown_while_the_notebook_is_elsewhere(self) -> None:
+        from unittest import mock
+
+        from gi.repository import Gtk
+
+        from ophion.gtkui.controllers.host_page import TerminalPage
+
+        notebook = Gtk.Box()
+        page = TerminalPage(notebook)
+        self.addCleanup(page.destroy)
+        page.show_sessions(True)
+        self.assertEqual(page.get_visible_child_name(), "sessions")
+        page.show_sessions(False)
+        page.remove(notebook)  # laid out somewhere else for a while (a test's offscreen window)
+        with mock.patch.object(page, "set_visible_child_name") as switch:
+            page.show_sessions(True)  # GTK warns for a name the stack does not have
+        switch.assert_not_called()
+        self.assertEqual(page.get_visible_child_name(), "ready")
+
 
 if __name__ == "__main__":
     unittest.main()
