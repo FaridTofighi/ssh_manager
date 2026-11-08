@@ -69,8 +69,14 @@ def _font_tokens():
     return density_tokens.active().font
 
 
+def style_font(widget: Gtk.Widget) -> Pango.FontDescription:
+    """The widget's CSS font (``StyleContext.get_font`` is deprecated)."""
+
+    return widget.get_style_context().get_property("font", Gtk.StateFlags.NORMAL)
+
+
 def font_pixel_size(widget: Gtk.Widget) -> float:
-    font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL)
+    font = style_font(widget)
     size = font.get_size() / Pango.SCALE
     if not font.get_size_is_absolute():
         screen = widget.get_screen()
@@ -225,7 +231,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
                                                     COUNT_SCALE, selected) + 8
         else:
             count_layout = widget.create_pango_layout(str(self.props.count))
-            font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
+            font = style_font(widget).copy()
             font.set_size(int(font.get_size() * COUNT_SCALE))
             count_layout.set_font_description(font)
             ink, logical = count_layout.get_pixel_extents()
@@ -235,7 +241,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
             right_reserved = COUNT_RIGHT + logical.width + 8
 
         layout = widget.create_pango_layout(self.props.text or "")
-        font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
+        font = style_font(widget).copy()
         bold = selected or (kind is not RowKind.HOST and self.props.depth == 0 and not self.props.flat)
         font.set_weight(Pango.Weight.SEMIBOLD if bold else Pango.Weight.NORMAL)
         layout.set_font_description(font)
@@ -273,7 +279,7 @@ class RelayRowRenderer(Gtk.CellRendererText):
 
         palette = current_palette()
         layout = widget.create_pango_layout(text)
-        font = widget.get_style_context().get_font(Gtk.StateFlags.NORMAL).copy()
+        font = style_font(widget).copy()
         font.set_size(int(font.get_size() * scale * 0.9))
         font.set_weight(Pango.Weight.SEMIBOLD)
         layout.set_font_description(font)

@@ -416,7 +416,10 @@ class FakeSftpServer:
                 except (OSError, EOFError):
                     pass
                 finally:
-                    channel.close()
+                    try:
+                        channel.close()  # the client may have closed the connection already
+                    except (OSError, EOFError):
+                        pass
                     target.close()
 
             threading.Thread(target=bridge, daemon=True).start()

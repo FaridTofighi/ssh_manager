@@ -174,7 +174,8 @@ class SSHManagerApplication(Gtk.Application):
         # X11 WM_CLASS = (APP_SLUG, APP_ID): its class is the desktop file's StartupWMClass, so docks group the
         # windows under the launcher and its icon; on Wayland the app id is already APP_ID.
         GLib.set_prgname(APP_SLUG)
-        GLib.set_application_name(APP_NAME)
+        if GLib.get_application_name() != APP_NAME:  # setting it a second time is a GLib warning
+            GLib.set_application_name(APP_NAME)
         Gdk.set_program_class(APPLICATION_ID)
         self._base_dir = base_dir  # a legacy folder inventory (--base-dir); None = the app store
         self._inventory = inventory  # --inventory: another database file

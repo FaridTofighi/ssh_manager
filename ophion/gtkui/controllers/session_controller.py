@@ -377,7 +377,8 @@ class SessionController:
         path_text = getattr(self.win._settings, "audit_log_path", "")
         if not path_text:
             return
-        timestamp = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)  # utcnow() is deprecated
+        timestamp = now.isoformat(timespec="seconds") + "Z"
         host_display = audit_log_value(host.alias or host_option(host, "hostname") or "", default="unknown")
         username = audit_log_value(host_option(host, "user") or "")
         fields: List[str] = [f"{timestamp} [{action}] host={host_display}"]

@@ -152,6 +152,9 @@ class TransparentMarkTests(unittest.TestCase):
         top = Gtk.OffscreenWindow()
         self.addCleanup(top.destroy)
         header = HeaderView(MessageHistory())
+        for child in header.get_children():  # a GtkPopover needs a real toplevel: offscreen, GDK reports criticals
+            if isinstance(child, Gtk.MenuButton):
+                child.set_popover(None)
         header.set_size_request(width, -1)
         top.add(header)
         top.show_all()

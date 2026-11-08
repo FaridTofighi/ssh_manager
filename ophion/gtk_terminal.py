@@ -606,7 +606,6 @@ class TerminalTab(SessionPage):
             term.set_scrollback_lines(self._profile.scrollback_lines)
         else:
             term.set_scrollback_lines(50_000)
-        term.set_allow_bold(True)
         term.set_cursor_blink_mode(Vte.CursorBlinkMode.SYSTEM)
         term.set_font_scale(self._font_scale)
         self._configure_terminal_appearance(term)
@@ -1558,12 +1557,9 @@ class TerminalTab(SessionPage):
 
     def _disconnect_input_commit_handler(self, term: Vte.Terminal) -> None:
         handler_id = self._input_commit_handlers.pop(term, None)
-        if handler_id is None:
-            return
-        try:
+        # A destroyed terminal has dropped its handlers already; disconnecting again is a GLib warning.
+        if handler_id is not None and GObject.signal_handler_is_connected(term, handler_id):
             term.disconnect(handler_id)
-        except Exception:
-            pass
 
     def _save_password_secret(self, password: str) -> bool:
         if not self._secure_store:
@@ -2435,6 +2431,10 @@ class TerminalNotebook(Gtk.Box):
         Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.set_hexpand(True)
         self.set_vexpand(True)
+        # Idle callbacks queued before a destroy still run after it: they skip a destroyed notebook
+        # (its toolbar toggles have lost their handlers by then).
+        self._destroyed = False
+        self.connect("destroy", lambda *_a: setattr(self, "_destroyed", True))
 
         self._log = log
         self._default_font_scale = default_font_scale
@@ -3364,11 +3364,13 @@ class TerminalNotebook(Gtk.Box):
         GLib.idle_add(self._emit_sessions_changed_idle)
 
     def _emit_sessions_changed_idle(self) -> bool:
-        self._emit_sessions_changed()
+        if not self._destroyed:
+            self._emit_sessions_changed()
         return GLib.SOURCE_REMOVE
 
     def _sync_toolbar_idle(self) -> bool:
-        self._sync_toolbar()
+        if not self._destroyed:
+            self._sync_toolbar()
         return GLib.SOURCE_REMOVE
 
     def _on_tab_activity(self, tab: TerminalTab) -> None:

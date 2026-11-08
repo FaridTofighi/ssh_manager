@@ -295,7 +295,9 @@ class DragDropTests(unittest.TestCase):
         data = SimpleNamespace(get_data=lambda: encode_payload(tab.local_pane.token, "local", [notes.path]),
                                get_uris=lambda: None)
         context = SimpleNamespace(get_selected_action=lambda: Gdk.DragAction.COPY)
-        with mock.patch("ophion.gtkui.file_browser.pane.Gtk.drag_finish") as finish:
+        # Called directly, not from a real drop: there is no signal emission for the handler to stop.
+        with mock.patch("ophion.gtkui.file_browser.pane.Gtk.drag_finish") as finish, \
+                mock.patch.object(tab.remote_pane.view, "stop_emission_by_name"):
             tab.remote_pane._on_drag_data_received(tab.remote_pane.view, context, 1, 1, data, 1, 0)
         finish.assert_called_once_with(context, True, False, 0)
         self.wait_jobs(tab)
