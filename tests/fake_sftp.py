@@ -239,14 +239,41 @@ class _Server(paramiko.ServerInterface):
         return paramiko.OPEN_SUCCEEDED
 
 
+# Commands a test sends must never act on the machine running the tests: these names resolve to stubs
+# that fail like a host where sudo needs a password, and the real programs are never reached.
+GUARDED = ("sudo", "su", "pkexec", "doas", "reboot", "shutdown", "poweroff", "halt", "systemctl")
+_STUB_DIR: Optional[str] = None
+
+
+def _stub_dir() -> str:
+    """A folder of stand-ins for :data:`GUARDED` (once per process, removed at exit)."""
+
+    global _STUB_DIR
+    if _STUB_DIR is None:
+        import atexit
+        import shutil
+        import tempfile
+
+        folder = tempfile.mkdtemp(prefix="fake-ssh-stubs-")
+        atexit.register(shutil.rmtree, folder, True)
+        for name in GUARDED:
+            stub = Path(folder) / name
+            stub.write_text(f"#!/bin/sh\necho '{name}: a password is required' >&2\nexit 1\n")
+            stub.chmod(0o755)
+        _STUB_DIR = folder
+    return _STUB_DIR
+
+
 def _run_exec(channel, command: str, owner) -> None:
     import subprocess
 
     owner.exec_commands.append(command)
     try:
-        env = dict(os.environ, HOME=owner.root)  # "~" is the server's temp root, never the real home
+        # "~" is the server's temp root, never the real home; privileged commands hit the stubs first.
+        env = dict(os.environ, HOME=owner.root, PATH=_stub_dir() + os.pathsep + os.environ.get("PATH", ""))
+        # A new session has no controlling terminal: nothing a command runs can prompt on the user's terminal.
         process = subprocess.Popen(command, shell=True, cwd=owner.root, stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True)
     except OSError:
         channel.send_exit_status(127)
         channel.close()

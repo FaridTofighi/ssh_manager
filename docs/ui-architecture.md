@@ -569,9 +569,11 @@ latency probing is disabled, so tests never open sockets.
 
 `tools/run_gtk_tests.py` runs any command on a private X server (Xvfb, else
 Xephyr) with fixed settings: 1920 × 1200 at 96 dpi, Adwaita and Sans 10 from a
-temporary `XDG_CONFIG_HOME`, GSettings in memory, its own D-Bus session with
-`XDG_DATA_DIRS` stripped of Flatpak exports (a Flatpak sync client started on
-the test bus asked for a login in a browser), and a no-op default handler for
+temporary `XDG_CONFIG_HOME`, GSettings in memory, its own D-Bus session whose
+configuration has no service folders, so nothing can be started on it (a
+Flatpak sync client started on an earlier version of it asked for a login in a
+browser; portals, gvfs and online accounts started too), `XDG_DATA_DIRS`
+without Flatpak exports, and a no-op default handler for
 links, files and folders whose calls it lists at the end. Under a desktop
 compositor an unseen window may never get a frame, so CSS changes and layout
 are never applied (stale sizes after a density switch); with a private server
@@ -580,6 +582,13 @@ and compared only when `OPHION_TEST_DISPLAY` is `private-96dpi`. Without a
 compositing window manager GTK draws the window `solid-csd`, where Adwaita pulls
 the title bar 1 px over the window border: `chrome_budget` reports
 `solid_csd` and the top bar check allows for it.
+
+The fake SSH server (`tests/fake_sftp.py`) really runs the commands tests send
+(`sh`, in its temp root): they run in a new session without a terminal, and
+`GUARDED` names (`sudo`, `su`, `pkexec`, `doas`, `reboot`, `shutdown`,
+`poweroff`, `halt`, `systemctl`) resolve to stubs that fail like a host where
+sudo needs a password. Before that, the Multi-Run sudo test ran the real
+`sudo`, which asked for the password on the terminal.
 
 Snapshots use the Compact density unless a scenario pins one: the `relay-*`
 scenarios use Comfortable, and `SSHM_DENSITY` overrides it for a whole run.

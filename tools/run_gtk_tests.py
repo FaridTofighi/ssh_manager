@@ -10,9 +10,10 @@ This runner gives every run the same display:
   96 dpi, the resolution the snapshots and pixel goldens are taken at;
 * GTK settings from a temporary ``XDG_CONFIG_HOME`` (``gtk-3.0/settings.ini``: Adwaita, Sans 10,
   96 dpi), so ``~/.config`` is neither read nor written;
-* GSettings in memory, its own D-Bus session (``dbus-run-session`` when installed), no
-  accessibility bridge; ``XDG_DATA_DIRS`` without Flatpak's exports, so the private bus cannot
-  start the user's Flatpak apps (a sync client started there with no settings asks for a login);
+* GSettings in memory, no accessibility bridge, and its own D-Bus session (``dbus-run-session``
+  when installed) that can start nothing: no service folders, so no portal, gvfs, online
+  accounts or the user's apps (a Flatpak sync client started on such a bus asked for a login);
+  ``XDG_DATA_DIRS`` also leaves out Flatpak's exports;
 * no real application is ever launched: links, files and folders open in a no-op handler (a
   temporary ``XDG_DATA_HOME`` with a ``mimeapps.list``; ``BROWSER=true``), and the runner lists
   what the tests asked to open.
@@ -59,6 +60,20 @@ Name=Test opener (does nothing)
 Exec=/bin/sh -c 'printf "%%s\\n" "$*" >> "$OPHION_TEST_OPENED"' opener %U
 NoDisplay=true
 MimeType={types};
+"""
+# A session bus with no service folders: nothing can be started on it.
+BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:tmpdir=/tmp</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
 """
 OPENED_TYPES = ("x-scheme-handler/http", "x-scheme-handler/https", "x-scheme-handler/file", "inode/directory",
                 "text/plain", "text/html", "text/markdown", "application/pdf", "application/octet-stream")
@@ -157,7 +172,9 @@ def main(argv: List[str]) -> int:
                 "OPHION_TEST_DISPLAY": f"private-{DPI}dpi",  # tests with pixel goldens of this display check them
             })
             if shutil.which("dbus-run-session"):
-                command = ["dbus-run-session", "--"] + command
+                bus_config = Path(tmp) / "session-bus.conf"
+                bus_config.write_text(BUS_CONFIG, encoding="utf-8")
+                command = ["dbus-run-session", f"--config-file={bus_config}", "--"] + command
             print(f"run_gtk_tests: {Path(server[0]).name} {display} {SCREEN} at {DPI} dpi", flush=True)
             status = subprocess.call(command, cwd=ROOT, env=env)
             if opened.exists() and opened.read_text().strip():

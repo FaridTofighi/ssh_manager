@@ -473,8 +473,12 @@ tools/run_gtk_tests.py -- <command>       # any command on the private display
 It needs Xvfb (or Xephyr inside a desktop session, which shows its window
 while the tests run): 1920 × 1200 at 96 dpi, Adwaita and Sans 10 from a
 temporary config folder (your `~/.config` is not read or written), its own
-D-Bus session without Flatpak services, and a no-op opener: no browser or file
-manager is ever launched; the runner lists what the tests asked to open.
+D-Bus session that can start no service or app, and a no-op opener: no browser
+or file manager is ever launched; the runner lists what the tests asked to open.
+Commands that tests send to the fake SSH server run without a terminal, and
+`sudo`, `su`, `pkexec`, `doas`, `reboot`, `shutdown`, `poweroff`, `halt` and
+`systemctl` are stubs there, so a test can never ask for your password or act
+on this machine.
 
 The GTK and VTE bindings come from the distribution, so a virtualenv needs
 access to system packages:

@@ -162,6 +162,19 @@ class FailureTests(EngineCase):
         self.assertEqual(result.status, R.FAILED)
         self.assertIn("NOPASSWD", result.hint)
 
+    def test_privileged_commands_never_reach_the_real_programs(self) -> None:
+        """The fake server runs commands on this machine: sudo, reboot … are stubs, and there is no terminal."""
+
+        from tests.fake_sftp import GUARDED
+
+        script = "; ".join(f"command -v {name}" for name in GUARDED) + "; sudo id -u; tty"
+        result = self.by_alias(self.run_all(script, self.targets(1)))["host0"]
+        paths = result.stdout.splitlines()[:len(GUARDED)]
+        self.assertEqual([Path(path).name for path in paths], list(GUARDED))
+        self.assertTrue(all("fake-ssh-stubs-" in path for path in paths), paths)
+        self.assertIn("sudo: a password is required", result.stderr)
+        self.assertIn("not a tty", result.stdout)
+
 
 class ControlTests(EngineCase):
     def test_concurrency_is_respected(self) -> None:
