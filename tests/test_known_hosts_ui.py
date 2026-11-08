@@ -104,6 +104,27 @@ class KnownHostsDialogTests(unittest.TestCase):
         self.assertTrue(dialog.forget_host())  # only a.example on port 22
         self.assertEqual(self.path.read_bytes(), before.replace(f"a.example ssh-ed25519 {ED25519}\n".encode(), b""))
 
+    def test_rows_arrive_unfiltered_then_the_search_applies(self) -> None:
+        """One filter function for the dialog's life: GTK refuses a second one (a critical), so the
+        "no filtering while the rows arrive" switch never happened; a flag does it now."""
+
+        from unittest import mock
+
+        from ophion.gtkui.dialogs.known_hosts import BATCH
+
+        self.path.write_text("".join(f"h{i}.example.org ssh-ed25519 {ED25519}\n" for i in range(BATCH + 100)))
+        dialog = self.dialog()
+        dialog.search.set_text("h7.example")
+        pump(0.2)
+        self.assertEqual(self.rows(dialog), ["h7.example.org"])
+        with mock.patch.object(dialog.filtered, "set_visible_func") as set_func:
+            dialog._fill()  # the rows again, in batches (as after an import or a view switch)
+            self.assertTrue(dialog._filling)
+            self.assertEqual(len(dialog.filtered), BATCH)  # the first batch is in, unfiltered
+            self.assertTrue(pump(10, until=lambda: not dialog._filling))
+        set_func.assert_not_called()
+        self.assertEqual(self.rows(dialog), ["h7.example.org"])  # the search applies once they are in
+
     def test_import_export_and_copy(self) -> None:
         self.path.write_text(f"a.example ssh-ed25519 {ED25519}\n")
         other = Path(self.tmp.name) / "other"

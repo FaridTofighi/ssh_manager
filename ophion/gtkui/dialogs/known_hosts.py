@@ -58,6 +58,7 @@ class KnownHostsDialog(BaseDialog):
         self.view = VIEW_ALL
         self._generation = 0
         self.loading = False
+        self._filling = False  # rows arriving in batches: shown unfiltered until the last one is in
         self._closed = False
         self.connect("destroy", lambda *_a: setattr(self, "_closed", True))  # late worker results are dropped
         # Test hooks: confirmations, messages, file choosers and the network probe.
@@ -254,7 +255,9 @@ class KnownHostsDialog(BaseDialog):
         generation = self._generation
         self.store.clear()
         rows = self._rows()
-        self.filtered.set_visible_func(lambda *_a: True)  # no filtering while the rows arrive
+        # No filtering while the rows arrive. A filter keeps its first visible function (GTK refuses another
+        # with a critical), so _visible itself passes every row until the last batch is in.
+        self._filling = True
 
         def add(start: int) -> bool:
             if self._closed or generation != self._generation:
@@ -265,7 +268,7 @@ class KnownHostsDialog(BaseDialog):
                 GLib.idle_add(add, start + BATCH)
             else:
                 self.loading = False
-                self.filtered.set_visible_func(self._visible)
+                self._filling = False
                 self._refilter()
                 self._select_host()
             return False
@@ -282,6 +285,8 @@ class KnownHostsDialog(BaseDialog):
                 selection.select_iter(row.iter)
 
     def _visible(self, model, tree_iter, _data=None) -> bool:
+        if self._filling:
+            return True
         text = self.search.get_text().strip().lower()
         if not text:
             return True
