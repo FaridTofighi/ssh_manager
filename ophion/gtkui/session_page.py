@@ -124,15 +124,8 @@ class SessionPage(Gtk.Box):
     def set_stats_visible(self, _visible: bool) -> None:
         pass
 
-    @property
-    def strip_ansi_on_copy(self) -> bool:
-        return False
-
-    def _set_strip_ansi(self, _active: bool) -> None:
-        pass
-
-    def toggle_strip_ansi_copy(self) -> None:
-        pass
+    def copy_as_plain_text(self, _term=None) -> int:
+        return 0  # pages without a terminal (remote desktop, file browser)
 
     def save_transcript(self) -> None:
         pass

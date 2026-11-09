@@ -32,6 +32,12 @@ Normal Size · Split Pane / Close Split, Reconnect (when disconnected; Restart i
 a local tab), Save Transcript… · Preferences… (opens Settings → Terminal). Each
 item shows its current shortcut.
 
+**Copy as Plain Text** (this menu, and the session toolbar's button) copies the
+selection, or with nothing selected everything the session shows (scrollback
+and screen), without colours or other escape sequences and without trailing
+blanks; a message says how many lines were copied. Copy (Ctrl+Shift+C) copies
+the selection.
+
 ## Selection
 
 * Selecting text with the mouse puts it into the PRIMARY selection (VTE does

@@ -109,9 +109,91 @@ class NotebookTests(unittest.TestCase):
         self._open("b")
         self.assertTrue(self.notebook._toolbar.broadcast.get_sensitive())
         self.notebook.focus_tab(tab)
-        tab._set_strip_ansi(True)
         self.notebook._sync_toolbar()
-        self.assertTrue(self.notebook._toolbar.plain_copy.get_active())
+        self.assertTrue(self.notebook._toolbar.plain_copy.get_sensitive())
+
+
+class FakeClipboard:
+    """Stands in for the clipboard: a test never replaces what the user copied."""
+
+    def __init__(self) -> None:
+        self.text = None
+
+    def set_text(self, text, _length) -> None:
+        self.text = text
+
+
+@unittest.skipUnless(HAS_DISPLAY, "GTK display not available")
+class PlainTextCopyTests(unittest.TestCase):
+    """Copy as plain text: the selection, else everything the session shows (scrollback and screen)."""
+
+    def setUp(self) -> None:
+        from ophion.gtk_terminal import TerminalNotebook
+
+        self.logs = []
+        self.notebook = TerminalNotebook(lambda message, level: self.logs.append((message, level)))
+        self.addCleanup(self.notebook.destroy)
+        # Not marked connected: that starts the remote stats, which run ssh in a thread.
+        self.tab = self.notebook.new_terminal(HostEntry(alias="web", parent_group="p", child_group="c"),
+                                              autostart=False)
+        self.clipboard = FakeClipboard()
+        patch = mock.patch("ophion.gtk_terminal.Gtk.Clipboard.get", return_value=self.clipboard)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def feed(self, text: str) -> None:
+        import time
+
+        from gi.repository import Gtk
+
+        self.tab._terminal.feed(text.encode("utf-8"))
+        deadline = time.monotonic() + 0.3  # VTE takes in fed text on a timer, not only on pending events
+        while time.monotonic() < deadline:
+            while Gtk.events_pending():
+                Gtk.main_iteration_do(False)
+            time.sleep(0.01)
+
+    def test_the_toolbar_button_copies_the_whole_session_without_colors(self) -> None:
+        from gi.repository import Gtk
+
+        self.feed("deploy@web:~$ uptime\r\n \x1b[32m10:42:01\x1b[0m up 3 days\r\ndeploy@web:~$ ")
+        button = self.notebook._toolbar.plain_copy
+        self.assertNotIsInstance(button, Gtk.ToggleButton)  # an action, not a mode
+        button.clicked()
+        self.assertEqual(self.clipboard.text, "deploy@web:~$ uptime\n 10:42:01 up 3 days\ndeploy@web:~$")
+        self.assertIn(("Copied 3 lines as plain text.", "success"), [(m, getattr(lv, "value", lv)) for m, lv in self.logs])
+
+    def test_a_selection_is_copied_instead(self) -> None:
+        self.feed("first line\r\nsecond line\r\n")
+        term = self.tab._terminal
+        with mock.patch.object(term, "get_has_selection", return_value=True), \
+                mock.patch.object(term, "get_text_selected", return_value="second line\n"):
+            self.assertEqual(self.tab.copy_as_plain_text(), 1)
+        self.assertEqual(self.clipboard.text, "second line")
+
+    def test_an_empty_session_copies_nothing(self) -> None:
+        self.assertEqual(self.tab.copy_as_plain_text(), 0)
+        self.assertIsNone(self.clipboard.text)  # the clipboard keeps what it had
+        self.assertIn("Nothing to copy", self.logs[-1][0])
+
+    def test_the_menu_item_works_without_a_selection_and_the_action_copies_too(self) -> None:
+        self.feed("hello\r\n")
+        spec = self.tab.terminal_menu_spec(self.tab._terminal)
+        item = next(i for section in spec for i in section.items if i.label == "Copy as Plain _Text")
+        self.assertTrue(item.sensitive)
+        item.callback()
+        self.assertEqual(self.clipboard.text, "hello")
+        self.clipboard.text = None
+        self.notebook.copy_current_as_plain_text()  # what the "toggle-strip-ansi" action (and its shortcut) runs
+        self.assertEqual(self.clipboard.text, "hello")
+
+    def test_ctrl_shift_c_still_copies_only_the_selection(self) -> None:
+        self.feed("hello\r\n")
+        term = self.tab._terminal
+        with mock.patch.object(term, "copy_clipboard_format") as copy_selection:
+            self.tab.copy_clipboard(term)
+        copy_selection.assert_called_once()
+        self.assertIsNone(self.clipboard.text)  # never the whole terminal
 
 
 @unittest.skipUnless(HAS_DISPLAY, "GTK display not available")

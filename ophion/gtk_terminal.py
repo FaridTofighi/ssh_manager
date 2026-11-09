@@ -68,7 +68,7 @@ from ophion.gtkui.constants import Icons
 from ophion.gtkui.dialogs.files import choose_save_file
 from ophion.gtkui.dialogs.password import PasswordRequestDialog, SavePasswordDialog
 from ophion.gtkui.dialogs.prompt import prompt_text
-from ophion.gtkui.i18n import _
+from ophion.gtkui.i18n import _, ngettext
 from ophion.gtkui.menu_spec import MenuItemSpec, MenuSection
 from ophion.gtkui.controllers.shortcuts import accel_label  # noqa: E402
 from ophion.gtkui.view_models import status_text
@@ -417,7 +417,6 @@ class TerminalTab(SessionPage):
         self._input_observer: Optional[Callable[[TerminalTab, str], None]] = None
         self._macro_feeding = False  # macro playback is writing: not user input (password heuristics, broadcast)
         self._profile = profile
-        self._strip_ansi_on_copy = False
         self._appearance = appearance
 
         # Mouse and selection (gnome-terminal conventions; ``terminal_input.py``).
@@ -755,7 +754,8 @@ class TerminalTab(SessionPage):
         edit = MenuSection("edit", [
             MenuItemSpec(_("_Copy"), lambda: self.copy_clipboard(term), accel=accel_label("copy"),
                          sensitive=has_selection),
-            MenuItemSpec(_("Copy as Plain _Text"), lambda: _copy_selection(term), sensitive=has_selection),
+            MenuItemSpec(_("Copy as Plain _Text"), lambda: self.copy_as_plain_text(term),
+                         tooltip=_("The selection, else the whole session, without colours")),
             MenuItemSpec(_("_Paste"), lambda: term.paste_clipboard(), accel=accel_label("paste"), sensitive=can_paste),
             MenuItemSpec(_("Paste _Selection"), lambda: term.paste_primary(), accel=accel_label("paste-primary")),
             MenuItemSpec(_("Select _All"), lambda: self.select_all_terminal(term),
@@ -828,10 +828,6 @@ class TerminalTab(SessionPage):
             self._show_stats_once()
         else:
             self._stop_stats_updates()
-
-    @property
-    def strip_ansi_on_copy(self) -> bool:
-        return self._strip_ansi_on_copy
 
     @property
     def status(self) -> ConnectionStatus:
@@ -979,18 +975,35 @@ class TerminalTab(SessionPage):
         return False
 
     def copy_clipboard(self, term: Optional[Vte.Terminal] = None) -> None:
+        """Copy (Ctrl+Shift+C): the selection, as VTE copies it."""
+
         term = term or self._active_terminal()
-        if not term:
-            return
-        try:
-            if self._strip_ansi_on_copy:
-                cleaned = strip_ansi(terminal_text(term))
-                clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-                clipboard.set_text(cleaned, -1)
-            else:
-                term.copy_clipboard()
-        except Exception:
-            term.copy_clipboard()
+        if term:
+            _copy_selection(term)
+
+    def copy_as_plain_text(self, term: Optional[Vte.Terminal] = None) -> int:
+        """The selection, else everything the session shows (scrollback and screen), as plain text.
+
+        No colours or other escape sequences, no trailing blanks. Returns the number of lines copied
+        (0: nothing to copy, and the clipboard keeps what it had)."""
+
+        term = term or self._active_terminal()
+        if term is None:
+            return 0
+        selected = term.get_has_selection() and hasattr(term, "get_text_selected")
+        text = (term.get_text_selected(Vte.Format.TEXT) if selected else terminal_text(term)) or ""
+        lines = [line.rstrip() for line in strip_ansi(text).splitlines()]
+        while lines and not lines[-1]:
+            lines.pop()
+        while lines and not lines[0]:
+            lines.pop(0)
+        if not lines:
+            self._log(_("Nothing to copy: the session shows no text yet."), Level.INFO)
+            return 0
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text("\n".join(lines), -1)
+        self._log(ngettext("Copied {n} line as plain text.", "Copied {n} lines as plain text.",
+                           len(lines)).format(n=len(lines)), Level.SUCCESS)
+        return len(lines)
 
     def set_appearance(self, appearance: TerminalAppearanceSettings) -> None:
         self._appearance = appearance
@@ -2228,16 +2241,6 @@ class TerminalTab(SessionPage):
         except Exception as exc:
             self._log(_("Transcript save failed: {error}").format(error=exc), Level.ERROR)
 
-    def toggle_strip_ansi_copy(self) -> None:
-        self._strip_ansi_on_copy = not self._strip_ansi_on_copy
-        state = "on" if self._strip_ansi_on_copy else "off"
-        self._log(_("Strip ANSI on copy {state}.").format(state=state), Level.INFO)
-
-    def _set_strip_ansi(self, active: bool) -> None:
-        self._strip_ansi_on_copy = active
-        state = "on" if active else "off"
-        self._log(_("Strip ANSI on copy {state}.").format(state=state), Level.INFO)
-
     def _update_stats(self) -> bool:
         if not self._session_active:
             return True
@@ -2484,12 +2487,12 @@ class TerminalNotebook(Gtk.Box):
         self._toolbar = bar
         self._toggle_handlers = {
             bar.split: bar.split.connect("toggled", self._on_split_toggled),
-            bar.plain_copy: bar.plain_copy.connect("toggled", self._on_plain_copy_toggled),
             bar.tile: bar.tile.connect("toggled", self._on_tile_toggled),
             bar.broadcast: bar.broadcast.connect("toggled", self._on_broadcast_toggled),
             bar.stats: bar.stats.connect("toggled", self._on_stats_toggled),
         }
         bar.save.connect("clicked", lambda *_: self.save_current_transcript())
+        bar.plain_copy.connect("clicked", lambda *_: self.copy_current_as_plain_text())
         bar.reconnect.connect("clicked", lambda *_: self.reconnect_current())
         bar.record.connect("clicked", lambda *_: self.on_record_clicked() if self.on_record_clicked else None)
         bar.set_overflow(self._overflow_menu_spec())
@@ -2859,11 +2862,12 @@ class TerminalNotebook(Gtk.Box):
         if tab:
             tab.save_transcript()
 
-    def toggle_strip_ansi_copy(self) -> None:
+    def copy_current_as_plain_text(self) -> None:
+        """The current session's selection, else all its text, as plain text (toolbar, action)."""
+
         tab = self._current_tab()
         if tab:
-            tab.toggle_strip_ansi_copy()
-            self._sync_toolbar()
+            tab.copy_as_plain_text()
 
     def focus_current(self) -> None:
         tab = self._current_tab()
@@ -3583,7 +3587,6 @@ class TerminalNotebook(Gtk.Box):
         bar.tile.set_sensitive(multiple)
         bar.broadcast.set_sensitive(len(self._terminal_tabs()) > 1)
         self._set_toggle(bar.split, bool(tab and tab.is_split))
-        self._set_toggle(bar.plain_copy, bool(tab and tab.strip_ansi_on_copy))
         self._set_toggle(bar.stats, bool(tab and tab.stats_visible))
         self._set_toggle(bar.tile, self._tile_mode)
         self._set_toggle(bar.broadcast, self._broadcast_mode)
@@ -3593,11 +3596,6 @@ class TerminalNotebook(Gtk.Box):
         if tab and tab.is_split != button.get_active():
             tab.toggle_split()
         self._sync_toolbar()
-
-    def _on_plain_copy_toggled(self, button: Gtk.ToggleButton) -> None:
-        tab = self._current_tab()
-        if tab:
-            tab._set_strip_ansi(button.get_active())
 
     def _on_tile_toggled(self, button: Gtk.ToggleButton) -> None:
         self._as_user(lambda: self.set_tile_mode(button.get_active()))

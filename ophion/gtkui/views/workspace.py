@@ -41,7 +41,7 @@ class SessionToolbar(ActionBar):
         ActionBar.__init__(self, css_class="session-toolbar")
         self.split = IconToggleButton(Icons.SPLIT, _("Split pane (Ctrl+Shift+E)"))
         self.save = IconButton(Icons.SAVE, _("Save transcript… (Ctrl+Shift+S)"))
-        self.plain_copy = IconToggleButton(Icons.PLAIN_TEXT, _("Copy as plain text (strip ANSI colors)"))
+        self.plain_copy = IconButton(Icons.PLAIN_TEXT, _("Copy as plain text: the selection, else the whole session"))
         self.add_start(self.split, self.save, self.plain_copy)
         self.add_separator()
         self.tile = IconToggleButton(Icons.TILE, _("Show all sessions (Ctrl+Shift+A)"))

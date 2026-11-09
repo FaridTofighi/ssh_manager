@@ -284,8 +284,9 @@ that direct file mode follows `Include` directives.
   address, or both (Settings → Appearance → Tab label); duplicates read
   `web-01 (2)`, and F2 renames a tab. Drag tabs to reorder them; the tooltip
   shows `user@host:port` and the status. The session toolbar acts on the
-  active tab: split pane, save transcript, copy as plain text, show all
-  sessions, broadcast and remote stats.
+  active tab: split pane, save transcript, copy as plain text (the selection,
+  else the whole session, without colours), show all sessions, broadcast and
+  remote stats.
 - **File transfer**: hosts can be FTP, FTPS or SFTP (host dialog →
   Protocol). They open in a two-pane file browser with a transfer queue,
   drag and drop and a connection log; SSH hosts have **Browse Files (SFTP)**

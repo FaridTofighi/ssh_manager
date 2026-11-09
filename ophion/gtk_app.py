@@ -673,7 +673,7 @@ class SSHManagerWindow(Gtk.ApplicationWindow):
             "toggle-tile": tabs.toggle_tile_mode,
             "split-pane": tabs.toggle_split_current,
             "toggle-stats": tabs.toggle_stats_current,
-            "toggle-strip-ansi": tabs.toggle_strip_ansi_copy,
+            "toggle-strip-ansi": tabs.copy_current_as_plain_text,  # the name is kept: user shortcuts use it
             "copy": terminal("copy"),
             "paste": terminal("paste"),
             "paste-primary": terminal("paste-primary"),

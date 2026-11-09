@@ -8,6 +8,10 @@ reference). Phase-1 screenshots are in the history of `docs/ui-after/`
 
 ## Fixes
 
+- "Copy as plain text" copies: the session toolbar's button (and the terminal menu's item) copies
+  the selection, or with nothing selected the whole session, without colours, and says how many
+  lines. It used to be an on/off switch that copied nothing itself (and made Ctrl+Shift+C copy the
+  whole terminal instead of the selection).
 - Tree colours are per inventory: a workspace no longer shows another one's colours for groups
   or hosts with the same names. After the update, each inventory keeps the colours of its own
   items it showed before.
