@@ -590,6 +590,14 @@ The fake SSH server (`tests/fake_sftp.py`) really runs the commands tests send
 sudo needs a password. Before that, the Multi-Run sudo test ran the real
 `sudo`, which asked for the password on the terminal.
 
+`tests/__init__.py` sets `OPHION_REMOTE_STATS=off` for every run (pytest and
+unittest): with it, `TerminalTab._fetch_stats_thread` fetches no remote
+statistics (no `ssh`, no live connection) and the status bar shows N/A. Tests
+that mark a fake session connected start its stats timer; before, that ran the
+real `ssh` to made-up hosts every 10 s, also from earlier tests' sessions (96
+tests). Tests of the stats call the fetch functions themselves, with
+`subprocess.run` mocked.
+
 Snapshots use the Compact density unless a scenario pins one: the `relay-*`
 scenarios use Comfortable, and `SSHM_DENSITY` overrides it for a whole run.
 The `compact-*` and `comfortable-session-dark` scenarios print and save a

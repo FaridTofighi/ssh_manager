@@ -2253,9 +2253,12 @@ class TerminalTab(SessionPage):
         return True
 
     def _fetch_stats_thread(self) -> None:
-        data = self._fetch_stats_via_paramiko()
-        if data is None:
-            data = self._fetch_stats_via_ssh_command()
+        data = None
+        # OPHION_REMOTE_STATS=off: no remote statistics at all (no ssh, no live connection); the tests set it.
+        if os.environ.get("OPHION_REMOTE_STATS", "").strip().lower() != "off":
+            data = self._fetch_stats_via_paramiko()
+            if data is None:
+                data = self._fetch_stats_via_ssh_command()
         GLib.idle_add(self._apply_stats_result, data)
 
     def _fetch_stats_via_paramiko(self) -> Optional[Dict[str, object]]:

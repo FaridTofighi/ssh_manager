@@ -479,7 +479,9 @@ or file manager is ever launched; the runner lists what the tests asked to open.
 Commands that tests send to the fake SSH server run without a terminal, and
 `sudo`, `su`, `pkexec`, `doas`, `reboot`, `shutdown`, `poweroff`, `halt` and
 `systemctl` are stubs there, so a test can never ask for your password or act
-on this machine.
+on this machine. The tests also never fetch remote statistics over SSH
+(`OPHION_REMOTE_STATS=off`, set by the test package; the same variable turns
+them off in the app).
 
 The GTK and VTE bindings come from the distribution, so a virtualenv needs
 access to system packages:
