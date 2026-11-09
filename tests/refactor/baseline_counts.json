@@ -1,0 +1,10 @@
+{
+ "commit": "pre-refactor (83b820e)",
+ "runner": "tools/run_gtk_tests.py, private Xvfb, 3 runs with identical per-test results",
+ "collected": 1748,
+ "passed": 1747,
+ "skipped": 1,
+ "skipped_reason": "tests/test_installer.py:56: shellcheck is not installed (bash -n passed)",
+ "flaky": [],
+ "removed_legacy_tests": 0
+}

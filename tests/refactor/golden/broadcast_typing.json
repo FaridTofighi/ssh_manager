@@ -1,0 +1,44 @@
+{
+ "broadcast_off": {},
+ "broadcast_on": {
+  "b": [
+   "u",
+   "p",
+   "t",
+   "i",
+   "m",
+   "e",
+   "\r"
+  ],
+  "c": [
+   "u",
+   "p",
+   "t",
+   "i",
+   "m",
+   "e",
+   "\r"
+  ]
+ },
+ "c_disconnected": {
+  "a": [
+   "d",
+   "a",
+   "t",
+   "e",
+   "\r"
+  ]
+ },
+ "c_excluded": {
+  "b": [
+   "w",
+   "h",
+   "o",
+   "a",
+   "m",
+   "i",
+   "\r"
+  ]
+ },
+ "typed_into_excluded_c": {}
+}

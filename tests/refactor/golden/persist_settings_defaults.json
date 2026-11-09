@@ -1,0 +1,68 @@
+{
+ "allowed_ciphers": [],
+ "allowed_kex": [],
+ "audit_log_path": "<TMP>/data/ophion/audit.log",
+ "enable_audit_logging": false,
+ "file_transfer": {
+  "bandwidth_limit_kbps": 0,
+  "clean_temp_on_exit": true,
+  "concurrency": 3,
+  "conflict_policy": "ask",
+  "download_dir": "",
+  "open_with_default_app": true,
+  "protocol_log": false,
+  "remember_last_dirs": true,
+  "show_hidden": false,
+  "warn_plain_ftp": true
+ },
+ "git_watch_enabled": false,
+ "git_watch_interval": 600,
+ "git_watch_path": "",
+ "host_key_policy": "reject",
+ "local_shell": {
+  "command": "",
+  "login_shell": false,
+  "on_exit": "close",
+  "start_in": "current"
+ },
+ "macros": {
+  "confirm_multi_session": true
+ },
+ "master_password_disabled": false,
+ "master_password_hash": "",
+ "passwords_off": false,
+ "remember_password_default": true,
+ "remote_desktop": {
+  "binary_path": "",
+  "max_sessions": 8,
+  "preferred_engine": "auto",
+  "release_shortcut": "<Control><Alt>Control_R"
+ },
+ "secrets_policy": {},
+ "shortcuts": {},
+ "terminal_appearance": {
+  "bg_color": null,
+  "bold_is_bright": true,
+  "color_scheme": "default",
+  "cursor_blink": true,
+  "cursor_shape": "block",
+  "custom_font": null,
+  "fg_color": null,
+  "font_size": null,
+  "palette": null,
+  "use_custom_colors": false,
+  "use_system_mono_font": true
+ },
+ "terminal_input": {
+  "copy_on_select": true,
+  "copy_on_select_clipboard": false,
+  "middle_click": "paste_primary",
+  "right_click": "menu"
+ },
+ "timeouts": {
+  "auth": 10.0,
+  "banner": 10.0,
+  "connect": 10.0
+ },
+ "use_paramiko_vte": false
+}

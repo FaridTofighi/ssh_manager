@@ -1,0 +1,12 @@
+{
+ "export_encrypted_format": "ssh-manager-export-encrypted",
+ "export_format": "ssh-manager-export",
+ "keybox_file_format": "ssh-manager-keybox",
+ "keybox_format": "ssh-manager-keybox",
+ "keyring_services": [
+  "ssh-manager",
+  "ssh-manager",
+  "ssh-manager"
+ ],
+ "schema_version": 2
+}

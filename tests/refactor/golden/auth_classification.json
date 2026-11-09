@@ -1,0 +1,178 @@
+{
+ "changed_ecdsa": {
+  "changed_after_exit": {
+   "host": "[127.0.0.1]:2222",
+   "key_type": "ECDSA",
+   "known_hosts_path": "/home/user/.ssh/known_hosts",
+   "line_no": 3,
+   "new_fingerprint": "SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0"
+  },
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "hostkey",
+   "ok": "hostkey",
+   "ssh_error": "hostkey",
+   "sshpass_host_key": "hostkey",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "changed_ed25519": {
+  "changed_after_exit": {
+   "host": "[127.0.0.1]:2222",
+   "key_type": "ED25519",
+   "known_hosts_path": "/home/user/.ssh/known_hosts",
+   "line_no": 3,
+   "new_fingerprint": "SHA256:jGkiGqgswgq3DMQZAqoAtgwXw+2aARSrqcjR5OJRsGk"
+  },
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "hostkey",
+   "ok": "hostkey",
+   "ssh_error": "hostkey",
+   "sshpass_host_key": "hostkey",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "changed_rsa": {
+  "changed_after_exit": {
+   "host": "[127.0.0.1]:2222",
+   "key_type": "RSA",
+   "known_hosts_path": "/home/user/.ssh/known_hosts",
+   "line_no": 3,
+   "new_fingerprint": "SHA256:XZbehxIxNIM/1GgUSr8J4M8kyP9GXLTd5Acx3hmu1YY"
+  },
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "hostkey",
+   "ok": "hostkey",
+   "ssh_error": "hostkey",
+   "sshpass_host_key": "hostkey",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "connection_refused": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "network",
+   "ok": "network",
+   "ssh_error": "network",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "decoy_cat": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "hostkey",
+   "ok": "hostkey",
+   "ssh_error": "hostkey",
+   "sshpass_host_key": "hostkey",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "empty": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "other",
+   "ok": "ok",
+   "ssh_error": "other",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "otp_prompt": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "otp_required",
+   "ok": "otp_required",
+   "ssh_error": "otp_required",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "permission_denied_retry": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "auth_failed",
+   "ok": "auth_failed",
+   "ssh_error": "auth_failed",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "publickey_only": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "no_password_method",
+   "ok": "no_password_method",
+   "ssh_error": "no_password_method",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "too_many_failures": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "other",
+   "ok": "other",
+   "ssh_error": "other",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": null
+ },
+ "unknown_host": {
+  "changed_after_exit": null,
+  "changed_while_running": null,
+  "classify_exit": {
+   "killed": "other",
+   "ok": "ok",
+   "ssh_error": "other",
+   "sshpass_host_key": "hostkey_unknown",
+   "sshpass_wrong_password": "auth_failed"
+  },
+  "ends_with_password_prompt": false,
+  "passphrase_prompt": null,
+  "unknown": {
+   "fingerprint": "SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0",
+   "host": "[127.0.0.1]:2222",
+   "key_type": "ECDSA"
+  }
+ }
+}

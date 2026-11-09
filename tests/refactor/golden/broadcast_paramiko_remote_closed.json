@@ -1,0 +1,15 @@
+{
+ "logs": [
+  [
+   "web: Session ended.",
+   "info"
+  ]
+ ],
+ "session_closed": [
+  [
+   "web",
+   true
+  ]
+ ],
+ "status": "Disconnected"
+}

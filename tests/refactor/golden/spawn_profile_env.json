@@ -1,0 +1,41 @@
+{
+ "argv": [
+  "ssh",
+  "-o",
+  "PermitLocalCommand=yes",
+  "-o",
+  "LocalCommand=touch -- /tmp/ophion-markers/0123456789abcdef.ok",
+  "10.0.0.12"
+ ],
+ "asked_password": false,
+ "auth_method": "sentinel",
+ "env": [
+  "HOME=/tmp",
+  "USER=tester",
+  "LANG=en_US.UTF-8",
+  "LC_ALL=en_US.UTF-8",
+  "PATH=/usr/bin:/bin",
+  "DISPLAY=:99",
+  "SSH_AUTH_SOCK=/run/user/1000/agent.sock",
+  "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/bus",
+  "TERM=xterm-256color",
+  "COLORTERM=truecolor",
+  "SSHPASS=outer-sshpass-value",
+  "OPHION_DEBUG=1",
+  "SSH_MANAGER_APPDIR=/opt/app",
+  "SSHM_DENSITY=compact",
+  "EDITOR=vim",
+  "LANG=C.UTF-8"
+ ],
+ "logs": [
+  [
+   "Automatic password entry unavailable for web (sshpass not installed).",
+   "warning"
+  ]
+ ],
+ "password_source": "manual",
+ "path": "spawn",
+ "pty_flags": 0,
+ "spawn_flags": 33554436,
+ "workdir": null
+}

@@ -1,0 +1,37 @@
+[
+ [
+  "Restart nginx",
+  [
+   "<Primary><Alt>F7"
+  ],
+  [
+   {
+    "text": "sudo systemctl restart nginx",
+    "type": "text"
+   },
+   {
+    "key": "Enter",
+    "type": "key"
+   },
+   {
+    "ms": 300,
+    "type": "delay"
+   },
+   {
+    "secret": true,
+    "text": "<SECRET>",
+    "type": "text"
+   }
+  ]
+ ],
+ [
+  "Uptime",
+  [],
+  [
+   {
+    "text": "uptime",
+    "type": "text"
+   }
+  ]
+ ]
+]

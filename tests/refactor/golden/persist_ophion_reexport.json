@@ -1,0 +1,262 @@
+{
+ "app_version": "fixture",
+ "counts": {
+  "by_protocol": {
+   "ftp": 1,
+   "ftps": 1,
+   "rdp": 1,
+   "sftp": 1,
+   "ssh": 4,
+   "vnc": 1
+  },
+  "groups": 7,
+  "hosts": 9
+ },
+ "credentials": [
+  {
+   "name": "Ops account",
+   "ref": "c1",
+   "username": "deploy"
+  },
+  {
+   "name": "Postgres",
+   "ref": "c2",
+   "username": "postgres"
+  }
+ ],
+ "exported_at": "1970-01-01T00:00:00Z",
+ "format": "ssh-manager-export",
+ "groups": [
+  {
+   "children": [],
+   "color": "",
+   "hosts": [
+    {
+     "alias": "ftp-old",
+     "color": "",
+     "hostname": "ftp.example.org",
+     "metadata": {
+      "transfer": {
+       "anonymous": true,
+       "anonymous_password": "me@x",
+       "v": 1
+      }
+     },
+     "port": 21,
+     "position": 0,
+     "protocol": "ftp",
+     "ref": "h1",
+     "user": "anonymous"
+    },
+    {
+     "alias": "ftps-new",
+     "color": "",
+     "hostname": "ftps.example.org",
+     "metadata": {
+      "transfer": {
+       "tls_mode": "implicit",
+       "v": 1
+      }
+     },
+     "port": 990,
+     "position": 0,
+     "protocol": "ftps",
+     "ref": "h2",
+     "user": "uploader"
+    },
+    {
+     "alias": "sftp-1",
+     "color": "#ABCDEF",
+     "credential": {
+      "mode": "shared",
+      "ref": "c1"
+     },
+     "hostname": "sftp.example.org",
+     "port": 22,
+     "position": 0,
+     "protocol": "sftp",
+     "ref": "h3",
+     "user": "deploy"
+    },
+    {
+     "alias": "vnc-1",
+     "color": "",
+     "hostname": "vnc.example.org",
+     "metadata": {
+      "future": {
+       "x": 1
+      }
+     },
+     "port": 5900,
+     "position": 0,
+     "protocol": "vnc",
+     "ref": "h4"
+    }
+   ],
+   "name": "Files",
+   "note": "",
+   "position": 0
+  },
+  {
+   "children": [
+    {
+     "children": [
+      {
+       "children": [],
+       "color": "#0000AA",
+       "hosts": [
+        {
+         "alias": "db-02",
+         "color": "#123456",
+         "credential": {
+          "mode": "shared",
+          "ref": "c2"
+         },
+         "hostname": "db2.internal",
+         "position": 0,
+         "protocol": "ssh",
+         "ref": "h8",
+         "user": "postgres"
+        }
+       ],
+       "name": "Replicas",
+       "note": "",
+       "position": 0
+      }
+     ],
+     "color": "#00AA00",
+     "hosts": [
+      {
+       "alias": "db-01",
+       "color": "",
+       "credential": {
+        "mode": "shared",
+        "ref": "c2"
+       },
+       "hostname": "db1.internal",
+       "port": 22,
+       "position": 0,
+       "protocol": "ssh",
+       "ref": "h7",
+       "user": "postgres"
+      }
+     ],
+     "name": "Databases",
+     "note": "",
+     "position": 0
+    },
+    {
+     "children": [],
+     "color": "",
+     "hosts": [],
+     "name": "Empty",
+     "note": "",
+     "position": 0
+    }
+   ],
+   "color": "#AA0000",
+   "hosts": [
+    {
+     "alias": "bastion",
+     "color": "",
+     "credential": {
+      "mode": "host-specific"
+     },
+     "hostname": "bastion.example.org",
+     "port": 22,
+     "position": 0,
+     "protocol": "ssh",
+     "ref": "h5",
+     "user": "jump"
+    },
+    {
+     "alias": "web-01",
+     "color": "",
+     "credential": {
+      "mode": "shared",
+      "ref": "c1"
+     },
+     "hostname": "web1.example.org",
+     "metadata": {
+      "default_session_profile_id": "profile-1",
+      "environment": "production",
+      "notes": "main site",
+      "owner": "ops",
+      "permissions": {
+       "read_only": true
+      },
+      "service": "nginx",
+      "tags": [
+       "web",
+       "frontend"
+      ]
+     },
+     "options": {
+      "identityfile": "~/.ssh/id_ed25519",
+      "proxycommand": "sshpass -p <removed> ssh -W %h:%p jump",
+      "proxyjump": "jump@bastion.example.org"
+     },
+     "port": 2222,
+     "position": 0,
+     "protocol": "ssh",
+     "ref": "h6",
+     "user": "deploy"
+    }
+   ],
+   "name": "Prod",
+   "note": "production servers",
+   "position": 0
+  },
+  {
+   "children": [],
+   "color": "",
+   "hosts": [
+    {
+     "alias": "dc-01",
+     "color": "",
+     "hostname": "dc1.corp.example",
+     "metadata": {
+      "rdp": {
+       "domain": "CORP",
+       "gateway": {
+        "host": "",
+        "port": 443
+       },
+       "v": 1,
+       "via_ssh_ref": "h5",
+       "width": 1600
+      }
+     },
+     "port": 3389,
+     "position": 0,
+     "protocol": "rdp",
+     "ref": "h9",
+     "user": "administrator"
+    }
+   ],
+   "name": "Windows",
+   "note": "",
+   "position": 0
+  },
+  {
+   "children": [],
+   "color": "",
+   "hosts": [],
+   "name": "سرورها",
+   "note": "",
+   "position": 0
+  }
+ ],
+ "integrity": {
+  "sha256": "d43280f09ad0e665673aca03932fd83b8fd958df14ecbf0881b1fdb4f44855ac"
+ },
+ "options": {
+  "colors": true,
+  "credential_refs": true,
+  "notes": true,
+  "smart_groups": false
+ },
+ "scope": "all",
+ "smart_groups": [],
+ "version": 1
+}

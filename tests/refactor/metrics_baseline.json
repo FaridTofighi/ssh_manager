@@ -1,0 +1,3949 @@
+{
+ "modules": 238,
+ "loc_total": 68904,
+ "loc": {
+  "ophion": 47,
+  "ophion.__main__": 11,
+  "ophion.aead": 148,
+  "ophion.auth_flow": 402,
+  "ophion.config": 969,
+  "ophion.config_viewer": 109,
+  "ophion.connection_state": 85,
+  "ophion.connector": 547,
+  "ophion.credentials": 408,
+  "ophion.credentials_export": 143,
+  "ophion.desktop_integration": 158,
+  "ophion.exporters": 1,
+  "ophion.exporters.native": 375,
+  "ophion.gc_guard": 60,
+  "ophion.gtk_app": 1003,
+  "ophion.gtk_main": 85,
+  "ophion.gtk_terminal": 3612,
+  "ophion.gtkui": 13,
+  "ophion.gtkui.constants": 132,
+  "ophion.gtkui.controllers": 0,
+  "ophion.gtkui.controllers.actions": 156,
+  "ophion.gtkui.controllers.app_dialogs": 317,
+  "ophion.gtkui.controllers.colors": 309,
+  "ophion.gtkui.controllers.context_menus": 196,
+  "ophion.gtkui.controllers.credentials_controller": 502,
+  "ophion.gtkui.controllers.details_presenter": 204,
+  "ophion.gtkui.controllers.drag_drop": 270,
+  "ophion.gtkui.controllers.favorites": 347,
+  "ophion.gtkui.controllers.group_actions": 362,
+  "ophion.gtkui.controllers.guards": 27,
+  "ophion.gtkui.controllers.host_actions": 501,
+  "ophion.gtkui.controllers.host_page": 579,
+  "ophion.gtkui.controllers.inventory": 301,
+  "ophion.gtkui.controllers.layout": 153,
+  "ophion.gtkui.controllers.macro_controller": 852,
+  "ophion.gtkui.controllers.mobaxterm_import": 63,
+  "ophion.gtkui.controllers.multirun": 149,
+  "ophion.gtkui.controllers.native_transfer": 288,
+  "ophion.gtkui.controllers.notifications": 220,
+  "ophion.gtkui.controllers.rdp_files": 162,
+  "ophion.gtkui.controllers.security": 204,
+  "ophion.gtkui.controllers.session_controller": 612,
+  "ophion.gtkui.controllers.shortcut_registry": 227,
+  "ophion.gtkui.controllers.shortcuts": 360,
+  "ophion.gtkui.controllers.ssh_keys_controller": 248,
+  "ophion.gtkui.controllers.store_actions": 203,
+  "ophion.gtkui.controllers.tree": 638,
+  "ophion.gtkui.controllers.tree_controller": 383,
+  "ophion.gtkui.controllers.tunnels": 293,
+  "ophion.gtkui.controllers.ui_state": 224,
+  "ophion.gtkui.dialogs": 0,
+  "ophion.gtkui.dialogs.base": 344,
+  "ophion.gtkui.dialogs.bulk_tag": 57,
+  "ophion.gtkui.dialogs.child_group_chooser": 113,
+  "ophion.gtkui.dialogs.config_viewer": 310,
+  "ophion.gtkui.dialogs.confirm": 140,
+  "ophion.gtkui.dialogs.credentials": 173,
+  "ophion.gtkui.dialogs.credentials_transfer": 223,
+  "ophion.gtkui.dialogs.files": 83,
+  "ophion.gtkui.dialogs.forwards_page": 167,
+  "ophion.gtkui.dialogs.group_picker": 181,
+  "ophion.gtkui.dialogs.host_dialog": 906,
+  "ophion.gtkui.dialogs.host_key": 213,
+  "ophion.gtkui.dialogs.known_hosts": 499,
+  "ophion.gtkui.dialogs.list_manager": 175,
+  "ophion.gtkui.dialogs.macros": 691,
+  "ophion.gtkui.dialogs.mobaxterm_import": 959,
+  "ophion.gtkui.dialogs.multirun": 536,
+  "ophion.gtkui.dialogs.multirun_confirm": 75,
+  "ophion.gtkui.dialogs.multirun_results": 363,
+  "ophion.gtkui.dialogs.multirun_targets": 222,
+  "ophion.gtkui.dialogs.native_export": 151,
+  "ophion.gtkui.dialogs.native_import": 1002,
+  "ophion.gtkui.dialogs.openssh_import": 135,
+  "ophion.gtkui.dialogs.password": 226,
+  "ophion.gtkui.dialogs.preferences": 743,
+  "ophion.gtkui.dialogs.prompt": 143,
+  "ophion.gtkui.dialogs.rdp_diagnostics": 109,
+  "ophion.gtkui.dialogs.rdp_page": 781,
+  "ophion.gtkui.dialogs.secrets": 251,
+  "ophion.gtkui.dialogs.security_page": 163,
+  "ophion.gtkui.dialogs.settings_layout": 152,
+  "ophion.gtkui.dialogs.shortcuts_page": 363,
+  "ophion.gtkui.dialogs.ssh_agent_section": 121,
+  "ophion.gtkui.dialogs.ssh_keys": 502,
+  "ophion.gtkui.dialogs.ssh_keys_deploy": 296,
+  "ophion.gtkui.dialogs.transfer_page": 346,
+  "ophion.gtkui.dialogs.trust": 131,
+  "ophion.gtkui.dialogs.tunnels": 476,
+  "ophion.gtkui.favorites": 142,
+  "ophion.gtkui.file_browser": 6,
+  "ophion.gtkui.file_browser.pane": 891,
+  "ophion.gtkui.file_browser.properties": 182,
+  "ophion.gtkui.file_browser.tab": 1027,
+  "ophion.gtkui.file_browser.transfers": 291,
+  "ophion.gtkui.file_browser.worker": 85,
+  "ophion.gtkui.health": 46,
+  "ophion.gtkui.host_facts": 259,
+  "ophion.gtkui.host_history": 119,
+  "ophion.gtkui.i18n": 24,
+  "ophion.gtkui.identity": 35,
+  "ophion.gtkui.latency": 125,
+  "ophion.gtkui.local_terminal": 221,
+  "ophion.gtkui.menu_spec": 70,
+  "ophion.gtkui.migration_flow": 231,
+  "ophion.gtkui.pane_activation": 83,
+  "ophion.gtkui.rdp": 1,
+  "ophion.gtkui.rdp.display": 270,
+  "ophion.gtkui.rdp.runtime": 98,
+  "ophion.gtkui.rdp.tab": 1388,
+  "ophion.gtkui.rdp.toolbar": 266,
+  "ophion.gtkui.session_page": 172,
+  "ophion.gtkui.tab_labels": 142,
+  "ophion.gtkui.theme": 0,
+  "ophion.gtkui.theme.accent": 271,
+  "ophion.gtkui.theme.css_dark": 14,
+  "ophion.gtkui.theme.css_light": 14,
+  "ophion.gtkui.theme.density": 477,
+  "ophion.gtkui.theme.fonts": 43,
+  "ophion.gtkui.theme.loader": 270,
+  "ophion.gtkui.theme.stylesheet": 1134,
+  "ophion.gtkui.theme.terminal_schemes": 97,
+  "ophion.gtkui.theme.tokens": 536,
+  "ophion.gtkui.tree_icons": 182,
+  "ophion.gtkui.unlock_flow": 334,
+  "ophion.gtkui.validation": 141,
+  "ophion.gtkui.view_models": 56,
+  "ophion.gtkui.views": 0,
+  "ophion.gtkui.views.favorites": 301,
+  "ophion.gtkui.views.header": 429,
+  "ophion.gtkui.views.host_page": 868,
+  "ophion.gtkui.views.session_tree": 753,
+  "ophion.gtkui.views.sidebar": 612,
+  "ophion.gtkui.views.statusbar": 129,
+  "ophion.gtkui.views.workspace": 493,
+  "ophion.gtkui.widgets": 0,
+  "ophion.gtkui.widgets.accent_picker": 383,
+  "ophion.gtkui.widgets.app_logo": 77,
+  "ophion.gtkui.widgets.chips": 68,
+  "ophion.gtkui.widgets.dot": 44,
+  "ophion.gtkui.widgets.empty_state": 116,
+  "ophion.gtkui.widgets.forms": 192,
+  "ophion.gtkui.widgets.host_picker": 101,
+  "ophion.gtkui.widgets.icon_button": 158,
+  "ophion.gtkui.widgets.icons": 340,
+  "ophion.gtkui.widgets.menus": 85,
+  "ophion.gtkui.widgets.pane_frame": 288,
+  "ophion.gtkui.widgets.ready_state": 170,
+  "ophion.gtkui.widgets.searchable_list": 197,
+  "ophion.gtkui.widgets.secret_entry": 177,
+  "ophion.gtkui.widgets.status_dot": 90,
+  "ophion.gtkui.widgets.toast": 297,
+  "ophion.gtkui.workspaces": 73,
+  "ophion.host_key_output": 134,
+  "ophion.host_key_preflight": 159,
+  "ophion.host_utils": 75,
+  "ophion.identity": 40,
+  "ophion.importers": 5,
+  "ophion.importers.mobaxterm": 1199,
+  "ophion.importers.native": 1114,
+  "ophion.inventory": 21,
+  "ophion.inventory.manager": 426,
+  "ophion.inventory.openssh": 450,
+  "ophion.inventory.startup": 90,
+  "ophion.inventory.store": 775,
+  "ophion.keybox": 366,
+  "ophion.known_hosts": 598,
+  "ophion.launcher": 175,
+  "ophion.legacy_paths": 288,
+  "ophion.local_shell": 147,
+  "ophion.macros": 955,
+  "ophion.main": 48,
+  "ophion.master_auth": 71,
+  "ophion.migration": 427,
+  "ophion.multirun": 1,
+  "ophion.multirun.engine": 387,
+  "ophion.multirun.report": 124,
+  "ophion.multirun.safety": 56,
+  "ophion.multirun.store": 163,
+  "ophion.native_format": 156,
+  "ophion.password_change": 175,
+  "ophion.password_dialog": 11,
+  "ophion.password_store": 67,
+  "ophion.persistence": 94,
+  "ophion.profiles": 45,
+  "ophion.protocols": 151,
+  "ophion.protocols.urls": 132,
+  "ophion.rdp": 6,
+  "ophion.rdp.clipboard": 62,
+  "ophion.rdp.command": 476,
+  "ophion.rdp.drives": 109,
+  "ophion.rdp.engines": 492,
+  "ophion.rdp.keyboard": 156,
+  "ophion.rdp.outcome": 259,
+  "ophion.rdp.probe": 345,
+  "ophion.rdp.process": 309,
+  "ophion.rdp.rdpfile": 420,
+  "ophion.rdp.reconnect": 81,
+  "ophion.rdp.settings": 535,
+  "ophion.rdp.trust_flow": 78,
+  "ophion.rdp.tunnel": 155,
+  "ophion.rdp.window_focus": 59,
+  "ophion.rdp.wol": 63,
+  "ophion.rdp.x11": 126,
+  "ophion.remote_stats": 119,
+  "ophion.secret_mask": 26,
+  "ophion.secure_store": 526,
+  "ophion.settings": 472,
+  "ophion.smart_groups": 55,
+  "ophion.ssh_command": 134,
+  "ophion.ssh_keys": 721,
+  "ophion.templates": 47,
+  "ophion.terminal": 229,
+  "ophion.terminal_input": 65,
+  "ophion.text_utils": 13,
+  "ophion.transfer": 9,
+  "ophion.transfer.backend": 352,
+  "ophion.transfer.browse": 252,
+  "ophion.transfer.copy": 107,
+  "ophion.transfer.dnd": 137,
+  "ophion.transfer.engine": 745,
+  "ophion.transfer.factory": 29,
+  "ophion.transfer.ftp": 755,
+  "ophion.transfer.listing": 225,
+  "ophion.transfer.local": 193,
+  "ophion.transfer.names": 124,
+  "ophion.transfer.pins": 7,
+  "ophion.transfer.protolog": 134,
+  "ophion.transfer.settings": 193,
+  "ophion.transfer.sftp": 634,
+  "ophion.transfer.state": 80,
+  "ophion.trust": 122,
+  "ophion.tunnels": 1,
+  "ophion.tunnels.engine": 687,
+  "ophion.tunnels.model": 289,
+  "ophion.ui": 1912,
+  "ophion.unlock": 186,
+  "ophion.vte_bridge": 105
+ },
+ "classes": {
+  "ophion.aead.AeadError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.auth_flow.AuthOutcome": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.auth_flow.Decision": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.auth_flow.FailureAction": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.auth_flow.PassphraseFill": {
+   "lines": 17,
+   "methods": 4
+  },
+  "ophion.auth_flow.PasswordFlow": {
+   "lines": 68,
+   "methods": 9
+  },
+  "ophion.auth_flow.PasswordRequest": {
+   "lines": 22,
+   "methods": 3
+  },
+  "ophion.auth_flow.PasswordResolution": {
+   "lines": 12,
+   "methods": 1
+  },
+  "ophion.auth_flow.SaveContext": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.auth_flow.SaveOffer": {
+   "lines": 23,
+   "methods": 2
+  },
+  "ophion.config.ConfigManager": {
+   "lines": 519,
+   "methods": 18
+  },
+  "ophion.config.GroupConfig": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.config.HostEntry": {
+   "lines": 31,
+   "methods": 3
+  },
+  "ophion.config_viewer.ValidationResult": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.connection_state.ConnectionState": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.connection_state.ConnectionStateMachine": {
+   "lines": 40,
+   "methods": 7
+  },
+  "ophion.connector.Connector": {
+   "lines": 381,
+   "methods": 21
+  },
+  "ophion.connector.HostConfig": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.connector.Settings": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.connector.TryResult": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.credentials.Credential": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.credentials.CredentialStore": {
+   "lines": 349,
+   "methods": 31
+  },
+  "ophion.credentials.PasswordChoice": {
+   "lines": 17,
+   "methods": 1
+  },
+  "ophion.credentials_export.CredentialExportError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.credentials_export.ExportedCredential": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.credentials_export.ImportResult": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.exporters.native.ExportOptions": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.exporters.native.ExportReport": {
+   "lines": 15,
+   "methods": 1
+  },
+  "ophion.gtk_app.SSHManagerApplication": {
+   "lines": 107,
+   "methods": 8
+  },
+  "ophion.gtk_app.SSHManagerWindow": {
+   "lines": 727,
+   "methods": 51
+  },
+  "ophion.gtk_main._VersionAction": {
+   "lines": 11,
+   "methods": 2
+  },
+  "ophion.gtk_terminal.PasswordService": {
+   "lines": 8,
+   "methods": 3
+  },
+  "ophion.gtk_terminal.TerminalNotebook": {
+   "lines": 1187,
+   "methods": 120
+  },
+  "ophion.gtk_terminal.TerminalPaneContainer": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.gtk_terminal.TerminalTab": {
+   "lines": 2123,
+   "methods": 174
+  },
+  "ophion.gtkui.constants.Icons": {
+   "lines": 82,
+   "methods": 0
+  },
+  "ophion.gtkui.constants.RowKind": {
+   "lines": 19,
+   "methods": 2
+  },
+  "ophion.gtkui.constants.TreeColumn": {
+   "lines": 17,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.actions.WindowActions": {
+   "lines": 141,
+   "methods": 44
+  },
+  "ophion.gtkui.controllers.app_dialogs.AppDialogs": {
+   "lines": 280,
+   "methods": 17
+  },
+  "ophion.gtkui.controllers.colors.ColorController": {
+   "lines": 213,
+   "methods": 20
+  },
+  "ophion.gtkui.controllers.context_menus.TreeMenuCallbacks": {
+   "lines": 39,
+   "methods": 38
+  },
+  "ophion.gtkui.controllers.credentials_controller.CredentialController": {
+   "lines": 468,
+   "methods": 38
+  },
+  "ophion.gtkui.controllers.details_presenter.DetailCallbacks": {
+   "lines": 17,
+   "methods": 16
+  },
+  "ophion.gtkui.controllers.drag_drop.DragDropController": {
+   "lines": 243,
+   "methods": 11
+  },
+  "ophion.gtkui.controllers.favorites.FavoritesController": {
+   "lines": 310,
+   "methods": 32
+  },
+  "ophion.gtkui.controllers.favorites.Target": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.group_actions.GroupActions": {
+   "lines": 337,
+   "methods": 18
+  },
+  "ophion.gtkui.controllers.host_actions.HostActions": {
+   "lines": 464,
+   "methods": 22
+  },
+  "ophion.gtkui.controllers.host_page.HostPageController": {
+   "lines": 500,
+   "methods": 41
+  },
+  "ophion.gtkui.controllers.host_page.TerminalPage": {
+   "lines": 19,
+   "methods": 2
+  },
+  "ophion.gtkui.controllers.inventory.InventoryController": {
+   "lines": 271,
+   "methods": 19
+  },
+  "ophion.gtkui.controllers.layout.LayoutController": {
+   "lines": 114,
+   "methods": 11
+  },
+  "ophion.gtkui.controllers.macro_controller.MacroController": {
+   "lines": 671,
+   "methods": 52
+  },
+  "ophion.gtkui.controllers.macro_controller._Group": {
+   "lines": 14,
+   "methods": 2
+  },
+  "ophion.gtkui.controllers.macro_controller._Playback": {
+   "lines": 11,
+   "methods": 1
+  },
+  "ophion.gtkui.controllers.macro_controller._Recording": {
+   "lines": 9,
+   "methods": 1
+  },
+  "ophion.gtkui.controllers.macro_controller._Sink": {
+   "lines": 22,
+   "methods": 4
+  },
+  "ophion.gtkui.controllers.mobaxterm_import.MobaXtermImportController": {
+   "lines": 38,
+   "methods": 2
+  },
+  "ophion.gtkui.controllers.multirun.MultiRunController": {
+   "lines": 122,
+   "methods": 14
+  },
+  "ophion.gtkui.controllers.native_transfer.NativeTransferController": {
+   "lines": 206,
+   "methods": 14
+  },
+  "ophion.gtkui.controllers.notifications.GLibScheduler": {
+   "lines": 17,
+   "methods": 2
+  },
+  "ophion.gtkui.controllers.notifications.Message": {
+   "lines": 14,
+   "methods": 1
+  },
+  "ophion.gtkui.controllers.notifications.MessageHistory": {
+   "lines": 39,
+   "methods": 9
+  },
+  "ophion.gtkui.controllers.notifications.Scheduler": {
+   "lines": 6,
+   "methods": 2
+  },
+  "ophion.gtkui.controllers.notifications.ToastController": {
+   "lines": 108,
+   "methods": 10
+  },
+  "ophion.gtkui.controllers.rdp_files.RdpFileActions": {
+   "lines": 129,
+   "methods": 6
+  },
+  "ophion.gtkui.controllers.security.SecurityActions": {
+   "lines": 160,
+   "methods": 15
+  },
+  "ophion.gtkui.controllers.security.SecurityState": {
+   "lines": 10,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.session_controller.SessionController": {
+   "lines": 492,
+   "methods": 34
+  },
+  "ophion.gtkui.controllers.session_controller.UIHostConfig": {
+   "lines": 10,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.shortcut_registry.ExtraEntry": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.shortcut_registry.ShortcutRegistry": {
+   "lines": 162,
+   "methods": 19
+  },
+  "ophion.gtkui.controllers.shortcuts.ActionSpec": {
+   "lines": 15,
+   "methods": 1
+  },
+  "ophion.gtkui.controllers.ssh_keys_controller.SshKeysController": {
+   "lines": 207,
+   "methods": 29
+  },
+  "ophion.gtkui.controllers.store_actions.StoreActions": {
+   "lines": 157,
+   "methods": 10
+  },
+  "ophion.gtkui.controllers.tree.TreeController": {
+   "lines": 567,
+   "methods": 44
+  },
+  "ophion.gtkui.controllers.tree_controller.TreeCallbacks": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.gtkui.controllers.tree_controller.TreeRow": {
+   "lines": 36,
+   "methods": 3
+  },
+  "ophion.gtkui.controllers.tunnels.TunnelController": {
+   "lines": 248,
+   "methods": 25
+  },
+  "ophion.gtkui.controllers.ui_state.UiState": {
+   "lines": 109,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.base.BaseDialog": {
+   "lines": 275,
+   "methods": 22
+  },
+  "ophion.gtkui.dialogs.base.DialogSize": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.gtkui.dialogs.bulk_tag.BulkTagDialog": {
+   "lines": 36,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.child_group_chooser.ChildGroupChooserDialog": {
+   "lines": 85,
+   "methods": 5
+  },
+  "ophion.gtkui.dialogs.config_viewer.ConfigViewerDialog": {
+   "lines": 274,
+   "methods": 19
+  },
+  "ophion.gtkui.dialogs.confirm.ConfirmDialog": {
+   "lines": 37,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.confirm.MessageDialog": {
+   "lines": 17,
+   "methods": 1
+  },
+  "ophion.gtkui.dialogs.credentials.CredentialEditDialog": {
+   "lines": 47,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.credentials.CredentialManagerDialog": {
+   "lines": 100,
+   "methods": 9
+  },
+  "ophion.gtkui.dialogs.credentials_transfer.CredentialImportDialog": {
+   "lines": 36,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.credentials_transfer.PassphraseDialog": {
+   "lines": 55,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.forwards_page.ForwardsPage": {
+   "lines": 137,
+   "methods": 11
+  },
+  "ophion.gtkui.dialogs.group_picker.GroupPickerDialog": {
+   "lines": 149,
+   "methods": 5
+  },
+  "ophion.gtkui.dialogs.host_dialog.HostDialog": {
+   "lines": 798,
+   "methods": 49
+  },
+  "ophion.gtkui.dialogs.host_key.ChangedKey": {
+   "lines": 20,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.host_key.HostKeyDetailsDialog": {
+   "lines": 61,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.known_hosts.KnownHostsDialog": {
+   "lines": 453,
+   "methods": 32
+  },
+  "ophion.gtkui.dialogs.list_manager.ListManagerDialog": {
+   "lines": 148,
+   "methods": 15
+  },
+  "ophion.gtkui.dialogs.macros.MacroDialog": {
+   "lines": 403,
+   "methods": 27
+  },
+  "ophion.gtkui.dialogs.macros.MacrosWindow": {
+   "lines": 109,
+   "methods": 9
+  },
+  "ophion.gtkui.dialogs.mobaxterm_import.MobaXtermImportDialog": {
+   "lines": 830,
+   "methods": 51
+  },
+  "ophion.gtkui.dialogs.mobaxterm_import.Step": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.gtkui.dialogs.mobaxterm_import.UsernameRow": {
+   "lines": 18,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.multirun.MultiRunDialog": {
+   "lines": 501,
+   "methods": 42
+  },
+  "ophion.gtkui.dialogs.multirun_confirm.RunConfirmDialog": {
+   "lines": 47,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.multirun_results.ResultsView": {
+   "lines": 299,
+   "methods": 19
+  },
+  "ophion.gtkui.dialogs.multirun_targets.TargetChooserDialog": {
+   "lines": 194,
+   "methods": 13
+  },
+  "ophion.gtkui.dialogs.native_export.NativeExportDialog": {
+   "lines": 105,
+   "methods": 5
+  },
+  "ophion.gtkui.dialogs.native_import.NativeImportDialog": {
+   "lines": 895,
+   "methods": 56
+  },
+  "ophion.gtkui.dialogs.native_import.Step": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.dialogs.openssh_import.OpenSSHImportDialog": {
+   "lines": 109,
+   "methods": 7
+  },
+  "ophion.gtkui.dialogs.password.HostDetails": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.dialogs.password.PasswordDialog": {
+   "lines": 70,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.password.PasswordRequestDialog": {
+   "lines": 48,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.password.SavePasswordDialog": {
+   "lines": 67,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.preferences.PreferencesDialog": {
+   "lines": 595,
+   "methods": 29
+  },
+  "ophion.gtkui.dialogs.preferences.PreferencesValues": {
+   "lines": 33,
+   "methods": 1
+  },
+  "ophion.gtkui.dialogs.prompt.PromptDialog": {
+   "lines": 89,
+   "methods": 4
+  },
+  "ophion.gtkui.dialogs.rdp_diagnostics.RdpDiagnosticsDialog": {
+   "lines": 81,
+   "methods": 5
+  },
+  "ophion.gtkui.dialogs.rdp_page.RdpPages": {
+   "lines": 711,
+   "methods": 39
+  },
+  "ophion.gtkui.dialogs.secrets.NewSecretDialog": {
+   "lines": 77,
+   "methods": 4
+  },
+  "ophion.gtkui.dialogs.secrets.UnlockDialog": {
+   "lines": 131,
+   "methods": 7
+  },
+  "ophion.gtkui.dialogs.security_page.SecurityPage": {
+   "lines": 130,
+   "methods": 11
+  },
+  "ophion.gtkui.dialogs.settings_layout.SettingsPage": {
+   "lines": 27,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.settings_layout.SettingsPageLayout": {
+   "lines": 84,
+   "methods": 10
+  },
+  "ophion.gtkui.dialogs.shortcuts_page.AssignResult": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.dialogs.shortcuts_page.ShortcutCaptureDialog": {
+   "lines": 45,
+   "methods": 3
+  },
+  "ophion.gtkui.dialogs.shortcuts_page.ShortcutEditor": {
+   "lines": 46,
+   "methods": 7
+  },
+  "ophion.gtkui.dialogs.shortcuts_page.ShortcutsPage": {
+   "lines": 188,
+   "methods": 14
+  },
+  "ophion.gtkui.dialogs.ssh_agent_section.AgentSection": {
+   "lines": 94,
+   "methods": 6
+  },
+  "ophion.gtkui.dialogs.ssh_keys.GenerateKeyDialog": {
+   "lines": 140,
+   "methods": 10
+  },
+  "ophion.gtkui.dialogs.ssh_keys.SshKeysDialog": {
+   "lines": 282,
+   "methods": 19
+  },
+  "ophion.gtkui.dialogs.ssh_keys_deploy.DeployKeyDialog": {
+   "lines": 258,
+   "methods": 17
+  },
+  "ophion.gtkui.dialogs.transfer_page.TransferPage": {
+   "lines": 293,
+   "methods": 12
+  },
+  "ophion.gtkui.dialogs.trust.TrustDialog": {
+   "lines": 38,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.tunnels.ForwardDialog": {
+   "lines": 137,
+   "methods": 8
+  },
+  "ophion.gtkui.dialogs.tunnels.HostPickerDialog": {
+   "lines": 21,
+   "methods": 2
+  },
+  "ophion.gtkui.dialogs.tunnels.TunnelsDialog": {
+   "lines": 245,
+   "methods": 17
+  },
+  "ophion.gtkui.favorites.Favorites": {
+   "lines": 81,
+   "methods": 10
+  },
+  "ophion.gtkui.file_browser.pane.FilePane": {
+   "lines": 808,
+   "methods": 56
+  },
+  "ophion.gtkui.file_browser.properties.PropertiesDialog": {
+   "lines": 136,
+   "methods": 7
+  },
+  "ophion.gtkui.file_browser.tab.FileBrowserTab": {
+   "lines": 942,
+   "methods": 70
+  },
+  "ophion.gtkui.file_browser.transfers.ConflictDialog": {
+   "lines": 51,
+   "methods": 2
+  },
+  "ophion.gtkui.file_browser.transfers.JobRow": {
+   "lines": 63,
+   "methods": 2
+  },
+  "ophion.gtkui.file_browser.transfers.TransferPanel": {
+   "lines": 98,
+   "methods": 9
+  },
+  "ophion.gtkui.file_browser.worker.Worker": {
+   "lines": 63,
+   "methods": 6
+  },
+  "ophion.gtkui.health.Health": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.ActivityEvent": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.AuthKind": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.AuthSummary": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.Crumb": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.HostActivity": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.gtkui.host_facts.LatencyLevel": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.host_history.HostHistory": {
+   "lines": 94,
+   "methods": 12
+  },
+  "ophion.gtkui.latency.LatencyProbe": {
+   "lines": 84,
+   "methods": 6
+  },
+  "ophion.gtkui.latency.LatencyResult": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.gtkui.local_terminal.LocalTerminalTab": {
+   "lines": 175,
+   "methods": 23
+  },
+  "ophion.gtkui.menu_spec.MenuItemSpec": {
+   "lines": 12,
+   "methods": 0
+  },
+  "ophion.gtkui.menu_spec.MenuSection": {
+   "lines": 8,
+   "methods": 1
+  },
+  "ophion.gtkui.migration_flow.MigrationFlow": {
+   "lines": 176,
+   "methods": 12
+  },
+  "ophion.gtkui.pane_activation.ActivePane": {
+   "lines": 67,
+   "methods": 8
+  },
+  "ophion.gtkui.rdp.display.FrdpSurface": {
+   "lines": 75,
+   "methods": 8
+  },
+  "ophion.gtkui.rdp.display.SocketSurface": {
+   "lines": 109,
+   "methods": 9
+  },
+  "ophion.gtkui.rdp.display.Surface": {
+   "lines": 37,
+   "methods": 6
+  },
+  "ophion.gtkui.rdp.runtime.RdpRuntime": {
+   "lines": 77,
+   "methods": 10
+  },
+  "ophion.gtkui.rdp.tab.RdpSessionTab": {
+   "lines": 1286,
+   "methods": 85
+  },
+  "ophion.gtkui.rdp.toolbar.RdpToolbar": {
+   "lines": 231,
+   "methods": 18
+  },
+  "ophion.gtkui.session_page.SessionPage": {
+   "lines": 150,
+   "methods": 34
+  },
+  "ophion.gtkui.tab_labels.SessionLabelInfo": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.tab_labels.TabLabelMode": {
+   "lines": 12,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.accent.AccentRoles": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.Density": {
+   "lines": 11,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.density.DensityTokens": {
+   "lines": 34,
+   "methods": 3
+  },
+  "ophion.gtkui.theme.density.FontTokens": {
+   "lines": 19,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.LayoutVariant": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.PageTokens": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.RadiusTokens": {
+   "lines": 11,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.density.ReadyTokens": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.SidebarTokens": {
+   "lines": 16,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.SizeTokens": {
+   "lines": 65,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.SpaceTokens": {
+   "lines": 14,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.density.TopbarTokens": {
+   "lines": 11,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density.TreeTokens": {
+   "lines": 11,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.density._Group": {
+   "lines": 9,
+   "methods": 2
+  },
+  "ophion.gtkui.theme.loader.ThemeManager": {
+   "lines": 188,
+   "methods": 23
+  },
+  "ophion.gtkui.theme.loader.ThemeMode": {
+   "lines": 19,
+   "methods": 2
+  },
+  "ophion.gtkui.theme.terminal_schemes.TerminalColors": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.tokens.ConnectionStatus": {
+   "lines": 14,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.tokens.Level": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.tokens.Motion": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.gtkui.theme.tokens.Palette": {
+   "lines": 117,
+   "methods": 8
+  },
+  "ophion.gtkui.theme.tokens._LiveFontScale": {
+   "lines": 8,
+   "methods": 1
+  },
+  "ophion.gtkui.theme.tokens._LiveGroup": {
+   "lines": 17,
+   "methods": 4
+  },
+  "ophion.gtkui.theme.tokens._LiveLayout": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.tree_icons.Badge": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.gtkui.tree_icons.Overlay": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.gtkui.tree_icons.TreeIcon": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.gtkui.unlock_flow.RecoveryKeyDialog": {
+   "lines": 53,
+   "methods": 3
+  },
+  "ophion.gtkui.unlock_flow.StartupFlow": {
+   "lines": 164,
+   "methods": 12
+  },
+  "ophion.gtkui.unlock_flow.StartupResult": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.gtkui.view_models.DetailAction": {
+   "lines": 11,
+   "methods": 0
+  },
+  "ophion.gtkui.view_models.DetailContent": {
+   "lines": 10,
+   "methods": 0
+  },
+  "ophion.gtkui.views.favorites.FavoritesList": {
+   "lines": 57,
+   "methods": 5
+  },
+  "ophion.gtkui.views.favorites.FavoritesSection": {
+   "lines": 199,
+   "methods": 19
+  },
+  "ophion.gtkui.views.header.HeaderView": {
+   "lines": 321,
+   "methods": 23
+  },
+  "ophion.gtkui.views.host_page.ActivityCard": {
+   "lines": 55,
+   "methods": 3
+  },
+  "ophion.gtkui.views.host_page.DetailsCard": {
+   "lines": 57,
+   "methods": 3
+  },
+  "ophion.gtkui.views.host_page.HostHeader": {
+   "lines": 192,
+   "methods": 8
+  },
+  "ophion.gtkui.views.host_page.HostPageContent": {
+   "lines": 22,
+   "methods": 0
+  },
+  "ophion.gtkui.views.host_page.HostPageView": {
+   "lines": 132,
+   "methods": 11
+  },
+  "ophion.gtkui.views.host_page.HostPanel": {
+   "lines": 118,
+   "methods": 9
+  },
+  "ophion.gtkui.views.host_page.InfoBar": {
+   "lines": 111,
+   "methods": 8
+  },
+  "ophion.gtkui.views.host_page.PageBar": {
+   "lines": 73,
+   "methods": 4
+  },
+  "ophion.gtkui.views.host_page.PanelPage": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.gtkui.views.session_tree.RelayRowRenderer": {
+   "lines": 182,
+   "methods": 12
+  },
+  "ophion.gtkui.views.session_tree.SessionTreeView": {
+   "lines": 434,
+   "methods": 35
+  },
+  "ophion.gtkui.views.sidebar.SidebarView": {
+   "lines": 514,
+   "methods": 32
+  },
+  "ophion.gtkui.views.sidebar.TreePage": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.gtkui.views.statusbar.SessionStatusBar": {
+   "lines": 47,
+   "methods": 4
+  },
+  "ophion.gtkui.views.workspace.BroadcastStrip": {
+   "lines": 32,
+   "methods": 2
+  },
+  "ophion.gtkui.views.workspace.SessionStrip": {
+   "lines": 151,
+   "methods": 13
+  },
+  "ophion.gtkui.views.workspace.SessionTab": {
+   "lines": 150,
+   "methods": 14
+  },
+  "ophion.gtkui.views.workspace.SessionToolbar": {
+   "lines": 46,
+   "methods": 3
+  },
+  "ophion.gtkui.views.workspace.TileFrame": {
+   "lines": 28,
+   "methods": 2
+  },
+  "ophion.gtkui.widgets.accent_picker.AccentPicker": {
+   "lines": 140,
+   "methods": 8
+  },
+  "ophion.gtkui.widgets.accent_picker.IconColorPicker": {
+   "lines": 129,
+   "methods": 6
+  },
+  "ophion.gtkui.widgets.accent_picker._Swatch": {
+   "lines": 53,
+   "methods": 2
+  },
+  "ophion.gtkui.widgets.app_logo.AppLogo": {
+   "lines": 32,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.chips.Chip": {
+   "lines": 14,
+   "methods": 1
+  },
+  "ophion.gtkui.widgets.chips.ChipFlow": {
+   "lines": 38,
+   "methods": 3
+  },
+  "ophion.gtkui.widgets.dot.Dot": {
+   "lines": 32,
+   "methods": 3
+  },
+  "ophion.gtkui.widgets.empty_state.EmptyState": {
+   "lines": 101,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.forms.FormRow": {
+   "lines": 65,
+   "methods": 5
+  },
+  "ophion.gtkui.widgets.forms.FormSection": {
+   "lines": 50,
+   "methods": 5
+  },
+  "ophion.gtkui.widgets.host_picker.HostPicker": {
+   "lines": 72,
+   "methods": 7
+  },
+  "ophion.gtkui.widgets.icon_button.ActionBar": {
+   "lines": 21,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.icon_button.IconButton": {
+   "lines": 22,
+   "methods": 2
+  },
+  "ophion.gtkui.widgets.icon_button.IconMenuButton": {
+   "lines": 28,
+   "methods": 1
+  },
+  "ophion.gtkui.widgets.icon_button.IconToggleButton": {
+   "lines": 31,
+   "methods": 3
+  },
+  "ophion.gtkui.widgets.icons.SvgIcon": {
+   "lines": 59,
+   "methods": 7
+  },
+  "ophion.gtkui.widgets.pane_frame.BroadcastChip": {
+   "lines": 24,
+   "methods": 2
+  },
+  "ophion.gtkui.widgets.pane_frame.PaneFooter": {
+   "lines": 17,
+   "methods": 2
+  },
+  "ophion.gtkui.widgets.pane_frame.PaneFrame": {
+   "lines": 130,
+   "methods": 13
+  },
+  "ophion.gtkui.widgets.pane_frame.PaneHeader": {
+   "lines": 64,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.ready_state.ReadyState": {
+   "lines": 135,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.searchable_list.SearchableList": {
+   "lines": 167,
+   "methods": 11
+  },
+  "ophion.gtkui.widgets.secret_entry.SecretEntry": {
+   "lines": 126,
+   "methods": 13
+  },
+  "ophion.gtkui.widgets.status_dot.StatusDot": {
+   "lines": 61,
+   "methods": 4
+  },
+  "ophion.gtkui.widgets.toast.MessageHistoryButton": {
+   "lines": 150,
+   "methods": 7
+  },
+  "ophion.gtkui.widgets.toast.Toast": {
+   "lines": 37,
+   "methods": 1
+  },
+  "ophion.gtkui.widgets.toast.ToastOverlay": {
+   "lines": 59,
+   "methods": 5
+  },
+  "ophion.gtkui.workspaces.Workspace": {
+   "lines": 9,
+   "methods": 1
+  },
+  "ophion.gtkui.workspaces.WorkspaceKind": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.host_key_output.HostKeyChange": {
+   "lines": 9,
+   "methods": 1
+  },
+  "ophion.host_key_output.HostKeyOutputDetector": {
+   "lines": 21,
+   "methods": 5
+  },
+  "ophion.host_key_output.UnknownHostKeyPrompt": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.host_key_preflight.Preflight": {
+   "lines": 12,
+   "methods": 1
+  },
+  "ophion.host_key_preflight.Target": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ConflictPolicy": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.CredentialMissingError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.Destination": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ExistingHost": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ExistingInventory": {
+   "lines": 48,
+   "methods": 5
+  },
+  "ophion.importers.mobaxterm.FolderNode": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ImportCancelled": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ImportIssue": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ImportJob": {
+   "lines": 22,
+   "methods": 3
+  },
+  "ophion.importers.mobaxterm.ImportOptions": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ImportPlan": {
+   "lines": 24,
+   "methods": 2
+  },
+  "ophion.importers.mobaxterm.ImportReport": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.ImportStatus": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.IssueCode": {
+   "lines": 23,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.MxtFileError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.importers.mobaxterm.MxtFolder": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.MxtParseResult": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.MxtSession": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.importers.mobaxterm.PlannedGroup": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.PlannedHost": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.Severity": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm.SshTarget": {
+   "lines": 16,
+   "methods": 1
+  },
+  "ophion.importers.mobaxterm.UsernameEntry": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.importers.mobaxterm._Namer": {
+   "lines": 18,
+   "methods": 2
+  },
+  "ophion.importers.native.Code": {
+   "lines": 27,
+   "methods": 0
+  },
+  "ophion.importers.native.ColorPolicy": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.native.FileCredential": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.native.FileGroup": {
+   "lines": 16,
+   "methods": 2
+  },
+  "ophion.importers.native.FileHost": {
+   "lines": 14,
+   "methods": 0
+  },
+  "ophion.importers.native.Issue": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.importers.native.NativeDocument": {
+   "lines": 29,
+   "methods": 4
+  },
+  "ophion.importers.native.NativeImportOptions": {
+   "lines": 21,
+   "methods": 1
+  },
+  "ophion.importers.native.NativeImportReport": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.importers.native.NativeJob": {
+   "lines": 27,
+   "methods": 3
+  },
+  "ophion.importers.native.NativePlan": {
+   "lines": 32,
+   "methods": 4
+  },
+  "ophion.importers.native.PlannedGroup": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.importers.native.PlannedHost": {
+   "lines": 13,
+   "methods": 1
+  },
+  "ophion.importers.native._Reader": {
+   "lines": 149,
+   "methods": 7
+  },
+  "ophion.inventory.manager.StoreConfigManager": {
+   "lines": 355,
+   "methods": 30
+  },
+  "ophion.inventory.openssh.Note": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.inventory.openssh.OpenSSHImportReport": {
+   "lines": 26,
+   "methods": 1
+  },
+  "ophion.inventory.openssh.OpenSSHPlan": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.inventory.openssh.PlannedHost": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.inventory.openssh.Policy": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.inventory.startup.Choice": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.inventory.store.GroupRow": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.inventory.store.HostRow": {
+   "lines": 11,
+   "methods": 0
+  },
+  "ophion.inventory.store.InventoryCorrupt": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.inventory.store.InventoryError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.inventory.store.InventoryLocked": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.inventory.store.InventoryStore": {
+   "lines": 542,
+   "methods": 48
+  },
+  "ophion.inventory.store.InventoryTooNew": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.inventory.store.InventoryUnavailable": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.inventory.store.NewHost": {
+   "lines": 12,
+   "methods": 0
+  },
+  "ophion.inventory.store.ValidationError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.keybox.Keybox": {
+   "lines": 254,
+   "methods": 26
+  },
+  "ophion.keybox.KeyboxError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.known_hosts.Entry": {
+   "lines": 44,
+   "methods": 5
+  },
+  "ophion.known_hosts.KnownHostsChanged": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.known_hosts.KnownHostsError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.known_hosts.KnownHostsFile": {
+   "lines": 115,
+   "methods": 12
+  },
+  "ophion.known_hosts.Unparsed": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.launcher.ConnectionLauncher": {
+   "lines": 73,
+   "methods": 4
+  },
+  "ophion.legacy_paths.MigrationError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.legacy_paths.MigrationResult": {
+   "lines": 8,
+   "methods": 1
+  },
+  "ophion.legacy_paths.Moved": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.macros.Macro": {
+   "lines": 52,
+   "methods": 4
+  },
+  "ophion.macros.MacroError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.macros.MacroFileError": {
+   "lines": 6,
+   "methods": 1
+  },
+  "ophion.macros.MacroPlayer": {
+   "lines": 78,
+   "methods": 7
+  },
+  "ophion.macros.MacroRecorder": {
+   "lines": 52,
+   "methods": 6
+  },
+  "ophion.macros.MacroStore": {
+   "lines": 293,
+   "methods": 29
+  },
+  "ophion.macros.MacroWriteError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.migration.Migration": {
+   "lines": 173,
+   "methods": 10
+  },
+  "ophion.migration.MigrationError": {
+   "lines": 6,
+   "methods": 1
+  },
+  "ophion.migration.MigrationReport": {
+   "lines": 14,
+   "methods": 1
+  },
+  "ophion.multirun.engine.HostResult": {
+   "lines": 26,
+   "methods": 2
+  },
+  "ophion.multirun.engine.MultiRun": {
+   "lines": 185,
+   "methods": 16
+  },
+  "ophion.multirun.engine.RunOptions": {
+   "lines": 13,
+   "methods": 1
+  },
+  "ophion.multirun.engine.Target": {
+   "lines": 8,
+   "methods": 0
+  },
+  "ophion.multirun.engine._Capture": {
+   "lines": 15,
+   "methods": 3
+  },
+  "ophion.multirun.report.OutputGroup": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.multirun.store.CommandFileError": {
+   "lines": 6,
+   "methods": 1
+  },
+  "ophion.multirun.store.CommandStore": {
+   "lines": 99,
+   "methods": 11
+  },
+  "ophion.multirun.store.SavedCommand": {
+   "lines": 17,
+   "methods": 2
+  },
+  "ophion.native_format.NativeFormatError": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.password_change.PasswordChangeTracker": {
+   "lines": 122,
+   "methods": 7
+  },
+  "ophion.password_store.PasswordStore": {
+   "lines": 55,
+   "methods": 7
+  },
+  "ophion.profiles.SessionProfile": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.protocols.ConnectionKind": {
+   "lines": 32,
+   "methods": 2
+  },
+  "ophion.protocols.urls.ConnectionUrl": {
+   "lines": 27,
+   "methods": 3
+  },
+  "ophion.rdp.clipboard.ClipboardPolicy": {
+   "lines": 36,
+   "methods": 4
+  },
+  "ophion.rdp.command.LaunchError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.rdp.command.LaunchPlan": {
+   "lines": 12,
+   "methods": 1
+  },
+  "ophion.rdp.command._Options": {
+   "lines": 24,
+   "methods": 4
+  },
+  "ophion.rdp.drives.FolderCheck": {
+   "lines": 8,
+   "methods": 1
+  },
+  "ophion.rdp.engines.ClientBinary": {
+   "lines": 30,
+   "methods": 4
+  },
+  "ophion.rdp.engines.Engine": {
+   "lines": 14,
+   "methods": 2
+  },
+  "ophion.rdp.engines.EngineReport": {
+   "lines": 45,
+   "methods": 3
+  },
+  "ophion.rdp.engines.Platform": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.rdp.keyboard.Effect": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.rdp.keyboard.GrabState": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.rdp.keyboard.KeyboardGrab": {
+   "lines": 64,
+   "methods": 5
+  },
+  "ophion.rdp.outcome.Kind": {
+   "lines": 12,
+   "methods": 0
+  },
+  "ophion.rdp.outcome.RdpOutcome": {
+   "lines": 20,
+   "methods": 3
+  },
+  "ophion.rdp.probe.Negotiation": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.rdp.probe.ProbeResult": {
+   "lines": 40,
+   "methods": 1
+  },
+  "ophion.rdp.process.ChildRegistry": {
+   "lines": 43,
+   "methods": 6
+  },
+  "ophion.rdp.process.RdpProcess": {
+   "lines": 139,
+   "methods": 10
+  },
+  "ophion.rdp.process.SessionLimiter": {
+   "lines": 25,
+   "methods": 4
+  },
+  "ophion.rdp.rdpfile.RdpFileError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.rdp.rdpfile.RdpFileImport": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.rdp.reconnect.Plan": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.rdp.reconnect.ReconnectScheduler": {
+   "lines": 35,
+   "methods": 6
+  },
+  "ophion.rdp.settings.Gateway": {
+   "lines": 17,
+   "methods": 2
+  },
+  "ophion.rdp.settings.RdpIdentity": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.rdp.settings.RdpSettings": {
+   "lines": 205,
+   "methods": 6
+  },
+  "ophion.rdp.settings.RemoteApp": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.rdp.settings.SharedFolder": {
+   "lines": 9,
+   "methods": 1
+  },
+  "ophion.rdp.trust_flow.Action": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.rdp.trust_flow.TrustDecision": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.rdp.tunnel.SshTunnel": {
+   "lines": 106,
+   "methods": 5
+  },
+  "ophion.rdp.x11.EmbedWatch": {
+   "lines": 15,
+   "methods": 2
+  },
+  "ophion.rdp.x11.X11": {
+   "lines": 45,
+   "methods": 5
+  },
+  "ophion.secure_store.DisabledSecureStore": {
+   "lines": 12,
+   "methods": 2
+  },
+  "ophion.secure_store.EncryptedFileKeyring": {
+   "lines": 164,
+   "methods": 16
+  },
+  "ophion.secure_store.FileKeyring": {
+   "lines": 159,
+   "methods": 12
+  },
+  "ophion.secure_store.InMemoryKeyring": {
+   "lines": 14,
+   "methods": 4
+  },
+  "ophion.secure_store.KeyringBackend": {
+   "lines": 11,
+   "methods": 3
+  },
+  "ophion.secure_store.KeyringError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.secure_store.SecureStore": {
+   "lines": 56,
+   "methods": 8
+  },
+  "ophion.secure_store.SecureStoreError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.secure_store._DisabledBackend": {
+   "lines": 19,
+   "methods": 5
+  },
+  "ophion.settings.AppSettings": {
+   "lines": 199,
+   "methods": 3
+  },
+  "ophion.settings.FileTransferPreferences": {
+   "lines": 33,
+   "methods": 2
+  },
+  "ophion.settings.LocalShellSettings": {
+   "lines": 31,
+   "methods": 2
+  },
+  "ophion.settings.MacroSettings": {
+   "lines": 17,
+   "methods": 2
+  },
+  "ophion.settings.RemoteDesktopPreferences": {
+   "lines": 27,
+   "methods": 2
+  },
+  "ophion.settings.TerminalAppearanceSettings": {
+   "lines": 76,
+   "methods": 2
+  },
+  "ophion.settings.TerminalInputSettings": {
+   "lines": 28,
+   "methods": 2
+  },
+  "ophion.smart_groups.SmartGroup": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.ssh_keys.AgentStatus": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.ssh_keys.DeployResult": {
+   "lines": 10,
+   "methods": 1
+  },
+  "ophion.ssh_keys.DeployRun": {
+   "lines": 87,
+   "methods": 9
+  },
+  "ophion.ssh_keys.KeyError_": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.ssh_keys.KeyInfo": {
+   "lines": 20,
+   "methods": 2
+  },
+  "ophion.templates.HostTemplate": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.terminal.TerminalClosed": {
+   "lines": 8,
+   "methods": 1
+  },
+  "ophion.terminal.TerminalConfig": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.terminal.TerminalSession": {
+   "lines": 41,
+   "methods": 4
+  },
+  "ophion.terminal.TerminalWidget": {
+   "lines": 163,
+   "methods": 13
+  },
+  "ophion.terminal_input.MouseAction": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.transfer.backend.AlreadyExists": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.AuthError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.BackendError": {
+   "lines": 9,
+   "methods": 1
+  },
+  "ophion.transfer.backend.CancelToken": {
+   "lines": 16,
+   "methods": 4
+  },
+  "ophion.transfer.backend.Cancelled": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.CertificateChanged": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.transfer.backend.Disconnected": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.DiskFull": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.EntryKind": {
+   "lines": 5,
+   "methods": 0
+  },
+  "ophion.transfer.backend.HostKeyChanged": {
+   "lines": 21,
+   "methods": 2
+  },
+  "ophion.transfer.backend.HostKeyError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.HostKeyRevoked": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.transfer.backend.NotFound": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.PermissionDenied": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.ProtocolError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.RemoteEntry": {
+   "lines": 21,
+   "methods": 2
+  },
+  "ophion.transfer.backend.RemoteFileBackend": {
+   "lines": 81,
+   "methods": 22
+  },
+  "ophion.transfer.backend.ServerInfo": {
+   "lines": 34,
+   "methods": 1
+  },
+  "ophion.transfer.backend.Timeout": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.TlsError": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.UnknownHostKey": {
+   "lines": 15,
+   "methods": 1
+  },
+  "ophion.transfer.backend.Unsupported": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.backend.UntrustedCertificate": {
+   "lines": 6,
+   "methods": 1
+  },
+  "ophion.transfer.browse.Crumb": {
+   "lines": 3,
+   "methods": 0
+  },
+  "ophion.transfer.browse.History": {
+   "lines": 46,
+   "methods": 7
+  },
+  "ophion.transfer.copy.CopyResult": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.transfer.dnd.DropAction": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.transfer.dnd.Payload": {
+   "lines": 4,
+   "methods": 0
+  },
+  "ophion.transfer.engine.Conflict": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.transfer.engine.ConflictInfo": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.transfer.engine.Direction": {
+   "lines": 6,
+   "methods": 0
+  },
+  "ophion.transfer.engine.Endpoint": {
+   "lines": 63,
+   "methods": 5
+  },
+  "ophion.transfer.engine.RateLimiter": {
+   "lines": 35,
+   "methods": 4
+  },
+  "ophion.transfer.engine.State": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.transfer.engine.TransferItem": {
+   "lines": 18,
+   "methods": 1
+  },
+  "ophion.transfer.engine.TransferJob": {
+   "lines": 59,
+   "methods": 7
+  },
+  "ophion.transfer.engine.TransferQueue": {
+   "lines": 319,
+   "methods": 20
+  },
+  "ophion.transfer.ftp.FtpBackend": {
+   "lines": 506,
+   "methods": 38
+  },
+  "ophion.transfer.ftp._Client": {
+   "lines": 112,
+   "methods": 9
+  },
+  "ophion.transfer.ftp._DataStream": {
+   "lines": 51,
+   "methods": 6
+  },
+  "ophion.transfer.local.LocalBackend": {
+   "lines": 138,
+   "methods": 21
+  },
+  "ophion.transfer.names.UnsafePath": {
+   "lines": 2,
+   "methods": 0
+  },
+  "ophion.transfer.protolog.ConnectionLog": {
+   "lines": 47,
+   "methods": 7
+  },
+  "ophion.transfer.protolog.RotatingLogFile": {
+   "lines": 36,
+   "methods": 3
+  },
+  "ophion.transfer.settings.TransferSettings": {
+   "lines": 118,
+   "methods": 8
+  },
+  "ophion.transfer.sftp.SftpBackend": {
+   "lines": 491,
+   "methods": 35
+  },
+  "ophion.transfer.sftp._Stream": {
+   "lines": 42,
+   "methods": 7
+  },
+  "ophion.transfer.state.BrowserState": {
+   "lines": 48,
+   "methods": 9
+  },
+  "ophion.trust.CertificateInfo": {
+   "lines": 9,
+   "methods": 0
+  },
+  "ophion.trust.TrustStore": {
+   "lines": 35,
+   "methods": 5
+  },
+  "ophion.tunnels.engine.ForwardError": {
+   "lines": 5,
+   "methods": 1
+  },
+  "ophion.tunnels.engine.HostLink": {
+   "lines": 189,
+   "methods": 12
+  },
+  "ophion.tunnels.engine.TunnelManager": {
+   "lines": 114,
+   "methods": 14
+  },
+  "ophion.tunnels.engine.TunnelStatus": {
+   "lines": 13,
+   "methods": 1
+  },
+  "ophion.tunnels.engine._Counters": {
+   "lines": 6,
+   "methods": 1
+  },
+  "ophion.tunnels.engine._DeadTransport": {
+   "lines": 6,
+   "methods": 2
+  },
+  "ophion.tunnels.engine._Forwarder": {
+   "lines": 36,
+   "methods": 6
+  },
+  "ophion.tunnels.engine._ListeningForwarder": {
+   "lines": 120,
+   "methods": 6
+  },
+  "ophion.tunnels.engine._RemoteForwarder": {
+   "lines": 41,
+   "methods": 4
+  },
+  "ophion.tunnels.model.Forward": {
+   "lines": 62,
+   "methods": 7
+  },
+  "ophion.tunnels.model.Validation": {
+   "lines": 7,
+   "methods": 1
+  },
+  "ophion.ui.ConfirmModal": {
+   "lines": 38,
+   "methods": 5
+  },
+  "ophion.ui.HostForm": {
+   "lines": 106,
+   "methods": 7
+  },
+  "ophion.ui.MoveTargetModal": {
+   "lines": 169,
+   "methods": 12
+  },
+  "ophion.ui.SSHManagerApp": {
+   "lines": 1477,
+   "methods": 60
+  },
+  "ophion.ui.TextInputModal": {
+   "lines": 40,
+   "methods": 6
+  },
+  "ophion.unlock.Inspection": {
+   "lines": 23,
+   "methods": 3
+  },
+  "ophion.unlock.Startup": {
+   "lines": 7,
+   "methods": 0
+  },
+  "ophion.vte_bridge.VTEBridge": {
+   "lines": 93,
+   "methods": 7
+  }
+ },
+ "long_functions": [
+  {
+   "module": "ophion.config",
+   "function": "parse_ssh_config_file",
+   "line": 96,
+   "lines": 126
+  },
+  {
+   "module": "ophion.config",
+   "function": "move_hosts",
+   "line": 826,
+   "lines": 124
+  },
+  {
+   "module": "ophion.connector",
+   "function": "_try_paramiko",
+   "line": 348,
+   "lines": 101
+  },
+  {
+   "module": "ophion.exporters.native",
+   "function": "build_export",
+   "line": 199,
+   "lines": 147
+  },
+  {
+   "module": "ophion.gtkui.dialogs.macros",
+   "function": "__init__",
+   "line": 85,
+   "lines": 149
+  },
+  {
+   "module": "ophion.gtkui.dialogs.multirun",
+   "function": "__init__",
+   "line": 34,
+   "lines": 148
+  },
+  {
+   "module": "ophion.gtkui.dialogs.multirun_results",
+   "function": "__init__",
+   "line": 63,
+   "lines": 117
+  },
+  {
+   "module": "ophion.gtkui.dialogs.transfer_page",
+   "function": "__init__",
+   "line": 57,
+   "lines": 129
+  },
+  {
+   "module": "ophion.gtkui.file_browser.pane",
+   "function": "_build",
+   "line": 127,
+   "lines": 137
+  },
+  {
+   "module": "ophion.importers.mobaxterm",
+   "function": "parse_mxtsessions",
+   "line": 210,
+   "lines": 109
+  },
+  {
+   "module": "ophion.importers.mobaxterm",
+   "function": "plan_import",
+   "line": 750,
+   "lines": 106
+  },
+  {
+   "module": "ophion.importers.native",
+   "function": "apply_mapping",
+   "line": 779,
+   "lines": 119
+  },
+  {
+   "module": "ophion.importers.native",
+   "function": "commit_native",
+   "line": 924,
+   "lines": 104
+  },
+  {
+   "module": "ophion.rdp.rdpfile",
+   "function": "import_rdp",
+   "line": 148,
+   "lines": 147
+  },
+  {
+   "module": "ophion.settings",
+   "function": "load",
+   "line": 307,
+   "lines": 118
+  },
+  {
+   "module": "ophion.ui",
+   "function": "_rebuild_tree",
+   "line": 962,
+   "lines": 128
+  }
+ ],
+ "imports": {
+  "ophion.__main__": {
+   "ophion.gtk_main": "module"
+  },
+  "ophion.auth_flow": {
+   "ophion.identity": "function",
+   "ophion.text_utils": "module"
+  },
+  "ophion.config": {
+   "ophion.persistence": "module"
+  },
+  "ophion.config_viewer": {
+   "ophion.config": "module",
+   "ophion.gtkui.dialogs.config_viewer": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.connector": {
+   "ophion.auth_flow": "module",
+   "ophion.connection_state": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.credentials": {
+   "ophion.persistence": "module",
+   "ophion.secure_store": "module",
+   "ophion.settings": "module"
+  },
+  "ophion.credentials_export": {
+   "ophion.aead": "module",
+   "ophion.persistence": "function"
+  },
+  "ophion.desktop_integration": {
+   "ophion.identity": "module"
+  },
+  "ophion.exporters.native": {
+   "ophion.identity": "module",
+   "ophion.native_format": "module"
+  },
+  "ophion.gtk_app": {
+   "ophion.config": "module",
+   "ophion.credentials": "module",
+   "ophion.gtk_terminal": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.actions": "module",
+   "ophion.gtkui.controllers.app_dialogs": "module",
+   "ophion.gtkui.controllers.colors": "module",
+   "ophion.gtkui.controllers.credentials_controller": "module",
+   "ophion.gtkui.controllers.drag_drop": "module",
+   "ophion.gtkui.controllers.favorites": "function",
+   "ophion.gtkui.controllers.group_actions": "module",
+   "ophion.gtkui.controllers.host_actions": "module",
+   "ophion.gtkui.controllers.host_page": "module",
+   "ophion.gtkui.controllers.inventory": "module",
+   "ophion.gtkui.controllers.layout": "module",
+   "ophion.gtkui.controllers.macro_controller": "module",
+   "ophion.gtkui.controllers.mobaxterm_import": "module",
+   "ophion.gtkui.controllers.multirun": "function",
+   "ophion.gtkui.controllers.native_transfer": "module",
+   "ophion.gtkui.controllers.notifications": "module",
+   "ophion.gtkui.controllers.rdp_files": "function",
+   "ophion.gtkui.controllers.security": "module",
+   "ophion.gtkui.controllers.session_controller": "module",
+   "ophion.gtkui.controllers.shortcut_registry": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.controllers.ssh_keys_controller": "function",
+   "ophion.gtkui.controllers.store_actions": "module",
+   "ophion.gtkui.controllers.tree": "module",
+   "ophion.gtkui.controllers.tunnels": "function",
+   "ophion.gtkui.controllers.ui_state": "module",
+   "ophion.gtkui.dialogs.config_viewer": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.credentials": "module",
+   "ophion.gtkui.dialogs.group_picker": "module",
+   "ophion.gtkui.dialogs.host_dialog": "module",
+   "ophion.gtkui.dialogs.preferences": "module",
+   "ophion.gtkui.dialogs.prompt": "module",
+   "ophion.gtkui.health": "module",
+   "ophion.gtkui.host_history": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.identity": "module",
+   "ophion.gtkui.migration_flow": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.fonts": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.unlock_flow": "module",
+   "ophion.gtkui.views.header": "module",
+   "ophion.gtkui.views.session_tree": "module",
+   "ophion.gtkui.views.sidebar": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.toast": "module",
+   "ophion.gtkui.workspaces": "module",
+   "ophion.identity": "module",
+   "ophion.inventory.manager": "module",
+   "ophion.inventory.startup": "module",
+   "ophion.inventory.store": "module",
+   "ophion.legacy_paths": "function",
+   "ophion.password_dialog": "module",
+   "ophion.profiles": "module",
+   "ophion.secure_store": "module",
+   "ophion.settings": "module",
+   "ophion.templates": "module"
+  },
+  "ophion.gtk_main": {
+   "ophion.config": "function",
+   "ophion.desktop_integration": "function",
+   "ophion.gtk_app": "module",
+   "ophion.gtkui.controllers.native_transfer": "function",
+   "ophion.identity": "module",
+   "ophion.legacy_paths": "function",
+   "ophion.protocols.urls": "function"
+  },
+  "ophion.gtk_terminal": {
+   "ophion.auth_flow": "module",
+   "ophion.config": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.host_key": "module",
+   "ophion.gtkui.dialogs.password": "module",
+   "ophion.gtkui.dialogs.prompt": "module",
+   "ophion.gtkui.dialogs.trust": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.local_terminal": "function",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.pane_activation": "module",
+   "ophion.gtkui.session_page": "module",
+   "ophion.gtkui.tab_labels": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.terminal_schemes": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module",
+   "ophion.gtkui.views.statusbar": "module",
+   "ophion.gtkui.views.workspace": "module",
+   "ophion.gtkui.widgets.empty_state": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.gtkui.widgets.pane_frame": "module",
+   "ophion.host_key_output": "module",
+   "ophion.host_key_preflight": "module",
+   "ophion.host_utils": "module",
+   "ophion.local_shell": "module",
+   "ophion.password_change": "module",
+   "ophion.persistence": "module",
+   "ophion.profiles": "type_checking",
+   "ophion.remote_stats": "module",
+   "ophion.secure_store": "module",
+   "ophion.settings": "module",
+   "ophion.ssh_command": "module",
+   "ophion.terminal_input": "module",
+   "ophion.text_utils": "module",
+   "ophion.vte_bridge": "module"
+  },
+  "ophion.gtkui.controllers.actions": {
+   "ophion.gtk_app": "type_checking"
+  },
+  "ophion.gtkui.controllers.app_dialogs": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.controllers.native_transfer": "function",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.config_viewer": "module",
+   "ophion.gtkui.dialogs.credentials": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.known_hosts": "function",
+   "ophion.gtkui.dialogs.preferences": "module",
+   "ophion.gtkui.dialogs.secrets": "module",
+   "ophion.gtkui.dialogs.tunnels": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.unlock_flow": "function",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.host_utils": "function",
+   "ophion.identity": "module",
+   "ophion.inventory.openssh": "function",
+   "ophion.keybox": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.gtkui.controllers.colors": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.tree_controller": "function",
+   "ophion.gtkui.favorites": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.accent": "function",
+   "ophion.gtkui.theme.loader": "function"
+  },
+  "ophion.gtkui.controllers.context_menus": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module"
+  },
+  "ophion.gtkui.controllers.credentials_controller": {
+   "ophion.auth_flow": "module",
+   "ophion.config": "module",
+   "ophion.credentials": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.host_utils": "module",
+   "ophion.profiles": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.controllers.details_presenter": {
+   "ophion.config": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module"
+  },
+  "ophion.gtkui.controllers.drag_drop": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.guards": "module",
+   "ophion.gtkui.i18n": "module"
+  },
+  "ophion.gtkui.controllers.favorites": {
+   "ophion.config": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.tree_controller": "module",
+   "ophion.gtkui.favorites": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.menus": "function"
+  },
+  "ophion.gtkui.controllers.group_actions": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.guards": "module",
+   "ophion.gtkui.dialogs.child_group_chooser": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module"
+  },
+  "ophion.gtkui.controllers.host_actions": {
+   "ophion.config": "module",
+   "ophion.credentials": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.guards": "module",
+   "ophion.gtkui.controllers.tree_controller": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.bulk_tag": "module",
+   "ophion.gtkui.dialogs.group_picker": "module",
+   "ophion.gtkui.dialogs.host_dialog": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.host_utils": "module",
+   "ophion.secure_store": "module",
+   "ophion.templates": "module",
+   "ophion.transfer.factory": "function"
+  },
+  "ophion.gtkui.controllers.host_page": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.host_facts": "module",
+   "ophion.gtkui.host_history": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.latency": "module",
+   "ophion.gtkui.menu_spec": "function",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.tree_icons": "module",
+   "ophion.gtkui.views.host_page": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.gtkui.widgets.ready_state": "module",
+   "ophion.host_utils": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.controllers.inventory": {
+   "ophion.config": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.workspaces": "module",
+   "ophion.inventory.manager": "function",
+   "ophion.inventory.startup": "function"
+  },
+  "ophion.gtkui.controllers.layout": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.controllers.ui_state": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.controllers.macro_controller": {
+   "ophion.auth_flow": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.credentials_controller": "function",
+   "ophion.gtkui.controllers.shortcut_registry": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.macros": "module",
+   "ophion.gtkui.dialogs.shortcuts_page": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.unlock_flow": "function",
+   "ophion.keybox": "function",
+   "ophion.macros": "module"
+  },
+  "ophion.gtkui.controllers.mobaxterm_import": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.dialogs.mobaxterm_import": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.importers.mobaxterm": "module",
+   "ophion.settings": "module"
+  },
+  "ophion.gtkui.controllers.multirun": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "function",
+   "ophion.gtkui.controllers.credentials_controller": "function",
+   "ophion.gtkui.dialogs.multirun": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.host_utils": "function",
+   "ophion.inventory.openssh": "function",
+   "ophion.multirun.engine": "module",
+   "ophion.multirun.store": "function",
+   "ophion.transfer.settings": "function",
+   "ophion.transfer.sftp": "function"
+  },
+  "ophion.gtkui.controllers.native_transfer": {
+   "ophion.exporters.native": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.mobaxterm_import": "function",
+   "ophion.gtkui.dialogs.base": "function",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.native_export": "module",
+   "ophion.gtkui.dialogs.native_import": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.importers.native": "function",
+   "ophion.native_format": "module",
+   "ophion.persistence": "module",
+   "ophion.smart_groups": "function"
+  },
+  "ophion.gtkui.controllers.notifications": {
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.controllers.rdp_files": {
+   "ophion.config": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.host_utils": "module",
+   "ophion.importers.mobaxterm": "module",
+   "ophion.protocols": "module",
+   "ophion.rdp.rdpfile": "module",
+   "ophion.rdp.settings": "module",
+   "ophion.rdp.wol": "module"
+  },
+  "ophion.gtkui.controllers.security": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.secrets": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.unlock_flow": "function",
+   "ophion.keybox": "module",
+   "ophion.migration": "module",
+   "ophion.secure_store": "module",
+   "ophion.unlock": "module"
+  },
+  "ophion.gtkui.controllers.session_controller": {
+   "ophion.config": "module",
+   "ophion.connection_state": "module",
+   "ophion.connector": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.details_presenter": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.prompt": "function",
+   "ophion.gtkui.file_browser.tab": "function",
+   "ophion.gtkui.host_facts": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.rdp.runtime": "function",
+   "ophion.gtkui.rdp.tab": "function",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.host_utils": "module",
+   "ophion.persistence": "module",
+   "ophion.profiles": "module",
+   "ophion.protocols": "module",
+   "ophion.protocols.urls": "function",
+   "ophion.rdp.engines": "function",
+   "ophion.ssh_command": "module",
+   "ophion.transfer.sftp": "function"
+  },
+  "ophion.gtkui.controllers.shortcut_registry": {
+   "ophion.gtkui.controllers.shortcuts": "module"
+  },
+  "ophion.gtkui.controllers.shortcuts": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.identity": "module"
+  },
+  "ophion.gtkui.controllers.ssh_keys_controller": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "function",
+   "ophion.gtkui.dialogs.ssh_keys": "function",
+   "ophion.gtkui.dialogs.ssh_keys_deploy": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.inventory.openssh": "function",
+   "ophion.persistence": "function",
+   "ophion.ssh_keys": "module"
+  },
+  "ophion.gtkui.controllers.store_actions": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.openssh_import": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.inventory.openssh": "module",
+   "ophion.inventory.store": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.controllers.tree": {
+   "ophion.config": "module",
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.context_menus": "module",
+   "ophion.gtkui.controllers.details_presenter": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.controllers.tree_controller": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.views.sidebar": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.protocols": "module",
+   "ophion.smart_groups": "module"
+  },
+  "ophion.gtkui.controllers.tree_controller": {
+   "ophion.config": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.tree_icons": "module",
+   "ophion.gtkui.view_models": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.controllers.tunnels": {
+   "ophion.gtk_app": "type_checking",
+   "ophion.gtkui.controllers.credentials_controller": "function",
+   "ophion.gtkui.dialogs.confirm": "function",
+   "ophion.gtkui.dialogs.host_key": "function",
+   "ophion.gtkui.dialogs.secrets": "function",
+   "ophion.gtkui.dialogs.trust": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.inventory.openssh": "function",
+   "ophion.transfer.sftp": "function",
+   "ophion.tunnels.engine": "module",
+   "ophion.tunnels.model": "module"
+  },
+  "ophion.gtkui.controllers.ui_state": {
+   "ophion.gtkui.favorites": "module",
+   "ophion.gtkui.tab_labels": "module",
+   "ophion.gtkui.theme.accent": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.persistence": "module"
+  },
+  "ophion.gtkui.dialogs.base": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.dialogs.bulk_tag": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.forms": "module"
+  },
+  "ophion.gtkui.dialogs.child_group_chooser": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.searchable_list": "module"
+  },
+  "ophion.gtkui.dialogs.config_viewer": {
+   "ophion.config_viewer": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.prompt": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.gtkui.widgets.toast": "module",
+   "ophion.persistence": "module"
+  },
+  "ophion.gtkui.dialogs.confirm": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.toast": "module"
+  },
+  "ophion.gtkui.dialogs.credentials": {
+   "ophion.credentials": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.credentials_transfer": "function",
+   "ophion.gtkui.dialogs.list_manager": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.dialogs.credentials_transfer": {
+   "ophion.credentials_export": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "function",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.native_export": "module",
+   "ophion.gtkui.dialogs.settings_layout": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "function",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.dialogs.files": {
+   "ophion.gtkui.i18n": "module"
+  },
+  "ophion.gtkui.dialogs.forwards_page": {
+   "ophion.gtkui.dialogs.tunnels": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.tunnels.model": "module"
+  },
+  "ophion.gtkui.dialogs.group_picker": {
+   "ophion.config": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.searchable_list": "module"
+  },
+  "ophion.gtkui.dialogs.host_dialog": {
+   "ophion.config": "module",
+   "ophion.credentials": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "function",
+   "ophion.gtkui.dialogs.forwards_page": "function",
+   "ophion.gtkui.dialogs.rdp_page": "module",
+   "ophion.gtkui.dialogs.settings_layout": "module",
+   "ophion.gtkui.dialogs.transfer_page": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.host_utils": "module",
+   "ophion.profiles": "module",
+   "ophion.protocols": "module",
+   "ophion.rdp.engines": "module",
+   "ophion.rdp.settings": "module",
+   "ophion.transfer.settings": "module",
+   "ophion.tunnels.model": "function"
+  },
+  "ophion.gtkui.dialogs.host_key": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.known_hosts": "module"
+  },
+  "ophion.gtkui.dialogs.known_hosts": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.known_hosts": "module"
+  },
+  "ophion.gtkui.dialogs.list_manager": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.empty_state": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.dialogs.macros": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.prompt": "module",
+   "ophion.gtkui.dialogs.secrets": "module",
+   "ophion.gtkui.dialogs.shortcuts_page": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.macros": "module"
+  },
+  "ophion.gtkui.dialogs.mobaxterm_import": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.credentials": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.settings_layout": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.importers.mobaxterm": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.dialogs.multirun": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "function",
+   "ophion.gtkui.dialogs.files": "function",
+   "ophion.gtkui.dialogs.host_key": "function",
+   "ophion.gtkui.dialogs.multirun_confirm": "function",
+   "ophion.gtkui.dialogs.multirun_results": "module",
+   "ophion.gtkui.dialogs.multirun_targets": "function",
+   "ophion.gtkui.dialogs.trust": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.multirun.engine": "module",
+   "ophion.multirun.report": "function",
+   "ophion.multirun.safety": "function",
+   "ophion.multirun.store": "function",
+   "ophion.persistence": "function",
+   "ophion.transfer.backend": "function",
+   "ophion.transfer.sftp": "function"
+  },
+  "ophion.gtkui.dialogs.multirun_confirm": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.searchable_list": "module",
+   "ophion.multirun.engine": "module",
+   "ophion.multirun.safety": "module"
+  },
+  "ophion.gtkui.dialogs.multirun_results": {
+   "ophion.gtkui.dialogs.base": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.multirun.engine": "module",
+   "ophion.multirun.report": "module"
+  },
+  "ophion.gtkui.dialogs.multirun_targets": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module"
+  },
+  "ophion.gtkui.dialogs.native_export": {
+   "ophion.exporters.native": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module"
+  },
+  "ophion.gtkui.dialogs.native_import": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.credentials": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.mobaxterm_import": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.searchable_list": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.importers.mobaxterm": "module",
+   "ophion.importers.native": "module",
+   "ophion.native_format": "module",
+   "ophion.secure_store": "module"
+  },
+  "ophion.gtkui.dialogs.openssh_import": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.inventory.openssh": "module"
+  },
+  "ophion.gtkui.dialogs.password": {
+   "ophion.auth_flow": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module"
+  },
+  "ophion.gtkui.dialogs.preferences": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.files": "module",
+   "ophion.gtkui.dialogs.rdp_diagnostics": "function",
+   "ophion.gtkui.dialogs.security_page": "function",
+   "ophion.gtkui.dialogs.settings_layout": "module",
+   "ophion.gtkui.dialogs.shortcuts_page": "function",
+   "ophion.gtkui.dialogs.ssh_agent_section": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.tab_labels": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.terminal_schemes": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.accent_picker": "function",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.settings": "module"
+  },
+  "ophion.gtkui.dialogs.prompt": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.secret_entry": "module"
+  },
+  "ophion.gtkui.dialogs.rdp_diagnostics": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.rdp.engines": "module"
+  },
+  "ophion.gtkui.dialogs.rdp_page": {
+   "ophion.gc_guard": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.host_picker": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.rdp.drives": "module",
+   "ophion.rdp.engines": "module",
+   "ophion.rdp.probe": "module",
+   "ophion.rdp.settings": "module"
+  },
+  "ophion.gtkui.dialogs.secrets": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.unlock": "function"
+  },
+  "ophion.gtkui.dialogs.security_page": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module"
+  },
+  "ophion.gtkui.dialogs.settings_layout": {
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.dialogs.shortcuts_page": {
+   "ophion.gtkui.controllers.shortcut_registry": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module"
+  },
+  "ophion.gtkui.dialogs.ssh_agent_section": {
+   "ophion.gtkui.dialogs.ssh_keys": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.ssh_keys": "module"
+  },
+  "ophion.gtkui.dialogs.ssh_keys": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.files": "function",
+   "ophion.gtkui.dialogs.secrets": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.ssh_keys": "module"
+  },
+  "ophion.gtkui.dialogs.ssh_keys_deploy": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.multirun_targets": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.ssh_keys": "module",
+   "ophion.transfer.settings": "function",
+   "ophion.transfer.sftp": "function"
+  },
+  "ophion.gtkui.dialogs.transfer_page": {
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.settings": "module"
+  },
+  "ophion.gtkui.dialogs.trust": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.gtkui.dialogs.tunnels": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.forms": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.searchable_list": "function",
+   "ophion.tunnels.engine": "module",
+   "ophion.tunnels.model": "module"
+  },
+  "ophion.gtkui.file_browser.pane": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.prompt": "module",
+   "ophion.gtkui.file_browser.worker": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.empty_state": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.browse": "module",
+   "ophion.transfer.dnd": "module",
+   "ophion.transfer.local": "module"
+  },
+  "ophion.gtkui.file_browser.properties": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.browse": "module"
+  },
+  "ophion.gtkui.file_browser.tab": {
+   "ophion.auth_flow": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.host_key": "function",
+   "ophion.gtkui.dialogs.password": "module",
+   "ophion.gtkui.dialogs.trust": "module",
+   "ophion.gtkui.file_browser.pane": "module",
+   "ophion.gtkui.file_browser.properties": "function",
+   "ophion.gtkui.file_browser.transfers": "module",
+   "ophion.gtkui.file_browser.worker": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.session_page": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.views.statusbar": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.host_utils": "module",
+   "ophion.identity": "module",
+   "ophion.protocols": "module",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.browse": "module",
+   "ophion.transfer.copy": "module",
+   "ophion.transfer.dnd": "module",
+   "ophion.transfer.engine": "module",
+   "ophion.transfer.factory": "function",
+   "ophion.transfer.local": "module",
+   "ophion.transfer.names": "module",
+   "ophion.transfer.protolog": "module",
+   "ophion.transfer.settings": "module",
+   "ophion.transfer.state": "module"
+  },
+  "ophion.gtkui.file_browser.transfers": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.transfer.browse": "module",
+   "ophion.transfer.engine": "module"
+  },
+  "ophion.gtkui.health": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.host_facts": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.host_utils": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.host_history": {
+   "ophion.gtkui.host_facts": "module",
+   "ophion.persistence": "module"
+  },
+  "ophion.gtkui.local_terminal": {
+   "ophion.config": "module",
+   "ophion.gtk_terminal": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.local_shell": "module",
+   "ophion.settings": "module"
+  },
+  "ophion.gtkui.migration_flow": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.secrets": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.unlock_flow": "module",
+   "ophion.keybox": "module",
+   "ophion.migration": "module",
+   "ophion.unlock": "module"
+  },
+  "ophion.gtkui.rdp.display": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.rdp.x11": "module",
+   "ophion.trust": "module"
+  },
+  "ophion.gtkui.rdp.runtime": {
+   "ophion.gc_guard": "module",
+   "ophion.legacy_paths": "function",
+   "ophion.rdp.process": "module",
+   "ophion.trust": "module"
+  },
+  "ophion.gtkui.rdp.tab": {
+   "ophion.auth_flow": "module",
+   "ophion.gc_guard": "module",
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.dialogs.confirm": "module",
+   "ophion.gtkui.dialogs.host_key": "function",
+   "ophion.gtkui.dialogs.password": "module",
+   "ophion.gtkui.dialogs.trust": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.rdp.display": "module",
+   "ophion.gtkui.rdp.runtime": "module",
+   "ophion.gtkui.rdp.toolbar": "module",
+   "ophion.gtkui.session_page": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.views.statusbar": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.host_utils": "module",
+   "ophion.rdp.clipboard": "module",
+   "ophion.rdp.command": "module",
+   "ophion.rdp.engines": "module",
+   "ophion.rdp.keyboard": "module",
+   "ophion.rdp.outcome": "module",
+   "ophion.rdp.probe": "module",
+   "ophion.rdp.process": "module",
+   "ophion.rdp.reconnect": "module",
+   "ophion.rdp.settings": "module",
+   "ophion.rdp.trust_flow": "module",
+   "ophion.rdp.tunnel": "module",
+   "ophion.rdp.window_focus": "module",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.protolog": "module",
+   "ophion.trust": "module"
+  },
+  "ophion.gtkui.rdp.toolbar": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.menus": "module"
+  },
+  "ophion.gtkui.session_page": {
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.host_utils": "module"
+  },
+  "ophion.gtkui.theme.accent": {
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.css_dark": {
+   "ophion.gtkui.theme.stylesheet": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.css_light": {
+   "ophion.gtkui.theme.stylesheet": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.fonts": {
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.loader": {
+   "ophion.gtkui.theme.accent": "function",
+   "ophion.gtkui.theme.css_dark": "module",
+   "ophion.gtkui.theme.css_light": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.stylesheet": {
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.theme.tokens": {
+   "ophion.gtkui.theme.accent": "function",
+   "ophion.gtkui.theme.density": "module"
+  },
+  "ophion.gtkui.tree_icons": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.unlock_flow": {
+   "ophion.gtkui.dialogs.base": "module",
+   "ophion.gtkui.dialogs.secrets": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.secret_entry": "module",
+   "ophion.keybox": "module",
+   "ophion.settings": "function",
+   "ophion.unlock": "module"
+  },
+  "ophion.gtkui.validation": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.inventory.store": "function"
+  },
+  "ophion.gtkui.view_models": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.views.favorites": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.tree": "function",
+   "ophion.gtkui.controllers.tree_controller": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.views.session_tree": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.views.header": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.notifications": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.health": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.app_logo": "module",
+   "ophion.gtkui.widgets.dot": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.toast": "module",
+   "ophion.gtkui.workspaces": "module",
+   "ophion.identity": "module"
+  },
+  "ophion.gtkui.views.host_page": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.host_facts": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.chips": "function",
+   "ophion.gtkui.widgets.dot": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.toast": "module"
+  },
+  "ophion.gtkui.views.session_tree": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.tree_controller": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.tree_icons": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.protocols": "module"
+  },
+  "ophion.gtkui.views.sidebar": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.density": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.views.favorites": "module",
+   "ophion.gtkui.widgets.dot": "module",
+   "ophion.gtkui.widgets.empty_state": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.views.statusbar": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.status_dot": "module"
+  },
+  "ophion.gtkui.views.workspace": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.menus": "module",
+   "ophion.gtkui.widgets.pane_frame": "module",
+   "ophion.gtkui.widgets.status_dot": "module"
+  },
+  "ophion.gtkui.widgets.accent_picker": {
+   "ophion.gtkui.constants": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.accent": "module",
+   "ophion.gtkui.theme.loader": "function",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "function"
+  },
+  "ophion.gtkui.widgets.app_logo": {
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.chips": {
+   "ophion.gtkui.theme.tokens": "module"
+  },
+  "ophion.gtkui.widgets.empty_state": {
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.forms": {
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.validation": "module",
+   "ophion.gtkui.widgets.icon_button": "module"
+  },
+  "ophion.gtkui.widgets.host_picker": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.searchable_list": "module"
+  },
+  "ophion.gtkui.widgets.icon_button": {
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.icons": {
+   "ophion.gtkui.constants": "function",
+   "ophion.gtkui.theme.loader": "function",
+   "ophion.gtkui.tree_icons": "function"
+  },
+  "ophion.gtkui.widgets.menus": {
+   "ophion.gtkui.menu_spec": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.pane_frame": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module",
+   "ophion.gtkui.widgets.status_dot": "module"
+  },
+  "ophion.gtkui.widgets.ready_state": {
+   "ophion.gtkui.constants": "module",
+   "ophion.gtkui.controllers.shortcuts": "module",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.searchable_list": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module"
+  },
+  "ophion.gtkui.widgets.secret_entry": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.widgets.status_dot": {
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.view_models": "module"
+  },
+  "ophion.gtkui.widgets.toast": {
+   "ophion.gtkui.controllers.notifications": "module",
+   "ophion.gtkui.host_facts": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.theme.loader": "module",
+   "ophion.gtkui.theme.tokens": "module",
+   "ophion.gtkui.widgets.icon_button": "module",
+   "ophion.gtkui.widgets.icons": "module"
+  },
+  "ophion.gtkui.workspaces": {
+   "ophion.identity": "module"
+  },
+  "ophion.host_key_output": {
+   "ophion.text_utils": "module"
+  },
+  "ophion.host_key_preflight": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.known_hosts": "function"
+  },
+  "ophion.host_utils": {
+   "ophion.config": "module",
+   "ophion.protocols": "module",
+   "ophion.ssh_command": "module"
+  },
+  "ophion.importers.mobaxterm": {
+   "ophion.config": "module",
+   "ophion.identity": "module",
+   "ophion.inventory.manager": "function",
+   "ophion.persistence": "function"
+  },
+  "ophion.importers.native": {
+   "ophion.config": "module",
+   "ophion.identity": "module",
+   "ophion.importers.mobaxterm": "module",
+   "ophion.inventory.manager": "function",
+   "ophion.inventory.store": "function",
+   "ophion.native_format": "module",
+   "ophion.persistence": "function",
+   "ophion.smart_groups": "function"
+  },
+  "ophion.inventory": {
+   "ophion.inventory.store": "module"
+  },
+  "ophion.inventory.manager": {
+   "ophion.config": "module",
+   "ophion.inventory.store": "module"
+  },
+  "ophion.inventory.openssh": {
+   "ophion.config": "module",
+   "ophion.identity": "module",
+   "ophion.inventory.manager": "function",
+   "ophion.inventory.store": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.inventory.startup": {
+   "ophion.inventory.store": "module"
+  },
+  "ophion.inventory.store": {
+   "ophion.legacy_paths": "function"
+  },
+  "ophion.keybox": {
+   "ophion.aead": "module",
+   "ophion.persistence": "function",
+   "ophion.settings": "function"
+  },
+  "ophion.launcher": {
+   "ophion.config": "module",
+   "ophion.ssh_command": "module"
+  },
+  "ophion.legacy_paths": {
+   "ophion.identity": "module",
+   "ophion.persistence": "function"
+  },
+  "ophion.local_shell": {
+   "ophion.identity": "module"
+  },
+  "ophion.macros": {
+   "ophion.aead": "function",
+   "ophion.settings": "function"
+  },
+  "ophion.main": {
+   "ophion.config": "module",
+   "ophion.launcher": "module",
+   "ophion.ui": "module"
+  },
+  "ophion.migration": {
+   "ophion.host_utils": "function",
+   "ophion.keybox": "function",
+   "ophion.macros": "function",
+   "ophion.master_auth": "function",
+   "ophion.secure_store": "function",
+   "ophion.unlock": "module"
+  },
+  "ophion.multirun.engine": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.host_key_preflight": "function",
+   "ophion.known_hosts": "function",
+   "ophion.transfer.backend": "function"
+  },
+  "ophion.multirun.report": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.multirun.engine": "module"
+  },
+  "ophion.multirun.store": {
+   "ophion.aead": "function",
+   "ophion.keybox": "function",
+   "ophion.settings": "function"
+  },
+  "ophion.native_format": {
+   "ophion.identity": "function"
+  },
+  "ophion.password_dialog": {
+   "ophion.gtkui.dialogs.password": "module"
+  },
+  "ophion.password_store": {
+   "ophion.config": "module",
+   "ophion.persistence": "module"
+  },
+  "ophion.protocols": {
+   "ophion.rdp.settings": "function"
+  },
+  "ophion.protocols.urls": {
+   "ophion.protocols": "module"
+  },
+  "ophion.rdp.command": {
+   "ophion.rdp.drives": "function",
+   "ophion.rdp.engines": "module",
+   "ophion.rdp.settings": "module"
+  },
+  "ophion.rdp.drives": {
+   "ophion.identity": "module"
+  },
+  "ophion.rdp.engines": {
+   "ophion.gc_guard": "module",
+   "ophion.identity": "module"
+  },
+  "ophion.rdp.probe": {
+   "ophion.trust": "module"
+  },
+  "ophion.rdp.process": {
+   "ophion.gc_guard": "module",
+   "ophion.identity": "function",
+   "ophion.rdp.command": "module",
+   "ophion.secret_mask": "module",
+   "ophion.text_utils": "module"
+  },
+  "ophion.rdp.rdpfile": {
+   "ophion.rdp.drives": "function",
+   "ophion.rdp.settings": "module"
+  },
+  "ophion.rdp.reconnect": {
+   "ophion.rdp.outcome": "module"
+  },
+  "ophion.rdp.settings": {
+   "ophion.rdp.drives": "function",
+   "ophion.rdp.wol": "function",
+   "ophion.trust": "function"
+  },
+  "ophion.rdp.trust_flow": {
+   "ophion.trust": "module"
+  },
+  "ophion.secure_store": {
+   "ophion.aead": "function",
+   "ophion.keybox": "function",
+   "ophion.legacy_paths": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.settings": {
+   "ophion.identity": "module",
+   "ophion.legacy_paths": "module",
+   "ophion.persistence": "module"
+  },
+  "ophion.smart_groups": {
+   "ophion.persistence": "module",
+   "ophion.settings": "module"
+  },
+  "ophion.ssh_command": {
+   "ophion.config": "module"
+  },
+  "ophion.ssh_keys": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.multirun.engine": "function",
+   "ophion.secret_mask": "module"
+  },
+  "ophion.terminal": {
+   "ophion.text_utils": "module"
+  },
+  "ophion.transfer.backend": {
+   "ophion.secret_mask": "module",
+   "ophion.trust": "module"
+  },
+  "ophion.transfer.browse": {
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.transfer.copy": {
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.transfer.engine": {
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.copy": "module",
+   "ophion.transfer.names": "module"
+  },
+  "ophion.transfer.factory": {
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.ftp": "function",
+   "ophion.transfer.pins": "module",
+   "ophion.transfer.settings": "module",
+   "ophion.transfer.sftp": "function"
+  },
+  "ophion.transfer.ftp": {
+   "ophion.host_utils": "function",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.listing": "module",
+   "ophion.transfer.pins": "module",
+   "ophion.transfer.settings": "module",
+   "ophion.trust": "module"
+  },
+  "ophion.transfer.listing": {
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.transfer.local": {
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.transfer.pins": {
+   "ophion.trust": "module"
+  },
+  "ophion.transfer.protolog": {
+   "ophion.legacy_paths": "function",
+   "ophion.transfer.backend": "module"
+  },
+  "ophion.transfer.sftp": {
+   "ophion.connector": "function",
+   "ophion.host_utils": "function",
+   "ophion.known_hosts": "function",
+   "ophion.transfer.backend": "module",
+   "ophion.transfer.settings": "module"
+  },
+  "ophion.transfer.state": {
+   "ophion.legacy_paths": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.trust": {
+   "ophion.legacy_paths": "function",
+   "ophion.persistence": "module"
+  },
+  "ophion.tunnels.engine": {
+   "ophion.gc_guard": "function",
+   "ophion.gtkui.i18n": "module",
+   "ophion.host_key_preflight": "function",
+   "ophion.transfer.backend": "function",
+   "ophion.tunnels.model": "module"
+  },
+  "ophion.tunnels.model": {
+   "ophion.gtkui.i18n": "module",
+   "ophion.gtkui.validation": "module"
+  },
+  "ophion.ui": {
+   "ophion.config": "module",
+   "ophion.host_utils": "module",
+   "ophion.launcher": "module",
+   "ophion.ssh_command": "module",
+   "ophion.terminal": "module"
+  },
+  "ophion.unlock": {
+   "ophion.secure_store": "function"
+  }
+ },
+ "runtime_sccs": [
+  [
+   "ophion.config_viewer",
+   "ophion.gtkui.dialogs.config_viewer"
+  ],
+  [
+   "ophion.gtk_terminal",
+   "ophion.gtkui.local_terminal"
+  ],
+  [
+   "ophion.gtkui.controllers.tree",
+   "ophion.gtkui.views.favorites",
+   "ophion.gtkui.views.sidebar"
+  ],
+  [
+   "ophion.gtkui.theme.accent",
+   "ophion.gtkui.theme.tokens"
+  ]
+ ],
+ "module_level_sccs": [],
+ "core_gtk": {
+  "ophion.connector": [
+   "gi.repository"
+  ],
+  "ophion.gtk_app": [
+   "gi",
+   "gi.repository",
+   "ophion.gtkui.constants",
+   "ophion.gtkui.controllers.actions",
+   "ophion.gtkui.controllers.app_dialogs",
+   "ophion.gtkui.controllers.colors",
+   "ophion.gtkui.controllers.credentials_controller",
+   "ophion.gtkui.controllers.drag_drop",
+   "ophion.gtkui.controllers.group_actions",
+   "ophion.gtkui.controllers.host_actions",
+   "ophion.gtkui.controllers.inventory",
+   "ophion.gtkui.controllers.layout",
+   "ophion.gtkui.controllers.mobaxterm_import",
+   "ophion.gtkui.controllers.store_actions",
+   "ophion.gtkui.controllers.notifications",
+   "ophion.gtkui.controllers.session_controller",
+   "ophion.gtkui.controllers.macro_controller",
+   "ophion.gtkui.controllers.shortcut_registry",
+   "ophion.gtkui.controllers.shortcuts",
+   "ophion.gtkui.controllers.tree",
+   "ophion.gtkui.controllers.ui_state",
+   "ophion.gtkui.dialogs.confirm",
+   "ophion.gtkui.dialogs.prompt",
+   "ophion.gtkui.controllers.native_transfer",
+   "ophion.gtkui.controllers.security",
+   "ophion.gtkui.migration_flow",
+   "ophion.gtkui.unlock_flow",
+   "ophion.gtkui.i18n",
+   "ophion.gtkui.theme.density",
+   "ophion.gtkui.theme.loader",
+   "ophion.gtkui.theme.tokens",
+   "ophion.gtkui.controllers.host_page",
+   "ophion.gtkui.views.header",
+   "ophion.gtkui.views.session_tree",
+   "ophion.gtkui.views.sidebar",
+   "ophion.gtkui.widgets.toast",
+   "ophion.gtkui.widgets.icon_button",
+   "ophion.gtkui.dialogs.config_viewer",
+   "ophion.gtkui.dialogs.credentials",
+   "ophion.gtkui.dialogs.group_picker",
+   "ophion.gtkui.dialogs.host_dialog",
+   "ophion.gtkui.dialogs.preferences",
+   "ophion.gtkui.health",
+   "ophion.gtkui.host_history",
+   "ophion.gtkui.identity",
+   "ophion.gtkui.theme.fonts",
+   "ophion.gtkui.workspaces",
+   "ophion.gtkui.widgets.icons"
+  ],
+  "ophion.gtk_terminal": [
+   "gi",
+   "gi.repository",
+   "ophion.gtkui.dialogs.host_key",
+   "ophion.gtkui.theme.terminal_schemes",
+   "ophion.gtkui.constants",
+   "ophion.gtkui.dialogs.files",
+   "ophion.gtkui.dialogs.password",
+   "ophion.gtkui.dialogs.prompt",
+   "ophion.gtkui.i18n",
+   "ophion.gtkui.menu_spec",
+   "ophion.gtkui.controllers.shortcuts",
+   "ophion.gtkui.view_models",
+   "ophion.gtkui.theme.loader",
+   "ophion.gtkui.theme.tokens",
+   "ophion.gtkui.views.statusbar",
+   "ophion.gtkui.views.workspace",
+   "ophion.gtkui.pane_activation",
+   "ophion.gtkui.session_page",
+   "ophion.gtkui.tab_labels",
+   "ophion.gtkui.widgets.pane_frame",
+   "ophion.gtkui.widgets.empty_state",
+   "ophion.gtkui.widgets.icon_button",
+   "ophion.gtkui.widgets.menus"
+  ],
+  "ophion.host_key_preflight": [
+   "ophion.gtkui.i18n"
+  ],
+  "ophion.multirun.engine": [
+   "ophion.gtkui.i18n"
+  ],
+  "ophion.multirun.report": [
+   "ophion.gtkui.i18n"
+  ],
+  "ophion.password_dialog": [
+   "ophion.gtkui.dialogs.password"
+  ],
+  "ophion.ssh_keys": [
+   "ophion.gtkui.i18n"
+  ],
+  "ophion.tunnels.engine": [
+   "ophion.gtkui.i18n"
+  ],
+  "ophion.tunnels.model": [
+   "ophion.gtkui.i18n",
+   "ophion.gtkui.validation"
+  ],
+  "ophion.vte_bridge": [
+   "gi",
+   "gi.repository"
+  ]
+ },
+ "core_gtk_any_level": [
+  "ophion.config_viewer",
+  "ophion.connector",
+  "ophion.gtk_app",
+  "ophion.gtk_main",
+  "ophion.gtk_terminal",
+  "ophion.host_key_preflight",
+  "ophion.legacy_paths",
+  "ophion.multirun.engine",
+  "ophion.multirun.report",
+  "ophion.password_dialog",
+  "ophion.rdp.engines",
+  "ophion.ssh_keys",
+  "ophion.tunnels.engine",
+  "ophion.tunnels.model",
+  "ophion.vte_bridge"
+ ],
+ "counts": {
+  "except_exception": 204,
+  "except_exception_pass": 55,
+  "thread_modules": 24,
+  "thread_idle_timeout_uses": 158,
+  "win_private": {
+   "_notify": 93,
+   "_settings": 49,
+   "_credential_store": 34,
+   "_log_event": 29,
+   "_ui": 23,
+   "_notify_error": 21,
+   "_secure_store": 19,
+   "_save_ui_state": 17,
+   "_notify_info": 17,
+   "_sidebar": 12,
+   "_prompt_text": 9,
+   "_paned": 9,
+   "_header": 7,
+   "_notify_warning": 5,
+   "_confirm": 5,
+   "_sidebar_container": 3,
+   "_ui_font_size": 2,
+   "_profiles": 2,
+   "_toasts": 1,
+   "_theme_mode": 1,
+   "_apply_theme_mode": 1,
+   "_apply_ui_font": 1,
+   "_password_dialog": 1
+  },
+  "win_private_total": 361,
+  "store_getattr": 10
+ },
+ "thread_modules": [
+  "ophion.connector",
+  "ophion.gtk_terminal",
+  "ophion.gtkui.controllers.inventory",
+  "ophion.gtkui.controllers.native_transfer",
+  "ophion.gtkui.controllers.session_controller",
+  "ophion.gtkui.dialogs.known_hosts",
+  "ophion.gtkui.dialogs.mobaxterm_import",
+  "ophion.gtkui.dialogs.native_import",
+  "ophion.gtkui.dialogs.rdp_page",
+  "ophion.gtkui.dialogs.secrets",
+  "ophion.gtkui.dialogs.ssh_agent_section",
+  "ophion.gtkui.dialogs.ssh_keys",
+  "ophion.gtkui.dialogs.transfer_page",
+  "ophion.gtkui.latency",
+  "ophion.gtkui.rdp.runtime",
+  "ophion.gtkui.rdp.tab",
+  "ophion.gtkui.unlock_flow",
+  "ophion.multirun.engine",
+  "ophion.rdp.engines",
+  "ophion.rdp.process",
+  "ophion.rdp.tunnel",
+  "ophion.ssh_keys",
+  "ophion.tunnels.engine",
+  "ophion.vte_bridge"
+ ]
+}

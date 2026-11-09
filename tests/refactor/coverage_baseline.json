@@ -1,0 +1,5196 @@
+{
+ "ophion/gtk_app.py": {
+  "executable": 797,
+  "executed": 650,
+  "functions": {
+   "SSHManagerApplication.__init__": [
+    14,
+    14
+   ],
+   "SSHManagerApplication._ask_startup": [
+    1,
+    24
+   ],
+   "SSHManagerApplication._install_css": [
+    1,
+    3
+   ],
+   "SSHManagerApplication._open_startup_host": [
+    1,
+    4
+   ],
+   "SSHManagerApplication.do_activate": [
+    18,
+    32
+   ],
+   "SSHManagerApplication.do_shutdown": [
+    1,
+    3
+   ],
+   "SSHManagerApplication.do_startup": [
+    1,
+    5
+   ],
+   "SSHManagerApplication.set_theme_mode": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.__init__": [
+    30,
+    30
+   ],
+   "SSHManagerWindow._apply_dark_theme": [
+    1,
+    2
+   ],
+   "SSHManagerWindow._apply_theme_mode": [
+    5,
+    6
+   ],
+   "SSHManagerWindow._apply_ui_font": [
+    11,
+    12
+   ],
+   "SSHManagerWindow._apply_ui_state": [
+    9,
+    10
+   ],
+   "SSHManagerWindow._build_header": [
+    9,
+    9
+   ],
+   "SSHManagerWindow._build_security_banner": [
+    21,
+    21
+   ],
+   "SSHManagerWindow._build_security_banner.name_close_button": [
+    6,
+    6
+   ],
+   "SSHManagerWindow._build_sidebar": [
+    23,
+    23
+   ],
+   "SSHManagerWindow._build_tree_view": [
+    10,
+    10
+   ],
+   "SSHManagerWindow._build_ui": [
+    32,
+    32
+   ],
+   "SSHManagerWindow._build_workspace": [
+    17,
+    17
+   ],
+   "SSHManagerWindow._check_external_changes": [
+    7,
+    8
+   ],
+   "SSHManagerWindow._collect_ui_state": [
+    19,
+    19
+   ],
+   "SSHManagerWindow._confirm": [
+    1,
+    2
+   ],
+   "SSHManagerWindow._init_controllers": [
+    30,
+    30
+   ],
+   "SSHManagerWindow._init_services": [
+    29,
+    33
+   ],
+   "SSHManagerWindow._load_ui_state": [
+    2,
+    2
+   ],
+   "SSHManagerWindow._log_event": [
+    3,
+    3
+   ],
+   "SSHManagerWindow._notify": [
+    3,
+    3
+   ],
+   "SSHManagerWindow._notify_error": [
+    2,
+    2
+   ],
+   "SSHManagerWindow._notify_info": [
+    2,
+    2
+   ],
+   "SSHManagerWindow._notify_warning": [
+    1,
+    2
+   ],
+   "SSHManagerWindow._on_delete_event": [
+    16,
+    27
+   ],
+   "SSHManagerWindow._on_density_changed": [
+    14,
+    15
+   ],
+   "SSHManagerWindow._on_destroy": [
+    18,
+    18
+   ],
+   "SSHManagerWindow._on_password_changed": [
+    1,
+    5
+   ],
+   "SSHManagerWindow._on_sessions_changed": [
+    4,
+    4
+   ],
+   "SSHManagerWindow._on_shortcuts_changed": [
+    7,
+    7
+   ],
+   "SSHManagerWindow._on_theme_changed": [
+    10,
+    10
+   ],
+   "SSHManagerWindow._on_window_key_press": [
+    9,
+    13
+   ],
+   "SSHManagerWindow._pass_ctrl_k_to_terminal": [
+    1,
+    2
+   ],
+   "SSHManagerWindow._pass_ctrl_key_to_terminal": [
+    5,
+    10
+   ],
+   "SSHManagerWindow._prompt_text": [
+    1,
+    2
+   ],
+   "SSHManagerWindow._register_actions": [
+    82,
+    82
+   ],
+   "SSHManagerWindow._register_actions.terminal": [
+    2,
+    2
+   ],
+   "SSHManagerWindow._release_shortcut_registry": [
+    4,
+    4
+   ],
+   "SSHManagerWindow._save_ui_state": [
+    3,
+    4
+   ],
+   "SSHManagerWindow._update_health": [
+    9,
+    10
+   ],
+   "SSHManagerWindow._update_tunnel_chip": [
+    5,
+    5
+   ],
+   "SSHManagerWindow.adopt_keybox": [
+    5,
+    5
+   ],
+   "SSHManagerWindow.clear_focus": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.density": [
+    2,
+    2
+   ],
+   "SSHManagerWindow.ensure_editable_inventory": [
+    19,
+    22
+   ],
+   "SSHManagerWindow.finish_migration": [
+    1,
+    27
+   ],
+   "SSHManagerWindow.focus_search": [
+    1,
+    6
+   ],
+   "SSHManagerWindow.hide_search_panel": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.open_selected_host": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.prompt_new_host": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.refresh_workspaces": [
+    3,
+    3
+   ],
+   "SSHManagerWindow.set_density": [
+    5,
+    5
+   ],
+   "SSHManagerWindow.show_search_panel": [
+    1,
+    2
+   ],
+   "SSHManagerWindow.toggle_host_details": [
+    3,
+    4
+   ],
+   "_home_relative": [
+    5,
+    5
+   ],
+   "_system_font_family": [
+    4,
+    12
+   ],
+   "default_inventory_folder": [
+    2,
+    2
+   ],
+   "migration_notice": [
+    12,
+    12
+   ],
+   "show_legacy_app_running": [
+    1,
+    10
+   ]
+  }
+ },
+ "ophion/gtk_terminal.py": {
+  "executable": 2828,
+  "executed": 2367,
+  "functions": {
+   "PasswordService.describe_password_source": [
+    1,
+    1
+   ],
+   "PasswordService.password_save_context": [
+    1,
+    1
+   ],
+   "PasswordService.save_host_password": [
+    1,
+    1
+   ],
+   "TerminalNotebook.__init__": [
+    50,
+    50
+   ],
+   "TerminalNotebook._append_tab_to_notebook": [
+    15,
+    15
+   ],
+   "TerminalNotebook._as_user": [
+    8,
+    8
+   ],
+   "TerminalNotebook._build_stack": [
+    39,
+    39
+   ],
+   "TerminalNotebook._build_strip": [
+    16,
+    16
+   ],
+   "TerminalNotebook._build_toolbar": [
+    19,
+    19
+   ],
+   "TerminalNotebook._close_tab_after_idle": [
+    3,
+    3
+   ],
+   "TerminalNotebook._create_tile_wrapper": [
+    15,
+    15
+   ],
+   "TerminalNotebook._current_tab": [
+    11,
+    13
+   ],
+   "TerminalNotebook._detach_tab": [
+    12,
+    12
+   ],
+   "TerminalNotebook._dock_statusbar": [
+    18,
+    19
+   ],
+   "TerminalNotebook._emit_sessions_changed": [
+    4,
+    4
+   ],
+   "TerminalNotebook._emit_sessions_changed_idle": [
+    4,
+    4
+   ],
+   "TerminalNotebook._focus_after_layout": [
+    4,
+    4
+   ],
+   "TerminalNotebook._focus_in_sessions": [
+    4,
+    4
+   ],
+   "TerminalNotebook._focus_neighbor_tile": [
+    11,
+    12
+   ],
+   "TerminalNotebook._focus_tab": [
+    2,
+    2
+   ],
+   "TerminalNotebook._in_tab_order": [
+    4,
+    4
+   ],
+   "TerminalNotebook._label_info": [
+    7,
+    9
+   ],
+   "TerminalNotebook._on_broadcast_include_toggled": [
+    3,
+    3
+   ],
+   "TerminalNotebook._on_broadcast_toggled": [
+    2,
+    2
+   ],
+   "TerminalNotebook._on_close_button_clicked": [
+    1,
+    2
+   ],
+   "TerminalNotebook._on_split_toggled": [
+    1,
+    5
+   ],
+   "TerminalNotebook._on_stats_toggled": [
+    1,
+    4
+   ],
+   "TerminalNotebook._on_strip_reorder": [
+    5,
+    5
+   ],
+   "TerminalNotebook._on_switch_page": [
+    12,
+    12
+   ],
+   "TerminalNotebook._on_tab_activated": [
+    15,
+    16
+   ],
+   "TerminalNotebook._on_tab_activity": [
+    7,
+    7
+   ],
+   "TerminalNotebook._on_tab_close_requested": [
+    2,
+    2
+   ],
+   "TerminalNotebook._on_tab_input": [
+    6,
+    8
+   ],
+   "TerminalNotebook._on_tab_session_closed": [
+    4,
+    4
+   ],
+   "TerminalNotebook._on_tab_status_changed": [
+    7,
+    7
+   ],
+   "TerminalNotebook._on_tabs_menu_toggled": [
+    8,
+    9
+   ],
+   "TerminalNotebook._on_tile_toggled": [
+    1,
+    2
+   ],
+   "TerminalNotebook._ordered_tabs": [
+    5,
+    5
+   ],
+   "TerminalNotebook._overflow_menu_spec": [
+    16,
+    16
+   ],
+   "TerminalNotebook._place_toolbar": [
+    11,
+    11
+   ],
+   "TerminalNotebook._rebuild_tile_grid": [
+    12,
+    13
+   ],
+   "TerminalNotebook._reconnect_peer": [
+    7,
+    7
+   ],
+   "TerminalNotebook._refresh_labels": [
+    7,
+    7
+   ],
+   "TerminalNotebook._request_quick_connect": [
+    3,
+    3
+   ],
+   "TerminalNotebook._same_host": [
+    3,
+    4
+   ],
+   "TerminalNotebook._set_tab_label_text": [
+    8,
+    8
+   ],
+   "TerminalNotebook._set_tile_mode": [
+    30,
+    30
+   ],
+   "TerminalNotebook._set_toggle": [
+    7,
+    7
+   ],
+   "TerminalNotebook._show_tab_menu": [
+    17,
+    17
+   ],
+   "TerminalNotebook._step_tab": [
+    6,
+    7
+   ],
+   "TerminalNotebook._sync_strip": [
+    2,
+    2
+   ],
+   "TerminalNotebook._sync_tab_order": [
+    6,
+    6
+   ],
+   "TerminalNotebook._sync_tile_frames": [
+    7,
+    7
+   ],
+   "TerminalNotebook._sync_toolbar": [
+    15,
+    15
+   ],
+   "TerminalNotebook._sync_toolbar_idle": [
+    4,
+    4
+   ],
+   "TerminalNotebook._tab_label_text": [
+    1,
+    4
+   ],
+   "TerminalNotebook._terminal_tabs": [
+    2,
+    2
+   ],
+   "TerminalNotebook._toggle_focus_mode": [
+    1,
+    3
+   ],
+   "TerminalNotebook._update_broadcast_ui": [
+    8,
+    8
+   ],
+   "TerminalNotebook._update_placeholder": [
+    17,
+    18
+   ],
+   "TerminalNotebook.activate_pane": [
+    3,
+    4
+   ],
+   "TerminalNotebook.add_page": [
+    28,
+    28
+   ],
+   "TerminalNotebook.apply_density": [
+    9,
+    9
+   ],
+   "TerminalNotebook.apply_font_scale_to_all": [
+    2,
+    3
+   ],
+   "TerminalNotebook.broadcast_active": [
+    2,
+    2
+   ],
+   "TerminalNotebook.close_current": [
+    1,
+    2
+   ],
+   "TerminalNotebook.close_others": [
+    3,
+    3
+   ],
+   "TerminalNotebook.close_tab": [
+    27,
+    28
+   ],
+   "TerminalNotebook.close_to_right": [
+    5,
+    6
+   ],
+   "TerminalNotebook.close_with_broadcast_peers": [
+    3,
+    3
+   ],
+   "TerminalNotebook.copy_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.copy_current_as_plain_text": [
+    4,
+    4
+   ],
+   "TerminalNotebook.current_tab": [
+    2,
+    2
+   ],
+   "TerminalNotebook.decrease_font": [
+    1,
+    4
+   ],
+   "TerminalNotebook.default_font_scale": [
+    2,
+    2
+   ],
+   "TerminalNotebook.duplicate_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.duplicate_tab": [
+    4,
+    7
+   ],
+   "TerminalNotebook.ended_broadcast_peers": [
+    7,
+    7
+   ],
+   "TerminalNotebook.ended_broadcast_peers.ended": [
+    3,
+    3
+   ],
+   "TerminalNotebook.find_tab": [
+    6,
+    6
+   ],
+   "TerminalNotebook.focus_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.focus_session_for": [
+    1,
+    6
+   ],
+   "TerminalNotebook.focus_tab": [
+    3,
+    3
+   ],
+   "TerminalNotebook.goto_tab": [
+    4,
+    4
+   ],
+   "TerminalNotebook.has_session_for": [
+    2,
+    2
+   ],
+   "TerminalNotebook.increase_font": [
+    1,
+    4
+   ],
+   "TerminalNotebook.interrupt_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.label_for": [
+    2,
+    2
+   ],
+   "TerminalNotebook.label_mode": [
+    1,
+    2
+   ],
+   "TerminalNotebook.labels": [
+    2,
+    2
+   ],
+   "TerminalNotebook.macro_targets": [
+    8,
+    8
+   ],
+   "TerminalNotebook.macro_unreachable": [
+    9,
+    10
+   ],
+   "TerminalNotebook.new_local_terminal": [
+    13,
+    13
+   ],
+   "TerminalNotebook.new_terminal": [
+    16,
+    16
+   ],
+   "TerminalNotebook.next_tab": [
+    2,
+    2
+   ],
+   "TerminalNotebook.paste_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.prev_tab": [
+    2,
+    2
+   ],
+   "TerminalNotebook.reconnect_current": [
+    4,
+    4
+   ],
+   "TerminalNotebook.reconnect_with_broadcast_peers": [
+    4,
+    4
+   ],
+   "TerminalNotebook.refresh_overflow_menu": [
+    2,
+    2
+   ],
+   "TerminalNotebook.rename_current": [
+    1,
+    4
+   ],
+   "TerminalNotebook.rename_tab": [
+    1,
+    11
+   ],
+   "TerminalNotebook.reset_font": [
+    1,
+    4
+   ],
+   "TerminalNotebook.save_current_transcript": [
+    1,
+    4
+   ],
+   "TerminalNotebook.session_states": [
+    2,
+    2
+   ],
+   "TerminalNotebook.set_appearance": [
+    3,
+    4
+   ],
+   "TerminalNotebook.set_broadcast_mode": [
+    19,
+    19
+   ],
+   "TerminalNotebook.set_default_font_scale": [
+    2,
+    2
+   ],
+   "TerminalNotebook.set_label_mode": [
+    3,
+    3
+   ],
+   "TerminalNotebook.set_macro_recording": [
+    5,
+    5
+   ],
+   "TerminalNotebook.set_status_dock": [
+    3,
+    3
+   ],
+   "TerminalNotebook.set_tile_mode": [
+    6,
+    6
+   ],
+   "TerminalNotebook.strip_visible": [
+    1,
+    2
+   ],
+   "TerminalNotebook.tab_count": [
+    2,
+    2
+   ],
+   "TerminalNotebook.tab_tooltip": [
+    13,
+    21
+   ],
+   "TerminalNotebook.tabs": [
+    2,
+    2
+   ],
+   "TerminalNotebook.terminal_action": [
+    21,
+    28
+   ],
+   "TerminalNotebook.tile_mode": [
+    2,
+    2
+   ],
+   "TerminalNotebook.toggle_broadcast": [
+    2,
+    2
+   ],
+   "TerminalNotebook.toggle_split_current": [
+    1,
+    5
+   ],
+   "TerminalNotebook.toggle_stats_current": [
+    1,
+    5
+   ],
+   "TerminalNotebook.toggle_tile_mode": [
+    2,
+    2
+   ],
+   "TerminalNotebook.toggle_tile_zoom": [
+    10,
+    11
+   ],
+   "TerminalNotebook.toolbar_in_strip": [
+    2,
+    2
+   ],
+   "TerminalPaneContainer.__init__": [
+    7,
+    7
+   ],
+   "TerminalTab.__init__": [
+    34,
+    34
+   ],
+   "TerminalTab._active_terminal": [
+    2,
+    2
+   ],
+   "TerminalTab._apply_stats_result": [
+    50,
+    52
+   ],
+   "TerminalTab._apply_stats_result.numeric": [
+    6,
+    6
+   ],
+   "TerminalTab._apply_terminal_theme": [
+    3,
+    3
+   ],
+   "TerminalTab._ask_password": [
+    6,
+    6
+   ],
+   "TerminalTab._attempts": [
+    2,
+    2
+   ],
+   "TerminalTab._auth_failure_output": [
+    6,
+    9
+   ],
+   "TerminalTab._begin_connect": [
+    5,
+    7
+   ],
+   "TerminalTab._build_host_key_bar": [
+    27,
+    27
+   ],
+   "TerminalTab._build_infobar": [
+    16,
+    16
+   ],
+   "TerminalTab._build_statusbar": [
+    8,
+    8
+   ],
+   "TerminalTab._build_terminal_area": [
+    11,
+    11
+   ],
+   "TerminalTab._center_divider": [
+    6,
+    6
+   ],
+   "TerminalTab._check_host_key_changed": [
+    14,
+    14
+   ],
+   "TerminalTab._check_host_key_prompt": [
+    17,
+    18
+   ],
+   "TerminalTab._check_marker_now": [
+    9,
+    11
+   ],
+   "TerminalTab._check_passphrase_prompt": [
+    14,
+    14
+   ],
+   "TerminalTab._clear_detected_password_change": [
+    4,
+    6
+   ],
+   "TerminalTab._close_duplicate_pane": [
+    27,
+    36
+   ],
+   "TerminalTab._close_password_dialog": [
+    4,
+    4
+   ],
+   "TerminalTab._colors_from_appearance": [
+    13,
+    13
+   ],
+   "TerminalTab._colors_from_appearance.rgba": [
+    4,
+    4
+   ],
+   "TerminalTab._configure_terminal_appearance": [
+    23,
+    33
+   ],
+   "TerminalTab._connect_mouse": [
+    6,
+    6
+   ],
+   "TerminalTab._create_terminal": [
+    14,
+    17
+   ],
+   "TerminalTab._credential_components": [
+    4,
+    5
+   ],
+   "TerminalTab._disconnect_input_commit_handler": [
+    4,
+    4
+   ],
+   "TerminalTab._duplicate_pane_once": [
+    28,
+    29
+   ],
+   "TerminalTab._failure_message": [
+    11,
+    11
+   ],
+   "TerminalTab._fetch_stats_thread": [
+    7,
+    7
+   ],
+   "TerminalTab._fetch_stats_via_paramiko": [
+    15,
+    24
+   ],
+   "TerminalTab._fetch_stats_via_ssh_command": [
+    19,
+    30
+   ],
+   "TerminalTab._finalize_detected_password_change": [
+    1,
+    13
+   ],
+   "TerminalTab._focused_terminal": [
+    2,
+    2
+   ],
+   "TerminalTab._frame_for": [
+    13,
+    13
+   ],
+   "TerminalTab._handle_auth_failure_retry": [
+    10,
+    13
+   ],
+   "TerminalTab._has_handler": [
+    2,
+    2
+   ],
+   "TerminalTab._hide_host_key_bar": [
+    7,
+    7
+   ],
+   "TerminalTab._host_key_names": [
+    4,
+    4
+   ],
+   "TerminalTab._init_state": [
+    69,
+    69
+   ],
+   "TerminalTab._mouse_reporting": [
+    6,
+    7
+   ],
+   "TerminalTab._observe_terminal_input": [
+    7,
+    8
+   ],
+   "TerminalTab._offer_save": [
+    10,
+    14
+   ],
+   "TerminalTab._on_auth_output": [
+    2,
+    2
+   ],
+   "TerminalTab._on_authenticated": [
+    10,
+    11
+   ],
+   "TerminalTab._on_banner_destroy": [
+    2,
+    2
+   ],
+   "TerminalTab._on_banner_response": [
+    5,
+    5
+   ],
+   "TerminalTab._on_child_exited": [
+    25,
+    25
+   ],
+   "TerminalTab._on_host_key_output": [
+    4,
+    4
+   ],
+   "TerminalTab._on_host_key_response": [
+    11,
+    18
+   ],
+   "TerminalTab._on_paned_press": [
+    3,
+    7
+   ],
+   "TerminalTab._on_paramiko_remote_closed": [
+    1,
+    5
+   ],
+   "TerminalTab._on_passphrase_output": [
+    5,
+    5
+   ],
+   "TerminalTab._on_password_answer": [
+    10,
+    10
+   ],
+   "TerminalTab._on_preflight": [
+    23,
+    31
+   ],
+   "TerminalTab._on_reconnect_clicked": [
+    1,
+    2
+   ],
+   "TerminalTab._on_save_decision": [
+    13,
+    16
+   ],
+   "TerminalTab._on_secondary_child_exited": [
+    1,
+    3
+   ],
+   "TerminalTab._on_tab_destroyed": [
+    7,
+    7
+   ],
+   "TerminalTab._on_terminal_button_press": [
+    16,
+    17
+   ],
+   "TerminalTab._on_terminal_button_press_after": [
+    7,
+    10
+   ],
+   "TerminalTab._on_terminal_button_release": [
+    6,
+    6
+   ],
+   "TerminalTab._on_terminal_commit": [
+    8,
+    8
+   ],
+   "TerminalTab._on_terminal_focus": [
+    1,
+    3
+   ],
+   "TerminalTab._on_terminal_key_press": [
+    22,
+    24
+   ],
+   "TerminalTab._on_terminal_selection_changed": [
+    3,
+    3
+   ],
+   "TerminalTab._on_terminal_size_allocate": [
+    2,
+    2
+   ],
+   "TerminalTab._paint_card": [
+    7,
+    9
+   ],
+   "TerminalTab._pane_address": [
+    4,
+    6
+   ],
+   "TerminalTab._parent_window": [
+    3,
+    3
+   ],
+   "TerminalTab._password_for_attempt": [
+    31,
+    32
+   ],
+   "TerminalTab._perform_mouse_action": [
+    8,
+    10
+   ],
+   "TerminalTab._persist_detected_password_change": [
+    1,
+    17
+   ],
+   "TerminalTab._pointer_window": [
+    5,
+    6
+   ],
+   "TerminalTab._poll_heuristic": [
+    1,
+    11
+   ],
+   "TerminalTab._poll_marker": [
+    5,
+    5
+   ],
+   "TerminalTab._poll_password_change_output": [
+    18,
+    18
+   ],
+   "TerminalTab._preflight_then_start": [
+    11,
+    14
+   ],
+   "TerminalTab._preflight_then_start.work": [
+    4,
+    7
+   ],
+   "TerminalTab._prompt_retry_after_failure": [
+    5,
+    7
+   ],
+   "TerminalTab._rejected_phrase": [
+    6,
+    8
+   ],
+   "TerminalTab._remember_text_cursor": [
+    3,
+    3
+   ],
+   "TerminalTab._request_close": [
+    2,
+    2
+   ],
+   "TerminalTab._request_close_ended": [
+    3,
+    4
+   ],
+   "TerminalTab._request_reconnect": [
+    3,
+    4
+   ],
+   "TerminalTab._reset_attempt_state": [
+    17,
+    17
+   ],
+   "TerminalTab._reset_stats_labels": [
+    8,
+    8
+   ],
+   "TerminalTab._resolve_password": [
+    7,
+    16
+   ],
+   "TerminalTab._reveal_banner": [
+    6,
+    6
+   ],
+   "TerminalTab._save_password_secret": [
+    1,
+    9
+   ],
+   "TerminalTab._schedule_retry_prompt": [
+    7,
+    9
+   ],
+   "TerminalTab._set_status": [
+    18,
+    18
+   ],
+   "TerminalTab._show_host_key_bar": [
+    13,
+    13
+   ],
+   "TerminalTab._show_save_dialog": [
+    4,
+    5
+   ],
+   "TerminalTab._show_stats_once": [
+    1,
+    5
+   ],
+   "TerminalTab._spawn": [
+    11,
+    11
+   ],
+   "TerminalTab._spawn_command": [
+    17,
+    20
+   ],
+   "TerminalTab._spawn_secondary": [
+    18,
+    22
+   ],
+   "TerminalTab._spawn_secondary._on_finish": [
+    1,
+    3
+   ],
+   "TerminalTab._ssh_arguments": [
+    2,
+    2
+   ],
+   "TerminalTab._stage_detected_password_change": [
+    1,
+    8
+   ],
+   "TerminalTab._start_child": [
+    18,
+    26
+   ],
+   "TerminalTab._start_child._on_spawn_finish": [
+    7,
+    15
+   ],
+   "TerminalTab._start_password_prompt_poll": [
+    6,
+    7
+   ],
+   "TerminalTab._start_stats_updates": [
+    5,
+    6
+   ],
+   "TerminalTab._stats_host_key_changed": [
+    10,
+    10
+   ],
+   "TerminalTab._stats_host_key_untrusted": [
+    1,
+    10
+   ],
+   "TerminalTab._stop_auth_sources": [
+    13,
+    13
+   ],
+   "TerminalTab._stop_paramiko_bridge": [
+    3,
+    13
+   ],
+   "TerminalTab._stop_password_prompt_poll": [
+    5,
+    5
+   ],
+   "TerminalTab._stop_stats_updates": [
+    6,
+    6
+   ],
+   "TerminalTab._stored_stats_password": [
+    4,
+    4
+   ],
+   "TerminalTab._sync_pane_frames": [
+    15,
+    15
+   ],
+   "TerminalTab._terminal_tail": [
+    18,
+    36
+   ],
+   "TerminalTab._terminals": [
+    5,
+    5
+   ],
+   "TerminalTab._terminate_current_child": [
+    5,
+    7
+   ],
+   "TerminalTab._update_stats": [
+    9,
+    10
+   ],
+   "TerminalTab._watch_activity": [
+    4,
+    4
+   ],
+   "TerminalTab._watch_authentication": [
+    6,
+    8
+   ],
+   "TerminalTab.activate_pane": [
+    11,
+    12
+   ],
+   "TerminalTab.active_terminal": [
+    2,
+    2
+   ],
+   "TerminalTab.attach_info_bar": [
+    3,
+    3
+   ],
+   "TerminalTab.attach_session": [
+    1,
+    29
+   ],
+   "TerminalTab.authenticated": [
+    2,
+    2
+   ],
+   "TerminalTab.clear_scrollback": [
+    1,
+    4
+   ],
+   "TerminalTab.confirm_host_key": [
+    1,
+    3
+   ],
+   "TerminalTab.connect_activity": [
+    4,
+    4
+   ],
+   "TerminalTab.copy_as_plain_text": [
+    16,
+    18
+   ],
+   "TerminalTab.copy_clipboard": [
+    4,
+    4
+   ],
+   "TerminalTab.custom_title": [
+    2,
+    2
+   ],
+   "TerminalTab.decrease_font": [
+    1,
+    2
+   ],
+   "TerminalTab.destroy": [
+    8,
+    8
+   ],
+   "TerminalTab.do_key_press_event": [
+    1,
+    2
+   ],
+   "TerminalTab.feed_input": [
+    1,
+    4
+   ],
+   "TerminalTab.focus_neighbor": [
+    11,
+    11
+   ],
+   "TerminalTab.focus_pane": [
+    2,
+    2
+   ],
+   "TerminalTab.focus_terminal": [
+    14,
+    16
+   ],
+   "TerminalTab.focus_terminal._attempt_focus": [
+    8,
+    9
+   ],
+   "TerminalTab.get_font_scale": [
+    1,
+    2
+   ],
+   "TerminalTab.host": [
+    2,
+    2
+   ],
+   "TerminalTab.host_key_banner": [
+    4,
+    4
+   ],
+   "TerminalTab.increase_font": [
+    1,
+    2
+   ],
+   "TerminalTab.is_session_active": [
+    2,
+    2
+   ],
+   "TerminalTab.is_split": [
+    2,
+    2
+   ],
+   "TerminalTab.macro_send": [
+    7,
+    8
+   ],
+   "TerminalTab.offer_save_password": [
+    6,
+    6
+   ],
+   "TerminalTab.pane_frames": [
+    2,
+    2
+   ],
+   "TerminalTab.paste_clipboard": [
+    1,
+    4
+   ],
+   "TerminalTab.paste_primary": [
+    4,
+    4
+   ],
+   "TerminalTab.profile": [
+    2,
+    2
+   ],
+   "TerminalTab.reclaim_statusbar": [
+    8,
+    8
+   ],
+   "TerminalTab.reconnect": [
+    4,
+    6
+   ],
+   "TerminalTab.release_statusbar": [
+    4,
+    4
+   ],
+   "TerminalTab.remove_host_key": [
+    2,
+    2
+   ],
+   "TerminalTab.reset_font": [
+    1,
+    3
+   ],
+   "TerminalTab.reset_terminal": [
+    1,
+    4
+   ],
+   "TerminalTab.save_transcript": [
+    1,
+    17
+   ],
+   "TerminalTab.select_all_terminal": [
+    7,
+    10
+   ],
+   "TerminalTab.send_interrupt": [
+    1,
+    4
+   ],
+   "TerminalTab.session_ended": [
+    2,
+    2
+   ],
+   "TerminalTab.set_appearance": [
+    1,
+    3
+   ],
+   "TerminalTab.set_broadcast_highlight": [
+    5,
+    5
+   ],
+   "TerminalTab.set_font_scale": [
+    1,
+    6
+   ],
+   "TerminalTab.set_input_observer": [
+    2,
+    2
+   ],
+   "TerminalTab.set_input_settings": [
+    2,
+    2
+   ],
+   "TerminalTab.set_pane_label": [
+    3,
+    3
+   ],
+   "TerminalTab.set_stats_visible": [
+    1,
+    5
+   ],
+   "TerminalTab.show_terminal_menu": [
+    5,
+    6
+   ],
+   "TerminalTab.stats_visible": [
+    2,
+    2
+   ],
+   "TerminalTab.status": [
+    2,
+    2
+   ],
+   "TerminalTab.statusbar": [
+    2,
+    2
+   ],
+   "TerminalTab.terminal_menu_spec": [
+    33,
+    33
+   ],
+   "TerminalTab.terminal_size": [
+    2,
+    2
+   ],
+   "TerminalTab.title": [
+    3,
+    3
+   ],
+   "TerminalTab.toggle_pane_zoom": [
+    10,
+    11
+   ],
+   "TerminalTab.toggle_split": [
+    3,
+    4
+   ],
+   "TerminalTab.zoomed_pane": [
+    2,
+    2
+   ],
+   "_copy_selection": [
+    3,
+    4
+   ],
+   "_select_all_terminal_text": [
+    1,
+    2
+   ],
+   "_set_stat_tooltip": [
+    4,
+    4
+   ],
+   "_status_for_message": [
+    9,
+    9
+   ],
+   "_terminal_contents": [
+    8,
+    10
+   ],
+   "_terminal_text_result": [
+    3,
+    4
+   ],
+   "auth_failure_output_detected": [
+    2,
+    2
+   ],
+   "broadcast_target_tabs": [
+    14,
+    14
+   ],
+   "session_tile_position": [
+    5,
+    5
+   ],
+   "terminal_key_event_payload": [
+    26,
+    27
+   ],
+   "terminal_text": [
+    15,
+    19
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/__init__.py": {
+  "executable": 1,
+  "executed": 0,
+  "functions": {}
+ },
+ "ophion/gtkui/controllers/actions.py": {
+  "executable": 96,
+  "executed": 53,
+  "functions": {
+   "WindowActions.__init__": [
+    2,
+    2
+   ],
+   "WindowActions.bulk_connect_selected": [
+    1,
+    2
+   ],
+   "WindowActions.bulk_move_selected": [
+    1,
+    2
+   ],
+   "WindowActions.bulk_tag_selected": [
+    1,
+    2
+   ],
+   "WindowActions.change_group_color": [
+    1,
+    2
+   ],
+   "WindowActions.change_host_color": [
+    1,
+    2
+   ],
+   "WindowActions.clear_color": [
+    1,
+    2
+   ],
+   "WindowActions.collapse_all_groups": [
+    1,
+    2
+   ],
+   "WindowActions.connect_child_group": [
+    1,
+    2
+   ],
+   "WindowActions.connect_parent_group": [
+    1,
+    2
+   ],
+   "WindowActions.connect_selected": [
+    1,
+    2
+   ],
+   "WindowActions.copy_scp_command": [
+    1,
+    2
+   ],
+   "WindowActions.copy_ssh_command": [
+    1,
+    2
+   ],
+   "WindowActions.create_child_group_for_current": [
+    1,
+    2
+   ],
+   "WindowActions.create_host_in_current_group": [
+    2,
+    2
+   ],
+   "WindowActions.create_parent_group": [
+    1,
+    2
+   ],
+   "WindowActions.delete_child_group": [
+    1,
+    2
+   ],
+   "WindowActions.delete_current_item": [
+    1,
+    2
+   ],
+   "WindowActions.delete_parent_group": [
+    1,
+    2
+   ],
+   "WindowActions.delete_selected": [
+    1,
+    2
+   ],
+   "WindowActions.duplicate_child_group": [
+    1,
+    2
+   ],
+   "WindowActions.duplicate_parent_group": [
+    1,
+    2
+   ],
+   "WindowActions.duplicate_selected": [
+    1,
+    2
+   ],
+   "WindowActions.edit_current_item": [
+    1,
+    2
+   ],
+   "WindowActions.edit_selected": [
+    1,
+    2
+   ],
+   "WindowActions.expand_all_groups": [
+    1,
+    2
+   ],
+   "WindowActions.export_group": [
+    2,
+    2
+   ],
+   "WindowActions.export_rdp_file": [
+    1,
+    2
+   ],
+   "WindowActions.export_selected_hosts": [
+    1,
+    2
+   ],
+   "WindowActions.forget_host_key": [
+    1,
+    4
+   ],
+   "WindowActions.forget_password": [
+    1,
+    2
+   ],
+   "WindowActions.install_key_on_group": [
+    1,
+    2
+   ],
+   "WindowActions.install_key_on_selection": [
+    1,
+    2
+   ],
+   "WindowActions.move_selected": [
+    1,
+    2
+   ],
+   "WindowActions.open_files_selected": [
+    2,
+    2
+   ],
+   "WindowActions.prompt_new_host": [
+    1,
+    2
+   ],
+   "WindowActions.quick_connect": [
+    1,
+    2
+   ],
+   "WindowActions.reconnect_selected": [
+    1,
+    2
+   ],
+   "WindowActions.rename_child_group": [
+    1,
+    2
+   ],
+   "WindowActions.rename_parent_group": [
+    1,
+    2
+   ],
+   "WindowActions.run_command_on_group": [
+    1,
+    2
+   ],
+   "WindowActions.run_command_on_selection": [
+    1,
+    2
+   ],
+   "WindowActions.toggle_favorite": [
+    2,
+    2
+   ],
+   "WindowActions.wake_and_connect": [
+    1,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/app_dialogs.py": {
+  "executable": 257,
+  "executed": 186,
+  "functions": {
+   "AppDialogs.__init__": [
+    3,
+    3
+   ],
+   "AppDialogs._change_keybox_password": [
+    20,
+    25
+   ],
+   "AppDialogs._change_keybox_password.verify": [
+    1,
+    5
+   ],
+   "AppDialogs._present_about_logo": [
+    10,
+    10
+   ],
+   "AppDialogs._present_about_logo.walk": [
+    5,
+    5
+   ],
+   "AppDialogs.apply_preferences": [
+    47,
+    49
+   ],
+   "AppDialogs.change_master_password": [
+    4,
+    6
+   ],
+   "AppDialogs.export_settings_snapshot": [
+    1,
+    32
+   ],
+   "AppDialogs.inventory_info": [
+    10,
+    11
+   ],
+   "AppDialogs.known_hosts_inventory": [
+    1,
+    10
+   ],
+   "AppDialogs.open_config_file": [
+    1,
+    3
+   ],
+   "AppDialogs.open_credentials": [
+    8,
+    8
+   ],
+   "AppDialogs.open_documentation": [
+    1,
+    9
+   ],
+   "AppDialogs.open_known_hosts": [
+    1,
+    7
+   ],
+   "AppDialogs.open_settings": [
+    29,
+    30
+   ],
+   "AppDialogs.open_tunnels": [
+    1,
+    3
+   ],
+   "AppDialogs.refresh_shortcuts_window": [
+    3,
+    3
+   ],
+   "AppDialogs.show_about": [
+    11,
+    11
+   ],
+   "AppDialogs.show_shortcuts": [
+    8,
+    8
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/colors.py": {
+  "executable": 206,
+  "executed": 201,
+  "functions": {
+   "ColorController.__init__": [
+    11,
+    11
+   ],
+   "ColorController._first_colors": [
+    20,
+    20
+   ],
+   "ColorController._first_colors.own": [
+    2,
+    2
+   ],
+   "ColorController.activate": [
+    14,
+    14
+   ],
+   "ColorController.change_host_color": [
+    2,
+    2
+   ],
+   "ColorController.change_item_color": [
+    22,
+    24
+   ],
+   "ColorController.clear_item_color": [
+    10,
+    11
+   ],
+   "ColorController.default_color": [
+    5,
+    5
+   ],
+   "ColorController.drawn_default": [
+    5,
+    5
+   ],
+   "ColorController.forget_group": [
+    5,
+    5
+   ],
+   "ColorController.forget_host": [
+    3,
+    3
+   ],
+   "ColorController.group_color_for": [
+    3,
+    3
+   ],
+   "ColorController.host_color_for": [
+    2,
+    2
+   ],
+   "ColorController.item_color_for": [
+    5,
+    5
+   ],
+   "ColorController.move_group": [
+    5,
+    5
+   ],
+   "ColorController.move_host": [
+    9,
+    9
+   ],
+   "ColorController.resolved_group_color_for": [
+    7,
+    7
+   ],
+   "ColorController.rgba_to_hex": [
+    5,
+    5
+   ],
+   "ColorController.set_default_colors": [
+    10,
+    10
+   ],
+   "ColorController.set_group_color": [
+    6,
+    6
+   ],
+   "ColorController.set_host_color": [
+    6,
+    6
+   ],
+   "_group_under": [
+    5,
+    5
+   ],
+   "_host_under": [
+    9,
+    9
+   ],
+   "forget_color_keys": [
+    5,
+    5
+   ],
+   "remap_color_keys": [
+    14,
+    14
+   ],
+   "remap_color_keys.group_key": [
+    2,
+    2
+   ],
+   "remap_color_keys.host_key": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/context_menus.py": {
+  "executable": 155,
+  "executed": 154,
+  "functions": {
+   "TreeMenuCallbacks.change_group_color": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.change_host_color": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.clear_color": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.collapse_all_groups": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.connect_child_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.connect_parent_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.connect_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.copy_scp_command": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.copy_ssh_command": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.create_child_group_for_current": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.create_host_in_current_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.create_parent_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.delete_child_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.delete_parent_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.delete_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.duplicate_child_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.duplicate_parent_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.duplicate_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.edit_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.expand_all_groups": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.export_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.export_rdp_file": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.export_selected_hosts": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.forget_host_key": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.forget_password": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.install_key_on_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.install_key_on_selection": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.move_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.open_files_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.prompt_new_host": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.quick_connect": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.reconnect_selected": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.rename_child_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.rename_parent_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.run_command_on_group": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.run_command_on_selection": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.toggle_favorite": [
+    1,
+    1
+   ],
+   "TreeMenuCallbacks.wake_and_connect": [
+    1,
+    1
+   ],
+   "blank_menu": [
+    13,
+    13
+   ],
+   "favorite_item": [
+    8,
+    8
+   ],
+   "group_menu": [
+    44,
+    44
+   ],
+   "host_menu": [
+    45,
+    45
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/credentials_controller.py": {
+  "executable": 374,
+  "executed": 260,
+  "functions": {
+   "CredentialController.__init__": [
+    2,
+    2
+   ],
+   "CredentialController._apply_host_credentials": [
+    19,
+    20
+   ],
+   "CredentialController._ids_are_stable": [
+    2,
+    2
+   ],
+   "CredentialController._save_blocker": [
+    11,
+    12
+   ],
+   "CredentialController.apply_host_credentials": [
+    10,
+    10
+   ],
+   "CredentialController.bind_credential": [
+    4,
+    8
+   ],
+   "CredentialController.bind_many": [
+    4,
+    8
+   ],
+   "CredentialController.binding_for_copy": [
+    4,
+    4
+   ],
+   "CredentialController.check_secrets_policy": [
+    6,
+    20
+   ],
+   "CredentialController.confirm_policy_override": [
+    1,
+    7
+   ],
+   "CredentialController.credential_for_host": [
+    2,
+    2
+   ],
+   "CredentialController.credential_key": [
+    2,
+    2
+   ],
+   "CredentialController.credential_password_for_host": [
+    1,
+    8
+   ],
+   "CredentialController.describe_password_source": [
+    6,
+    6
+   ],
+   "CredentialController.display_username_for_host": [
+    5,
+    5
+   ],
+   "CredentialController.find_current_host": [
+    10,
+    11
+   ],
+   "CredentialController.forget_password": [
+    1,
+    16
+   ],
+   "CredentialController.host_connection_params": [
+    2,
+    2
+   ],
+   "CredentialController.host_has_plaintext_password": [
+    4,
+    5
+   ],
+   "CredentialController.host_is_read_only": [
+    4,
+    4
+   ],
+   "CredentialController.host_key": [
+    2,
+    2
+   ],
+   "CredentialController.host_with_resolved_identity": [
+    6,
+    7
+   ],
+   "CredentialController.password_save_context": [
+    15,
+    15
+   ],
+   "CredentialController.password_store_problem": [
+    13,
+    17
+   ],
+   "CredentialController.password_summary": [
+    7,
+    7
+   ],
+   "CredentialController.permissions_for_host": [
+    8,
+    8
+   ],
+   "CredentialController.private_credential_for_host": [
+    2,
+    2
+   ],
+   "CredentialController.profile_for_host": [
+    4,
+    5
+   ],
+   "CredentialController.prune_bindings": [
+    6,
+    8
+   ],
+   "CredentialController.rebind_credential": [
+    6,
+    10
+   ],
+   "CredentialController.remap_credential_prefix": [
+    6,
+    10
+   ],
+   "CredentialController.render_permissions": [
+    7,
+    10
+   ],
+   "CredentialController.resolve_host_credentials": [
+    2,
+    2
+   ],
+   "CredentialController.resolve_password": [
+    18,
+    21
+   ],
+   "CredentialController.save_detected_password_change": [
+    4,
+    28
+   ],
+   "CredentialController.save_host_password": [
+    22,
+    24
+   ],
+   "CredentialController.unbind_credential_prefix": [
+    7,
+    11
+   ],
+   "CredentialController.warn_if_password_file_locked": [
+    4,
+    10
+   ],
+   "migration_pending_text": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/details_presenter.py": {
+  "executable": 159,
+  "executed": 139,
+  "functions": {
+   "DetailCallbacks.bulk_connect_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.bulk_move_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.bulk_tag_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.connect_child_group": [
+    1,
+    1
+   ],
+   "DetailCallbacks.connect_parent_group": [
+    1,
+    1
+   ],
+   "DetailCallbacks.connect_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.copy_scp_command": [
+    1,
+    1
+   ],
+   "DetailCallbacks.copy_ssh_command": [
+    1,
+    1
+   ],
+   "DetailCallbacks.create_host_in_current_group": [
+    1,
+    1
+   ],
+   "DetailCallbacks.delete_current_item": [
+    1,
+    1
+   ],
+   "DetailCallbacks.delete_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.duplicate_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.edit_current_item": [
+    1,
+    1
+   ],
+   "DetailCallbacks.edit_selected": [
+    1,
+    1
+   ],
+   "DetailCallbacks.forget_password": [
+    1,
+    1
+   ],
+   "DetailCallbacks.move_selected": [
+    1,
+    1
+   ],
+   "_opt": [
+    2,
+    2
+   ],
+   "empty_detail": [
+    2,
+    2
+   ],
+   "group_detail": [
+    31,
+    31
+   ],
+   "host_detail": [
+    46,
+    52
+   ],
+   "host_subtitle": [
+    6,
+    7
+   ],
+   "host_tags": [
+    2,
+    2
+   ],
+   "multi_detail": [
+    1,
+    10
+   ],
+   "parse_quick_connect": [
+    25,
+    28
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/drag_drop.py": {
+  "executable": 230,
+  "executed": 126,
+  "functions": {
+   "DragDropController.__init__": [
+    4,
+    4
+   ],
+   "DragDropController._drop_child_group": [
+    20,
+    27
+   ],
+   "DragDropController._drop_hosts": [
+    33,
+    40
+   ],
+   "DragDropController.configure": [
+    10,
+    10
+   ],
+   "DragDropController.handle_drop": [
+    8,
+    10
+   ],
+   "DragDropController.on_drag_data_get": [
+    7,
+    13
+   ],
+   "DragDropController.on_drag_data_received": [
+    9,
+    23
+   ],
+   "DragDropController.on_drag_drop": [
+    7,
+    15
+   ],
+   "DragDropController.on_drag_motion": [
+    7,
+    15
+   ],
+   "DragDropController.resolve_drop_target": [
+    3,
+    22
+   ],
+   "DragDropController.serialize_payload": [
+    1,
+    32
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/favorites.py": {
+  "executable": 253,
+  "executed": 234,
+  "functions": {
+   "FavoritesController.__init__": [
+    8,
+    8
+   ],
+   "FavoritesController._build_index": [
+    22,
+    22
+   ],
+   "FavoritesController._changed": [
+    5,
+    5
+   ],
+   "FavoritesController._host_tooltip": [
+    1,
+    4
+   ],
+   "FavoritesController._key_at": [
+    6,
+    7
+   ],
+   "FavoritesController._location": [
+    2,
+    2
+   ],
+   "FavoritesController._on_expanded": [
+    4,
+    4
+   ],
+   "FavoritesController._paths_are_keys": [
+    2,
+    2
+   ],
+   "FavoritesController._row": [
+    22,
+    27
+   ],
+   "FavoritesController._with_location": [
+    2,
+    2
+   ],
+   "FavoritesController.activate": [
+    8,
+    9
+   ],
+   "FavoritesController.attach": [
+    8,
+    8
+   ],
+   "FavoritesController.index": [
+    4,
+    4
+   ],
+   "FavoritesController.inventory_changed": [
+    8,
+    8
+   ],
+   "FavoritesController.is_favorite": [
+    2,
+    2
+   ],
+   "FavoritesController.is_favorite_host": [
+    2,
+    2
+   ],
+   "FavoritesController.key_for": [
+    9,
+    9
+   ],
+   "FavoritesController.keys": [
+    2,
+    2
+   ],
+   "FavoritesController.on_status": [
+    7,
+    7
+   ],
+   "FavoritesController.refresh_section": [
+    7,
+    8
+   ],
+   "FavoritesController.remap_prefix": [
+    7,
+    7
+   ],
+   "FavoritesController.rename_host": [
+    3,
+    3
+   ],
+   "FavoritesController.reveal": [
+    8,
+    9
+   ],
+   "FavoritesController.scope": [
+    2,
+    2
+   ],
+   "FavoritesController.selected_keys": [
+    9,
+    9
+   ],
+   "FavoritesController.selection_state": [
+    5,
+    5
+   ],
+   "FavoritesController.show_context_menu": [
+    11,
+    15
+   ],
+   "FavoritesController.sync_selection": [
+    7,
+    8
+   ],
+   "FavoritesController.targets": [
+    6,
+    6
+   ],
+   "FavoritesController.toggle": [
+    14,
+    14
+   ],
+   "FavoritesController.toggle_selected": [
+    4,
+    4
+   ],
+   "FavoritesController.tree_path": [
+    6,
+    6
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/group_actions.py": {
+  "executable": 297,
+  "executed": 192,
+  "functions": {
+   "GroupActions.__init__": [
+    3,
+    3
+   ],
+   "GroupActions._child_siblings": [
+    5,
+    5
+   ],
+   "GroupActions._copy_duplicate_bindings": [
+    1,
+    12
+   ],
+   "GroupActions._host_count": [
+    9,
+    9
+   ],
+   "GroupActions._store_names": [
+    2,
+    2
+   ],
+   "GroupActions._top_names": [
+    2,
+    2
+   ],
+   "GroupActions._validator": [
+    14,
+    15
+   ],
+   "GroupActions._validator.check": [
+    7,
+    8
+   ],
+   "GroupActions.create_child_group": [
+    1,
+    19
+   ],
+   "GroupActions.create_child_group_for_current": [
+    21,
+    49
+   ],
+   "GroupActions.create_parent_group": [
+    14,
+    14
+   ],
+   "GroupActions.delete_child_group": [
+    20,
+    22
+   ],
+   "GroupActions.delete_parent_group": [
+    17,
+    19
+   ],
+   "GroupActions.duplicate_child_group": [
+    1,
+    19
+   ],
+   "GroupActions.duplicate_parent_group": [
+    1,
+    17
+   ],
+   "GroupActions.normalize_group_filename": [
+    1,
+    5
+   ],
+   "GroupActions.prompt_child_destination": [
+    15,
+    15
+   ],
+   "GroupActions.rename_child_group": [
+    24,
+    25
+   ],
+   "GroupActions.rename_parent_group": [
+    17,
+    19
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/guards.py": {
+  "executable": 13,
+  "executed": 12,
+  "functions": {
+   "requires_editable_inventory": [
+    8,
+    8
+   ],
+   "requires_editable_inventory.wrapper": [
+    5,
+    5
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/host_actions.py": {
+  "executable": 419,
+  "executed": 301,
+  "functions": {
+   "HostActions.__init__": [
+    2,
+    2
+   ],
+   "HostActions.bulk_move_selected": [
+    17,
+    19
+   ],
+   "HostActions.bulk_tag_selected": [
+    1,
+    28
+   ],
+   "HostActions.create_host_in_current_group": [
+    21,
+    43
+   ],
+   "HostActions.create_host_in_group": [
+    11,
+    13
+   ],
+   "HostActions.delete_current_item": [
+    6,
+    8
+   ],
+   "HostActions.delete_selected": [
+    17,
+    23
+   ],
+   "HostActions.duplicate_selected": [
+    25,
+    33
+   ],
+   "HostActions.edit_current_item": [
+    1,
+    8
+   ],
+   "HostActions.edit_selected": [
+    30,
+    36
+   ],
+   "HostActions.holds_hosts_directly": [
+    3,
+    3
+   ],
+   "HostActions.host_dialog": [
+    35,
+    39
+   ],
+   "HostActions.move_selected": [
+    29,
+    39
+   ],
+   "HostActions.new_host_from_template": [
+    1,
+    3
+   ],
+   "HostActions.pick_group": [
+    8,
+    8
+   ],
+   "HostActions.prompt_new_host": [
+    33,
+    35
+   ],
+   "HostActions.rename_focused": [
+    1,
+    4
+   ],
+   "HostActions.run_host_dialog": [
+    7,
+    7
+   ],
+   "HostActions.save_to_inventory": [
+    5,
+    5
+   ],
+   "HostActions.selected_target": [
+    7,
+    7
+   ],
+   "HostActions.transfer_backend": [
+    1,
+    13
+   ],
+   "HostActions.tunnel_hosts": [
+    5,
+    6
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/host_page.py": {
+  "executable": 458,
+  "executed": 375,
+  "functions": {
+   "HostPageController.__init__": [
+    10,
+    10
+   ],
+   "HostPageController._clock_tick": [
+    1,
+    3
+   ],
+   "HostPageController._duplicate_subject": [
+    1,
+    3
+   ],
+   "HostPageController._edit_subject": [
+    1,
+    3
+   ],
+   "HostPageController._group_content": [
+    33,
+    33
+   ],
+   "HostPageController._host_content": [
+    56,
+    63
+   ],
+   "HostPageController._item_color": [
+    3,
+    3
+   ],
+   "HostPageController._latency_value": [
+    9,
+    12
+   ],
+   "HostPageController._multi_content": [
+    13,
+    13
+   ],
+   "HostPageController._on_latency": [
+    1,
+    4
+   ],
+   "HostPageController._overview_content": [
+    11,
+    11
+   ],
+   "HostPageController._refresh_latency_tick": [
+    1,
+    5
+   ],
+   "HostPageController._refresh_ready_state": [
+    51,
+    52
+   ],
+   "HostPageController._refresh_ready_state.strong": [
+    2,
+    2
+   ],
+   "HostPageController._request_latency": [
+    1,
+    9
+   ],
+   "HostPageController._select_subject_in_tree": [
+    1,
+    8
+   ],
+   "HostPageController._strip_height": [
+    4,
+    5
+   ],
+   "HostPageController.active_session": [
+    4,
+    5
+   ],
+   "HostPageController.apply_density": [
+    6,
+    7
+   ],
+   "HostPageController.auth_for": [
+    11,
+    13
+   ],
+   "HostPageController.build": [
+    19,
+    19
+   ],
+   "HostPageController.build_content": [
+    10,
+    10
+   ],
+   "HostPageController.close_panel": [
+    5,
+    5
+   ],
+   "HostPageController.copy_command": [
+    1,
+    7
+   ],
+   "HostPageController.host_activity": [
+    5,
+    5
+   ],
+   "HostPageController.inject_latency": [
+    4,
+    4
+   ],
+   "HostPageController.latency_key": [
+    5,
+    5
+   ],
+   "HostPageController.on_crumb": [
+    7,
+    9
+   ],
+   "HostPageController.on_host_status": [
+    9,
+    9
+   ],
+   "HostPageController.on_more": [
+    1,
+    14
+   ],
+   "HostPageController.on_password_changed": [
+    1,
+    2
+   ],
+   "HostPageController.on_primary": [
+    1,
+    12
+   ],
+   "HostPageController.refresh": [
+    9,
+    10
+   ],
+   "HostPageController.selection": [
+    7,
+    7
+   ],
+   "HostPageController.set_chrome_visible": [
+    4,
+    4
+   ],
+   "HostPageController.set_latency_enabled": [
+    3,
+    3
+   ],
+   "HostPageController.set_narrow": [
+    3,
+    3
+   ],
+   "HostPageController.show_activity": [
+    3,
+    3
+   ],
+   "HostPageController.show_details": [
+    1,
+    3
+   ],
+   "HostPageController.shutdown": [
+    5,
+    5
+   ],
+   "HostPageController.toggle_details": [
+    3,
+    3
+   ],
+   "HostPageController.tree_selection": [
+    8,
+    8
+   ],
+   "TerminalPage.__init__": [
+    8,
+    8
+   ],
+   "TerminalPage.show_sessions": [
+    7,
+    7
+   ],
+   "_idle": [
+    1,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/inventory.py": {
+  "executable": 250,
+  "executed": 88,
+  "functions": {
+   "InventoryController.__init__": [
+    11,
+    11
+   ],
+   "InventoryController._manager_for": [
+    7,
+    7
+   ],
+   "InventoryController.check_git_now": [
+    9,
+    16
+   ],
+   "InventoryController.check_git_now.worker": [
+    0,
+    3
+   ],
+   "InventoryController.check_git_repo_for_updates": [
+    1,
+    43
+   ],
+   "InventoryController.check_shared_inventory": [
+    1,
+    33
+   ],
+   "InventoryController.git_watch_loop": [
+    1,
+    4
+   ],
+   "InventoryController.load_workspace": [
+    13,
+    13
+   ],
+   "InventoryController.open_inventory_folder": [
+    1,
+    8
+   ],
+   "InventoryController.open_shared_inventory": [
+    1,
+    21
+   ],
+   "InventoryController.refresh": [
+    2,
+    2
+   ],
+   "InventoryController.refresh_git_watch": [
+    5,
+    16
+   ],
+   "InventoryController.report_git_check": [
+    1,
+    4
+   ],
+   "InventoryController.resolve_config_view_path": [
+    1,
+    10
+   ],
+   "InventoryController.set_git_updates": [
+    5,
+    10
+   ],
+   "InventoryController.show_git_updates": [
+    1,
+    6
+   ],
+   "InventoryController.shutdown": [
+    3,
+    5
+   ],
+   "InventoryController.start_shared_poll": [
+    1,
+    7
+   ],
+   "InventoryController.stop_git_watch": [
+    4,
+    6
+   ],
+   "InventoryController.switch_workspace": [
+    1,
+    7
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/layout.py": {
+  "executable": 110,
+  "executed": 102,
+  "functions": {
+   "LayoutController.__init__": [
+    9,
+    9
+   ],
+   "LayoutController.on_density_changed": [
+    9,
+    9
+   ],
+   "LayoutController.on_paned_position": [
+    6,
+    7
+   ],
+   "LayoutController.on_size_allocate": [
+    2,
+    2
+   ],
+   "LayoutController.set_maximized": [
+    17,
+    19
+   ],
+   "LayoutController.set_narrow": [
+    9,
+    9
+   ],
+   "LayoutController.set_sidebar_visible": [
+    18,
+    20
+   ],
+   "LayoutController.toggle_maximized": [
+    2,
+    2
+   ],
+   "LayoutController.toggle_sidebar": [
+    3,
+    4
+   ],
+   "LayoutController.update_maximize_ui": [
+    2,
+    2
+   ],
+   "LayoutController.update_sidebar_toggle_ui": [
+    6,
+    6
+   ],
+   "default_sidebar_width": [
+    2,
+    2
+   ],
+   "resolve_sidebar_width": [
+    4,
+    4
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/macro_controller.py": {
+  "executable": 677,
+  "executed": 543,
+  "functions": {
+   "MacroController.__init__": [
+    14,
+    14
+   ],
+   "MacroController._busy": [
+    2,
+    2
+   ],
+   "MacroController._confirm_run": [
+    10,
+    12
+   ],
+   "MacroController._current_terminal": [
+    4,
+    5
+   ],
+   "MacroController._end_recording": [
+    16,
+    19
+   ],
+   "MacroController._ensure_unlocked": [
+    12,
+    23
+   ],
+   "MacroController._finished": [
+    20,
+    22
+   ],
+   "MacroController._group_finished": [
+    14,
+    16
+   ],
+   "MacroController._label": [
+    3,
+    5
+   ],
+   "MacroController._notify": [
+    2,
+    2
+   ],
+   "MacroController._offer_save": [
+    22,
+    32
+   ],
+   "MacroController._on_commit": [
+    7,
+    9
+   ],
+   "MacroController._on_key_press": [
+    4,
+    4
+   ],
+   "MacroController._on_recording_status": [
+    1,
+    4
+   ],
+   "MacroController._progress": [
+    3,
+    3
+   ],
+   "MacroController._progress_text": [
+    2,
+    2
+   ],
+   "MacroController._recording_target_gone": [
+    3,
+    3
+   ],
+   "MacroController._save": [
+    4,
+    14
+   ],
+   "MacroController._show_recording": [
+    4,
+    4
+   ],
+   "MacroController._start_playback": [
+    17,
+    18
+   ],
+   "MacroController._status_text": [
+    6,
+    7
+   ],
+   "MacroController._stop": [
+    4,
+    4
+   ],
+   "MacroController._store_new": [
+    9,
+    12
+   ],
+   "MacroController._suggest_name": [
+    4,
+    5
+   ],
+   "MacroController._take_shortcut_from": [
+    10,
+    10
+   ],
+   "MacroController._tick_recording": [
+    1,
+    5
+   ],
+   "MacroController._unlocked": [
+    22,
+    28
+   ],
+   "MacroController.allow_turning_saving_off": [
+    7,
+    7
+   ],
+   "MacroController.bind": [
+    6,
+    6
+   ],
+   "MacroController.callbacks": [
+    6,
+    6
+   ],
+   "MacroController.conflicts": [
+    6,
+    7
+   ],
+   "MacroController.conflicts.check": [
+    4,
+    5
+   ],
+   "MacroController.create_keybox": [
+    3,
+    3
+   ],
+   "MacroController.delete_macro": [
+    10,
+    14
+   ],
+   "MacroController.duplicate_macro": [
+    13,
+    19
+   ],
+   "MacroController.edit_macro": [
+    15,
+    21
+   ],
+   "MacroController.is_secret_input": [
+    8,
+    12
+   ],
+   "MacroController.menu_sections": [
+    20,
+    20
+   ],
+   "MacroController.name_error": [
+    8,
+    9
+   ],
+   "MacroController.name_error.check": [
+    6,
+    7
+   ],
+   "MacroController.open_manager": [
+    1,
+    15
+   ],
+   "MacroController.run_from_shortcut": [
+    8,
+    8
+   ],
+   "MacroController.run_macro": [
+    35,
+    38
+   ],
+   "MacroController.set_confirm_multi_session": [
+    1,
+    3
+   ],
+   "MacroController.shutdown": [
+    4,
+    7
+   ],
+   "MacroController.start": [
+    7,
+    7
+   ],
+   "MacroController.start_recording": [
+    28,
+    33
+   ],
+   "MacroController.stop_group": [
+    3,
+    3
+   ],
+   "MacroController.stop_playback": [
+    5,
+    5
+   ],
+   "MacroController.stop_recording": [
+    9,
+    12
+   ],
+   "MacroController.sync": [
+    7,
+    7
+   ],
+   "MacroController.toggle_recording": [
+    1,
+    4
+   ],
+   "MacroController.unlock_with_keybox": [
+    9,
+    9
+   ],
+   "MacroController.verify_master": [
+    1,
+    9
+   ],
+   "_Group.__init__": [
+    7,
+    7
+   ],
+   "_Group.running": [
+    2,
+    2
+   ],
+   "_Playback.__init__": [
+    10,
+    10
+   ],
+   "_Recording.__init__": [
+    8,
+    8
+   ],
+   "_Sink.__init__": [
+    2,
+    2
+   ],
+   "_Sink._alive": [
+    4,
+    8
+   ],
+   "_Sink.feed": [
+    3,
+    3
+   ],
+   "_Sink.paste": [
+    1,
+    3
+   ],
+   "_info_bar": [
+    20,
+    20
+   ],
+   "macro_action": [
+    2,
+    2
+   ],
+   "macro_key": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/mobaxterm_import.py": {
+  "executable": 46,
+  "executed": 17,
+  "functions": {
+   "MobaXtermImportController.__init__": [
+    3,
+    3
+   ],
+   "MobaXtermImportController.open": [
+    1,
+    28
+   ],
+   "import_report_dir": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/multirun.py": {
+  "executable": 102,
+  "executed": 68,
+  "functions": {
+   "MultiRunController.__init__": [
+    6,
+    6
+   ],
+   "MultiRunController.all_hosts": [
+    3,
+    3
+   ],
+   "MultiRunController.connect": [
+    13,
+    15
+   ],
+   "MultiRunController.host_by_key": [
+    2,
+    2
+   ],
+   "MultiRunController.log": [
+    3,
+    3
+   ],
+   "MultiRunController.matching_hosts": [
+    1,
+    2
+   ],
+   "MultiRunController.open": [
+    1,
+    7
+   ],
+   "MultiRunController.open_for_group": [
+    1,
+    9
+   ],
+   "MultiRunController.open_for_matches": [
+    1,
+    2
+   ],
+   "MultiRunController.open_for_selection": [
+    1,
+    2
+   ],
+   "MultiRunController.open_sessions": [
+    1,
+    10
+   ],
+   "MultiRunController.store": [
+    15,
+    19
+   ],
+   "MultiRunController.target": [
+    7,
+    7
+   ],
+   "MultiRunController.targets": [
+    3,
+    3
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/native_transfer.py": {
+  "executable": 222,
+  "executed": 164,
+  "functions": {
+   "NativeTransferController.__init__": [
+    7,
+    7
+   ],
+   "NativeTransferController._ask_export": [
+    1,
+    8
+   ],
+   "NativeTransferController._choose_path": [
+    1,
+    2
+   ],
+   "NativeTransferController._credential_for": [
+    3,
+    5
+   ],
+   "NativeTransferController._exported": [
+    12,
+    12
+   ],
+   "NativeTransferController._run": [
+    10,
+    10
+   ],
+   "NativeTransferController._run.target": [
+    7,
+    7
+   ],
+   "NativeTransferController._selected_group_id": [
+    9,
+    9
+   ],
+   "NativeTransferController._selected_host_ids": [
+    3,
+    5
+   ],
+   "NativeTransferController._store": [
+    4,
+    5
+   ],
+   "NativeTransferController.apply_after_commit": [
+    12,
+    17
+   ],
+   "NativeTransferController.busy": [
+    2,
+    2
+   ],
+   "NativeTransferController.export": [
+    29,
+    37
+   ],
+   "NativeTransferController.export.work": [
+    3,
+    3
+   ],
+   "NativeTransferController.import_file": [
+    28,
+    40
+   ],
+   "NativeTransferController.wait": [
+    8,
+    8
+   ],
+   "app_version": [
+    11,
+    17
+   ],
+   "show_text": [
+    1,
+    13
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/notifications.py": {
+  "executable": 145,
+  "executed": 135,
+  "functions": {
+   "GLibScheduler.cancel": [
+    4,
+    4
+   ],
+   "GLibScheduler.schedule": [
+    4,
+    6
+   ],
+   "GLibScheduler.schedule.fire": [
+    1,
+    3
+   ],
+   "Message.sticky": [
+    2,
+    2
+   ],
+   "MessageHistory.__init__": [
+    3,
+    3
+   ],
+   "MessageHistory.__len__": [
+    1,
+    2
+   ],
+   "MessageHistory._emit": [
+    3,
+    3
+   ],
+   "MessageHistory.add": [
+    3,
+    3
+   ],
+   "MessageHistory.add_listener": [
+    2,
+    2
+   ],
+   "MessageHistory.clear": [
+    1,
+    3
+   ],
+   "MessageHistory.items": [
+    2,
+    2
+   ],
+   "MessageHistory.mark_all_read": [
+    8,
+    8
+   ],
+   "MessageHistory.unread_count": [
+    2,
+    2
+   ],
+   "Scheduler.cancel": [
+    1,
+    1
+   ],
+   "Scheduler.schedule": [
+    1,
+    1
+   ],
+   "ToastController.__init__": [
+    13,
+    13
+   ],
+   "ToastController._expire": [
+    3,
+    3
+   ],
+   "ToastController.activate": [
+    7,
+    8
+   ],
+   "ToastController.dismiss": [
+    10,
+    11
+   ],
+   "ToastController.dismiss_all": [
+    1,
+    3
+   ],
+   "ToastController.notify": [
+    25,
+    25
+   ],
+   "ToastController.on_dismiss": [
+    2,
+    2
+   ],
+   "ToastController.on_show": [
+    2,
+    2
+   ],
+   "ToastController.shutdown": [
+    5,
+    5
+   ],
+   "ToastController.visible": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/rdp_files.py": {
+  "executable": 138,
+  "executed": 93,
+  "functions": {
+   "RdpFileActions.__init__": [
+    2,
+    2
+   ],
+   "RdpFileActions._connect_after_wake": [
+    3,
+    3
+   ],
+   "RdpFileActions.choose_files": [
+    1,
+    12
+   ],
+   "RdpFileActions.export_selected": [
+    12,
+    27
+   ],
+   "RdpFileActions.import_files": [
+    43,
+    53
+   ],
+   "RdpFileActions.wake_and_connect": [
+    11,
+    18
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/security.py": {
+  "executable": 164,
+  "executed": 136,
+  "functions": {
+   "SecurityActions.__init__": [
+    6,
+    6
+   ],
+   "SecurityActions._ask_password": [
+    1,
+    5
+   ],
+   "SecurityActions._confirm": [
+    1,
+    2
+   ],
+   "SecurityActions._turn_saving_off": [
+    24,
+    25
+   ],
+   "SecurityActions._turn_saving_on": [
+    10,
+    11
+   ],
+   "SecurityActions._verify": [
+    1,
+    5
+   ],
+   "SecurityActions.change_password": [
+    1,
+    2
+   ],
+   "SecurityActions.config_dir": [
+    2,
+    2
+   ],
+   "SecurityActions.finish_migration": [
+    2,
+    2
+   ],
+   "SecurityActions.keybox": [
+    2,
+    2
+   ],
+   "SecurityActions.recovery_key": [
+    12,
+    18
+   ],
+   "SecurityActions.remove_keyring_copies": [
+    13,
+    16
+   ],
+   "SecurityActions.set_passwords_off": [
+    2,
+    2
+   ],
+   "SecurityActions.set_remember": [
+    11,
+    16
+   ],
+   "SecurityActions.state": [
+    19,
+    19
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/session_controller.py": {
+  "executable": 488,
+  "executed": 343,
+  "functions": {
+   "SessionController.__init__": [
+    6,
+    6
+   ],
+   "SessionController.audit_log": [
+    21,
+    27
+   ],
+   "SessionController.audit_log._write_line": [
+    5,
+    7
+   ],
+   "SessionController.bind_tab_status": [
+    18,
+    21
+   ],
+   "SessionController.bind_tab_status.on_closed": [
+    1,
+    2
+   ],
+   "SessionController.bind_tab_status.on_destroy": [
+    3,
+    3
+   ],
+   "SessionController.bind_tab_status.on_status": [
+    7,
+    7
+   ],
+   "SessionController.build_host_config": [
+    10,
+    10
+   ],
+   "SessionController.bulk_connect_selected": [
+    1,
+    6
+   ],
+   "SessionController.cleanup_paramiko_connector": [
+    2,
+    2
+   ],
+   "SessionController.connect_child_group": [
+    1,
+    8
+   ],
+   "SessionController.connect_current_item": [
+    1,
+    7
+   ],
+   "SessionController.connect_parent_group": [
+    1,
+    7
+   ],
+   "SessionController.connect_selected": [
+    3,
+    4
+   ],
+   "SessionController.copy_scp_command": [
+    1,
+    16
+   ],
+   "SessionController.copy_ssh_command": [
+    8,
+    14
+   ],
+   "SessionController.credential_password": [
+    1,
+    2
+   ],
+   "SessionController.duplicate_current_session": [
+    5,
+    9
+   ],
+   "SessionController.inventory_host": [
+    1,
+    7
+   ],
+   "SessionController.notify_connection_success": [
+    8,
+    9
+   ],
+   "SessionController.on_paramiko_aborted": [
+    1,
+    8
+   ],
+   "SessionController.on_paramiko_success": [
+    1,
+    13
+   ],
+   "SessionController.open_files_for_host": [
+    6,
+    13
+   ],
+   "SessionController.open_files_selected": [
+    4,
+    6
+   ],
+   "SessionController.open_host_paramiko": [
+    22,
+    22
+   ],
+   "SessionController.open_hosts": [
+    27,
+    43
+   ],
+   "SessionController.open_rdp_host": [
+    18,
+    18
+   ],
+   "SessionController.open_selected_host": [
+    4,
+    9
+   ],
+   "SessionController.open_ssh_host": [
+    16,
+    18
+   ],
+   "SessionController.open_transfer_host": [
+    12,
+    12
+   ],
+   "SessionController.open_unsaved": [
+    5,
+    5
+   ],
+   "SessionController.quick_connect": [
+    25,
+    30
+   ],
+   "SessionController.quick_connect.validate": [
+    7,
+    9
+   ],
+   "SessionController.rdp_runtime": [
+    5,
+    5
+   ],
+   "SessionController.rdp_tunnel_backend": [
+    1,
+    11
+   ],
+   "SessionController.reconnect_selected": [
+    1,
+    8
+   ],
+   "SessionController.refresh_rdp_engines": [
+    6,
+    6
+   ],
+   "SessionController.saved_key_passphrase": [
+    3,
+    3
+   ],
+   "SessionController.start_session_tunnels": [
+    14,
+    16
+   ],
+   "SessionController.start_session_tunnels.on_destroy": [
+    6,
+    6
+   ],
+   "audit_log_key": [
+    4,
+    4
+   ],
+   "audit_log_value": [
+    3,
+    3
+   ],
+   "files_view_of": [
+    3,
+    3
+   ],
+   "quick_connect_host": [
+    28,
+    29
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/shortcut_registry.py": {
+  "executable": 148,
+  "executed": 137,
+  "functions": {
+   "ShortcutRegistry.__init__": [
+    10,
+    10
+   ],
+   "ShortcutRegistry._notify": [
+    4,
+    6
+   ],
+   "ShortcutRegistry.add_listener": [
+    2,
+    2
+   ],
+   "ShortcutRegistry.apply": [
+    13,
+    14
+   ],
+   "ShortcutRegistry.conflicts": [
+    6,
+    6
+   ],
+   "ShortcutRegistry.defaults": [
+    1,
+    2
+   ],
+   "ShortcutRegistry.effective_accels": [
+    6,
+    6
+   ],
+   "ShortcutRegistry.extras": [
+    2,
+    2
+   ],
+   "ShortcutRegistry.from_dict": [
+    25,
+    27
+   ],
+   "ShortcutRegistry.is_default": [
+    2,
+    2
+   ],
+   "ShortcutRegistry.is_extra": [
+    2,
+    2
+   ],
+   "ShortcutRegistry.names": [
+    1,
+    2
+   ],
+   "ShortcutRegistry.reset": [
+    3,
+    3
+   ],
+   "ShortcutRegistry.reset_all": [
+    4,
+    4
+   ],
+   "ShortcutRegistry.set_accels": [
+    13,
+    15
+   ],
+   "ShortcutRegistry.set_extras": [
+    9,
+    9
+   ],
+   "ShortcutRegistry.spec": [
+    2,
+    2
+   ],
+   "ShortcutRegistry.title": [
+    6,
+    6
+   ],
+   "ShortcutRegistry.to_dict": [
+    2,
+    2
+   ],
+   "canonical": [
+    6,
+    7
+   ],
+   "is_customizable": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/shortcuts.py": {
+  "executable": 260,
+  "executed": 240,
+  "functions": {
+   "ActionSpec.detailed_name": [
+    2,
+    2
+   ],
+   "_groups": [
+    6,
+    6
+   ],
+   "_shortcut_accelerator": [
+    4,
+    4
+   ],
+   "_sync_extra_rows": [
+    13,
+    24
+   ],
+   "accel_label": [
+    8,
+    9
+   ],
+   "accel_tooltip": [
+    4,
+    4
+   ],
+   "build_shortcuts_window": [
+    38,
+    38
+   ],
+   "effective_accels": [
+    5,
+    5
+   ],
+   "refresh_accel_tooltips": [
+    8,
+    8
+   ],
+   "refresh_shortcuts_window": [
+    12,
+    15
+   ],
+   "register_actions": [
+    26,
+    26
+   ],
+   "set_accel_tooltip": [
+    3,
+    3
+   ],
+   "set_active_registry": [
+    2,
+    2
+   ],
+   "set_enabled": [
+    1,
+    5
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/ssh_keys_controller.py": {
+  "executable": 181,
+  "executed": 110,
+  "functions": {
+   "SshKeysController.__init__": [
+    3,
+    3
+   ],
+   "SshKeysController._extra_path": [
+    2,
+    2
+   ],
+   "SshKeysController._save_extra": [
+    3,
+    3
+   ],
+   "SshKeysController._store": [
+    2,
+    2
+   ],
+   "SshKeysController.change_passphrase": [
+    1,
+    5
+   ],
+   "SshKeysController.default_comment": [
+    5,
+    7
+   ],
+   "SshKeysController.delete": [
+    6,
+    9
+   ],
+   "SshKeysController.deploy_to_group": [
+    1,
+    9
+   ],
+   "SshKeysController.deploy_to_selection": [
+    1,
+    2
+   ],
+   "SshKeysController.derive_public": [
+    1,
+    8
+   ],
+   "SshKeysController.extra_paths": [
+    6,
+    6
+   ],
+   "SshKeysController.forget_passphrase": [
+    3,
+    5
+   ],
+   "SshKeysController.has_saved_passphrase": [
+    2,
+    2
+   ],
+   "SshKeysController.hosts": [
+    3,
+    3
+   ],
+   "SshKeysController.import_copy": [
+    10,
+    11
+   ],
+   "SshKeysController.import_reference": [
+    5,
+    6
+   ],
+   "SshKeysController.keys": [
+    2,
+    2
+   ],
+   "SshKeysController.missing_references": [
+    2,
+    2
+   ],
+   "SshKeysController.open_deploy": [
+    1,
+    4
+   ],
+   "SshKeysController.open_dialog": [
+    1,
+    5
+   ],
+   "SshKeysController.passphrase_for_host": [
+    3,
+    3
+   ],
+   "SshKeysController.remember_passphrase": [
+    5,
+    11
+   ],
+   "SshKeysController.rename": [
+    1,
+    18
+   ],
+   "SshKeysController.reveal": [
+    1,
+    7
+   ],
+   "SshKeysController.saved_passphrase": [
+    3,
+    6
+   ],
+   "SshKeysController.suggest": [
+    2,
+    2
+   ],
+   "SshKeysController.usage": [
+    7,
+    7
+   ],
+   "SshKeysController.which_ssh_add": [
+    1,
+    2
+   ],
+   "SshKeysController.write_generated": [
+    5,
+    5
+   ],
+   "identity_path": [
+    3,
+    3
+   ],
+   "passphrase_key": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/store_actions.py": {
+  "executable": 164,
+  "executed": 123,
+  "functions": {
+   "StoreActions.__init__": [
+    2,
+    2
+   ],
+   "StoreActions._commit": [
+    12,
+    15
+   ],
+   "StoreActions._require_store": [
+    4,
+    8
+   ],
+   "StoreActions.backup_now": [
+    8,
+    12
+   ],
+   "StoreActions.export_openssh": [
+    16,
+    24
+   ],
+   "StoreActions.import_openssh": [
+    9,
+    11
+   ],
+   "StoreActions.manager": [
+    3,
+    3
+   ],
+   "StoreActions.offer_first_run_import": [
+    27,
+    30
+   ],
+   "StoreActions.offer_include": [
+    16,
+    24
+   ],
+   "StoreActions.reveal_inventory": [
+    1,
+    8
+   ],
+   "_home": [
+    5,
+    5
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/tree.py": {
+  "executable": 523,
+  "executed": 425,
+  "functions": {
+   "TreeController.__init__": [
+    9,
+    9
+   ],
+   "TreeController.coerce_host": [
+    5,
+    8
+   ],
+   "TreeController.collapse_all_groups": [
+    2,
+    2
+   ],
+   "TreeController.context_menu_spec": [
+    28,
+    28
+   ],
+   "TreeController.current_item": [
+    11,
+    11
+   ],
+   "TreeController.current_item_is_read_only": [
+    9,
+    12
+   ],
+   "TreeController.delete_smart_group": [
+    1,
+    15
+   ],
+   "TreeController.detail_content": [
+    38,
+    40
+   ],
+   "TreeController.expand_all_groups": [
+    2,
+    2
+   ],
+   "TreeController.find_host_by_alias": [
+    7,
+    7
+   ],
+   "TreeController.find_tree_path": [
+    12,
+    12
+   ],
+   "TreeController.find_tree_path.traverse": [
+    10,
+    10
+   ],
+   "TreeController.generate_duplicate_alias": [
+    11,
+    13
+   ],
+   "TreeController.get_selected_iter": [
+    8,
+    9
+   ],
+   "TreeController.hosts_in_child_group": [
+    5,
+    12
+   ],
+   "TreeController.hosts_in_parent_group": [
+    6,
+    6
+   ],
+   "TreeController.infer_target_group": [
+    9,
+    9
+   ],
+   "TreeController.inventories": [
+    5,
+    5
+   ],
+   "TreeController.make_host_key": [
+    2,
+    2
+   ],
+   "TreeController.menu_accels": [
+    2,
+    2
+   ],
+   "TreeController.on_button_press": [
+    12,
+    17
+   ],
+   "TreeController.on_filter_text_changed": [
+    4,
+    4
+   ],
+   "TreeController.on_key_press": [
+    8,
+    18
+   ],
+   "TreeController.on_row_activated": [
+    1,
+    15
+   ],
+   "TreeController.on_selection_changed": [
+    7,
+    7
+   ],
+   "TreeController.on_smart_group_activated": [
+    1,
+    6
+   ],
+   "TreeController.rebuild": [
+    43,
+    43
+   ],
+   "TreeController.recolor": [
+    16,
+    16
+   ],
+   "TreeController.recolor.walk": [
+    11,
+    11
+   ],
+   "TreeController.refresh_smart_groups": [
+    1,
+    2
+   ],
+   "TreeController.remap_group_keys": [
+    2,
+    2
+   ],
+   "TreeController.restore_selection": [
+    8,
+    8
+   ],
+   "TreeController.reveal_imported": [
+    7,
+    7
+   ],
+   "TreeController.save_current_filter_as_group": [
+    1,
+    17
+   ],
+   "TreeController.search_text_for_host": [
+    1,
+    2
+   ],
+   "TreeController.select_child_group": [
+    7,
+    7
+   ],
+   "TreeController.select_host": [
+    8,
+    8
+   ],
+   "TreeController.select_parent_group": [
+    6,
+    6
+   ],
+   "TreeController.select_path": [
+    10,
+    10
+   ],
+   "TreeController.selected_host": [
+    6,
+    6
+   ],
+   "TreeController.selected_hosts": [
+    14,
+    15
+   ],
+   "TreeController.set_host_status": [
+    2,
+    2
+   ],
+   "TreeController.set_host_status_for_key": [
+    23,
+    25
+   ],
+   "TreeController.show_context_menu": [
+    1,
+    10
+   ],
+   "TreeController.update_action_state": [
+    19,
+    19
+   ],
+   "TreeController.update_details": [
+    4,
+    4
+   ],
+   "is_favorite_key": [
+    3,
+    3
+   ],
+   "search_reveal_keys": [
+    18,
+    18
+   ],
+   "search_reveal_keys.visit": [
+    11,
+    11
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/tree_controller.py": {
+  "executable": 280,
+  "executed": 273,
+  "functions": {
+   "TreeRow.icon": [
+    5,
+    5
+   ],
+   "TreeRow.key": [
+    2,
+    2
+   ],
+   "TreeRow.walk": [
+    4,
+    4
+   ],
+   "_child_rows": [
+    64,
+    69
+   ],
+   "_child_rows.folder_for": [
+    18,
+    18
+   ],
+   "_count_tooltip": [
+    2,
+    2
+   ],
+   "_fill_folder_counts": [
+    7,
+    7
+   ],
+   "_groups_first": [
+    4,
+    4
+   ],
+   "_host_rows": [
+    35,
+    35
+   ],
+   "_keep_filtered": [
+    5,
+    5
+   ],
+   "_option": [
+    2,
+    2
+   ],
+   "build_tree_rows": [
+    31,
+    31
+   ],
+   "filter_host": [
+    16,
+    16
+   ],
+   "group_sort_key": [
+    3,
+    3
+   ],
+   "has_inventory": [
+    2,
+    2
+   ],
+   "host_key": [
+    2,
+    2
+   ],
+   "host_tooltip": [
+    13,
+    13
+   ],
+   "parse_filter": [
+    15,
+    16
+   ],
+   "search_text_for_host": [
+    9,
+    9
+   ],
+   "sidebar_page_for": [
+    6,
+    6
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/tunnels.py": {
+  "executable": 218,
+  "executed": 166,
+  "functions": {
+   "TunnelController.__init__": [
+    13,
+    13
+   ],
+   "TunnelController._ask_password": [
+    1,
+    6
+   ],
+   "TunnelController._changed": [
+    4,
+    6
+   ],
+   "TunnelController._connect": [
+    12,
+    14
+   ],
+   "TunnelController._on_event": [
+    13,
+    13
+   ],
+   "TunnelController._on_failed": [
+    1,
+    26
+   ],
+   "TunnelController._on_status": [
+    14,
+    14
+   ],
+   "TunnelController._trust_host_key": [
+    1,
+    13
+   ],
+   "TunnelController.active_count": [
+    2,
+    2
+   ],
+   "TunnelController.all_forwards": [
+    2,
+    2
+   ],
+   "TunnelController.confirm_quit": [
+    12,
+    12
+   ],
+   "TunnelController.host": [
+    2,
+    2
+   ],
+   "TunnelController.host_key": [
+    2,
+    2
+   ],
+   "TunnelController.hosts": [
+    3,
+    3
+   ],
+   "TunnelController.hosts_with_forwards": [
+    7,
+    7
+   ],
+   "TunnelController.last_session_closed": [
+    9,
+    9
+   ],
+   "TunnelController.running_count": [
+    2,
+    2
+   ],
+   "TunnelController.save": [
+    7,
+    8
+   ],
+   "TunnelController.session_opened": [
+    9,
+    9
+   ],
+   "TunnelController.shutdown": [
+    2,
+    2
+   ],
+   "TunnelController.start": [
+    6,
+    8
+   ],
+   "TunnelController.start_with_app": [
+    15,
+    16
+   ],
+   "TunnelController.start_with_app.next_one": [
+    5,
+    6
+   ],
+   "TunnelController.status": [
+    2,
+    2
+   ],
+   "TunnelController.stop": [
+    2,
+    2
+   ],
+   "TunnelController.stop_all": [
+    2,
+    2
+   ],
+   "_idle": [
+    5,
+    5
+   ],
+   "_idle.run": [
+    3,
+    3
+   ]
+  }
+ },
+ "ophion/gtkui/controllers/ui_state.py": {
+  "executable": 155,
+  "executed": 150,
+  "functions": {
+   "UiState.from_dict": [
+    36,
+    36
+   ],
+   "UiState.to_dict": [
+    29,
+    29
+   ],
+   "_bool": [
+    2,
+    2
+   ],
+   "_color": [
+    2,
+    2
+   ],
+   "_color_maps": [
+    3,
+    3
+   ],
+   "_favorites": [
+    5,
+    5
+   ],
+   "_float": [
+    4,
+    4
+   ],
+   "_int": [
+    2,
+    2
+   ],
+   "_inventory_colors": [
+    4,
+    4
+   ],
+   "_str": [
+    2,
+    2
+   ],
+   "_str_list": [
+    4,
+    4
+   ],
+   "_str_map": [
+    4,
+    4
+   ],
+   "load_ui_state": [
+    6,
+    8
+   ],
+   "save_ui_state": [
+    5,
+    7
+   ],
+   "ui_state_path_for_base": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/inventory/__init__.py": {
+  "executable": 2,
+  "executed": 1,
+  "functions": {}
+ },
+ "ophion/inventory/manager.py": {
+  "executable": 321,
+  "executed": 287,
+  "functions": {
+   "StoreConfigManager.__init__": [
+    8,
+    8
+   ],
+   "StoreConfigManager._new_host": [
+    4,
+    4
+   ],
+   "StoreConfigManager._resolve_target": [
+    7,
+    9
+   ],
+   "StoreConfigManager._run": [
+    9,
+    9
+   ],
+   "StoreConfigManager.add_host": [
+    11,
+    12
+   ],
+   "StoreConfigManager.add_hosts_bulk": [
+    6,
+    6
+   ],
+   "StoreConfigManager.all_host_ids": [
+    2,
+    2
+   ],
+   "StoreConfigManager.backup_before": [
+    4,
+    6
+   ],
+   "StoreConfigManager.base_dir": [
+    2,
+    2
+   ],
+   "StoreConfigManager.changed_externally": [
+    3,
+    5
+   ],
+   "StoreConfigManager.child_host_count": [
+    3,
+    3
+   ],
+   "StoreConfigManager.create_child_group": [
+    15,
+    18
+   ],
+   "StoreConfigManager.create_child_group.action": [
+    6,
+    6
+   ],
+   "StoreConfigManager.create_group_path": [
+    4,
+    5
+   ],
+   "StoreConfigManager.create_parent_group": [
+    2,
+    2
+   ],
+   "StoreConfigManager.delete_child_group": [
+    5,
+    6
+   ],
+   "StoreConfigManager.delete_host": [
+    4,
+    5
+   ],
+   "StoreConfigManager.delete_parent_group": [
+    5,
+    6
+   ],
+   "StoreConfigManager.duplicate_child_group": [
+    8,
+    9
+   ],
+   "StoreConfigManager.duplicate_child_group.action": [
+    4,
+    4
+   ],
+   "StoreConfigManager.duplicate_parent_group": [
+    6,
+    7
+   ],
+   "StoreConfigManager.duplicate_parent_group.action": [
+    2,
+    2
+   ],
+   "StoreConfigManager.group_id": [
+    6,
+    6
+   ],
+   "StoreConfigManager.host_id": [
+    5,
+    6
+   ],
+   "StoreConfigManager.move_child_group": [
+    12,
+    13
+   ],
+   "StoreConfigManager.move_child_group.action": [
+    4,
+    4
+   ],
+   "StoreConfigManager.move_hosts": [
+    25,
+    34
+   ],
+   "StoreConfigManager.move_hosts.action": [
+    8,
+    9
+   ],
+   "StoreConfigManager.read_only": [
+    2,
+    2
+   ],
+   "StoreConfigManager.read_only_reason": [
+    2,
+    2
+   ],
+   "StoreConfigManager.refresh": [
+    57,
+    58
+   ],
+   "StoreConfigManager.refresh.path_of": [
+    12,
+    12
+   ],
+   "StoreConfigManager.rename_child_group": [
+    8,
+    9
+   ],
+   "StoreConfigManager.rename_child_group.action": [
+    4,
+    4
+   ],
+   "StoreConfigManager.rename_parent_group": [
+    5,
+    6
+   ],
+   "StoreConfigManager.transaction": [
+    4,
+    4
+   ],
+   "StoreConfigManager.update_host": [
+    11,
+    14
+   ],
+   "entry_options": [
+    10,
+    10
+   ],
+   "host_columns": [
+    16,
+    16
+   ],
+   "split_child": [
+    2,
+    2
+   ]
+  }
+ },
+ "ophion/inventory/openssh.py": {
+  "executable": 342,
+  "executed": 315,
+  "functions": {
+   "OpenSSHImportReport.summary": [
+    10,
+    15
+   ],
+   "OpenSSHPlan.host_count": [
+    2,
+    2
+   ],
+   "_clean_entry": [
+    3,
+    3
+   ],
+   "_has_match_block": [
+    3,
+    5
+   ],
+   "_identity": [
+    3,
+    3
+   ],
+   "_strip_quotes": [
+    5,
+    5
+   ],
+   "_too_big": [
+    3,
+    5
+   ],
+   "apply_include_line": [
+    13,
+    13
+   ],
+   "commit_openssh_import": [
+    66,
+    72
+   ],
+   "count_hosts": [
+    3,
+    5
+   ],
+   "import_sources_found": [
+    14,
+    14
+   ],
+   "include_directive": [
+    5,
+    8
+   ],
+   "include_line_change": [
+    19,
+    19
+   ],
+   "iter_hosts": [
+    4,
+    4
+   ],
+   "non_ssh_hosts": [
+    4,
+    4
+   ],
+   "plan_openssh_import": [
+    61,
+    66
+   ],
+   "plan_openssh_import.add_group": [
+    6,
+    6
+   ],
+   "plan_openssh_import.take": [
+    21,
+    23
+   ],
+   "protected_targets": [
+    2,
+    2
+   ],
+   "render_export": [
+    28,
+    28
+   ],
+   "safe_alias": [
+    9,
+    10
+   ],
+   "write_export": [
+    6,
+    6
+   ]
+  }
+ },
+ "ophion/inventory/startup.py": {
+  "executable": 57,
+  "executed": 44,
+  "functions": {
+   "_read_only": [
+    1,
+    7
+   ],
+   "empty_read_only_store": [
+    5,
+    5
+   ],
+   "open_inventory_store": [
+    26,
+    32
+   ]
+  }
+ },
+ "ophion/inventory/store.py": {
+  "executable": 558,
+  "executed": 491,
+  "functions": {
+   "InventoryStore.__init__": [
+    8,
+    8
+   ],
+   "InventoryStore._check_alias_free": [
+    4,
+    4
+   ],
+   "InventoryStore._check_name_free": [
+    4,
+    4
+   ],
+   "InventoryStore._exec": [
+    3,
+    7
+   ],
+   "InventoryStore._group_exists": [
+    2,
+    2
+   ],
+   "InventoryStore._integrity_message": [
+    1,
+    9
+   ],
+   "InventoryStore._json": [
+    5,
+    5
+   ],
+   "InventoryStore._migrate": [
+    11,
+    11
+   ],
+   "InventoryStore._storage_error": [
+    6,
+    11
+   ],
+   "InventoryStore._validate_host": [
+    4,
+    4
+   ],
+   "InventoryStore.add_host": [
+    16,
+    17
+   ],
+   "InventoryStore.add_hosts_bulk": [
+    3,
+    3
+   ],
+   "InventoryStore.backup": [
+    21,
+    24
+   ],
+   "InventoryStore.backup_dir": [
+    2,
+    2
+   ],
+   "InventoryStore.children": [
+    4,
+    5
+   ],
+   "InventoryStore.close": [
+    5,
+    5
+   ],
+   "InventoryStore.conn": [
+    3,
+    4
+   ],
+   "InventoryStore.count_hosts": [
+    4,
+    4
+   ],
+   "InventoryStore.create_group": [
+    14,
+    15
+   ],
+   "InventoryStore.create_group_path": [
+    10,
+    11
+   ],
+   "InventoryStore.data_version": [
+    2,
+    2
+   ],
+   "InventoryStore.delete_group": [
+    7,
+    7
+   ],
+   "InventoryStore.delete_hosts": [
+    4,
+    4
+   ],
+   "InventoryStore.descendants": [
+    5,
+    5
+   ],
+   "InventoryStore.duplicate_group": [
+    17,
+    19
+   ],
+   "InventoryStore.find_child": [
+    7,
+    7
+   ],
+   "InventoryStore.find_group": [
+    7,
+    7
+   ],
+   "InventoryStore.find_host": [
+    4,
+    4
+   ],
+   "InventoryStore.get_group": [
+    3,
+    3
+   ],
+   "InventoryStore.get_host": [
+    3,
+    3
+   ],
+   "InventoryStore.get_meta": [
+    3,
+    3
+   ],
+   "InventoryStore.group_path": [
+    9,
+    9
+   ],
+   "InventoryStore.host_ids": [
+    2,
+    2
+   ],
+   "InventoryStore.list_backups": [
+    4,
+    4
+   ],
+   "InventoryStore.list_groups": [
+    3,
+    3
+   ],
+   "InventoryStore.list_hosts": [
+    5,
+    5
+   ],
+   "InventoryStore.list_ssh_host_labels": [
+    4,
+    4
+   ],
+   "InventoryStore.move_group": [
+    15,
+    18
+   ],
+   "InventoryStore.move_hosts": [
+    11,
+    13
+   ],
+   "InventoryStore.open": [
+    40,
+    50
+   ],
+   "InventoryStore.rename_group": [
+    11,
+    13
+   ],
+   "InventoryStore.restore_latest_backup": [
+    18,
+    22
+   ],
+   "InventoryStore.schema_version": [
+    2,
+    2
+   ],
+   "InventoryStore.set_aside": [
+    9,
+    14
+   ],
+   "InventoryStore.set_meta": [
+    4,
+    4
+   ],
+   "InventoryStore.set_position": [
+    1,
+    4
+   ],
+   "InventoryStore.transaction": [
+    24,
+    32
+   ],
+   "InventoryStore.update_host": [
+    20,
+    21
+   ],
+   "_fold": [
+    2,
+    2
+   ],
+   "_group": [
+    2,
+    2
+   ],
+   "_host": [
+    4,
+    4
+   ],
+   "_new_id": [
+    2,
+    2
+   ],
+   "_valid_target": [
+    3,
+    3
+   ],
+   "clean_name": [
+    2,
+    2
+   ],
+   "clean_protocol": [
+    5,
+    5
+   ],
+   "default_inventory_path": [
+    3,
+    3
+   ],
+   "validate_alias": [
+    6,
+    7
+   ],
+   "validate_name": [
+    13,
+    13
+   ],
+   "validate_target_fields": [
+    8,
+    8
+   ]
+  }
+ }
+}

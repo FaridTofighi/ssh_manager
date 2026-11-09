@@ -1,0 +1,18 @@
+[
+  {
+    "name": " Production ",
+    "query": "tag:prod"
+  },
+  {
+    "name": "",
+    "query": "x:y"
+  },
+  {
+    "name": "Web",
+    "query": " proto:ssh AND tag:web "
+  },
+  "garbage",
+  {
+    "name": "No query"
+  }
+]

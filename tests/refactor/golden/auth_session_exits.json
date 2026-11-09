@@ -1,0 +1,882 @@
+{
+ "changed_ecdsa/ok": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ecdsa/ssh_error": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ecdsa/sshpass_host_key": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ecdsa/sshpass_wrong_password": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ed25519/ok": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ed25519/ssh_error": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ed25519/sshpass_host_key": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_ed25519/sshpass_wrong_password": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_rsa/ok": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_rsa/ssh_error": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_rsa/sshpass_host_key": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "changed_rsa/sshpass_wrong_password": {
+  "banner": "Host key changed",
+  "host_key_bar": [
+   [
+    "changed",
+    "<b>The server&apos;s host key has changed. This can mean the server was reinstalled — or that someone is intercepting the connection.</b>"
+   ]
+  ],
+  "logs": [
+   [
+    "web: the server's host key has changed; the connection was refused.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Host key changed"
+ },
+ "connection_refused/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Could not reach web.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "connection_refused/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Could not reach web.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "connection_refused/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "connection_refused/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "decoy_cat/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Host key verification failed for web; check the server's key.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "decoy_cat/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Host key verification failed for web; check the server's key.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "decoy_cat/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Host key verification failed for web; check the server's key.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "decoy_cat/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "empty/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "empty/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "empty/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "empty/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "otp_prompt/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "web asks for a one-time code; type it in the terminal.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "otp_prompt/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "web asks for a one-time code; type it in the terminal.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "otp_prompt/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "otp_prompt/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "permission_denied_retry/ok": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [
+   [
+    "web",
+    false
+   ]
+  ],
+  "status": "Authentication failed"
+ },
+ "permission_denied_retry/ssh_error": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [
+   [
+    "web",
+    false
+   ]
+  ],
+  "status": "Authentication failed"
+ },
+ "permission_denied_retry/sshpass_host_key": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [
+   [
+    "web",
+    false
+   ]
+  ],
+  "status": "Authentication failed"
+ },
+ "permission_denied_retry/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [
+   [
+    "web",
+    false
+   ]
+  ],
+  "status": "Authentication failed"
+ },
+ "publickey_only/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "The server does not accept password login for this account (web).",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "publickey_only/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "The server does not accept password login for this account (web).",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "publickey_only/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "publickey_only/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "too_many_failures/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "too_many_failures/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "too_many_failures/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "too_many_failures/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ },
+ "unknown_host/ok": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "unknown",
+    "web is not known yet. Compare its ECDSA fingerprint with the one you expect, then answer ssh in the terminal:\n<tt>SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0</tt>"
+   ]
+  ],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "unknown_host/ssh_error": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "unknown",
+    "web is not known yet. Compare its ECDSA fingerprint with the one you expect, then answer ssh in the terminal:\n<tt>SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0</tt>"
+   ]
+  ],
+  "logs": [],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "unknown_host/sshpass_host_key": {
+  "banner": "Disconnected",
+  "host_key_bar": [
+   [
+    "unknown",
+    "web is not known yet. Compare its ECDSA fingerprint with the one you expect, then answer ssh in the terminal:\n<tt>SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0</tt>"
+   ],
+   [
+    "untrusted",
+    "Host key for web is not trusted yet. Click to review it."
+   ]
+  ],
+  "logs": [
+   [
+    "Host key for web is not trusted yet. Click to review it.",
+    "error"
+   ]
+  ],
+  "retry_pending": false,
+  "retry_scheduled": false,
+  "session_closed": [
+   [
+    "web",
+    true
+   ]
+  ],
+  "status": "Disconnected"
+ },
+ "unknown_host/sshpass_wrong_password": {
+  "banner": "Authentication failed",
+  "host_key_bar": [
+   [
+    "unknown",
+    "web is not known yet. Compare its ECDSA fingerprint with the one you expect, then answer ssh in the terminal:\n<tt>SHA256:tMLQTRnLmJhk1uxUC13cIkRqlCVXnCSP1j0oO5fsrN0</tt>"
+   ]
+  ],
+  "logs": [
+   [
+    "Authentication failed for web. Enter a new password.",
+    "error"
+   ]
+  ],
+  "retry_pending": true,
+  "retry_scheduled": true,
+  "session_closed": [],
+  "status": "Authentication failed"
+ }
+}

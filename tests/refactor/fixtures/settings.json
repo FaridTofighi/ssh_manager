@@ -1,0 +1,46 @@
+{
+  "host_key_policy": "reject",
+  "connect_timeout": 15.5,
+  "auth_timeout": 9,
+  "banner_timeout": 10.0,
+  "use_paramiko_vte": false,
+  "passwords_off": false,
+  "allowed_ciphers": [
+    "aes256-gcm@openssh.com"
+  ],
+  "allowed_kex": [],
+  "secrets_policy": {
+    "forbid_plaintext": true
+  },
+  "enable_audit_logging": true,
+  "audit_log_path": "/var/tmp/ophion-audit.log",
+  "git_watch_enabled": true,
+  "git_watch_path": "/srv/inventory",
+  "git_watch_interval": 300,
+  "terminal_appearance": {
+    "font_family": "Monospace",
+    "font_size": 12,
+    "scheme": "solarized-dark"
+  },
+  "terminal_input": {
+    "right_click": "menu",
+    "middle_click": "paste-primary",
+    "copy_on_select_clipboard": true
+  },
+  "local_shell": {
+    "command": "/bin/bash",
+    "login_shell": true,
+    "start_in": "home",
+    "on_exit": "hold"
+  },
+  "shortcuts": {
+    "copy": [
+      "<Primary><Shift>c"
+    ],
+    "toggle-sidebar": []
+  },
+  "master_password_hash": "legacy-hash-ignored-once-keybox-exists",
+  "some_future_key": {
+    "kept": "or dropped, as the baseline does"
+  }
+}

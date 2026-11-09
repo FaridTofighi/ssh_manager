@@ -1,0 +1,10 @@
+[
+ {
+  "name": "Production",
+  "query": "tag:prod"
+ },
+ {
+  "name": "Web",
+  "query": "proto:ssh AND tag:web"
+ }
+]

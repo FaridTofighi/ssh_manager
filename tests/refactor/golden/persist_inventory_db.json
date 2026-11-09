@@ -1,0 +1,259 @@
+{
+ "content": {
+  "groups": [
+   [
+    "Files",
+    "files",
+    0,
+    ""
+   ],
+   [
+    "Prod",
+    "prod",
+    0,
+    "production servers"
+   ],
+   [
+    "Prod/Databases",
+    "databases",
+    0,
+    ""
+   ],
+   [
+    "Prod/Databases/Replicas",
+    "replicas",
+    0,
+    ""
+   ],
+   [
+    "Prod/Empty",
+    "empty",
+    0,
+    ""
+   ],
+   [
+    "Windows",
+    "windows",
+    0,
+    ""
+   ],
+   [
+    "سرورها",
+    "سرورها",
+    0,
+    ""
+   ]
+  ],
+  "hosts": [
+   [
+    "Files",
+    "ftp-old",
+    "ftp-old",
+    "ftp.example.org",
+    21,
+    "anonymous",
+    {},
+    {
+     "transfer": {
+      "anonymous": true,
+      "anonymous_password": "me@x",
+      "ftp_password": "S3NT1NEL-secret-value",
+      "v": 1
+     }
+    },
+    0,
+    "ftp"
+   ],
+   [
+    "Files",
+    "ftps-new",
+    "ftps-new",
+    "ftps.example.org",
+    990,
+    "uploader",
+    {},
+    {
+     "transfer": {
+      "pinned_sha256": "11:22:S3NT1NEL-secret-value",
+      "tls_mode": "implicit",
+      "v": 1
+     }
+    },
+    0,
+    "ftps"
+   ],
+   [
+    "Files",
+    "sftp-1",
+    "sftp-1",
+    "sftp.example.org",
+    22,
+    "deploy",
+    {},
+    {},
+    0,
+    "sftp"
+   ],
+   [
+    "Files",
+    "vnc-1",
+    "vnc-1",
+    "vnc.example.org",
+    5900,
+    "",
+    {},
+    {
+     "future": {
+      "x": 1
+     }
+    },
+    0,
+    "vnc"
+   ],
+   [
+    "Prod",
+    "bastion",
+    "bastion",
+    "bastion.example.org",
+    22,
+    "jump",
+    {},
+    {},
+    0,
+    "ssh"
+   ],
+   [
+    "Prod",
+    "web-01",
+    "web-01",
+    "web1.example.org",
+    2222,
+    "deploy",
+    {
+     "Password": "S3NT1NEL-secret-value",
+     "identityfile": "~/.ssh/id_ed25519",
+     "proxycommand": "sshpass -p S3NT1NEL-secret-value ssh -W %h:%p jump",
+     "proxyjump": "jump@bastion.example.org",
+     "pwd": "S3NT1NEL-secret-value"
+    },
+    {
+     "default_session_profile_id": "profile-1",
+     "environment": "production",
+     "notes": "main site",
+     "owner": "ops",
+     "permissions": {
+      "read_only": true
+     },
+     "service": "nginx",
+     "tags": [
+      "web",
+      "frontend"
+     ]
+    },
+    0,
+    "ssh"
+   ],
+   [
+    "Prod/Databases",
+    "db-01",
+    "db-01",
+    "db1.internal",
+    22,
+    "postgres",
+    {},
+    {},
+    0,
+    "ssh"
+   ],
+   [
+    "Prod/Databases/Replicas",
+    "db-02",
+    "db-02",
+    "db2.internal",
+    null,
+    "postgres",
+    {},
+    {},
+    0,
+    "ssh"
+   ],
+   [
+    "Windows",
+    "dc-01",
+    "dc-01",
+    "dc1.corp.example",
+    3389,
+    "administrator",
+    {},
+    {
+     "rdp": {
+      "domain": "CORP",
+      "gateway": {
+       "credential_id": "gw-S3NT1NEL-secret-value",
+       "host": "",
+       "port": 443
+      },
+      "gateway_password": "S3NT1NEL-secret-value",
+      "pinned_sha256": [
+       "AB:CD:S3NT1NEL-secret-value"
+      ],
+      "v": 1,
+      "via_ssh": "<host:Prod/bastion>",
+      "width": 1600
+     }
+    },
+    0,
+    "rdp"
+   ]
+  ]
+ },
+ "counts": {
+  "groups": 7,
+  "hosts": 9,
+  "meta": 0
+ },
+ "meta": [],
+ "schema": [
+  [
+   "index",
+   "groups_child_name",
+   "CREATE UNIQUE INDEX groups_child_name ON groups(parent_id, name_key) WHERE parent_id IS NOT NULL"
+  ],
+  [
+   "index",
+   "groups_parent",
+   "CREATE INDEX groups_parent ON groups(parent_id)"
+  ],
+  [
+   "index",
+   "groups_root_name",
+   "CREATE UNIQUE INDEX groups_root_name ON groups(name_key) WHERE parent_id IS NULL"
+  ],
+  [
+   "index",
+   "hosts_group",
+   "CREATE INDEX hosts_group ON hosts(group_id)"
+  ],
+  [
+   "index",
+   "hosts_protocol",
+   "CREATE INDEX hosts_protocol ON hosts(protocol)"
+  ],
+  [
+   "table",
+   "groups",
+   "CREATE TABLE groups (\n    id TEXT PRIMARY KEY,\n    parent_id TEXT NULL REFERENCES groups(id) ON DELETE CASCADE,\n    name TEXT NOT NULL,\n    name_key TEXT NOT NULL,\n    position INTEGER NOT NULL DEFAULT 0,\n    note TEXT NOT NULL DEFAULT '',\n    created_at REAL NOT NULL,\n    updated_at REAL NOT NULL\n)"
+  ],
+  [
+   "table",
+   "hosts",
+   "CREATE TABLE hosts (\n    id TEXT PRIMARY KEY,\n    group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,\n    alias TEXT NOT NULL,\n    alias_key TEXT NOT NULL,\n    hostname TEXT NOT NULL DEFAULT '',\n    port INTEGER NULL,\n    user TEXT NOT NULL DEFAULT '',\n    options_json TEXT NOT NULL DEFAULT '{}',\n    metadata_json TEXT NOT NULL DEFAULT '{}',\n    position INTEGER NOT NULL DEFAULT 0,\n    created_at REAL NOT NULL,\n    updated_at REAL NOT NULL, protocol TEXT NOT NULL DEFAULT 'ssh',\n    UNIQUE (group_id, alias_key)\n)"
+  ],
+  [
+   "table",
+   "meta",
+   "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+  ]
+ ],
+ "user_version": 2
+}

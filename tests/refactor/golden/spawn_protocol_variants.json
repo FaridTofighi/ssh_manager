@@ -1,0 +1,20 @@
+{
+ "ftp": {
+  "error": "'h' is a ftp host, not an SSH host."
+ },
+ "ftps": {
+  "error": "'h' is a ftps host, not an SSH host."
+ },
+ "rdp": {
+  "error": "'h' is a rdp host, not an SSH host."
+ },
+ "sftp": {
+  "error": "'h' is a sftp host, not an SSH host."
+ },
+ "ssh": {
+  "argv": [
+   "ssh",
+   "u@10.0.0.1"
+  ]
+ }
+}

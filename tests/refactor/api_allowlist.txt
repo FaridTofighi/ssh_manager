@@ -1,0 +1,1 @@
+# Names that may leave the API surface (R5): one "module[:Class].name  # justification" per line.

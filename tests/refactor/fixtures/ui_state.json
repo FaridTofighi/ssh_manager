@@ -1,0 +1,44 @@
+{
+  "window_size": [
+    1400,
+    900
+  ],
+  "is_maximized": false,
+  "sidebar_width": 320,
+  "sidebar_visible": true,
+  "theme_mode": "dark",
+  "accent_color": "#3584e4",
+  "density": "compact",
+  "tab_label_mode": "name_ip",
+  "font_scale": 1.1,
+  "ui_font_size": 12,
+  "filter_query": "tag:prod",
+  "latency_probe": false,
+  "group_colors": {
+    "Prod": "#aa0000",
+    "Prod/Databases": "#00aa00"
+  },
+  "host_colors": {
+    "Prod::Databases::db-01": "#123456"
+  },
+  "recent_inventories": [
+    "/home/u/.local/share/ophion/inventory.db",
+    7,
+    ""
+  ],
+  "favorites": {
+    "/home/u/.local/share/ophion/inventory.db": [
+      "host:abc",
+      "group:def",
+      "host:abc",
+      3
+    ]
+  },
+  "favorites_expanded": false,
+  "page_tab": "details",
+  "unknown_future_key": [
+    1,
+    2,
+    3
+  ]
+}
