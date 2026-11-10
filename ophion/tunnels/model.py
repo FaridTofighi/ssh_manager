@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from ..i18n import _
-from ..gtkui.validation import validate_hostname
+from ..validation import validate_hostname
 
 LOCAL, REMOTE, DYNAMIC = "local", "remote", "dynamic"
 KINDS = (LOCAL, REMOTE, DYNAMIC)

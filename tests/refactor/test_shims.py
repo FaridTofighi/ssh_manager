@@ -15,5 +15,18 @@ class I18nShimTests(unittest.TestCase):
         self.assertIs(old.DOMAIN, new.DOMAIN)
 
 
+class ValidationShimTests(unittest.TestCase):
+    def test_gtkui_validation_is_the_neutral_module(self) -> None:
+        import ophion.gtkui.validation as old
+        import ophion.validation as new
+
+        names = [name for name in vars(new) if name.startswith("validat") or name in ("Validator", "_HOST_LABEL", "_")]
+        self.assertIn("validators_for", names)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(old, name), getattr(new, name))
+        self.assertIs(new._, __import__("ophion.i18n", fromlist=["_"])._)
+
+
 if __name__ == "__main__":
     unittest.main()
