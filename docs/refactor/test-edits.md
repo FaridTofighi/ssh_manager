@@ -19,3 +19,7 @@ Follow-up (not done in 0.1): `ophion/launcher.py` (`ConnectionLauncher`) was use
 `ophion/main.py`; it stays because it is still exported from `ophion/__init__.py` (`_EXPORTS`), so removing it
 would shrink the API surface. `docs/rename-audit.md` still mentions the Textual UI: it is a historical audit and
 is left as written.
+
+| Commit | Edit | Kind | Justification |
+|---|---|---|---|
+| `refactor(0.2)` | `tests/rename_allowlist.txt` row 19: `ophion/gtkui/i18n.py` → `ophion/i18n.py` (same literal `ssh-manager`, same reason) | R4 (b) | `DOMAIN = "ssh-manager"` moved with `git mv`; the shim imports it instead of repeating the literal, so the row must name the file that holds it. `tests/test_rename_guard.py` itself is unchanged. |

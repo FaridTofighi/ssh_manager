@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from ..gtkui.i18n import _
+from ..i18n import _
 from ..gtkui.validation import validate_hostname
 
 LOCAL, REMOTE, DYNAMIC = "local", "remote", "dynamic"

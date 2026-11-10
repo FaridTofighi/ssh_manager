@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..gtkui.i18n import _
+from ..i18n import _
 from .model import DYNAMIC, REMOTE, Forward, is_loopback
 
 LOGGER = logging.getLogger(__name__)

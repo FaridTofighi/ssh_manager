@@ -16,7 +16,7 @@ ophion/unlock.py | ssh-manager | L: keyring service of the remembered unlock key
 ophion/migration.py | ssh-manager | L: keyring service the migration reads (row 9)
 ophion/gtkui/controllers/ssh_keys_controller.py | ssh-manager | L: keyring service of saved key passphrases (row 9)
 ophion/gtkui/controllers/security.py | ssh-manager | L: keyring service of old copies to remove (row 9)
-ophion/gtkui/i18n.py | ssh-manager | I: gettext domain, no catalogues shipped (row 10)
+ophion/i18n.py | ssh-manager | I: gettext domain, no catalogues shipped (row 10)
 ophion/gtkui/controllers/drag_drop.py | ssh-manager/tree-row | I: in-process drag-and-drop type (row 11)
 ophion/gtk_app.py | ssh-manager-window | I: widget name used by CSS (row 12)
 ophion/gtkui/controllers/session_controller.py | ssh-manager-connected-{self.win.creds.host_key(host)} | I: notification id (row 12)

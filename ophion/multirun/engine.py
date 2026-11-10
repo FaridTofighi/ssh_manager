@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..gtkui.i18n import _
+from ..i18n import _
 
 LOGGER = logging.getLogger(__name__)
 THREAD_PREFIX = "sshm-multirun"

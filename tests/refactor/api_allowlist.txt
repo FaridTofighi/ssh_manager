@@ -2,3 +2,5 @@
 ophion.ui  # step 0.1: the legacy Textual UI was deleted (imported only by ophion.main and its own test)
 ophion.terminal  # step 0.1: the legacy Textual UI's terminal widget, imported only by ophion.ui
 ophion.main  # step 0.1: the legacy Textual entry point (python -m ophion.main); the GTK app starts from ophion.gtk_main
+ophion.gtkui.i18n._  # step 0.2: re-exported from ophion.i18n (moved); the same function object (tests/refactor/test_shims.py)
+ophion.gtkui.i18n.ngettext  # step 0.2: re-exported from ophion.i18n (moved); the same function object (tests/refactor/test_shims.py)

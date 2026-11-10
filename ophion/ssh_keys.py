@@ -34,7 +34,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-from .gtkui.i18n import _
+from .i18n import _
 from .secret_mask import mask_secrets
 
 LOGGER = logging.getLogger(__name__)

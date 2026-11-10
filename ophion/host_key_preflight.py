@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from .gtkui.i18n import _
+from .i18n import _
 
 KNOWN, UNKNOWN, SKIP, PROXIED, UNREADABLE = "known", "unknown", "skip", "proxied", "unreadable"
 PROBE_TIMEOUT_S = 5.0

@@ -14,7 +14,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence
 
-from ..gtkui.i18n import _, ngettext
+from ..i18n import _, ngettext
 from .engine import FAILED, SUCCESS, HostResult, status_label
 
 GROUPED = (SUCCESS, FAILED)  # finished with an exit status: their output can be compared

@@ -14,3 +14,9 @@ least one of them fails; then restore it.
 No code moved, so there is nothing to check yet. The baseline has 92 distinct string patch targets in
 182 uses (`tests/refactor/test_patch_targets.patch_targets()`); one of them is patched with `create=True` and
 intercepts nothing at the baseline (`found-bugs.md` #1).
+
+## Phase 0
+
+* 0.2 `ophion/gtkui/i18n.py` → `ophion/i18n.py`: no test patches a name of either module (grep of `tests/` for
+  `gtkui.i18n` / `ophion.i18n` patch strings: none), so no mutation check applies. The shim re-exports the same
+  objects (`tests/refactor/test_shims.py`).
