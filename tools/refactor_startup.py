@@ -4,11 +4,13 @@ Runs on the private X server (tools/run_gtk_tests.py) in a temporary HOME (the t
 ``startup_ms <milliseconds>``.
 """
 
+import os
 import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# The tree to measure (tools/refactor_bench.py passes the pre-refactor export), else this repository.
+sys.path.insert(0, os.environ.get("OPHION_TREE") or str(Path(__file__).resolve().parents[1]))
 
 import gi  # noqa: E402
 

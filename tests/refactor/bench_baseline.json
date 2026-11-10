@@ -1,0 +1,20 @@
+{
+ "Credentials dialog": 3.3,
+ "GroupPickerDialog": 5.2,
+ "Preferences dialog": 147.1,
+ "_check_external_changes (no change)": 0.0,
+ "add host \u2192 rebuild \u2192 select": 314.8,
+ "duplicate host dialog": 30.9,
+ "edit RDP host dialog": 89.5,
+ "edit SSH host dialog": 32.1,
+ "host_dialog() new host": 33.2,
+ "manager.refresh": 45.4,
+ "move host (there and back)": 511.6,
+ "prompt_new_host (until shown)": 34.3,
+ "search typing (5 keystrokes)": 733.4,
+ "startup (main window, 1,200 hosts, best of 5)": 105.6,
+ "startup (new window)": 321.4,
+ "tree.rebuild()": 142.0,
+ "tree.rebuild(refresh=True)": 196.2,
+ "tunnel_hosts": 5.6
+}
