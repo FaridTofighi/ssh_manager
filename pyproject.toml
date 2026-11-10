@@ -1,0 +1,51 @@
+# Project metadata and tool settings only. Nothing builds or installs from this file: install.sh and
+# packaging/appimage/build.sh copy main.py, ophion/ and ssh_manager/ and install the pinned libraries themselves.
+
+[project]
+name = "ophion"
+# packaging scripts are authoritative: the app reports `git describe` or the VERSION file install.sh writes
+version = "0.0.0"
+description = "SSH, SFTP/FTP and RDP connection manager (GTK 3 / VTE)"
+readme = "README.md"
+requires-python = ">=3.10"  # install.sh MIN_PYTHON; the AppImage bundles CPython 3.10
+# Top-level runtime libraries of packaging/appimage/requirements.lock (the lock pins the exact versions and every
+# transitive dependency). PyGObject, GTK, VTE and librsvg come from the system and are not listed.
+dependencies = [
+    "paramiko>=3.5,<4",
+    "cryptography>=43",
+    "pexpect>=4.9",
+    "keyring>=25",
+    "certifi",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "coverage", "ruff"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["tests/refactor/golden", "tests/refactor/fixtures"]
+
+[tool.ruff.lint]
+# Syntax errors and pyflakes only; report-only in tools/refactor_gate.sh (never --fix: R12).
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# The findings of the code at the start of the refactor, exactly (fixing them is not part of the refactor).
+"ophion/gtkui/rdp/tab.py" = ["F541"]
+"ophion/rdp/settings.py" = ["F401"]
+"ophion/rdp/tunnel.py" = ["F401"]
+"ophion/transfer/ftp.py" = ["F401"]
+"tests/test_rdp_files.py" = ["F401"]
+
+[tool.mypy]
+# Opt-in: only the modules listed here are checked, strictly. Add new modules of the refactor as they appear
+# (tasks.py, inventory/backend.py, the terminal components).
+python_version = "3.10"
+files = ["ophion/i18n.py", "ophion/validation.py"]
+follow_imports = "silent"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ophion.i18n", "ophion.validation"]
+strict = true

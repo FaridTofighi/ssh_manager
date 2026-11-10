@@ -9,6 +9,7 @@
 #   4 architecture ratchets, boundaries 9 UI snapshots vs baseline (R11): with --snapshots, or when the
 #   5 full suite on the private X         last commit touches GTK code (ophion/gtkui, gtk_app, gtk_terminal)
 #     server: passed ≥ baseline        10 benchmarks vs baseline (R10): with --phase-end
+#                                      11 ruff + mypy (pyproject.toml): report-only, skipped if not installed
 #
 # --quick skips step 5 (for trying a step locally; a commit needs the full gate).
 set -uo pipefail
@@ -48,6 +49,16 @@ gate() {  # gate <number> <name> <command…>
   fi
 }
 skip() { RESULTS+=("  skipped $1  $2"); }
+report() {  # report <number> <name> <command…>: the outcome is shown, never fails the gate
+  local number="$1" name="$2"; shift 2
+  if "$@" >"$WORK/step$number.log" 2>&1; then
+    RESULTS+=("  ok      $number  $name (report-only)")
+  else
+    RESULTS+=("  report  $number  $name (report-only): findings below")
+    { echo "----- step $number: $name (report-only, does not fail the gate)"; tail -40 "$WORK/step$number.log"; } \
+      >>"$WORK/reports"
+  fi
+}
 
 suite() {  # the full suite; passed must reach the baseline (minus legacy tests removed under R4 (a))
   python3 tools/run_gtk_tests.py -- python3 -m pytest -q -p no:cacheprovider tests >"$WORK/suite.txt" 2>&1
@@ -81,6 +92,14 @@ ratchets() {  # the metrics ratchets and the layer boundaries (tests/test_archit
 }
 
 snapshots() { python3 tools/refactor_snapshots.py check; }
+lint() {  # never --fix (R12); each tool is skipped with a notice when it is not installed
+  local status=0
+  if command -v ruff >/dev/null 2>&1; then ruff check --no-cache ophion ssh_manager tools tests main.py || status=1
+  else echo "ruff is not installed: skipped"; fi
+  if command -v mypy >/dev/null 2>&1; then mypy --no-incremental --cache-dir=/dev/null || status=1
+  else echo "mypy is not installed: skipped"; fi
+  return $status
+}
 benchmarks() { python3 tools/refactor_bench.py check; }
 
 gate 1 "compileall" python3 -m compileall -q ophion ssh_manager tools tests
@@ -94,11 +113,14 @@ gate 7 "cross-version harness (R9)" tools/refactor_crossversion.sh
 gate 8 "smoke" tools/refactor_smoke.sh
 if [ "$SNAPSHOTS" -eq 1 ]; then gate 9 "UI snapshots (R11)" snapshots; else skip 9 "UI snapshots (no GTK change)"; fi
 if [ "$PHASE_END" -eq 1 ]; then gate 10 "benchmarks (R10)" benchmarks; else skip 10 "benchmarks (not a phase end)"; fi
+report 11 "ruff + mypy" lint
 
 echo "refactor gate — $(git rev-parse --short HEAD) $(git log -1 --format=%s | cut -c1-60)"
 printf '%s\n' "${RESULTS[@]}"
 [ -f "$WORK/suite.txt" ] && grep -E '[0-9]+ passed' "$WORK/suite.txt" | tail -1 | sed 's/^/  suite: /'
 echo "  time: $(( $(date +%s) - START ))s"
+[ -f "$WORK/reports" ] && cat "$WORK/reports"
+grep -h "is not installed: skipped" "$WORK/step11.log" 2>/dev/null | sed 's/^/  notice: /'
 if [ "$FAILED" -ne 0 ]; then
   cat "$WORK/failures"
   echo "refactor gate: FAILED"
