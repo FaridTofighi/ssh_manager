@@ -7,7 +7,4 @@ Sub-packages:
 * ``dialogs``     – the dialog framework and every application dialog.
 * ``views``       – composite widgets that make up the main window.
 * ``controllers`` – UI logic that drives the views (no widget construction).
-
-The package is named ``gtkui`` so it does not collide with the Textual
-front-end in ``ophion/ui.py``.
 """

@@ -29,9 +29,6 @@ _EXPORTS = {
     "build_scp_command": ("ophion.host_utils", "build_scp_command"),
     "host_config_key": ("ophion.host_utils", "host_config_key"),
     "host_connection_params": ("ophion.host_utils", "host_connection_params"),
-    "parse_args": ("ophion.main", "parse_args"),
-    "run_app": ("ophion.main", "run_app"),
-    "main": ("ophion.main", "main"),
 }
 
 __all__ = list(_EXPORTS)

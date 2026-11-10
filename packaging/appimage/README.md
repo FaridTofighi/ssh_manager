@@ -125,7 +125,6 @@ host's PulseAudio / PipeWire server as usual).
 * **gtk-frdp** (the "Embedded (gtk-frdp)" remote-desktop engine). It is not packaged for Ubuntu 22.04 and
   not trivial to build. Settings → Remote Desktop → Diagnostics then says "gtk-frdp (the Frdp typelib)
   is not installed", and the app uses FreeRDP inside the tab (X11/XWayland) or in its own window.
-* The legacy terminal (Textual) interface and its `rich` / `textual` packages; only the GTK app is packaged.
 * `wmctrl` (the RDP tab's "Focus Window" also works with the bundled xdotool).
 * Translations: Ophion has none yet; GTK's own few strings use the host's GTK translations if present.
 

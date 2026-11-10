@@ -104,9 +104,6 @@ sudo apt install -y \
 | `python3-keyring` | Optional: *Remember on this computer* (no master-password prompt) and moving passwords saved by older versions |
 | `xdotool` | Optional: makes **Focus Window** work when FreeRDP runs in its own window |
 
-The Textual terminal app also needs `python3-textual python3-rich`. The GTK app
-does not.
-
 ### 2. Get the code
 
 ```bash
@@ -173,17 +170,10 @@ python3 -m ophion
 The package was called `ssh_manager` before; `python3 -m ssh_manager` still
 starts the app (and says the new command).
 
-Textual terminal app:
-
-```bash
-python3 -m ophion.main
-```
-
 The GTK app uses its own inventory database by default (see below);
 `--inventory <file>` picks another database, and `--base-dir <folder>` opens a
 folder of grouped config files instead (the layout of older versions, edited in
-place). The Textual app works on folders (`--base-dir`, default
-`~/.ssh/conf.d`); the Textual app also accepts `--terminal`.
+place).
 
 ## Inventory
 
@@ -492,6 +482,6 @@ python3 -m venv --system-site-packages .venv
 ```
 
 The app depends on Python plus GTK 3 / VTE GI bindings for the desktop UI.
-Runtime modules used by optional features include Paramiko, Textual, pexpect,
+Runtime modules used by optional features include Paramiko, pexpect,
 cryptography (the encrypted password and macro files), and keyring (optional:
 "Remember on this computer" and reading passwords older versions saved there).

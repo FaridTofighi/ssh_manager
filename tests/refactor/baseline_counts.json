@@ -6,5 +6,5 @@
  "skipped": 1,
  "skipped_reason": "tests/test_installer.py:56: shellcheck is not installed (bash -n passed)",
  "flaky": [],
- "removed_legacy_tests": 0
+ "removed_legacy_tests": 4
 }

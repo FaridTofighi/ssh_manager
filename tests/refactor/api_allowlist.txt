@@ -1,1 +1,4 @@
 # Names that may leave the API surface (R5): one "module[:Class].name  # justification" per line.
+ophion.ui  # step 0.1: the legacy Textual UI was deleted (imported only by ophion.main and its own test)
+ophion.terminal  # step 0.1: the legacy Textual UI's terminal widget, imported only by ophion.ui
+ophion.main  # step 0.1: the legacy Textual entry point (python -m ophion.main); the GTK app starts from ophion.gtk_main

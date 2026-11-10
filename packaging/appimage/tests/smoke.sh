@@ -165,8 +165,8 @@ if [ "$code" -lt 128 ]; then pass "no display: exit $code, $(grep -m1 -iE 'displ
 else fail "no display: crashed with exit $code"; fi
 
 # 8. the whole unit suite on the bundled Python (one image). Informational: some tests depend on the
-#    machine (pixel colours with the container's only font, the legacy Textual UI's "rich", which is not
-#    bundled, a VTE 0.76 API used by one test); every failing test is listed for review.
+#    machine (pixel colours with the container's only font, a VTE 0.76 API used by one test); every failing
+#    test is listed for review.
 if [ "${FULL_SUITE:-0}" = 1 ]; then
     (cd /tmp/tt && run python3 -m unittest discover -s tests -t . > /tmp/suite.txt 2>&1)
     echo "INFO unit suite on the bundled Python: $(grep -E '^Ran' /tmp/suite.txt); $(tail -1 /tmp/suite.txt)"
