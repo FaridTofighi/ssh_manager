@@ -1,0 +1,24 @@
+# The test suite on a private X server (tools/run_gtk_tests.py). Nothing else depends on this file.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: System packages (install.sh's list, the test runner's X server and D-Bus, the Python libraries)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates \
+            python3 python3-venv python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91 gir1.2-rsvg-2.0 \
+            xvfb dbus openssh-client \
+            python3-pytest python3-paramiko python3-cryptography python3-pexpect python3-keyring
+      - uses: actions/checkout@v4
+      - name: Test suite
+        run: python3 tools/run_gtk_tests.py -- python3 -m pytest -q -p no:cacheprovider tests
