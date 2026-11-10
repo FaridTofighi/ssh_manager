@@ -1,0 +1,8 @@
+# Modules outside ophion/gtkui that may import gi or ophion.gtkui at module level (ratchet: a new violation
+# fails tests/test_architecture_boundaries.py, and so does an entry whose violation is gone).
+# One module per line, "module  # why".
+ophion.connector  # GLib.idle_add hands connection results to the main loop
+ophion.gtk_app  # the GTK main window
+ophion.gtk_terminal  # the VTE terminal tabs and notebook
+ophion.password_dialog  # re-exports the GTK password dialog of ophion.gtkui.dialogs.password
+ophion.vte_bridge  # wraps Vte.Terminal

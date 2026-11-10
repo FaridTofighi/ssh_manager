@@ -6,7 +6,7 @@
 #   1 compileall                       6 security invariants (R8)
 #   2 string patch targets resolve      7 cross-version harness (R9)
 #   3 API surface ⊇ baseline (R5)       8 smoke (app start, entry points, installer dry run)
-#   4 architecture ratchets             9 UI snapshots vs baseline (R11): with --snapshots, or when the
+#   4 architecture ratchets, boundaries 9 UI snapshots vs baseline (R11): with --snapshots, or when the
 #   5 full suite on the private X         last commit touches GTK code (ophion/gtkui, gtk_app, gtk_terminal)
 #     server: passed ≥ baseline        10 benchmarks vs baseline (R10): with --phase-end
 #
@@ -75,6 +75,11 @@ security() {
     tests/test_persistence.py tests/test_credentials_export.py tests/test_native_export.py
 }
 
+ratchets() {  # the metrics ratchets and the layer boundaries (tests/test_architecture_boundaries.py)
+  python3 tools/arch_metrics.py --check "$REF/metrics_baseline.json" &&
+    python3 -m pytest -q -p no:cacheprovider tests/test_architecture_boundaries.py
+}
+
 snapshots() { python3 tools/refactor_snapshots.py check; }
 benchmarks() { python3 tools/refactor_bench.py check; }
 
@@ -82,7 +87,7 @@ gate 1 "compileall" python3 -m compileall -q ophion ssh_manager tools tests
 gate 2 "string patch targets resolve" python3 tools/run_gtk_tests.py -- python3 -m pytest -q -p no:cacheprovider \
   tests/refactor/test_patch_targets.py
 gate 3 "API surface ⊇ baseline" python3 tools/api_surface.py --check "$REF/api_surface.json"
-gate 4 "architecture ratchets" python3 tools/arch_metrics.py --check "$REF/metrics_baseline.json"
+gate 4 "architecture ratchets" ratchets
 if [ "$QUICK" -eq 1 ]; then skip 5 "full suite (--quick)"; else gate 5 "full suite (private X server)" suite; fi
 gate 6 "security invariants (R8)" security
 gate 7 "cross-version harness (R9)" tools/refactor_crossversion.sh
