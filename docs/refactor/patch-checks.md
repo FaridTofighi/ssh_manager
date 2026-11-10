@@ -20,6 +20,3 @@ intercepts nothing at the baseline (`found-bugs.md` #1).
 * 0.2 `ophion/gtkui/i18n.py` → `ophion/i18n.py`: no test patches a name of either module (grep of `tests/` for
   `gtkui.i18n` / `ophion.i18n` patch strings: none), so no mutation check applies. The shim re-exports the same
   objects (`tests/refactor/test_shims.py`).
-* 0.3 `ophion/gtkui/validation.py` → `ophion/validation.py`: no test patches a name of either module (none in
-  `tests/`; `tests/test_gtkui_components.py` imports from the old path, unchanged), so no mutation check applies.
-  The shim re-exports the same objects (`tests/refactor/test_shims.py`).
